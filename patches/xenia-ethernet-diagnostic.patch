@@ -1,0 +1,35 @@
+diff --git a/src/xenia/kernel/xam/xam_net.cc b/src/xenia/kernel/xam/xam_net.cc
+index 8174383..22d5ebe 100644
+--- a/src/xenia/kernel/xam/xam_net.cc
++++ b/src/xenia/kernel/xam/xam_net.cc
+@@ -7,6 +7,10 @@
+  ******************************************************************************
+  */
+ 
++#include <atomic>
++#include <cstdlib>
++#include <cstring>
++
+ #include "xenia/base/logging.h"
+ #include "xenia/kernel/kernel_state.h"
+ #include "xenia/kernel/util/shim_utils.h"
+@@ -573,6 +577,19 @@ struct XEthernetStatus {
+ };
+ 
+ dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
++  // Diagnostic only: isolate Destiny's link-status check from sign-in and
++  // service availability. This does not establish an Internet connection.
++  static const bool test_active = [] {
++    const char* value = std::getenv("XENIA_TEST_ETHERNET_ACTIVE");
++    return value && std::strcmp(value, "1") == 0;
++  }();
++  if (test_active) {
++    static std::atomic<bool> logged{false};
++    if (!logged.exchange(true, std::memory_order_relaxed)) {
++      XELOGW("Diagnostic override: reporting Ethernet link active");
++    }
++    return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE;
++  }
+   return 0;
+ }
+ DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking, kStub);

@@ -1,0 +1,13 @@
+# Keep personally dumped game and account data out of source control.
+captures/
+original_dump/
+working_dump/
+xenia/
+logs/
+*.xex
+*.iso
+*.data/
+__pycache__/
+*.pyc
+/Destiny (Europe) (EnFrDeEsItPt) PS3/
+/Destiny (World) (En,Fr,De,Es,It) XBOX/

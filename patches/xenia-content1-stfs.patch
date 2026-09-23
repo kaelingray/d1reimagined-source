@@ -1,0 +1,115 @@
+diff --git a/src/xenia/vfs/devices/xcontent_devices/stfs_container_device.cc b/src/xenia/vfs/devices/xcontent_devices/stfs_container_device.cc
+index ea79e19..1040267 100644
+--- a/src/xenia/vfs/devices/xcontent_devices/stfs_container_device.cc
++++ b/src/xenia/vfs/devices/xcontent_devices/stfs_container_device.cc
+@@ -95,8 +95,16 @@ StfsContainerDevice::Result StfsContainerDevice::Read() {
+ std::unique_ptr<StfsContainerEntry> StfsContainerDevice::ReadEntry(
+     Entry* parent, const StfsDirectoryEntry* dir_entry) {
+   // Filename is stored as Windows-1252, convert it to UTF-8.
++  size_t name_length = dir_entry->flags.name_length;
++  // Some CON packages have a NUL-terminated name but no stored name length.
++  if (!name_length) {
++    while (name_length < sizeof(dir_entry->name) &&
++           dir_entry->name[name_length] != '\0') {
++      ++name_length;
++    }
++  }
+   std::string ansi_name(reinterpret_cast<const char*>(dir_entry->name),
+-                        dir_entry->flags.name_length & 0x3F);
++                        name_length);
+   std::string name = xe::win1252_to_utf8(ansi_name);
+   // Fallback to normal name if for whatever reason conversion from 1252 code
+   // page failed.
+@@ -125,7 +133,6 @@ std::unique_ptr<StfsContainerEntry> StfsContainerDevice::ReadEntry(
+   // Fill in all block records.
+   // It's easier to do this now and just look them up later, at the cost
+   // of some memory. Nasty chain walk.
+-  // TODO(benvanik): optimize if flags.contiguous is set.
+   if (entry->attributes() & X_FILE_ATTRIBUTE_NORMAL) {
+     uint32_t block_index = dir_entry->start_block_number();
+     size_t remaining_size = dir_entry->length;
+@@ -135,8 +142,12 @@ std::unique_ptr<StfsContainerEntry> StfsContainerDevice::ReadEntry(
+       size_t offset = BlockToOffset(block_index);
+       entry->block_list_.push_back({0, offset, block_size});
+       remaining_size -= block_size;
+-      auto block_hash = GetBlockHash(block_index);
+-      block_index = block_hash->level0_next_block();
++      if (dir_entry->flags.contiguous) {
++        ++block_index;
++      } else {
++        auto block_hash = GetBlockHash(block_index);
++        block_index = block_hash->level0_next_block();
++      }
+     }
+ 
+     if (remaining_size) {
+@@ -271,7 +282,33 @@ const StfsHashEntry* StfsContainerDevice::GetBlockHash(uint32_t block_index) {
+ 
+   const size_t hash_offset = BlockToHashBlockOffset(block_index, 0);
+   const uint32_t record = block_index % kBlocksPerHashLevel[0];
+-  return &cached_hash_tables_[hash_offset].entries[record];
++  const StfsHashEntry* selected =
++      &cached_hash_tables_[hash_offset].entries[record];
++
++  // Writable STFS packages keep two copies of each hash table. Some packages
++  // switch the live record between copies within a table, so choosing one
++  // table for every record can follow a stale end-of-chain marker. If exactly
++  // one record is allocated, use it; otherwise preserve the header's choice.
++  if (blocks_per_hash_table_ == 2 &&
++      data_->size() >= 2 * kBlockSize &&
++      hash_offset <= data_->size() - 2 * kBlockSize) {
++    const auto* primary = reinterpret_cast<const StfsHashTable*>(
++        data_->data() + hash_offset);
++    const auto* secondary = reinterpret_cast<const StfsHashTable*>(
++        data_->data() + hash_offset + kBlockSize);
++    const StfsHashEntry* primary_record = &primary->entries[record];
++    const StfsHashEntry* secondary_record = &secondary->entries[record];
++    const bool primary_used =
++        static_cast<uint8_t>(primary_record->level0_allocation_state()) >=
++        static_cast<uint8_t>(StfsHashState::kInUse);
++    const bool secondary_used =
++        static_cast<uint8_t>(secondary_record->level0_allocation_state()) >=
++        static_cast<uint8_t>(StfsHashState::kInUse);
++    if (primary_used != secondary_used) {
++      return primary_used ? primary_record : secondary_record;
++    }
++  }
++  return selected;
+ }
+ 
+ }  // namespace vfs
+diff --git a/src/xenia/vfs/virtual_file_system.cc b/src/xenia/vfs/virtual_file_system.cc
+index 816a0d9..cd649e0 100644
+--- a/src/xenia/vfs/virtual_file_system.cc
++++ b/src/xenia/vfs/virtual_file_system.cc
+@@ -408,8 +408,16 @@ X_STATUS VirtualFileSystem::ExtractDeviceFile(Entry* entry,
+ 
+     while (remaining_size > 0) {
+       size_t bytes_read = 0;
+-      in_file->ReadSync(std::span<uint8_t>(buffer, write_buffer_size), offset,
+-                        &bytes_read);
++      X_STATUS read_result = in_file->ReadSync(
++          std::span<uint8_t>(buffer, std::min(write_buffer_size, remaining_size)),
++          offset, &bytes_read);
++      if (XFAILED(read_result) || !bytes_read) {
++        XELOGE("Failed to extract file {} at offset {}", entry->path(), offset);
++        fclose(file);
++        in_file->Destroy();
++        delete[] buffer;
++        return X_STATUS_UNSUCCESSFUL;
++      }
+       fwrite(buffer, bytes_read, 1, file);
+       offset += bytes_read;
+       remaining_size -= bytes_read;
+@@ -441,7 +449,10 @@ X_STATUS VirtualFileSystem::ExtractDeviceFiles(Device* device,
+       queue.push(entry.get());
+     }
+ 
+-    ExtractDeviceFile(entry, base_path, progress);
++    X_STATUS result = ExtractDeviceFile(entry, base_path, progress);
++    if (result != X_STATUS_SUCCESS) {
++      return result;
++    }
+   }
+   return X_STATUS_SUCCESS;
+ }
