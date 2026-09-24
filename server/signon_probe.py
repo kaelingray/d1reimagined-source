@@ -284,7 +284,7 @@ def main():
     ap.add_argument("--default-host", default="www1.signon.deadorbit.net",
                     help="certificate used on --bind when no SNI is sent")
     ap.add_argument("--destiny-hosts", action="store_true",
-                    help="also listen on each sign-on host's loopback address from hosts.py")
+                    help="also listen on each sign-on and Demonware host's loopback address from hosts.py")
     ap.add_argument("--ca-dir", type=Path, default=local_ca.DEFAULT_DIR)
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
     ap.add_argument("--session-ip", default="127.1.1.127",
@@ -302,7 +302,7 @@ def main():
     ports = [args.tls_port] + ([args.plain_port] if args.plain_port else [])
     listeners = [(args.bind, None)]
     if args.destiny_hosts:
-        listeners += [(ip, name) for name, ip in hosts.SIGNON_HOSTS.items()]
+        listeners += [(ip, name) for name, ip in hosts.HTTPS_HOSTS.items()]
     threads = [threading.Thread(target=serve, args=(addr, port, args, certs, name), daemon=True)
                for addr, name in listeners for port in ports]
     for t in threads:

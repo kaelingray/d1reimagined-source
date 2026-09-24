@@ -63,7 +63,7 @@ def main():
     ap.add_argument("--override", action="append", default=[], metavar="NAME=IP",
                     help="answer NAME with IP instead of --answer (repeatable; IP must be loopback)")
     ap.add_argument("--destiny-hosts", action="store_true",
-                    help="apply hosts.ALL_OVERRIDES (STUN and per-host sign-on loopback addresses)")
+                    help="apply hosts.ALL_OVERRIDES (STUN, per-host sign-on and Demonware loopback addresses)")
     ap.add_argument("--log", type=Path, help="append query log to this file as well as stdout")
     args = ap.parse_args()
 

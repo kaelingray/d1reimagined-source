@@ -13,4 +13,11 @@ for n in range(1, 10):
     SIGNON_HOSTS[f"www{n}.signon.deadorbit.net"] = f"127.0.1.{n}"
     SIGNON_HOSTS[f"www{n}.signon.gravityshavings.net"] = f"127.0.2.{n}"
 
-ALL_OVERRIDES = {STUN_HOST: STUN_IP, **SIGNON_HOSTS}
+# Demonware HTTPS hosts named in the EBOOT (0x11f5614-0x11f5770); PS3 comparison 015 posted
+# to panther-ps3-auth3.prod after SignOn. prod/cert/dev x lobby/auth/auth3 -> 127.0.3.x.
+DEMONWARE_HOSTS = {}
+for i, (env, svc) in enumerate((e, s) for e in ("prod", "cert", "dev") for s in ("lobby", "auth", "auth3")):
+    DEMONWARE_HOSTS[f"panther-ps3-{svc}.{env}.demonware.net"] = f"127.0.3.{i + 1}"
+
+HTTPS_HOSTS = {**SIGNON_HOSTS, **DEMONWARE_HOSTS}
+ALL_OVERRIDES = {STUN_HOST: STUN_IP, **HTTPS_HOSTS}
