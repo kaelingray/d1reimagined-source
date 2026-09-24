@@ -88,3 +88,9 @@ Copy this section for each run. Change one input or setting per run.
 - The first boot precompiled 6,650 shader interpreter variants and reached a visually intact "Press X to Play" title screen. This did not show Xenia's missing horizontal bands.
 - Player 1 was changed from Keyboard to XInput. RPCS3 detected the user's Xbox controller as `XInput Pad #1`; Xbox A mapped to PlayStation Cross.
 - Pressing A displayed Destiny's **canary** message: "No internet connection detected." Gameplay was not reached. The screenshot was supplied by the user; see `notes/ps3-route.md` for the setup and comparison.
+
+## PS3 comparison 002 — Network status connected
+
+- Date: 2026-09-24. Same official RPCS3 installation and PS3 game as comparison 001. Changed only Network Status from `Disconnected` to `Connected`; PSN Status stayed `Disconnected`.
+- Pressing A advanced to **buffalo**: "You must be signed into PSN in order to play Destiny." This confirms the first network gate was passed. Gameplay was not reached.
+- The current RPCS3 PSN Status menu offers `Disconnected` and `RPCN`. No account setup or private server connection was attempted.
