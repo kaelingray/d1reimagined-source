@@ -82,6 +82,14 @@ Copy this section for each run. Change one input or setting per run.
 - The title update applied to `v0.0.23.2`. After pressing A, the user still saw the same canary message. An active-link answer alone does not solve the network blocker. Log: `D:\Destiny360\LOGS\Test011-ethernet-active.xenia.log`. Screenshot: `D:\Destiny360\LOGS\Test011-ethernet-active-canary.png`.
 - The diagnostic source change was removed from the local Xenia checkout after this run. The content-import patch and its tested executable remain separate.
 
+## Test 013 — XHttpStartup diagnostic
+
+- Date: 2026-09-24. Isolated build: `D:\Destiny360\XENIA_TEST013_XHTTP_STARTUP`, using `patches/xenia-xhttp-startup-diagnostic.patch`.
+- Input: Working installed game, imported Content 1–3, and captured title update from the separate content root. The window showed `v0.0.23.2`, and the log confirmed the XEX patch applied.
+- The diagnostic implementation returned 1 from `NetDll_XHttpStartup` and logged one call. No subsequent `NetDll_XHttp*` call was recorded.
+- After the user pressed A, the screen still showed **canary**. This one API return is insufficient to pass the network check. The test does not simulate an HTTP connection or Destiny service.
+- Log: `D:\Destiny360\LOGS\Test013-xhttp-startup.xenia.log` (private, outside Git).
+
 ## PS3 comparison 001 — Official RPCS3 baseline
 
 - Date: 2026-09-24. Official RPCS3 `v0.0.42-20043-b5a174e9`, Vulkan, PS3 disc game `BLES01857` version `01.00`, with firmware from the user's disc and a private working copy outside Git. No PS3 title update was installed.
