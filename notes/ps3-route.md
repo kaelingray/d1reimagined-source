@@ -128,3 +128,14 @@ Next: service 503's response type. The service table is a runtime tag; each serv
 - **027b.** Result 5 made the client disconnect within 100 ms and show **chimpanzee**, "There may be a problem with your Bungie account." This proves the reply is matched and decoded.
 
 After a successful sign-in the client appears to wait for server pushes. The prime candidate is `qz->c update not` (0x7b, header kind 4), which carries investment "families": `[family_type, family_root_soid, version, flags, object_count]` followed by objects (decoder `0x4198d8`). The family types (`0xb6068c`) are peer, inspection, roster, select_character, self, universe, party_details and party_network_details. Next: the 0x7b frame layout and a minimal `self`/`select_character` push.
+
+## Investment sign-in wait condition (comparisons 028–032, GDB)
+
+RPCS3's GDB stub (`GDB Server: 127.0.0.1:2345` in `config.yml`) is enabled in the official build. `scripts/rpcs3_gdb.py` and `scripts/rpcs3_gdb_trace.py` set breakpoints and log the thread, registers and saved-LR chain on each hit. The stub pauses emulation on connect, so the tracer resumes it with `vCont;c`. Heavy tracing slows the game by about one second per hit.
+
+- `0x3204a8` records bootflow milestones as well as errors. During sign-in it ran 4, 5, 6, 7, 8, 0xc, 0x11, 0x12, 0x13, and then chicken was raised as **(0x18, 0xa1) from `0x32d070`**.
+- The investment sign-in bootflow step (`0x32cf44`) starts sign-in through `0x286fdc` (which posts event 0x22 via `0x262bc4`). It then polls until a timeout from title configuration +0x122c (10 000 ms, taken from the default configuration). Success needs: `0x294a54` == 0, **`0x294a5c` != 0**, `0x4249d8` != 0, a non-zero u64 from `0x2935c4`, and `0x28e5d4` != 0.
+- GDB (031) showed the second check never passes. `0x294a5c` requires a user entry in the object at `*(0x18da7cc+4)`: byte state == 3, the 8-byte local player id at +1, and a non-zero u64 at +0x10. After the failure that entry was all zero.
+- 028 (empty `self`/`select_character` family pushes) and 030 (sign-in reply carrying the request's account id, both optional u64s, and 1 in both u32s) did not change the outcome.
+
+Next: follow event 0x22 through the investment update loop to find what sets the user entry to state 3, and whether it depends on 503 reply fields or on queuez family objects.

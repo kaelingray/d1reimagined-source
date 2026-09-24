@@ -181,3 +181,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 
 - Date: 2026-09-24. Run with `scripts/Invoke-Rpcs3LocalTest.ps1`, which makes a fresh copy from TEST017 and restarts `bap_server.py` with the given arguments.
 - 027b (`--ws-result 5`): the client disconnected immediately after the service-503 reply and showed **chimpanzee** (Bungie account problem). With result 0 (026) the client waited, then showed chicken. The reply is therefore processed; the missing piece comes after sign-in. Details are in `notes/ps3-route.md`.
+
+## PS3 comparisons 028–032 — Investment sign-in, GDB tracing
+
+- 028: after the sign-in reply, pushed empty `self` and `select_character` queuez families. No change (chicken after 10 s).
+- 029: GDB trace of milestone/error calls. Chicken is (0x18, 0xa1), raised by the sign-in step's 10 s timeout.
+- 030: typed sign-in reply with the account id (`--ws-signin`). No change.
+- 031: GDB checkpoints showed the second success predicate (`0x294a5c`, user entry state 3) never passes.
+- 032: GDB entry trace of the user-manager range `0x286000`–`0x297000`. Sign-in is started by posting event 0x22.
+- Details are in `notes/ps3-route.md`.

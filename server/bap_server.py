@@ -62,6 +62,54 @@ SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
 QZ_REG_REQ, QZ_REG_RSP = 0x79, 0x7A
 ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
 WS_REQ, WS_RSP = 0x0A, 0x0B
+QZ_UPDATE = 0x7B
+FAMILY_TYPES = {"peer": 0, "inspection": 1, "roster": 2, "select_character": 3, "self": 4,
+                "universe": 5, "party_details": 6, "party_network_details": 7}  # 0xb6068c
+
+
+class BitWriter:
+    """MSB-first bit stream, as written by the engine's type serializer (0x25e080)."""
+
+    def __init__(self):
+        self.bits = []
+
+    def put(self, value, width):
+        self.bits += [(value >> (width - 1 - i)) & 1 for i in range(width)]
+
+    def data(self):
+        bits = self.bits + [0] * (-len(self.bits) % 8)
+        return bytes(int("".join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
+
+
+def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True):
+    """Service 503 (investment sign-in) response, type 0x80801825:
+    {u4 result, i32 detail} u64 +0x08, u32 +0x10, u32 +0x14, then struct 0x80801941 of six
+    optional fields (presence bit each): u64, u64, three counted lists, u32. Lists and the
+    last u32 are left absent here; the trailing bit is the ws blob flag (0)."""
+    w = BitWriter()
+    w.put(0x01F7, 16)
+    w.put(result, 4); w.put(0, 32)
+    w.put(account_id, 64); w.put(word1, 32); w.put(word2, 32)
+    for _ in range(2):
+        w.put(1 if optional_ids else 0, 1)
+        if optional_ids:
+            w.put(account_id, 64)
+    for _ in range(4):
+        w.put(0, 1)
+    w.put(0, 1)
+    return w.data()
+
+
+def qz_update(families):
+    """qz->c update payload (decoder 0x4198d8): u32 count, then per family
+    u32 type, u64 root soid, u32 version, u8 flags, u32 object count, objects.
+    Objects are (16-byte header, payload); the header's u32 at +0xc is the payload length."""
+    out = struct.pack(">I", len(families))
+    for family_type, root, version, flags, objects in families:
+        out += struct.pack(">IQIBI", family_type, root, version, flags, len(objects))
+        for header, payload in objects:
+            out += header[:12] + struct.pack(">I", len(payload)) + payload
+    return out
 # The client's reply queue (0x7c6bc0) expects exactly four reply types: shello rsp, echo
 # rsp, qz_reg rsp and rrc rsp. The last three decode with 0xa62a0, which ignores the
 # payload, so an empty status-200 reply satisfies them. Request -> reply type.
@@ -144,6 +192,12 @@ def encrypted_frame(channel, msg_type, msg_id, status, payload):
     return struct.pack(">BBI", 1, 1, len(body)) + body
 
 
+def encrypted_frame_kind(channel, msg_type, msg_id, payload):
+    """Server push with a 6-byte header (header kinds 1 and 4: type, id; no status)."""
+    body = channel.seal(struct.pack(">HI", msg_type, msg_id) + payload)
+    return struct.pack(">BBI", 1, 1, len(body)) + body
+
+
 def plain_frame(msg_type, msg_id, status, body):
     inner = struct.pack(">HIH", msg_type, msg_id, status) + body
     return struct.pack(">BBI", 1, 2, len(inner)) + inner
@@ -188,7 +242,13 @@ def handle(conn, peer, args):
             payload = body[6:]
             log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
                 f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
-            if kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_zero_bytes:
+            if kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f7") and args.ws_signin:
+                account_id = int.from_bytes(payload[38:46], "big")
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, signin_response(account_id))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
+                log(f"[{tag}] sent sign-in rsp (account id {account_id:#x})")
+            elif kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_zero_bytes:
                 body = bytearray(args.ws_zero_bytes)
                 body[0] = (args.ws_result & 0xF) << 4  # u4 result code, MSB-first (0 = error_none)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, payload[:2] + bytes(body))
@@ -196,6 +256,15 @@ def handle(conn, peer, args):
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent c->ws rsp for service {int.from_bytes(payload[:2], 'big')} "
                     f"(result {args.ws_result}, {args.ws_zero_bytes} bytes)")
+                if args.qz_push:
+                    families = []
+                    for spec in args.qz_push:
+                        name, version, flags = (spec.split(":") + ["1", "0"])[:3]
+                        families.append((FAMILY_TYPES[name], args.qz_root, int(version, 0), int(flags, 0), []))
+                    push = encrypted_frame_kind(tx, QZ_UPDATE, 0, qz_update(families))
+                    conn.sendall(push)
+                    folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
+                    log(f"[{tag}] pushed qz update {args.qz_push} root={args.qz_root:#x}")
             if kind == 1 and msg_type in EMPTY_REPLIES:
                 reply = encrypted_frame(tx, EMPTY_REPLIES[msg_type], msg_id, 200, b"")
                 conn.sendall(reply)
@@ -226,6 +295,11 @@ def main():
     ap.add_argument("--timeout", type=float, default=120)
     ap.add_argument("--ws-zero-bytes", type=int, default=1024,
                     help="answer c->ws requests with the service id and this many zero bytes (0: no reply)")
+    ap.add_argument("--ws-signin", action="store_true",
+                    help="answer service 503 with a typed sign-in response carrying the request's account id")
+    ap.add_argument("--qz-push", nargs="*", default=[],
+                    help="after the ws reply, push families as name[:version[:flags]] with no objects")
+    ap.add_argument("--qz-root", type=lambda v: int(v, 0), default=0, help="root soid for pushed families")
     ap.add_argument("--ws-result", type=int, default=0,
                     help="ws result code in the first 4 bits (0 error_none, 1 unknown, 2 no_content, "
                          "3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout)")
