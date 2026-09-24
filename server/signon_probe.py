@@ -10,6 +10,7 @@ SNI, cipher suites, extensions) before anything else happens. Then, per --mode:
              log the HTTP request, and reply with --status
   signon     as terminate, but answer POST /SignOn with a success message
              (signon_proto.py) that points the game at --session-ip:--session-port
+  auth3      as signon, plus a synthetic local PS3 auth3 success reply
 
 The certificate's hostname comes from the SNI name if sent, else from the loopback address
 the client dialled (--destiny-hosts listens on every address in hosts.py; the PS3 client
@@ -24,6 +25,7 @@ defaults to a private folder outside Git.
 import argparse
 import datetime
 import ipaddress
+import json
 import socket
 import ssl
 import struct
@@ -33,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hosts  # noqa: E402
+import auth3_proto  # noqa: E402
 import local_ca  # noqa: E402
 import signon_proto  # noqa: E402
 import sslv3  # noqa: E402
@@ -232,12 +235,28 @@ def handle(raw, peer, port, args, certs, bound_host):
             log(conn_id, f"body fields: {[(n, w, v if w == 0 else len(v)) for n, w, v in signon_proto.decode(body)]}")
         except (ValueError, IndexError) as exc:
             log(conn_id, f"body is not protobuf: {exc}")
-        if args.mode == "signon" and request_line.startswith("POST /SignOn"):
+        if args.mode in ("signon", "auth3") and request_line.startswith("POST /SignOn"):
             reply = signon_response(args)
             conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
                          + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
             log(conn_id, f"replied 200 SignOn success ({len(reply)} bytes): session "
                          f"{args.session_ip}:{args.session_port}")
+            return
+        if (args.mode == "auth3" and request_line.split()[:2] == ["POST", "/auth/"]
+                and host in hosts.DEMONWARE_HOSTS and "-auth3." in host):
+            try:
+                reply, session = auth3_proto.make_response(body)
+            except (ValueError, TypeError) as exc:
+                log(conn_id, f"auth3 request rejected: {exc}")
+                conn.sendall(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                return
+            # Keep the key and opaque server ticket together for a future local
+            # lobby handler. All captures and session material stay outside Git.
+            out.with_suffix(".session.json").write_text(json.dumps(session, indent=2), encoding="utf-8")
+            out.with_suffix(".response.json").write_bytes(reply)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                         + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
+            log(conn_id, "replied 200 auth3 task=19 code=700 client_ticket=145 server_ticket=128")
             return
         reason = {200: "OK", 404: "Not Found", 503: "Service Unavailable"}.get(args.status, "Status")
         conn.sendall(f"HTTP/1.1 {args.status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode())
@@ -278,7 +297,7 @@ def main():
     ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--tls-port", type=int, default=443)
     ap.add_argument("--plain-port", type=int, default=80, help="plain HTTP listener; 0 disables")
-    ap.add_argument("--mode", choices=["hello", "terminate", "signon"], default="hello")
+    ap.add_argument("--mode", choices=["hello", "terminate", "signon", "auth3"], default="hello")
     ap.add_argument("--status", type=int, default=503, help="HTTP status returned in terminate mode")
     ap.add_argument("--digest", choices=["sha1", "sha256"], default="sha1")
     ap.add_argument("--default-host", default="www1.signon.deadorbit.net",

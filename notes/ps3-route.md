@@ -61,4 +61,14 @@ After the local SignOn reply, the client looks up `panther-ps3-auth3.prod.demonw
 
 The request-side strings sit together in the EBOOT near `0x12ca360` (`auth_task`, `iv_seed`, `title_id`, `extra_data`, the URL format, `application/json`). The client classes are named `bdAuth`, `bdAuthPS3` and `bdAuthService`. The raw requests are kept privately in `D:\Destiny360\SIGNON_LOCAL\captures`.
 
-This note covers only what the client sends. The server side of this exchange is not built in this repository.
+## Auth3 accepted (comparison 016)
+
+`server/auth3_proto.py` implements a synthetic local reply, enabled with `signon_probe.py --mode auth3`. Request task 18 expects **response task 19**, with `code=700` and the request's `iv_seed`. All three are emitted as decimal strings. Inspection of `0xa2c7a8` shows the JSON integer reader accepts both string and numeric nodes (types 1 and 2); the string constructor at `0xa2d954` writes type 1. The PS3 handler at `0xa264f8` supplies expected task 19 and decoded size 145 to the generic handler at `0xa24b94`.
+
+The tickets are base64-encoded plaintext at this stage. Client ticket = packed 128-byte `bdAuthTicket` followed by 17 bytes of PS3 information; server ticket = opaque 128-byte local token. The key and token are generated per reply and kept together outside Git for later lobby work. No real PSN identity is validated by this diagnostic responder.
+
+Important layout distinction from `0xa2c1dc`: the **wire** ticket has no native alignment padding. Its format is `<IBIIIQQ64s24s3s4s`: magic `0xEFBDADDE`, type, title, issue/expiry timestamps, license/user IDs, name, session key, reserved bytes, hash. The session key is 24 bytes at **wire offset 0x61**, copied to **object offset 0x68**. The PS3 extension starts at wire offset 128; two u32s and three byte flags are consumed. Their semantics and the remaining padding are still unverified; this test used zeros.
+
+At 15:10 on 2026-09-24, an isolated `D:\Destiny360\RPCS3_TEST016_AUTH3` copy completed local SignOn and received one successful auth3 reply. It then resolved the lobby to `127.0.3.1` and connected to TCP 3074. The listener received 28 bytes: five little-endian u32 values `200, 200, 210, 210, 65535`, followed by eight changing bytes. With no lobby response, it disconnected about 9.5 seconds later and showed **cattle**, "Lost connection to partner services." This demonstrates acceptance of auth3 and entry into lobby negotiation, not completion of lobby authentication or gameplay.
+
+Evidence: private `SIGNON_LOCAL/logs/test016-{probe,dns,lobby}.log`, request/session files in `SIGNON_LOCAL/captures`, and the lobby binary capture. The synthetic HTTP integration test preceded the game attempt and is distinguishable by its 56-byte request on port 80; the actual game request was 491 bytes over SSLv3 on port 443. Two wire-contract tests also passed, including invalid task/title/seed rejection.
