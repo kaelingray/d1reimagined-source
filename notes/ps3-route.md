@@ -46,3 +46,19 @@ The game now sends its first sign-on request to the local probe: `POST /SignOn?p
 A fallback exists if a later host needs it: the SSL callback's return at `0x108224` (`extsw r3, r27`) could return 0 and accept any chain. That fallback is not needed now.
 
 The `SignOn` exchange uses nanopb 0.1.x messages. Their field tables are compiled into the EBOOT, so `server/signon_proto.py` documents both messages. A local success reply was accepted in comparison 015. The game then moved on to Demonware authentication (`POST /auth/` on `panther-ps3-auth3.prod.demonware.net`), which is the current gate.
+
+## Demonware auth3 request (comparison 015 captures)
+
+After the local SignOn reply, the client looks up `panther-ps3-auth3.prod.demonware.net` (the EBOOT also names `lobby`, `auth` and `auth3` hosts for the `prod`, `cert` and `dev` environments; all nine now resolve to `127.0.3.1`–`9`). It sends one request per attempt over the same SSLv3 client as SignOn:
+
+- `POST /auth/`, `Content-Type: application/json`, `X-TransactionID: 0`, about 490 bytes. The URL is built from the format string `%s://%s:%d/auth/`.
+- Body: a flat JSON object whose values are all **strings**, even the numeric ones:
+  - `auth_task`: `"18"` in every attempt.
+  - `title_id`: `"5378"` in every attempt.
+  - `iv_seed`: a decimal 32-bit value that changes on every attempt.
+  - `extra_data`: a JSON document encoded as a string, `{"token": "<base64>"}`. The token decodes to the same 294-byte NP ticket that the SignOn body carries (version 2.1, issued by the local RPCN for `d1localtest`, service `UP0002-BLUS31181_00`).
+- When the reply is 503, the client resends: five requests in all, arriving at about 0, 0.1, 1.2, 3.3 and 7.4 s. No further request was captured, and the screen stays on "SIGNING IN".
+
+The request-side strings sit together in the EBOOT near `0x12ca360` (`auth_task`, `iv_seed`, `title_id`, `extra_data`, the URL format, `application/json`). The client classes are named `bdAuth`, `bdAuthPS3` and `bdAuthService`. The raw requests are kept privately in `D:\Destiny360\SIGNON_LOCAL\captures`.
+
+This note covers only what the client sends. The server side of this exchange is not built in this repository.
