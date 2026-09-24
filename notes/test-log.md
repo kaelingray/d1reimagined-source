@@ -146,3 +146,15 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - Input: the user was away, so Player 1 in this copy was switched from XInput to the keyboard handler (Cross = X; original saved as `Default.xinput.yml.bak`), and X was posted to the game window from a script. A Windows Firewall prompt for the new `rpcs3.exe` path appeared and was left unanswered; all traffic was loopback.
 - Result: **SignOn accepted on the first attempt.** The game did not contact the session address. Instead it resolved `panther-ps3-auth3.prod.demonware.net` (sinkholed to 127.0.0.1) and sent `POST /auth/` with `Content-Type: application/json`, retrying at 1, 2 and 4 s while the probe answered 503. The screen stayed on "SIGNING IN". The raw requests are in `D:\Destiny360\SIGNON_LOCAL\captures`.
 - Next gate: Demonware authentication. This session did not continue past it.
+
+## PS3 comparison 017 — Lobby header acknowledged
+
+- Date: 2026-09-24. Copy `D:\Destiny360\RPCS3_TEST017_LOBBY_HEADER`, services as in 016, plus `server/lobby_probe.py` on `127.0.3.1:3074`, which answers the greeting with `server_header_ack` (protocol 210).
+- Result (017b): the client accepted the header and sent a 153-byte `client_auth` frame (`AB 82`). The probe did not reply, and the client disconnected after about 10 s (**cattle**). Captures are in `D:\Destiny360\SIGNON_LOCAL\captures\lobby210`. Static analysis of that frame is in `notes/ps3-route.md`.
+
+## PS3 comparison 018 — Lobby authentication completed
+
+- Date: 2026-09-24. Fresh copy `D:\Destiny360\RPCS3_TEST018_LOBBY_AUTH` of 017. The only change: `lobby_probe.py` derives the `CLIENTCHAL` verify from the auth3 session key and answers `client_auth` with `server_auth_done`. Before the live run, the derivation reproduced the 017b client challenge offline.
+- Input: X posted to the game window from a script. The game reached the lobby without further input.
+- Result: SignOn and auth3 succeeded as before. In the lobby, the probe logged `client_auth title=5378 challenge_verified=True` and sent `server_auth_done`. RPCS3 shows the client read the full 10-byte frame and began waiting for the next frame. A game job thread closed the socket about 70 ms later, after a `stat` of `/dev_hdd1/downloads/` returned ENOENT. No further DNS lookups or connections followed. The screen showed **termite**: "Failed to download configuration files from Bungie servers, please try again." (RPCS3 screenshot, kept privately under the test folder.)
+- Next gate: termite. Leads are listed in `notes/ps3-route.md`.
