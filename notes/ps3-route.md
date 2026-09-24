@@ -45,4 +45,4 @@ The game now sends its first sign-on request to the local probe: `POST /SignOn?p
 
 A fallback exists if a later host needs it: the SSL callback's return at `0x108224` (`extsw r3, r27`) could return 0 and accept any chain. That fallback is not needed now.
 
-Next: work out the `SignOn` response the client expects: status, content type and protobuf message. Leads include the Xbox 360 console capture of the same sign-on host (`notes/console-network-capture.md`) and the response-parsing code reachable from the game's `_DW HTTP Processor` thread.
+The `SignOn` exchange uses nanopb 0.1.x messages. Their field tables are compiled into the EBOOT, so `server/signon_proto.py` documents both messages. A local success reply was accepted in comparison 015. The game then moved on to Demonware authentication (`POST /auth/` on `panther-ps3-auth3.prod.demonware.net`), which is the current gate.

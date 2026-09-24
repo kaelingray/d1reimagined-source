@@ -8,6 +8,8 @@ SNI, cipher suites, extensions) before anything else happens. Then, per --mode:
   hello      close the connection after logging the ClientHello
   terminate  complete the handshake with a leaf certificate issued by local_ca.py,
              log the HTTP request, and reply with --status
+  signon     as terminate, but answer POST /SignOn with a success message
+             (signon_proto.py) that points the game at --session-ip:--session-port
 
 The certificate's hostname comes from the SNI name if sent, else from the loopback address
 the client dialled (--destiny-hosts listens on every address in hosts.py; the PS3 client
@@ -32,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hosts  # noqa: E402
 import local_ca  # noqa: E402
+import signon_proto  # noqa: E402
 import sslv3  # noqa: E402
 
 from cryptography import x509  # noqa: E402
@@ -225,6 +228,17 @@ def handle(raw, peer, port, args, certs, bound_host):
         out = args.capture_dir / f"{stamp}_{conn_id.replace('#', '_')}_{host}.http"
         out.write_bytes(raw_req)
         log(conn_id, f"raw request saved to {out}")
+        try:
+            log(conn_id, f"body fields: {[(n, w, v if w == 0 else len(v)) for n, w, v in signon_proto.decode(body)]}")
+        except (ValueError, IndexError) as exc:
+            log(conn_id, f"body is not protobuf: {exc}")
+        if args.mode == "signon" and request_line.startswith("POST /SignOn"):
+            reply = signon_response(args)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                         + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
+            log(conn_id, f"replied 200 SignOn success ({len(reply)} bytes): session "
+                         f"{args.session_ip}:{args.session_port}")
+            return
         reason = {200: "OK", 404: "Not Found", 503: "Service Unavailable"}.get(args.status, "Status")
         conn.sendall(f"HTTP/1.1 {args.status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode())
         log(conn_id, f"replied {args.status}")
@@ -235,6 +249,15 @@ def handle(raw, peer, port, args, certs, bound_host):
             raw.close()
         except OSError:
             pass
+
+
+def signon_response(args):
+    now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    return signon_proto.success_response(
+        token=b"d1xenia-local-signon-token-" + b"0" * 37,
+        key1=b"d1xenia-key-0001", key2=b"d1xenia-key-0002", key3=b"d1xenia-key-0003",
+        expires_at=now + 86400, expires_in=86400,
+        ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port)
 
 
 def serve(addr, port, args, certs, bound_host=None):
@@ -255,7 +278,7 @@ def main():
     ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--tls-port", type=int, default=443)
     ap.add_argument("--plain-port", type=int, default=80, help="plain HTTP listener; 0 disables")
-    ap.add_argument("--mode", choices=["hello", "terminate"], default="hello")
+    ap.add_argument("--mode", choices=["hello", "terminate", "signon"], default="hello")
     ap.add_argument("--status", type=int, default=503, help="HTTP status returned in terminate mode")
     ap.add_argument("--digest", choices=["sha1", "sha256"], default="sha1")
     ap.add_argument("--default-host", default="www1.signon.deadorbit.net",
@@ -264,10 +287,16 @@ def main():
                     help="also listen on each sign-on host's loopback address from hosts.py")
     ap.add_argument("--ca-dir", type=Path, default=local_ca.DEFAULT_DIR)
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
+    ap.add_argument("--session-ip", default="127.1.1.127",
+                    help="address returned in the SignOn reply; must be loopback and byte-order symmetric")
+    ap.add_argument("--session-port", type=int, default=0x3232,
+                    help="port returned in the SignOn reply (default 12850 = 0x3232)")
     ap.add_argument("--timeout", type=float, default=15.0)
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")
+    if not ipaddress.ip_address(args.session_ip).is_loopback:
+        sys.exit("--session-ip must be loopback")
 
     certs = CertStore(args.ca_dir, args.digest, args.default_host)
     ports = [args.tls_port] + ([args.plain_port] if args.plain_port else [])
