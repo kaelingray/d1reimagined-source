@@ -8,6 +8,8 @@ Copies a baseline RPCS3 folder (never modified) to a new folder, then:
     kept in <dest>/dev_flash_cert_original.
   * with --game-ca, writes an RPCS3 patch (game_ca_patch.py) that swaps the root PEM
     embedded in Destiny's EBOOT for the local test CA, leaving the firmware roots alone.
+    A d1xenia patch copied from the source folder is replaced. --unsigned-manifest adds
+    the patch that accepts an unsigned content manifest.
 
 The copy's rpcn.yml is left as-is (it should already point at the loopback RPCN).
 """
@@ -41,7 +43,11 @@ def main():
     ap.add_argument("--ca-slots", default="",
                     help="comma-separated root files to replace, e.g. CA01,CA02 (default: all CAnn.cer)")
     ap.add_argument("--game-ca", type=Path, help="PEM CA certificate to patch over Destiny's embedded roots")
+    ap.add_argument("--unsigned-manifest", action="store_true",
+                    help="with --game-ca, also patch out the content manifest signature requirement")
     args = ap.parse_args()
+    if args.unsigned_manifest and not args.game_ca:
+        ap.error("--unsigned-manifest needs --game-ca")
 
     if not ipaddress.ip_address(args.dns).is_loopback:
         sys.exit("DNS address must be loopback so the game cannot resolve live hosts")
@@ -82,7 +88,8 @@ def main():
         print(f"replaced {len(roots)} firmware roots with {args.install_ca}; originals in {backup}")
 
     if args.game_ca:
-        patch_file, config_file = game_ca_patch.install(args.dest, args.game_ca)
+        patch_file, config_file = game_ca_patch.install(
+            args.dest, args.game_ca, unsigned_manifest=args.unsigned_manifest, replace=True)
         print(f"wrote {patch_file} and enabled it in {config_file}")
 
 

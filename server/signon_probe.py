@@ -31,6 +31,7 @@ import ssl
 import struct
 import sys
 import threading
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -258,6 +259,15 @@ def handle(raw, peer, port, args, certs, bound_host):
                          + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
             log(conn_id, "replied 200 auth3 task=19 code=700 client_ticket=145 server_ticket=128")
             return
+        if (args.manifest_url and request_line.split()[:2]
+                == ["GET", urllib.parse.urlsplit(args.manifest_url).path]):
+            packages = signon_proto.disc_packages(args.manifest_packages) if args.manifest_packages else []
+            reply = signon_proto.content_manifest(args.manifest_guid.encode(), packages)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                         + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
+            log(conn_id, f"replied 200 content manifest ({len(reply)} bytes, unsigned, "
+                         f"{len(packages)} packages)")
+            return
         reason = {200: "OK", 404: "Not Found", 503: "Service Unavailable"}.get(args.status, "Status")
         conn.sendall(f"HTTP/1.1 {args.status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode())
         log(conn_id, f"replied {args.status}")
@@ -276,7 +286,9 @@ def signon_response(args):
         token=b"d1xenia-local-signon-token-" + b"0" * 37,
         key1=b"d1xenia-key-0001", key2=b"d1xenia-key-0002", key3=b"d1xenia-key-0003",
         expires_at=now + 86400, expires_in=86400,
-        ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port)
+        ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port,
+        config=signon_proto.title_config(args.manifest_url.encode(), args.manifest_guid.encode())
+        if args.manifest_url else None)
 
 
 def serve(addr, port, args, certs, bound_host=None):
@@ -310,6 +322,11 @@ def main():
                     help="address returned in the SignOn reply; must be loopback and byte-order symmetric")
     ap.add_argument("--session-port", type=int, default=0x3232,
                     help="port returned in the SignOn reply (default 12850 = 0x3232)")
+    ap.add_argument("--manifest-url", default="",
+                    help="content manifest URL placed in the SignOn title configuration (field 4)")
+    ap.add_argument("--manifest-guid", default="00000000-0000-0000-0000-000000000001")
+    ap.add_argument("--manifest-packages", type=Path,
+                    help="PS3_GAME/USRDIR/packages folder whose file names are listed in the manifest")
     ap.add_argument("--timeout", type=float, default=15.0)
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:

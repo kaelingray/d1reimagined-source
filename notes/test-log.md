@@ -158,3 +158,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - Input: X posted to the game window from a script. The game reached the lobby without further input.
 - Result: SignOn and auth3 succeeded as before. In the lobby, the probe logged `client_auth title=5378 challenge_verified=True` and sent `server_auth_done`. RPCS3 shows the client read the full 10-byte frame and began waiting for the next frame. A game job thread closed the socket about 70 ms later, after a `stat` of `/dev_hdd1/downloads/` returned ENOENT. No further DNS lookups or connections followed. The screen showed **termite**: "Failed to download configuration files from Bungie servers, please try again." (RPCS3 screenshot, kept privately under the test folder.)
 - Next gate: termite. Leads are listed in `notes/ps3-route.md`.
+
+## PS3 comparisons 019–022 — Title configuration, content manifest, packages
+
+- Date: 2026-09-24. Each run used a fresh copy of 017 (`RPCS3_TEST019_MANIFEST_URL`, `…020_UNSIGNED_MANIFEST`, `…021_MANIFEST_PACKAGES`, `…022_MANIFEST_HASHES`). From 020 on, the copies were made with `prepare_rpcs3_copy.py --game-ca … --unsigned-manifest`. Services were the same as in 018, plus `signon_probe.py --manifest-url http://content.local.test/manifest` (and `--manifest-packages <disc packages folder>` from 021).
+- 019: The SignOn configuration supplied the URL. The game sent `GET /manifest`, the probe replied 503, and the screen showed **nightingale**.
+- 020: An unsigned, GUID-only manifest was accepted. The screen showed "The game disc cannot be read." The halt text read from guest memory was "failed to load bootstrap_patchable".
+- 021: The manifest listed 160 disc packages. The halt text was "Patchable package registration failed with result (-90)".
+- 022: Each package entry also carried its header u64. Registration completed, and the game connected to the SignOn session address `127.1.1.127:12850`, sending an 80-byte message with the SignOn token. There was no reply; after 10 s the screen showed **centipede**. Screenshots and logs are kept privately in the test folders and `SIGNON_LOCAL/logs`.
+- Details and addresses are in `notes/ps3-route.md`.
