@@ -36,3 +36,13 @@ Next options, most promising first:
 - Try RPCS3's HLE `libssl` for the loader only — unlikely to work, because the LLE `libhttp` depends on the real SSL implementation.
 
 Once the handshake completes, `signon_probe.py` will save the first sign-on request under `D:\Destiny360\SIGNON_LOCAL\captures` for protocol work.
+
+## Sign-on reached (2026-09-24, comparison 014)
+
+The certificate blocker was in the game, not the firmware. Destiny passes `cellHttpsInit` two CA buffers: firmware CA01–CA05, and a PEM string built into the EBOOT (`0x011b7218`) that holds Bungie's own "Tiger Root Authority" and GeoTrust Global CA. Replacing firmware roots broke the first buffer and crashed the game. Leaving those roots alone and patching the embedded string in guest memory with the local CA (`server/game_ca_patch.py`, an RPCS3 patch) keeps every verification step on and lets the SSLv3 handshake complete.
+
+The game now sends its first sign-on request to the local probe: `POST /SignOn?platform=ps3_ppu&build=41375.14.07.03.1501.live`, a 390-byte protobuf body that wraps the NP ticket with language, build and region fields (`notes/test-log.md`, comparison 014).
+
+A fallback exists if a later host needs it: the SSL callback's return at `0x108224` (`extsw r3, r27`) could return 0 and accept any chain. That fallback is not needed now.
+
+Next: work out the `SignOn` response the client expects: status, content type and protobuf message. Leads include the Xbox 360 console capture of the same sign-on host (`notes/console-network-capture.md`) and the response-parsing code reachable from the game's `_DW HTTP Processor` thread.

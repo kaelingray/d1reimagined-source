@@ -6,6 +6,8 @@ Copies a baseline RPCS3 folder (never modified) to a new folder, then:
   * with --install-ca, replaces dev_flash/data/cert/CAnn.cer files with the local test CA
     (all of them, or only --ca-slots). Destiny loads CA01-CA05 only. The originals are
     kept in <dest>/dev_flash_cert_original.
+  * with --game-ca, writes an RPCS3 patch (game_ca_patch.py) that swaps the root PEM
+    embedded in Destiny's EBOOT for the local test CA, leaving the firmware roots alone.
 
 The copy's rpcn.yml is left as-is (it should already point at the loopback RPCN).
 """
@@ -16,6 +18,9 @@ import re
 import shutil
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import game_ca_patch  # noqa: E402
 
 
 def set_yaml_value(text, key, value):
@@ -35,6 +40,7 @@ def main():
     ap.add_argument("--install-ca", type=Path, help="PEM CA certificate to install over the firmware roots")
     ap.add_argument("--ca-slots", default="",
                     help="comma-separated root files to replace, e.g. CA01,CA02 (default: all CAnn.cer)")
+    ap.add_argument("--game-ca", type=Path, help="PEM CA certificate to patch over Destiny's embedded roots")
     args = ap.parse_args()
 
     if not ipaddress.ip_address(args.dns).is_loopback:
@@ -74,6 +80,10 @@ def main():
         for root in roots:
             root.write_bytes(pem)
         print(f"replaced {len(roots)} firmware roots with {args.install_ca}; originals in {backup}")
+
+    if args.game_ca:
+        patch_file, config_file = game_ca_patch.install(args.dest, args.game_ca)
+        print(f"wrote {patch_file} and enabled it in {config_file}")
 
 
 if __name__ == "__main__":
