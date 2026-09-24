@@ -105,3 +105,17 @@ The termite leads were right: the bootflow's content-manifest step (`0x32bb40`) 
 - **022.** Field 4 was set to each package's header value (only the first 16 bytes of each file are read). Registration succeeded with no halt. About 15 s later the game connected over TCP to the **session server address from the SignOn reply** (`127.1.1.127:12850`), for the first time. It sent 80 bytes: `01 02 | 00 4a | 00 19 | 00 00 00 00`, then protobuf `{1: <SignOn token, 64 bytes>, 2: 1}`. `session_listener.py` never replies, so the game closed after 10 s and showed **centipede**, "Your connection to Destiny servers has been lost."
 
 The next gate is Bungie's own session protocol on that connection: framing `01 02`, a u16 length, and a u16 message type (0x19 here). The EBOOT's error names mention a `bap` connection and investment servers, so the next step is to find the handler for the reply to message 0x19. Both patches are loopback diagnostics: the CA patch keeps SSL verification on but trusts a private root, and the manifest patch disables one signature check.
+
+## BAP session server (comparisons 023–026)
+
+`server/bap_server.py` now answers the session server address from SignOn (`127.1.1.127:12850`). The protocol was read from the client code; the details and addresses are in the module's docstring.
+
+- **Framing.** Each frame starts with u8 version 1, a u8 kind and a u32be length. Kind 2 is plaintext; kind 1 is encrypted. Client-to-server headers are `u16 type | u32 id`. Server replies use `u16 type | u32 id | u16 status`, and the status must be 200. Message names come from `0x7c6ef4`.
+- **`shello` (0x19 → 0x1a).** The request is protobuf `{1 SignOn token, 2 mode, 3 u64, 4 bool}`. The reply is a sealed blob: `u32be N | IV | AES-128-CBC | HMAC-SHA256`, keyed with **SignOn session keys 2 (AES) and 3 (MAC)**. Its plaintext is `nonce[12] || session_key[16]`.
+- **Encrypted frames.** After shello, frames are AES-128-GCM under that session key: 16-byte tag first, no AAD. Each direction has its own nonce: the client sends with the last nonce byte XOR 1. Nonces are incremented as little-endian counters.
+- **023.** shello was accepted; the client then sent encrypted `qz_reg req` (0x79).
+- **024.** `qz_reg rsp` (empty) was accepted; the client sent `rrc req` (0x12e) with its LAN and STUN addresses.
+- **025.** `rrc rsp` and `echo rsp` (both empty) were accepted. The client sent `c->ws req` (0x0a), a web-service call for **service 503**. Its payload uses the engine's bit-packed type serializer and contains the RPCN name `d1localtest` and a u64. With no reply, the game timed out after about 10 s with **chicken**, "Your connection to Destiny character servers has been lost."
+- **026.** A `c->ws rsp` containing the service id followed by 1024 zero bytes was read by the client (tag plus 1034 bytes). It still ended in chicken.
+
+Next: service 503's response type. The service table is a runtime tag; each service record's request/response type handles are at +0xc and +0x10. The type-driven deserializer is `0x25e25c` → `0x25d2dc`.

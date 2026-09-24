@@ -41,6 +41,10 @@ import struct
 
 VARINT, FIXED64, BYTES, FIXED32 = 0, 1, 2, 5
 
+# Fixed keys in the local SignOn success reply (fields 2.1-2.3). The client uses key 2 as
+# the AES-128 key and key 3 as the HMAC-SHA256 key for the BAP shello reply (bap_server.py).
+TEST_SESSION_KEYS = (b"d1xenia-key-0001", b"d1xenia-key-0002", b"d1xenia-key-0003")
+
 
 def varint(n):
     n &= (1 << 64) - 1

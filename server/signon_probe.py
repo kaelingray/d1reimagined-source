@@ -284,7 +284,8 @@ def signon_response(args):
     now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
     return signon_proto.success_response(
         token=b"d1xenia-local-signon-token-" + b"0" * 37,
-        key1=b"d1xenia-key-0001", key2=b"d1xenia-key-0002", key3=b"d1xenia-key-0003",
+        key1=signon_proto.TEST_SESSION_KEYS[0], key2=signon_proto.TEST_SESSION_KEYS[1],
+        key3=signon_proto.TEST_SESSION_KEYS[2],
         expires_at=now + 86400, expires_in=86400,
         ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port,
         config=signon_proto.title_config(args.manifest_url.encode(), args.manifest_guid.encode())

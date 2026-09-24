@@ -167,3 +167,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 021: The manifest listed 160 disc packages. The halt text was "Patchable package registration failed with result (-90)".
 - 022: Each package entry also carried its header u64. Registration completed, and the game connected to the SignOn session address `127.1.1.127:12850`, sending an 80-byte message with the SignOn token. There was no reply; after 10 s the screen showed **centipede**. Screenshots and logs are kept privately in the test folders and `SIGNON_LOCAL/logs`.
 - Details and addresses are in `notes/ps3-route.md`.
+
+## PS3 comparisons 023–026 — BAP session server
+
+- Date: 2026-09-24. Fresh copies of 017 with `--game-ca … --unsigned-manifest` (`RPCS3_TEST023_BAP_SHELLO` … `RPCS3_TEST026_WS_ZERO`). `server/bap_server.py` replaced `session_listener.py` on 127.1.1.127:12850.
+- 023: `shello rsp` was accepted, then an encrypted `qz_reg req` arrived (timeout, centipede).
+- 024: `qz_reg rsp` was accepted, then `rrc req` arrived.
+- 025: `rrc rsp` and `echo rsp` were accepted. `c->ws req` for service 503 went unanswered; after 10 s the screen showed **chicken** ("connection to Destiny character servers lost").
+- 026: A zero-filled `c->ws rsp` was received by the client but still ended in chicken.
+- Details are in `notes/ps3-route.md`.

@@ -15,6 +15,7 @@ Loopback-only tools for replacing, one gate at a time, the online services Desti
 | `auth3_proto.py` | Synthetic PS3 auth3 response: task 19, code 700, echoed seed, packed client ticket and opaque server ticket. Enabled with `signon_probe.py --mode auth3`. |
 | `session_listener.py` | Loopback TCP/UDP catch-all for the server address given in the SignOn reply (default 127.1.1.127:12850); logs and saves, never replies. |
 | `lobby_probe.py` | Demonware lobby on 127.0.3.1:3074: answers the greeting (`server_header_ack`, protocol 210) and `client_auth` (`server_auth_done`). Picks the auth3 session whose key reproduces the client's challenge. Saves frames and derived keys privately; does not implement the encrypted READY-state messages. |
+| `bap_server.py` | Bungie session server (BAP) stand-in on 127.1.1.127:12850: answers `shello` (AES-CBC/HMAC-sealed with the SignOn keys) and then the GCM-encrypted `qz_reg`, `rrc` and `echo` requests; `--ws-zero-bytes` gives a placeholder `c->ws` reply. |
 | `game_ca_patch.py` | RPCS3 patch (`patches/imported_patch.yml` + `config/patch_config.yml`) that overwrites the root PEM embedded in Destiny's EBOOT (`0x011b7218`) with the local CA, in guest memory only. |
 
 ## Typical run
@@ -31,6 +32,6 @@ The local RPCN server (`D:\Destiny360\RPCN_LOCAL\rpcn.exe`) must also be running
 
 ## Current gate (2026-09-24)
 
-With DNS, STUN and RPCN local, the RPCS3 copy prepared with `--game-ca … --unsigned-manifest`, `signon_probe.py --mode auth3 --manifest-url http://content.local.test/manifest --manifest-packages <PS3_GAME/USRDIR/packages>` and `lobby_probe.py`, Destiny completes SignOn, auth3 and lobby authentication. It downloads the local content manifest and registers the disc packages (comparison 022). It then connects to the SignOn session address (127.1.1.127:12850) and sends its token. `session_listener.py` never replies, so the game shows **centipede** after 10 s. Character selection is not implemented. See `notes/ps3-route.md`.
+With the comparison-022 setup plus `python -u server/bap_server.py` in place of `session_listener.py`, Destiny completes the BAP session hello and three encrypted requests (comparisons 023–025). It then sends a web-service call (`c->ws req`, service 503) and, without a valid reply, shows **chicken** (character servers). Character selection is not implemented. See `notes/ps3-route.md`.
 
-For this test, also run `python -u server/lobby_probe.py --timeout 60`. It reads the private auth3 session files that `signon_probe.py` saves in `D:/Destiny360/SIGNON_LOCAL/captures`. Run the unit tests with `python -m unittest discover -s server -p "test_*.py" -v`.
+For this test, also run `python -u server/lobby_probe.py --timeout 60`. Run the unit tests with `python -m unittest discover -s server -p "test_*.py" -v`.
