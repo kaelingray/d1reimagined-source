@@ -119,3 +119,12 @@ The next gate is Bungie's own session protocol on that connection: framing `01 0
 - **026.** A `c->ws rsp` containing the service id followed by 1024 zero bytes was read by the client (tag plus 1034 bytes). It still ended in chicken.
 
 Next: service 503's response type. The service table is a runtime tag; each service record's request/response type handles are at +0xc and +0x10. The type-driven deserializer is `0x25e25c` → `0x25d2dc`.
+
+## Investment sign-in (comparisons 027–027b)
+
+`scripts/rpcs3_tiger_types.py` reads the engine's runtime type definitions and web-service table from a running test instance; its docstring records the formats. Service 503 is the **investment account sign-in**. Its request is `{name[36] u8, account_id u64}`. Its response (type `0x80801825`, 0xe0 bytes) starts with the shared result block `{u4 result, i32 detail}` (45 of 66 services use it), followed by a u64, two u32s and a struct of six optional fields: two u64s and counted lists of character-like records. Result codes (`0x41a2f8`): 0 error_none, 1 unknown, 2 no_content, 3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout.
+
+- **026/027.** Result 0 (all other fields zero or absent) was accepted. The client sent nothing further and timed out after about 10 s with **chicken**.
+- **027b.** Result 5 made the client disconnect within 100 ms and show **chimpanzee**, "There may be a problem with your Bungie account." This proves the reply is matched and decoded.
+
+After a successful sign-in the client appears to wait for server pushes. The prime candidate is `qz->c update not` (0x7b, header kind 4), which carries investment "families": `[family_type, family_root_soid, version, flags, object_count]` followed by objects (decoder `0x4198d8`). The family types (`0xb6068c`) are peer, inspection, roster, select_character, self, universe, party_details and party_network_details. Next: the 0x7b frame layout and a minimal `self`/`select_character` push.

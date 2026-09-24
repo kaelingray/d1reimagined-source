@@ -176,3 +176,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 025: `rrc rsp` and `echo rsp` were accepted. `c->ws req` for service 503 went unanswered; after 10 s the screen showed **chicken** ("connection to Destiny character servers lost").
 - 026: A zero-filled `c->ws rsp` was received by the client but still ended in chicken.
 - Details are in `notes/ps3-route.md`.
+
+## PS3 comparisons 027–027b — Investment sign-in result code
+
+- Date: 2026-09-24. Run with `scripts/Invoke-Rpcs3LocalTest.ps1`, which makes a fresh copy from TEST017 and restarts `bap_server.py` with the given arguments.
+- 027b (`--ws-result 5`): the client disconnected immediately after the service-503 reply and showed **chimpanzee** (Bungie account problem). With result 0 (026) the client waited, then showed chicken. The reply is therefore processed; the missing piece comes after sign-in. Details are in `notes/ps3-route.md`.

@@ -189,11 +189,13 @@ def handle(conn, peer, args):
             log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
                 f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
             if kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_zero_bytes:
-                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, payload[:2] + bytes(args.ws_zero_bytes))
+                body = bytearray(args.ws_zero_bytes)
+                body[0] = (args.ws_result & 0xF) << 4  # u4 result code, MSB-first (0 = error_none)
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, payload[:2] + bytes(body))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent c->ws rsp for service {int.from_bytes(payload[:2], 'big')} "
-                    f"({args.ws_zero_bytes} zero bytes)")
+                    f"(result {args.ws_result}, {args.ws_zero_bytes} bytes)")
             if kind == 1 and msg_type in EMPTY_REPLIES:
                 reply = encrypted_frame(tx, EMPTY_REPLIES[msg_type], msg_id, 200, b"")
                 conn.sendall(reply)
@@ -224,6 +226,9 @@ def main():
     ap.add_argument("--timeout", type=float, default=120)
     ap.add_argument("--ws-zero-bytes", type=int, default=1024,
                     help="answer c->ws requests with the service id and this many zero bytes (0: no reply)")
+    ap.add_argument("--ws-result", type=int, default=0,
+                    help="ws result code in the first 4 bits (0 error_none, 1 unknown, 2 no_content, "
+                         "3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout)")
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
     args = ap.parse_args()
     if not ipaddress.IPv4Address(args.bind).is_loopback:
