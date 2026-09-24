@@ -4,7 +4,9 @@ local RPCS3 test instance (read-only guest memory access via rpcs3_guest_read.py
 Tag handles resolve through the instance table at *(*0x0175c1f0) (as in 0x1c13a0):
   idx = (h >> 13) masked, entry = table + idx*64,
   p = [entry+0x10] + (h & 0x1fff) * [entry+0x30]; def = p - ([p+8] & [entry+0x34]).
-A type definition holds its struct size at +0x14 and a field list at def+0x54+[def+0x54]:
+A type definition holds its struct size at +0x14 and a field list at def+0x54+[def+0x54].
+Primitive readers (table 0x175d5c8) decode bits - min: kind 2 bool (1 bit), 3/7 u8,
+4/8 u16, 5/9 u32, 6/10 u64 (width bits each), 11 real32 (32 bits when +0x20 is 0).
 u32 count, 16-byte header, then 0x28-byte entries:
   +0 struct offset, +8 presence-bit index, +0x10 kind (1 nested struct, 3/4/5/6/7/9/0xa
   primitives), +0x11 optional (1 presence bit precedes the field), +0x14 nested type
@@ -17,6 +19,7 @@ response type. Most responses start with type 0x80801796 = {u4 result, i32 detai
 is error_none (0x41a2f8).
 
 Usage: python scripts/rpcs3_tiger_types.py services | wire <id> | type <handle>
+       python scripts/rpcs3_tiger_types.py schema OUT.json HANDLE... (type trees as JSON)
 """
 
 import struct
@@ -60,8 +63,11 @@ def fields(h):
     out = []
     for i in range(u32(fl)):
         e = fl + 0x14 + i * 0x28
+        # For primitives, +0x18 is the minimum value (decoded = bits - min, 0xd1c428) and
+        # +0x1c the bit width; for nested fields the byte at +0x18 is the array mode.
         out.append(dict(off=u32(e), bit=u32(e + 8), kind=rd(e + 0x10, 1)[0], opt=rd(e + 0x11, 1)[0],
-                        nested=u32(e + 0x14), arr=rd(e + 0x18, 1)[0], width=u32(e + 0x1C)))
+                        nested=u32(e + 0x14), arr=rd(e + 0x18, 1)[0], min=u32(e + 0x18),
+                        width=u32(e + 0x1C), extra=u32(e + 0x20)))
     return p, u32(p + 0x14), out
 
 
@@ -83,6 +89,21 @@ def services():
         yield i, u16(d + 8), u32(d + 0xC), u32(d + 0x10)
 
 
+def schema(handles, out=None):
+    """Collect type trees as {handle: {"size": n, "fields": [...]}} for server-side encoders."""
+    out = {} if out is None else out
+    todo = list(handles)
+    while todo:
+        h = todo.pop()
+        key = f"{h:#x}"
+        if key in out:
+            continue
+        _, size, fs = fields(h)
+        out[key] = {"size": size, "fields": fs}
+        todo += [f["nested"] for f in fs if f["kind"] == 1]
+    return out
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "services"
     if cmd == "services":
@@ -95,3 +116,11 @@ if __name__ == "__main__":
                 print("response:"); dump(rsp)
     elif cmd == "type":
         dump(int(sys.argv[2], 16))
+    elif cmd == "schema":
+        # Types for the given handles plus every web-service response type; "services"
+        # maps wire id -> [request handle, response handle].
+        import json
+        svc = {wire: [req, rsp] for _, wire, req, rsp in services()}
+        out = schema([int(h, 16) for h in sys.argv[3:]] + [rsp for _, rsp in svc.values()])
+        out["services"] = {str(w): [f"{a:#x}", f"{b:#x}"] for w, (a, b) in svc.items()}
+        Path(sys.argv[2]).write_text(json.dumps(out, indent=0))

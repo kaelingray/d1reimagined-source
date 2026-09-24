@@ -139,3 +139,17 @@ RPCS3's GDB stub (`GDB Server: 127.0.0.1:2345` in `config.yml`) is enabled in th
 - 028 (empty `self`/`select_character` family pushes) and 030 (sign-in reply carrying the request's account id, both optional u64s, and 1 in both u32s) did not change the outcome.
 
 Next: follow event 0x22 through the investment update loop to find what sets the user entry to state 3, and whether it depends on 503 reply fields or on queuez family objects.
+
+## Past sign-in: first-run setup screens (comparisons 033–048)
+
+Destiny now passes the investment sign-in on the local stack and shows its first-run setup screens: **Set Screen Bounds → Adjust Brightness → Subtitles** (comparison 047, RPCS3 screenshots kept privately). The chain of fixes:
+
+1. **Biased primitives.** The engine's serializer stores `value + min` for every primitive (readers at `0x175d5c8`, `decoded = bits - min`). The ws result enum has min 1 and a signed i32 has min 0x80000000. Replies sent as plain zeros decoded as result −1, which is why every earlier sign-in "success" was ignored.
+2. **Sign-in reply** (service 503, handled by `0xbb8a40` → `0x295794`): result 0 moves the local user entry from state 2 to 3 and takes the user's root soid from response +0x08. The optional struct at +0x18 is the **universe object** (`0x41becc`); its first u64 must be the universe root `0x7fffffffffffffff` that the client subscribed to.
+3. **Family fetch** (service 206, request `{u4 family type, u64 root}`): the reply is `{u4 result}` plus the ws **blob**, which carries a qz update payload for the family (a missing blob crashed the client at `0xbb882c`). The client fetches `select_character` (3) at the user's soid, then sends `sub req` (0x0c: `u8 family type, u64 root`) for `self` (4). The server answers `sub rsp` and pushes the family as a `qz->c update`.
+4. **Objects.** An object is a header (u32 type hash, u64 soid, u32 payload length) plus a payload encoded with the object's runtime type. `server/investment.py` encodes any type from the exported schema. The sign-in step waits for the `self` root object (type hash `0x88190fe1`, id = soid; `0x293108`).
+5. **Snapshots.** `0x41b75c` accepts a family for a new subscription only when flags bit 0 (full snapshot) is set; otherwise its objects are ignored.
+
+GDB tracing through RPCS3's stub (`scripts/rpcs3_gdb*.py`) located each step: the error/milestone calls, the pending-request completion (`0x28c3b8`), the family/object manager (`0x41b75c`, `0x41b9ec`) and the sign-in reason codes (`0x28d4c0`: 2 = no subscription, 3 = unknown object type, 4 = no free object, 6 = version gap).
+
+After the setup screens the client calls service 701 (1080-byte request). Unhandled services now receive their response type encoded by default (result error_none) from the exported schema.

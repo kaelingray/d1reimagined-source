@@ -55,14 +55,45 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import investment  # noqa: E402
 import signon_proto  # noqa: E402
+
+# Root object types per family (object pools at mgr+0x2a3c0 in 0x41a0d0's manager):
+# family -> (type hash, type handle). The self (4) root object is what the sign-in step
+# looks up (0x293108); select_character (3) type 0 is its roster header.
+ROOT_OBJECTS = {4: (0x88190FE1, 0x80801803, lambda soid: {0: {0: soid}}),
+                3: (0xA2AC2C74, 0x80801951, lambda soid: {0: soid})}
+
+
+def default_ws_response(schema, wire):
+    """Service reply with its response type encoded by default (result error_none, other
+    fields absent or zero) and no blob; None if the service is not in the schema."""
+    entry = (schema or {}).get("services", {}).get(str(wire))
+    if not entry:
+        return None
+    w = investment.BitWriter()
+    w.put(wire, 16)
+    investment.encode_into(w, schema, int(entry[1], 16))
+    w.put(0, 1)  # no blob
+    return w.data()
+
+
+def family_blob(schema, family_type, root):
+    objects = []
+    if schema and family_type in ROOT_OBJECTS:
+        type_hash, handle, values = ROOT_OBJECTS[family_type]
+        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, values(root))))
+    # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
+    return investment.qz_payload([investment.family(family_type, root, objects, flags=1)])
 
 CAPTURE_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\captures\bap")
 SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
 QZ_REG_REQ, QZ_REG_RSP = 0x79, 0x7A
 ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
 WS_REQ, WS_RSP = 0x0A, 0x0B
+SUB_REQ, SUB_RSP = 0x0C, 0x0D
 QZ_UPDATE = 0x7B
+UNIVERSE_SOID = 0x7FFFFFFFFFFFFFFF
 FAMILY_TYPES = {"peer": 0, "inspection": 1, "roster": 2, "select_character": 3, "self": 4,
                 "universe": 5, "party_details": 6, "party_network_details": 7}  # 0xb6068c
 
@@ -81,22 +112,57 @@ class BitWriter:
         return bytes(int("".join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
 
 
-def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True):
+def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, opt_values=None):
     """Service 503 (investment sign-in) response, type 0x80801825:
     {u4 result, i32 detail} u64 +0x08, u32 +0x10, u32 +0x14, then struct 0x80801941 of six
     optional fields (presence bit each): u64, u64, three counted lists, u32. Lists and the
-    last u32 are left absent here; the trailing bit is the ws blob flag (0)."""
+    last u32 are left absent here; the trailing bit is the ws blob flag (0).
+
+    Primitive kinds are biased on the wire (seen in decoded memory): the kind-3 result enum
+    decodes as bits - 1 and the signed kind-5 detail as bits - 0x80000000. The completion
+    handler 0x295794 (via 0xbb8a40) needs result 0 and takes the user's root soid from +0x08;
+    it then moves the local user entry from state 2 to 3."""
     w = BitWriter()
     w.put(0x01F7, 16)
-    w.put(result, 4); w.put(0, 32)
+    w.put(result + 1, 4); w.put(0x80000000, 32)
     w.put(account_id, 64); w.put(word1, 32); w.put(word2, 32)
-    for _ in range(2):
+    # The +0x18 struct is the universe object (0x41becc): its first u64 must be the
+    # universe root soid the client subscribed to (0x7fffffffffffffff, rodata 0x11f4590).
+    for value in (opt_values or (UNIVERSE_SOID, 1)):
         w.put(1 if optional_ids else 0, 1)
         if optional_ids:
-            w.put(account_id, 64)
+            w.put(value, 64)
     for _ in range(4):
         w.put(0, 1)
     w.put(0, 1)
+    return w.data()
+
+
+def read_bits(data, start, count):
+    """Unsigned MSB-first value of `count` bits at bit offset `start`."""
+    value = 0
+    for i in range(start, start + count):
+        value = (value << 1) | ((data[i >> 3] >> (7 - (i & 7))) & 1)
+    return value
+
+
+def family_fetch_request(payload):
+    """Service 206 request (type 0x80801774): u4 family type (biased +1), u64 root soid."""
+    return read_bits(payload, 16, 4) - 1, read_bits(payload, 20, 64)
+
+
+def family_fetch_response(family_type, root, version=1, blob=None):
+    """Service 206 response (type 0x80801869, just {u4 result}) plus the ws blob that the
+    client posts to its queuez handler (0xbb87b8 -> 0x51c7ec): a qz update payload holding
+    the requested family, here with no objects."""
+    blob = blob if blob is not None else qz_update([(family_type, root, version, 0, [])])
+    w = BitWriter()
+    w.put(206, 16)
+    w.put(0 + 1, 4)          # result error_none, biased
+    w.put(1, 1)              # blob present
+    w.put(len(blob), 16)
+    for byte in blob:
+        w.put(byte, 8)
     return w.data()
 
 
@@ -113,7 +179,7 @@ def qz_update(families):
 # The client's reply queue (0x7c6bc0) expects exactly four reply types: shello rsp, echo
 # rsp, qz_reg rsp and rrc rsp. The last three decode with 0xa62a0, which ignores the
 # payload, so an empty status-200 reply satisfies them. Request -> reply type.
-EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP}
+EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP}
 NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08: "c->ah not",
          0x09: "b->c not", 0x0A: "c->ws req", 0x0B: "c->ws rsp", 0x0C: "sub req", 0x0D: "sub rsp",
          0x0E: "unsubscribe req", 0x0F: "unsubscribe rsp", 0x10: "ahp req", 0x11: "ahp rsp",
@@ -244,10 +310,29 @@ def handle(conn, peer, args):
                 f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
             if kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f7") and args.ws_signin:
                 account_id = int.from_bytes(payload[38:46], "big")
-                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, signin_response(account_id))
+                if args.ws_markers:
+                    body = signin_response(0x3333333333333333, word1=0x44444444, word2=0x55555555,
+                                           opt_values=(0x1111111111111111, 0x2222222222222222))
+                else:
+                    body = signin_response(account_id, optional_ids=not args.ws_no_optional)
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent sign-in rsp (account id {account_id:#x})")
+            elif kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("00ce") and args.ws_signin:
+                family_type, root = family_fetch_request(payload)
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
+                    family_type, root, blob=family_blob(args.schema, family_type, root)))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
+                log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, no objects")
+            elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
+                  and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
+                wire = int.from_bytes(payload[:2], "big")
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(args.schema, wire))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
+                log(f"[{tag}] sent default reply for service {wire} (result error_none)")
             elif kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_zero_bytes:
                 body = bytearray(args.ws_zero_bytes)
                 body[0] = (args.ws_result & 0xF) << 4  # u4 result code, MSB-first (0 = error_none)
@@ -270,6 +355,15 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-{EMPTY_REPLIES[msg_type]:02x}.bin").write_bytes(reply)
                 log(f"[{tag}] sent {NAMES[EMPTY_REPLIES[msg_type]]} (empty, status 200)")
+                if msg_type == SUB_REQ and len(payload) >= 9 and args.ws_signin:
+                    # sub req payload: u8 family type, u64 root soid. Answer with that family
+                    # (version 1, no objects) as a queuez update push.
+                    family_type, root = payload[0], int.from_bytes(payload[1:9], "big")
+                    push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(args.schema, family_type, root))
+                    conn.sendall(push)
+                    folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
+                    log(f"[{tag}] pushed family type {family_type} root {root:#x} "
+                        f"({len(push)} bytes, root object {'yes' if args.schema and family_type in ROOT_OBJECTS else 'no'})")
             if msg_type == SHELLO_REQ:
                 fields = [(n, w, v if w == 0 else len(v)) for n, w, v in signon_proto.decode(payload)]
                 log(f"[{tag}] shello req fields {fields}")
@@ -297,6 +391,10 @@ def main():
                     help="answer c->ws requests with the service id and this many zero bytes (0: no reply)")
     ap.add_argument("--ws-signin", action="store_true",
                     help="answer service 503 with a typed sign-in response carrying the request's account id")
+    ap.add_argument("--ws-no-optional", action="store_true",
+                    help="with --ws-signin, leave the optional u64 fields of the sign-in reply absent")
+    ap.add_argument("--ws-markers", action="store_true",
+                    help="with --ws-signin, fill the reply with distinct marker values to find copies in memory")
     ap.add_argument("--qz-push", nargs="*", default=[],
                     help="after the ws reply, push families as name[:version[:flags]] with no objects")
     ap.add_argument("--qz-root", type=lambda v: int(v, 0), default=0, help="root soid for pushed families")
@@ -304,7 +402,10 @@ def main():
                     help="ws result code in the first 4 bits (0 error_none, 1 unknown, 2 no_content, "
                          "3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout)")
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
+    ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
+                    help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args()
+    args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
     args.key, args.mac_key = signon_proto.TEST_SESSION_KEYS[1], signon_proto.TEST_SESSION_KEYS[2]

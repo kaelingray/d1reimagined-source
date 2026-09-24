@@ -38,7 +38,7 @@ do {
     $stamp = [datetime]::MinValue
     $ready = $last -and [datetime]::TryParse($last.Split(' ')[0], [ref]$stamp) -and $stamp -gt $launched
 } until ($ready -or (Get-Date) -gt $deadline)
-Start-Sleep 8
+Start-Sleep 15
 & "$PSScriptRoot\Send-RpcsKey.ps1" -Count 1 | Out-Null
 Start-Sleep $WaitSeconds
 & "$PSScriptRoot\Send-RpcsKey.ps1" -Count 1 -Vk 0x7B | Out-Null
