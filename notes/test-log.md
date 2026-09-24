@@ -102,3 +102,13 @@ Copy this section for each run. Change one input or setting per run.
 - Date: 2026-09-24. Same official RPCS3 installation and PS3 game as comparison 001. Changed only Network Status from `Disconnected` to `Connected`; PSN Status stayed `Disconnected`.
 - Pressing A advanced to **buffalo**: "You must be signed into PSN in order to play Destiny." This confirms the first network gate was passed. Gameplay was not reached.
 - The current RPCS3 PSN Status menu offers `Disconnected` and `RPCN`. No account setup or private server connection was attempted.
+
+## PS3 comparison 003 — Local RPCN sign-in
+
+- Date: 2026-09-24. Isolated copy of the same official RPCS3 build at `D:\Destiny360\RPCS3_TEST003_LOCAL_RPCN` (baseline install untouched). Network Status `Connected`, PSN Status `RPCN`.
+- Sign-in service: RPCN server 1.10.0 (protocol 32, matching RPCS3 `b5a174e9`; 1.11.0 speaks 33 and is incompatible), run from `D:\Destiny360\RPCN_LOCAL` bound to `127.0.0.1` only, email validation and ticket signing disabled. A throwaway account `d1localtest` was created on that local server only with `scripts/rpcn_local_account.py`. No public RPCN account was created.
+- First attempt: still **buffalo**, plus an "RPCN unknown error" popup. Cause: RPCN's UDP helper was bound to `[::1]` only, so RPCS3's IPv4 address check on `127.0.0.1:3657` went unanswered. Setting an unparsable `HostIPv6` makes RPCN fall back to `127.0.0.1:3657`.
+- Second attempt: **buffalo cleared**. Destiny showed "SIGNING IN", then "Destiny servers are not available. Dismiss this message to try again."
+- Log evidence (private: `D:\Destiny360\LOGS\PS3-Test003-local-rpcn.RPCS3.log`): the game called `sceNpManagerRequestTicket2` for service ID `UP0002-BLUS31181_00` and the local RPCN issued each ticket. Its network threads are named `DW Thread` and `_DW HTTP Processor` (Demonware). At boot it looked up `dev-stun.demonware.net`. After each ticket it tried HTTPS (port 443) sign-on hosts in turn: `www8.signon.deadorbit.net`, `www1.signon.gravityshavings.net`, `www1.signon.deadorbit.net`, `www2.signon.gravityshavings.net`, `www2.signon.deadorbit.net`.
+- Those names resolved publicly, so these attempts reached Bungie's live sign-on service with a locally issued, unsigned ticket. RPCS3 was stopped once this was noticed. Future local tests should keep the game from contacting live services.
+- What this proves: RPCS3 + a local RPCN server satisfies Destiny's PSN sign-in check, and the next gate is Bungie/Demonware sign-on over HTTPS. What remains unknown: the sign-on request and response format, and whether a compatible local service can be built.
