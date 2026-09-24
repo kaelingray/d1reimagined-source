@@ -17,3 +17,22 @@ The fork's August 2022 commit [`1f065d3`](https://github.com/cohaereo/rpcs3-v4ng
 A local RPCN server (see `notes/test-log.md`, PS3 comparison 003) cleared buffalo. Destiny then requested an NP ticket for service `UP0002-BLUS31181_00` and tried Demonware/Bungie HTTPS sign-on hosts (`www*.signon.deadorbit.net`, `www*.signon.gravityshavings.net`), ending at "Destiny servers are not available." The public V4NGUARD custom-server project demonstrated Destiny on RPCS3 reaching the Tower but has not published its server.
 
 Next: determine whether a usable Destiny PS3 service endpoint exists and what RPCN/PSN sign-in it requires. Only then test authentication or later gameplay in a separate RPCS3 installation. Do not push the ISO, firmware, extracted game, emulator binary, save data, or raw network traces.
+
+## Local service stand-ins (2026-09-24, comparisons 004–013)
+
+A loopback-only toolset in `server/` now replaces each gate the game hits before sign-on, and keeps every name the game resolves on this PC (`server/README.md`):
+
+1. **DNS** — `dns_sinkhole.py`, set as RPCS3's DNS address, answers everything locally.
+2. **Demonware STUN / NAT discovery** — the game probes `dev-stun.demonware.net:3074` from its own UDP port 3074. With no answer it shows **marionberry**. `stun_stub.py` answers IP discovery (type 30 → 31) and NAT discovery (20 → 21) using the layout in [project-bo4/shield-development `stun_server.cpp`](https://github.com/project-bo4/shield-development/blob/6b8f7ce/source/proxy-dll/demonware/servers/stun_server.cpp) (GPL-3.0; format reference only, no code copied). Destiny accepts it and moves on. The stub runs on 127.0.0.2 because RPCS3 holds the game's `0.0.0.0:3074`.
+3. **PSN sign-in** — loopback RPCN, as in comparison 003.
+4. **HTTPS sign-on** — the client offers only SSL 3.0 (3DES/RC4/DES/export suites, no SNI). `sslv3.py` implements the server side; `signon_probe.py` gives each sign-on hostname its own loopback address so the right certificate is chosen without SNI.
+
+**Current blocker: certificate trust.** Destiny loads only firmware roots `CA01`–`CA05` (SCEI DNAS Root 01–05; LF-terminated PEM, PrintableString C/O/CN, SHA-1, 2048-bit). The firmware `libssl.sprx` loader reads a replacement root and stops, whatever slot it occupies; the game then hits a fatal-error path (`0x0010723c`, `r23 = "ps3_ppu"`) while preparing the sign-on URL. Matching line endings, subject structure, string types, extensions and validity dates did not help. RPCS3's HLE `cellSslCertificateLoader` (in `rpcs3/Emu/Cell/Modules/cellSsl.cpp`) simply concatenates files, but this game uses the LLE module.
+
+Next options, most promising first:
+
+- Find the rejecting check in the decrypted LLE `libssl.sprx` (RPCS3 can decrypt firmware modules) and apply an RPCS3 patch in the isolated copy so the loader accepts a local root.
+- Leave the DNAS roots intact and instead patch the game's HTTPS verification (it imports `cellHttpClientSetSslCallback` and `cellSslCertGet*`), so any chain is accepted for the sign-on hosts only.
+- Try RPCS3's HLE `libssl` for the loader only — unlikely to work, because the LLE `libhttp` depends on the real SSL implementation.
+
+Once the handshake completes, `signon_probe.py` will save the first sign-on request under `D:\Destiny360\SIGNON_LOCAL\captures` for protocol work.
