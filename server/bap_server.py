@@ -216,7 +216,13 @@ AH_NOT = 0x08
 # Next the client waits for its entity indices: b->c not type 0 (handler 0xd0d020), a
 # 0x80800d64 struct holding a 384-word bitmap (0x808043a7) that is ORed into the client's
 # index set (+0x5bf8) and marks the indices received (+0x61f8).
+# The client counts as established (0x258324) once it also has host flag 0x100 (type 11,
+# body ignored, handler 0x25715c) and an activity state: type 1 (handler 0xd0d250), a
+# 0x80800e76 struct whose 0xa20-byte body is copied into the simulation (0x1c95f0) and must
+# have bool @0 set and either bool @1 clear or i32 @0x10 > 0.
 AH_JOIN_REQUEST, AH_JOIN_RESPONSE, AH_ENTITY_INDICES = 3, 4, 0
+AH_STATE, AH_ESTABLISH = 1, 11
+STATE_TYPE = 0x80800E76
 JOIN_REQUEST_TYPE, JOIN_RESPONSE_TYPE = 0x80800E98, 0x80800A58
 ENTITY_INDICES_TYPE, ENTITY_WORDS = 0x80800D64, 384
 ACTIVITY_SCHEMA = Path(r"D:\Destiny360\SIGNON_LOCAL\activity_schema.json")
@@ -239,6 +245,10 @@ def entity_indices(schema, first, last):
     for index in range(first, last):
         words[index // 32] |= 0x80000000 >> (index % 32)
     return investment.encode(schema, ENTITY_INDICES_TYPE, {0: {4 * i: w for i, w in enumerate(words)}})
+
+
+def activity_state(schema, values=None):
+    return investment.encode(schema, STATE_TYPE, {0: values or {0: True, 0x10: 1}})
 
 
 def join_response(schema, request_body, session_id="d1local-activity", result=0):
@@ -627,6 +637,17 @@ def handle(conn, peer, args):
                     push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ENTITY_INDICES, data, host_id))
                     conn.sendall(push)
                     log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
+                if args.ah_state:
+                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema))):
+                        push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
+                        conn.sendall(push)
+                    log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
+                for spec in args.ah_after_join:
+                    subtype, _, data = spec.partition(":")
+                    push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0), bytes.fromhex(data),
+                                                                               host_id))
+                    conn.sendall(push)
+                    log(f"[{tag}] pushed b->c not subtype {subtype} ({len(data) // 2} bytes) after the join")
             if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
                 subtype, _, data = args.ah_not_push.partition(":")
                 push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
@@ -730,6 +751,10 @@ def main():
                     help="answer host join requests (c->ah not type 3) with a joined response")
     ap.add_argument("--ah-entities", metavar="FIRST:LAST",
                     help="with --ah-join, then grant entity indices FIRST..LAST-1 (b->c not type 0)")
+    ap.add_argument("--ah-state", action="store_true",
+                    help="with --ah-join, then send host type 11 and a minimal activity state (type 1)")
+    ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
+                    help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-session", default="d1local-activity",
                     help="activity session id sent in the host join response")
     ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,
