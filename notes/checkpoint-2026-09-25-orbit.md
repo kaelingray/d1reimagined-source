@@ -211,3 +211,14 @@ Full run (about 10 minutes):
   (4 bytes), then 14/21 and leaves: "You have been returned to Orbit due to an error"
   (**lobster**, failure (0x18, 0xfe) from `0x327e44`, reason via `0x326fe4`/`0x3268d8`).
   Next: what the host must answer after arrival (types 20/36) / what `0x326fe4` checks.
+- Why "lobster" (TEST149): once in the world, `0x327d90` checks 30 leave conditions every frame
+  (mask at +8 of 0x18eb978). Condition 34's handler reads a state byte at `0x30e088()+0x89`
+  (>= 6 = error) and maps it (table 0x11e9ec4) to the failure reason; 0xfe = state 12, set at
+  `0x31c350` when the session peer table (`0x13e2a0()`, lookup `0x140820`, 0x200 peers) has no
+  peer at the expected machine index (result 0 or 5). I.e. the activity host is not a known
+  peer. The peer roster is what host type-5 simulation packets carry (`0x1c85e0`: u8 epoch,
+  bool, 65-bit mask + delta of the 65-slot roster type 0x80800cf7 {opt char8 id, opt u16,
+  bool}, u32, then the replicated object stream `0x1ce4a4`). Next: send type-5 packets with the
+  host (and the player) in the roster, epoch = simulation +0x5010.
+- Client messages after arrival: type 20 = `0x80800e22` (384-word bitmap, zero), type 36 =
+  `0x80800bd0` (u32 0).
