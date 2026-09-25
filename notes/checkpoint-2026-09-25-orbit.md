@@ -222,3 +222,12 @@ Full run (about 10 minutes):
   host (and the player) in the roster, epoch = simulation +0x5010.
 - Client messages after arrival: type 20 = `0x80800e22` (384-word bitmap, zero), type 36 =
   `0x80800bd0` (u32 0).
+- Correction (TEST150/151): the "missing peer" is object table index 0. `0x13e2a0()` (global
+  0x18a943c, table `*(+4)`: +0 scenario handle, +8.. 0x200 entries of 8 bytes, masks +0x1154/
+  +0x1194) is filled by `0x140ce4` from the scenario's zone data for the **active zone set**
+  (table +0x110c, -1 = none). +0x110c is set by `0x13ff9c` from engine request slot 2
+  ("switch zone set", handler `0x30256c` -> `0x1403dc`), posted at `0x31ebf4` by the client's
+  world-controller zone state (`0x30e128()`, records at +0x8 / +0xa8, 0xa0 bytes each) - i.e.
+  the zone set must come from the host's world controller (replicated state / RPC events
+  0x33..0x36), which the stand-in does not send yet. The type-5 roster only drives peers
+  (`0x1c8280` -> session interface `0x123478` / `0x1234c8`).
