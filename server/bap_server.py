@@ -281,6 +281,19 @@ UNIVERSE_TIME_UNITS = {"one": lambda t: 1, "s": lambda t: int(t), "ms": lambda t
                        "filetime": lambda t: int((t + 11644473600) * 1e7)}
 
 
+def universe_reply(args):
+    """Service 104 reply values: the universe object (0x80801941) with its root soid, the
+    server clock and, optionally, the i16 list at +0x10 (0x808045f0: u5 count + up to 20
+    i16) - flag indexes applied over the content defaults of the universe unlock table."""
+    universe = {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}
+    if args.universe_flags:
+        universe[0x10] = {0: len(args.universe_flags), 4: list(args.universe_flags)}
+    if args.universe_values:
+        universe[0x3C] = {0: len(args.universe_values),
+                          4: [{0: index, 2: value} for index, value in args.universe_values]}
+    return {8: universe}
+
+
 def universe_time(unit, now=None):
     import time as _time
     return UNIVERSE_TIME_UNITS[unit](_time.time() if now is None else now)
@@ -319,7 +332,8 @@ class BitWriter:
         return bytes(int("".join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
 
 
-def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, opt_values=None):
+def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, opt_values=None,
+                    universe_flags=(), universe_values=()):
     """Service 503 (investment sign-in) response, type 0x80801825:
     {u4 result, i32 detail} u64 +0x08, u32 +0x10, u32 +0x14, then struct 0x80801941 of six
     optional fields (presence bit each): u64, u64, three counted lists, u32. Lists and the
@@ -339,7 +353,21 @@ def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, o
         w.put(1 if optional_ids else 0, 1)
         if optional_ids:
             w.put(value, 64)
-    for _ in range(4):
+    # +0x10: optional list 0x808045f0 = u5 count + up to 20 i16 (biased by 0x8000).
+    w.put(1 if universe_flags else 0, 1)
+    if universe_flags:
+        w.put(len(universe_flags), 5)
+        for flag in universe_flags:
+            w.put((flag + 0x8000) & 0xFFFF, 16)
+    # +0x3c: optional list 0x808046e7 = u5 count + up to 20 0x8080185c {opt i16 flag index,
+    # opt u2 tri-state value (bits = value + 1; 2 = true, 1 = false)}: universe flag overrides.
+    w.put(1 if universe_values else 0, 1)
+    if universe_values:
+        w.put(len(universe_values), 5)
+        for index, value in universe_values:
+            w.put(1, 1); w.put((index + 0x8000) & 0xFFFF, 16)
+            w.put(1, 1); w.put(value + 1, 2)
+    for _ in range(2):
         w.put(0, 1)
     w.put(0, 1)
     return w.data()
@@ -541,7 +569,9 @@ def handle(conn, peer, args):
                                            opt_values=(0x1111111111111111, 0x2222222222222222))
                 else:
                     body = signin_response(account_id, optional_ids=not args.ws_no_optional,
-                                           opt_values=(UNIVERSE_SOID, universe_time(args.universe_time)))
+                                           opt_values=(UNIVERSE_SOID, universe_time(args.universe_time)),
+                                           universe_flags=args.universe_flags,
+                                           universe_values=args.universe_values)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
@@ -596,8 +626,7 @@ def handle(conn, peer, args):
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
-                    args.schema, wire, {8: {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}}
-                    if wire == 104 else WS_REPLY_VALUES.get(wire)))
+                    args.schema, wire, universe_reply(args) if wire == 104 else WS_REPLY_VALUES.get(wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
@@ -749,6 +778,12 @@ def main():
                     help="comma-separated ws services to leave unanswered (experiments only)")
     ap.add_argument("--universe-time", choices=sorted(UNIVERSE_TIME_UNITS), default="one",
                     help="value sent in universe +8 (suspected server clock): 1 or now in a unit")
+    ap.add_argument("--universe-flags", type=lambda v: [int(x, 0) for x in v.split(",") if x], default=[],
+                    help="experiment: i16 list in the universe object's +0x10 field (service 104)")
+    ap.add_argument("--universe-flag-values", dest="universe_values", default=[],
+                    type=lambda v: [tuple(int(y, 0) for y in x.split("=")) for x in v.split(",") if x],
+                    help="universe flag overrides INDEX=VALUE,... (tri-state: 2 true, 1 false) in the "
+                         "universe object's +0x3c list (sign-in and service 104)")
     ap.add_argument("--self-flags",
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')

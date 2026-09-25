@@ -7,7 +7,8 @@
 #   Invoke-JoinCycle.ps1 -Name TEST097 -LobbyArgs @('--reply-type','0x01','--session-result') `
 #     -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host -AhArgs @('--ah-join') -Trace 0x3204a8
 # -AhHost adds --ah-mgr-reply (02 | u64 host id 1 | char[128] host name) to the proxy's arguments.
-param([string]$Name, [string[]]$LobbyArgs, [string]$Trace = '0x3204a8', [string]$Dumps = 'r5:64', [int]$Seconds = 420, [int]$Hits = 60, [string]$AhpReply = '000102030405060708090a0b0c0d0e0f', [string[]]$ExtraBap = @(), [string[]]$AhArgs = @(), [string]$AhHost)
+# -TraceAfter REGEX delays the trace until the BAP log matches (e.g. 'ahp req'), so polled functions do not use up -Hits before the join.
+param([string]$Name, [string[]]$LobbyArgs, [string]$Trace = '0x3204a8', [string]$Dumps = 'r5:64', [int]$Seconds = 420, [int]$Hits = 60, [string]$AhpReply = '000102030405060708090a0b0c0d0e0f', [string[]]$ExtraBap = @(), [string[]]$AhArgs = @(), [string]$AhHost, [string]$TraceAfter)
 Set-Location C:\Users\lukem\source\repos\WIP\d1xenia
 if ($AhHost) {
     $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes($AhHost) + (,0 * (128 - $AhHost.Length)))
@@ -18,6 +19,10 @@ Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.
 Start-Process -FilePath C:\Python314\python.exe -ArgumentList (@('-u','server/bap_server.py','--bind','127.1.1.128','--port','12851') + $AhArgs) -WorkingDirectory (Get-Location) -WindowStyle Hidden -RedirectStandardOutput "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahl.log" -RedirectStandardError "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahl.err"
 Start-Process -FilePath C:\Python314\python.exe -ArgumentList @('-u','server/session_listener.py','--bind','127.1.1.129','--port','12852') -WorkingDirectory (Get-Location) -WindowStyle Hidden -RedirectStandardOutput "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahost.log" -RedirectStandardError "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahost.err"
 .\scripts\Invoke-TitanLogin.ps1 -Name $Name
+if ($TraceAfter) {
+    $deadline = (Get-Date).AddMinutes(10)
+    while (-not (Select-String -Path "D:\Destiny360\SIGNON_LOCAL\logs\$Name-bap.log" -Pattern $TraceAfter -Quiet) -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+}
 "=== trace"
 C:\Python314\python.exe scripts/rpcs3_gdb_daemon.py send hits $Hits $Seconds $Trace $Dumps | ForEach-Object { $_.Substring(0,[Math]::Min(300,$_.Length)) }
 "=== lobby"; Get-Content "D:\Destiny360\SIGNON_LOCAL\logs\$Name-lobby.log" | Where-Object { $_ -notmatch 'keepalive' } | Select-Object -Last 6 | ForEach-Object { $_.Substring(0,[Math]::Min(200,$_.Length)) }
