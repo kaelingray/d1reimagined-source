@@ -203,8 +203,48 @@ BC_NOT = 0x09
 # exactly 137 bytes, subtype 2 + 136 bytes (decoder 0x415be4). Contents still unknown.
 AH_MGR_REQ, AH_MGR_RSP = 0x06, 0x07
 # Client -> activity host message relayed by the proxy: u64 host id | u8 1 | u32 type |
-# u32 length | body (type 3 = host join request carrying account and character ids).
+# u32 length | u32 0 | body (type 3 = host join request carrying account and character ids).
 AH_NOT = 0x08
+# Activity host messages are typed structs in the investment bit format (0x25bd0c /
+# 0x25bc88). Client -> host types come from the table at *(0x179eba4), host -> client types
+# from *(0x179eba8); the schema is exported with scripts/rpcs3_tiger_types.py (outside Git).
+# Join: the client sends c->ah not type 3 with a 0x80800e98 struct and keeps a copy
+# (0x259c84; its first i32 is a random token). The host answers with b->c not type 4 (handler 0xd0d560 -> 0x256ad8), a
+# 0x80800a58 struct: @0 the request echoed (its first i32 must match the copy), @0xf8 a
+# result (0 = joined, stored as bits - 1 in 3 bits), @0xf9 char[128] activity session id,
+# then i32s @0x17c..0x188, u8 @0x18c, u16s @0x18e/0x190 (kept at 0x6930/0x6934), i32 @0x194.
+# Next the client waits for its entity indices: b->c not type 0 (handler 0xd0d020), a
+# 0x80800d64 struct holding a 384-word bitmap (0x808043a7) that is ORed into the client's
+# index set (+0x5bf8) and marks the indices received (+0x61f8).
+AH_JOIN_REQUEST, AH_JOIN_RESPONSE, AH_ENTITY_INDICES = 3, 4, 0
+JOIN_REQUEST_TYPE, JOIN_RESPONSE_TYPE = 0x80800E98, 0x80800A58
+ENTITY_INDICES_TYPE, ENTITY_WORDS = 0x80800D64, 384
+ACTIVITY_SCHEMA = Path(r"D:\Destiny360\SIGNON_LOCAL\activity_schema.json")
+
+
+def char_array(text, size=128):
+    """A char[size] field (type 0x80804056 -> 0x80804008: size i8 fields, one per byte)."""
+    data = text.encode("latin1")[:size - 1]
+    return {0: dict(enumerate(data))}
+
+
+def join_request(schema, body):
+    return investment.decode(schema, JOIN_REQUEST_TYPE, body)
+
+
+def entity_indices(schema, first, last):
+    """Bitmap granting entity indices first..last-1 (bit order inside a word is unverified,
+    so grant whole words: multiples of 32)."""
+    words = [0] * ENTITY_WORDS
+    for index in range(first, last):
+        words[index // 32] |= 0x80000000 >> (index % 32)
+    return investment.encode(schema, ENTITY_INDICES_TYPE, {0: {4 * i: w for i, w in enumerate(words)}})
+
+
+def join_response(schema, request_body, session_id="d1local-activity", result=0):
+    request = join_request(schema, request_body)
+    return investment.encode(schema, JOIN_RESPONSE_TYPE,
+                             {0: request, 0xF8: result, 0xF9: char_array(session_id)})
 
 
 def bc_notification(subtype, data, ident=0):
@@ -567,9 +607,27 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-18.bin").write_bytes(reply)
                 log(f"[{tag}] sent acct id trans rsp {names} -> {account_id or 0:#x}")
-            if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
+            if kind == 1 and msg_type == AH_NOT and len(payload) >= 21:
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
-                log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len}")
+                body = payload[21:21 + ah_len]
+                log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+            if (kind == 1 and msg_type == AH_NOT and len(payload) >= 21 and ah_type == AH_JOIN_REQUEST
+                    and args.ah_join and args.activity_schema):
+                request = join_request(args.activity_schema, body)
+                log(f"[{tag}] host join request {request.get(0, 0):#x} / {request.get(8, 0):#x} "
+                    f"ids {request.get(0x10)}")
+                data = join_response(args.activity_schema, body, args.ah_session)
+                push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_JOIN_RESPONSE, data, host_id))
+                conn.sendall(push)
+                folder.joinpath(f"{number:03}-server-bcnot.bin").write_bytes(push)
+                log(f"[{tag}] pushed host join response from host {host_id:#x} ({len(data)} bytes)")
+                if args.ah_entities:
+                    first, _, last = args.ah_entities.partition(":")
+                    data = entity_indices(args.activity_schema, int(first, 0), int(last, 0))
+                    push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ENTITY_INDICES, data, host_id))
+                    conn.sendall(push)
+                    log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
+            if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
                 subtype, _, data = args.ah_not_push.partition(":")
                 push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
                                                                            bytes.fromhex(data), host_id))
@@ -668,12 +726,22 @@ def main():
                     help="experiment: hex payload for c->ah mgr rsp (0x07), normally 137 bytes")
     ap.add_argument("--ah-not-push",
                     help="experiment: SUBTYPE:HEX b->c not pushed (from that host) after c->ah not")
+    ap.add_argument("--ah-join", action="store_true",
+                    help="answer host join requests (c->ah not type 3) with a joined response")
+    ap.add_argument("--ah-entities", metavar="FIRST:LAST",
+                    help="with --ah-join, then grant entity indices FIRST..LAST-1 (b->c not type 0)")
+    ap.add_argument("--ah-session", default="d1local-activity",
+                    help="activity session id sent in the host join response")
+    ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,
+                    help="activity host message schema exported by scripts/rpcs3_tiger_types.py")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args()
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
+    args.activity_schema = (investment.load_schema(args.activity_schema)
+                            if args.activity_schema.exists() else None)
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
     args.key, args.mac_key = signon_proto.TEST_SESSION_KEYS[1], signon_proto.TEST_SESSION_KEYS[2]

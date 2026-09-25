@@ -4,10 +4,15 @@
 # character (Invoke-TitanLogin.ps1), trace ADDRs through the GDB daemon for SECONDS, then print
 # the lobby, BAP, proxy and listener logs and an F12 screenshot path.
 # Example:
-#   Invoke-JoinCycle.ps1 -Name TEST094 -LobbyArgs @('--reply-type','0x01','--session-result') `
-#     -AhpReply 00000000000000007f01018000003233 -AhArgs @('--ah-mgr-reply', <hex>) -Trace 0x3204a8
-param([string]$Name, [string[]]$LobbyArgs, [string]$Trace = '0x3204a8', [string]$Dumps = 'r5:64', [int]$Seconds = 420, [int]$Hits = 60, [string]$AhpReply = '000102030405060708090a0b0c0d0e0f', [string[]]$ExtraBap = @(), [string[]]$AhArgs = @())
+#   Invoke-JoinCycle.ps1 -Name TEST097 -LobbyArgs @('--reply-type','0x01','--session-result') `
+#     -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host -AhArgs @('--ah-join') -Trace 0x3204a8
+# -AhHost adds --ah-mgr-reply (02 | u64 host id 1 | char[128] host name) to the proxy's arguments.
+param([string]$Name, [string[]]$LobbyArgs, [string]$Trace = '0x3204a8', [string]$Dumps = 'r5:64', [int]$Seconds = 420, [int]$Hits = 60, [string]$AhpReply = '000102030405060708090a0b0c0d0e0f', [string[]]$ExtraBap = @(), [string[]]$AhArgs = @(), [string]$AhHost)
 Set-Location C:\Users\lukem\source\repos\WIP\d1xenia
+if ($AhHost) {
+    $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes($AhHost) + (,0 * (128 - $AhHost.Length)))
+    $AhArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower()) + $AhArgs
+}
 .\scripts\Start-LocalStack.ps1 -Name $Name -BapArgs (@('--universe-time','s','--self-flags','1;2@B0,C0-1023','--ahp-reply',$AhpReply) + $ExtraBap) -LobbyArgs $LobbyArgs | Out-Null
 Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -like '*session_listener*' -or $_.CommandLine -like '*127.1.1.128*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Confirm:$false }
 Start-Process -FilePath C:\Python314\python.exe -ArgumentList (@('-u','server/bap_server.py','--bind','127.1.1.128','--port','12851') + $AhArgs) -WorkingDirectory (Get-Location) -WindowStyle Hidden -RedirectStandardOutput "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahl.log" -RedirectStandardError "D:\Destiny360\SIGNON_LOCAL\logs\$Name-ahl.err"
