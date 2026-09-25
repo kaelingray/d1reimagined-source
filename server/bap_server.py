@@ -310,7 +310,9 @@ def qz_update(families):
 # The client's reply queue (0x7c6bc0) expects exactly four reply types: shello rsp, echo
 # rsp, qz_reg rsp and rrc rsp. The last three decode with 0xa62a0, which ignores the
 # payload, so an empty status-200 reply satisfies them. Request -> reply type.
-EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP}
+UNSUB_REQ, UNSUB_RSP = 0x0E, 0x0F
+EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP,
+                 UNSUB_REQ: UNSUB_RSP}
 NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08: "c->ah not",
          0x09: "b->c not", 0x0A: "c->ws req", 0x0B: "c->ws rsp", 0x0C: "sub req", 0x0D: "sub rsp",
          0x0E: "unsubscribe req", 0x0F: "unsubscribe rsp", 0x10: "ahp req", 0x11: "ahp rsp",

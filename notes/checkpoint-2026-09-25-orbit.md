@@ -42,3 +42,16 @@ rainbow-distorted in places; that is a separate graphics issue.
 - Try Set Destination / the Tower and watch for new requests; level 0 and empty gear come
   from absent character progression fields (`0x80801954` +0x30, +0x68).
 - Re-test character creation (Finish) now that 501 sets the active character.
+
+## Update (comparisons 063–081)
+
+- Run with `--universe-time s --self-flags "1;2@B0,C0-1023"`: past trial and purchase gates;
+  selecting the Titan plays a story cutscene and starts an activity join.
+- Current gate: the activity join's **Demonware bdMatchMaking createSession** request on the
+  lobby connection (encrypted `AB 85` frame, format in test-log 080–081) is unanswered, so
+  the join fails with **currant**. `lobby_probe.py` must decrypt post-auth frames and answer
+  with an encrypted task reply (server keys: AES key 1, HMAC key 1; reply format still to be
+  read from the client's bdRemoteTaskManager, receive path `0xa3a640` -> type byte ->
+  `0xa3e8ac`). The ahp reply (16 bytes) likely identifies the activity host/session.
+- Unattended loop: `Start-LocalStack.ps1 -Name X -BapArgs ...` then
+  `Invoke-TitanLogin.ps1 -Name X`, then arm traces via the GDB daemon.

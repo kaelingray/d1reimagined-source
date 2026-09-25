@@ -5,9 +5,11 @@ session: after that client disconnects the emulator stays paused and later conne
 are refused or never answered. This daemon connects once, keeps the game running, and
 accepts one-line commands on a loopback control port (default 127.0.0.1:2346):
 
-  hits N SECONDS ADDR[,ADDR...]   break on ADDRs until N hits or SECONDS pass, then clear
-                                  them; per hit: pc, r3-r8, lr, ctr, saved-LR chain, and
-                                  for 0x41c0e0 (investment object lookup) the soid at *r6
+  hits N SECONDS ADDR[,ADDR...] [REG:LEN,...]
+                                  break on ADDRs until N hits or SECONDS pass, then clear
+                                  them; per hit: pc, r3-r8, lr, ctr, saved-LR chain, 16
+                                  bytes at *r4, for 0x41c0e0 the soid at *r6, and LEN bytes
+                                  at each listed register (e.g. r5:512)
   mem ADDR LEN                    hex dump of guest memory (big-endian guest addresses)
   ping                            liveness check
 
@@ -89,7 +91,7 @@ class Session:
                 break
         return out
 
-    def hits(self, limit, seconds, addrs):
+    def hits(self, limit, seconds, addrs, dumps=()):
         lines = []
         self.pause()
         for a in addrs:
@@ -115,6 +117,17 @@ class Session:
                     r = {i: self.reg(i) for i in (1, 3, 4, 5, 6, 7, 8)}
                     lr, ctr = self.reg(67), self.reg(68)
                     text = " ".join(f"r{i}={v:#x}" for i, v in r.items() if i != 1 and v is not None)
+                    if r[4] and 0x10000 <= r[4] < 0xF0000000:
+                        try:  # e.g. the sockaddr of connect/sendto
+                            text += f" m4={self.read(r[4], 16).hex()}"
+                        except Exception:
+                            pass
+                    for reg_no, size in dumps:
+                        value = self.reg(reg_no)
+                        try:
+                            text += f" m{reg_no}={self.read(value, size).hex()}"
+                        except Exception:
+                            text += f" m{reg_no}=?"
                     if pc == LOOKUP and r[6]:
                         text += f" soid={struct.unpack('>Q', self.read(r[6], 8))[0]:#x}"
                     lines.append(f"{time.strftime('%H:%M:%S')} pc={pc:#x} {text} lr={lr:#x} "
@@ -147,8 +160,10 @@ def serve():
                 line = conn.makefile().readline().split()
                 try:
                     if line[:1] == ["hits"]:
+                        dumps = [(int(d.split(":")[0].lstrip("r")), int(d.split(":")[1], 0))
+                                 for d in line[4].split(",")] if len(line) > 4 else []
                         out = session.hits(int(line[1]), float(line[2]),
-                                           [int(a, 16) for a in line[3].split(",")])
+                                           [int(a, 16) for a in line[3].split(",")], dumps)
                     elif line[:1] == ["mem"]:
                         out = session.mem(int(line[1], 16), int(line[2], 0))
                     else:
