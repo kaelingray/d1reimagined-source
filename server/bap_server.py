@@ -251,8 +251,17 @@ def entity_indices(schema, first, last):
     return investment.encode(schema, ENTITY_INDICES_TYPE, {0: {4 * i: w for i, w in enumerate(words)}})
 
 
-def activity_state(schema, map_name=None, world=None):
+def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=None):
     values = {0: True, 0x10: 1}
+    if bubbles:
+        # i32 @0x10 = bubble count (must equal the scenario's, def +0x30; 0x1c7608 "activity
+        # client bubble count mismatch"), i8[64] @0x14 = per-bubble state index (-1 = default).
+        values[0x10] = bubbles
+        values[0x14] = {i: -1 for i in range(bubbles)}
+    if checksum is not None:
+        # u32 @0x5c: the activity checksum; 0x258550 compares it with the loaded scenario's
+        # ("activity checksum mismatch" fails the world load).
+        values[0x5C] = checksum
     scene = {}
     if map_name:
         scene[0x994] = {0: char_array(map_name, 40)[0]}
@@ -679,7 +688,8 @@ def handle(conn, peer, args):
                     conn.sendall(push)
                     log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
                 if args.ah_state:
-                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world))):
+                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
+                                                                      args.ah_bubbles))):
                         push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
                         conn.sendall(push)
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
@@ -802,6 +812,10 @@ def main():
                     help="with --ah-join, then send host type 11 and a minimal activity state (type 1)")
     ap.add_argument("--ah-map", help="with --ah-state, map name in the activity state (e.g. orbit)")
     ap.add_argument("--ah-world", type=int, help="with --ah-state, world id (i16) in the activity state")
+    ap.add_argument("--ah-bubbles", type=int,
+                    help="with --ah-state, bubble count of the scenario (states left at default)")
+    ap.add_argument("--ah-checksum", type=lambda v: int(v, 0),
+                    help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-session", default="d1local-activity",

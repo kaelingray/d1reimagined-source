@@ -43,7 +43,12 @@ def snapshot():
     out = {}
     rm = u32(0x18B477C)
     if rm:
-        out["rm"] = (rd(rm, 48).split(b"\0")[0].decode("latin1"), hex(u32(rm + 0x290) or 0))
+        out["rm"] = (hex(rm), rd(rm, 48).split(b"\0")[0].decode("latin1"), hex(u32(rm + 0x290) or 0))
+        # part slots (16 handles each, -1 = empty) and masks; kinds follow the suffix table
+        # at 0x175ccb0 ("" / :scenario_fah / :scenario_gah / :globals_host / :scenario_client /
+        # ... / :root)
+        out["rmslots"] = (rd(rm + 0x100, 0x48).hex(), rd(rm + 0x294, 48).split(b"\0")[0].decode("latin1"),
+                          rd(rm + 0x394, 0x48).hex())
     sel = u32(0x1906960)
     if sel:
         out["sel"] = rd(sel, 8).hex()
