@@ -219,7 +219,11 @@ AH_NOT = 0x08
 # The client counts as established (0x258324) once it also has host flag 0x100 (type 11,
 # body ignored, handler 0x25715c) and an activity state: type 1 (handler 0xd0d250), a
 # 0x80800e76 struct whose 0xa20-byte body is copied into the simulation (0x1c95f0) and must
-# have bool @0 set and either bool @1 clear or i32 @0x10 > 0.
+# have bool @0 set and either bool @1 clear or i32 @0x10 > 0. Loading the activity then
+# needs the map name (0x305a2c): state @0x60 (0x80800cc5) @0x994 (0x8080409f) = char[40],
+# looked up as a resource key (0x1f6564, e.g. "orbit"; ":scenario_fah" etc. for parts).
+# The world id is the i16 at state @0x60 @0x990 (0x3254ec; checked for DLC by 0x4105c4,
+# "World-transition requires DLC."); service 105 carries the world the client asked for.
 AH_JOIN_REQUEST, AH_JOIN_RESPONSE, AH_ENTITY_INDICES = 3, 4, 0
 AH_STATE, AH_ESTABLISH = 1, 11
 STATE_TYPE = 0x80800E76
@@ -247,8 +251,16 @@ def entity_indices(schema, first, last):
     return investment.encode(schema, ENTITY_INDICES_TYPE, {0: {4 * i: w for i, w in enumerate(words)}})
 
 
-def activity_state(schema, values=None):
-    return investment.encode(schema, STATE_TYPE, {0: values or {0: True, 0x10: 1}})
+def activity_state(schema, map_name=None, world=None):
+    values = {0: True, 0x10: 1}
+    scene = {}
+    if map_name:
+        scene[0x994] = {0: char_array(map_name, 40)[0]}
+    if world is not None:
+        scene[0x990] = world
+    if scene:
+        values[0x60] = scene
+    return investment.encode(schema, STATE_TYPE, {0: values})
 
 
 def join_response(schema, request_body, session_id="d1local-activity", result=0):
@@ -638,7 +650,7 @@ def handle(conn, peer, args):
                     conn.sendall(push)
                     log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
                 if args.ah_state:
-                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema))):
+                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world))):
                         push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
                         conn.sendall(push)
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
@@ -753,6 +765,8 @@ def main():
                     help="with --ah-join, then grant entity indices FIRST..LAST-1 (b->c not type 0)")
     ap.add_argument("--ah-state", action="store_true",
                     help="with --ah-join, then send host type 11 and a minimal activity state (type 1)")
+    ap.add_argument("--ah-map", help="with --ah-state, map name in the activity state (e.g. orbit)")
+    ap.add_argument("--ah-world", type=int, help="with --ah-state, world id (i16) in the activity state")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-session", default="d1local-activity",

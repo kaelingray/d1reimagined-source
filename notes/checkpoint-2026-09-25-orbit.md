@@ -72,3 +72,32 @@ entity indices). The error-name table `0x175eafc` lists every step. Test loop:
 `%TEMP%\...\scratchpad\cycle2.ps1` pattern (stack + login + trace + AHP stand-in), about 8 min.
 The TEST048 copy uses a keyboard pad now; the user's XInput config is saved as
 `config\input_configs\global\Default.xinput.user.yml.bak`.
+## Update (comparisons 094–107): activity host join answered
+One command runs a full unattended join (about 10 minutes; `-Trace`/`-Dumps` optional):
+
+    scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','--session-result') `
+      -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host `
+      -AhArgs @('--ah-join','--ah-entities','8192:12288','--ah-state','--ah-map','orbit','--ah-world','125')
+
+Host messages are typed structs (investment bit format); schema exported to
+`SIGNON_LOCAL\activity_schema.json` (`rpcs3_tiger_types.py schema OUT 0x80800a58 ...`, the 64
+handles in the tables at `0x18cffe0`/`0x18d0000`). The AHP stand-in now:
+1. answers the host join request (c->ah not type 3, `0x80800e98`) with the **join response**
+   (b->c not type 4, `0x80800a58`: request echoed, result 0, session id) — `--ah-join`;
+2. grants **entity indices** (type 0, 384-word bitmap) — `--ah-entities`;
+3. sends host flag type 11 and an **activity state** (type 1, `0x80800e76`: bool @0, i32 @0x10,
+   map name char[40] at @0x60 @0x994, world id i16 at @0x60 @0x990) — `--ah-state --ah-map --ah-world`.
+Failure progression: 0x2a (join response) -> 0x2b (entity indices) -> 0x2c (establish client) ->
+0x36 "loading activity resources" (error **lime**) -> with `--ah-map orbit`: "World-transition
+requires DLC." (world id 0) -> with `--ah-world 125` (the i16 the client sent in service 105):
+the world transition completes, then (0x18, 0x36) "Transition completed, but we don't have an
+active activity." (`0x334260`: the resource manager has no map loaded).
+
+Why: the loader (`0x3363a0`) needs an activity index `*(0x30e0c8()+0x94)`; it is -1, so after
+retries it falls back to loading orbit resources (state 0x1f). That index is set by
+`0x30d488`, the receiver of a **world controller RPC** (descriptor table `0x1724c60`, pairs
+sender/receiver, e.g. `0xd24e14`/`0x30d488`) that the host sends over the simulation stream.
+Host type 38 (`0x25b9a8`) looks like that stream's carrier: a typed header (`*(0x179eb20)`)
+then u32 bit length and up to 0x1f40 bytes of raw bit stream. Next: decode the simulation
+stream framing (types 38/5/7) and the world controller RPC for the activity index, or find
+the map name / activity index for world 125 so the activity itself loads.
