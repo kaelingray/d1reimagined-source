@@ -64,6 +64,12 @@ def snapshot():
             c, t = rd(data + 0x450, 0x3A8), rd(data + 0x7F8, 0x3A8)
             if len(c) == 0x3A8 and len(t) == 0x3A8:
                 out["fireteam"] = (c[0xD0], c[0xD4:0xD8].hex(), t[0xD0], t[0xD8:0xDC].hex())
+    zone = u32(0x18EA618)  # world controller zone state (0x30e128()): byte 0 state, records +8/+0xa8
+    if zone:
+        out["zone"] = rd(zone, 0x150).hex()
+    table = u32(0x18A9440)  # scenario object table (0x13e2a0()): +0x110c active zone set
+    if table:
+        out["objtable"] = (hex(u32(table + 0x110C) or 0), rd(table + 8, 0x20).hex())
     x = u32(0x18EA60C)
     wc = u32(0x18EA570)
     out["index"] = (hex(u32(x + 0x94) or 0) if x else None, hex(u32(wc + 0x238) or 0) if wc else None)

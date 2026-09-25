@@ -231,3 +231,15 @@ Full run (about 10 minutes):
   the zone set must come from the host's world controller (replicated state / RPC events
   0x33..0x36), which the stand-in does not send yet. The type-5 roster only drives peers
   (`0x1c8280` -> session interface `0x123478` / `0x1234c8`).
+- Zone set (TEST152-154): object table slot 0 = bubble 0's first object (bubbles use slots
+  8*i; in orbit slot 0 holds orbit's `:scenario_client` handle and the active zone set becomes
+  0x10). For the activity the table stays empty and +0x110c stays -1. The zone set is chosen
+  by the world/zone load state machine `0x4b2d00` (state at +0x100: 2 = after world load ->
+  `0x4b2b9c` default bubble states -> 3 = select zone: hash from global 0x190a220 / 0x190a224 or,
+  mode 2, from character data via `0x293308`/`0x28e9f0` (+0x480) -> `0x1406f0` index ->
+  `0x13f8ec` load or engine request slot 2 "switch zone set"). It is driven from the activity
+  loader's normal path (`0x33612c`) and in-world states (`0x3298b8`, `0x32e638`, `0x32f840`);
+  in our travel-only flow it never ran before the leave check fired right after status 0x21.
+  So the remaining blocker is again the travel-only activity selection (+4 = 0, `0x30c448`).
+- `scripts/rpcs3_activity_poll.py` now also shows the zone object `*(0x18ea618)` and the object
+  table's active zone set and first slots.
