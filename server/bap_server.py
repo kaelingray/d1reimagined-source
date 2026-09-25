@@ -202,6 +202,9 @@ BC_NOT = 0x09
 # c->ah mgr req (0x06, 3103 bytes: u8 subtype + body); the reply c->ah mgr rsp (0x07) must be
 # exactly 137 bytes, subtype 2 + 136 bytes (decoder 0x415be4). Contents still unknown.
 AH_MGR_REQ, AH_MGR_RSP = 0x06, 0x07
+# Client -> activity host message relayed by the proxy: u64 host id | u8 1 | u32 type |
+# u32 length | body (type 3 = host join request carrying account and character ids).
+AH_NOT = 0x08
 
 
 def bc_notification(subtype, data, ident=0):
@@ -564,6 +567,15 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-18.bin").write_bytes(reply)
                 log(f"[{tag}] sent acct id trans rsp {names} -> {account_id or 0:#x}")
+            if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
+                host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
+                log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len}")
+                subtype, _, data = args.ah_not_push.partition(":")
+                push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
+                                                                           bytes.fromhex(data), host_id))
+                conn.sendall(push)
+                folder.joinpath(f"{number:03}-server-bcnot.bin").write_bytes(push)
+                log(f"[{tag}] pushed b->c not from host {host_id:#x} subtype {subtype} ({len(data) // 2} bytes)")
             if kind == 1 and msg_type == AH_MGR_REQ and args.ah_mgr_reply is not None:
                 reply = encrypted_frame(tx, AH_MGR_RSP, msg_id, 200, args.ah_mgr_reply)
                 conn.sendall(reply)
@@ -654,6 +666,8 @@ def main():
     ap.add_argument("--ahp-push", help="experiment: SUBTYPE:HEX b->c not pushed after the ahp rsp")
     ap.add_argument("--ah-mgr-reply", type=bytes.fromhex,
                     help="experiment: hex payload for c->ah mgr rsp (0x07), normally 137 bytes")
+    ap.add_argument("--ah-not-push",
+                    help="experiment: SUBTYPE:HEX b->c not pushed (from that host) after c->ah not")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
