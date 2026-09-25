@@ -163,3 +163,25 @@ in the session/peer code around `0x7bc600` (fields at +0x21b4..+0x21d8 of that o
   `0x40ddc4` -> `0xb4f494`: three destination checks `0xb51c64` (uses a float from `0xb5016c`,
   probably level), `0xb51894`, `0xb51698` (the last only for the fireteam leader).
 - `scripts/rpcs3_activity_poll.py` polls these structures (read-only) beside a GDB trace.
+
+## Update (comparisons 126–136): activity 126 permission solved
+- The "world" in the fireteam target / activity selection is an **activity index**: 126 = the
+  first story mission (its definition, found at run time, names `act_cosmo_m0_highway`).
+  Service 105's 125 is something else (probably the current activity/world).
+- "World-transition requires permissions." came from `0xb51698` (leader-only check): the
+  activity's first unlock expression is `NOT flag[215]` (ops `01 00 00d7`, `02`; format: u32
+  count, u32 offset, 4-byte ops from +offset+0x14 = u8 opcode, u8, i16 index; opcode 1 = flag
+  == 2, 2 = NOT, 3..9 binary). The flag table there is the **universe** investment object
+  (cache header type 0xf04cc38e, soid 0x7fffffffffffffff; table at 0x7009fe8a), defaults from
+  content, flag 215 = 2. The universe struct's +0x3c list (0x8080185c = {opt i16 index,
+  opt u2 tri-state}) overrides it: `bap_server.py --universe-flag-values 215=1` (sign-in and
+  service 104) -> the check passes (TEST135).
+- Remaining: the world change to activity 126 with scenario `act_cosmo_m0_highway` (or
+  `ambient_cosmo`) loads it into the resource manager, which is emptied again at once ->
+  "Transition completed, but we don't have an active activity." The activity loader still
+  aborts earlier because the activity selection's +4 is 0 (`0x30c448`); +4 = 1 is set by
+  `0x3291a4` (copy of the fireteam target) only when the game state `0xb26d88()` is 8 and the
+  current world passes `0x305608`. Next: how the real flow reaches that state (or supplies
+  +4) before the loader runs.
+- Tooling: `Invoke-JoinCycle.ps1 -TraceAfter 'ahp req'` starts the trace at the join, so polled
+  functions do not use up -Hits.
