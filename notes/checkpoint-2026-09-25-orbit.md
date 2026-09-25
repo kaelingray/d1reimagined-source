@@ -281,3 +281,27 @@ Full run (about 10 minutes):
   world"), service 505, back to orbit. (TEST158 itself stalled at character select: the client
   stopped sending BAP frames, unrelated.) Next: what baboon checks (probably host simulation
   traffic the stand-in never sends).
+- Baboon (TEST159-161): the leave is condition 30 (`0x32798c`) with reason 0x67. Reasons index the
+  failure name table at `0x175eafc` in 8-byte entries at (reason - 0x18); condition 30 maps the
+  activity-host session status (`0x303c68(0, 0)` = `*(0x30e048() + i*0x140 + 0x8a0)`, >= 9 =
+  failed) through `0x326358` (table 0x11ea1c4, status - 9): status 36 -> 0x67 =
+  `error.private_activity_host_host_crashed`. (Statuses 9..38 are the
+  `private_activity_host_*` errors: 26 timed out waiting for join response, 27 entity indices,
+  28 establish, 31 lost session, 33 lost connection to BAP, 35 booted, 36 host crashed, ...)
+  Status 36 is set at `0x308c48` while in status 6 (in activity): `0x25b210(host)` = now - the
+  host messaging object's (host +0xba8) last receive time, compared with `0x121518()` (config
+  +0x13f8 unless overridden by `*(0x175c554)`) + config +0x2d10, gated by `0x1c97b8(0x11e179c)`.
+  The stand-in pushed host messages only at the join, so after the timeout (~70 s in activity)
+  the host counts as crashed. `bap_server.py --ah-heartbeat SECONDS[:SUBTYPE]` pushes an empty
+  host message (default type 11) every SECONDS after the join, piggybacked on the client's
+  ~30/s type-15 messages.
+- `rpcs3_gdb_daemon.py`: a dump spec `rN:0` prints register N itself (e.g. a loop index).
+- TEST158 and TEST160 stalled (no network syscalls, F12 screenshots not written, CPU still busy):
+  an emulator hang, unrelated to the arguments (the same arguments worked in 158b/159/161).
+- TEST162 (`--ah-heartbeat 1`, type 11 every second): **no baboon** - no failure in a 300 s
+  trace window (only the transition steps 0x1e..0x21 at the join), still in the activity after
+  6+ minutes (client host messages at ~30/s). The screen is the black loading screen with the
+  spinning loader: the client waits in the activity world, presumably for the host's
+  simulation stream (type 5: roster, replicated objects - see above), which the stand-in
+  does not send. F12 screenshots need the game window to have focus (Qt shortcut); the
+  PrintWindow capture of the game window works while it is unfocused.

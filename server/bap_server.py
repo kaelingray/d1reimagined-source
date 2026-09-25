@@ -49,6 +49,7 @@ import socket
 import struct
 import sys
 import threading
+import time
 from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
@@ -545,6 +546,7 @@ def handle(conn, peer, args):
     rx = tx = None
     account_id = character_id = character_profile = active_id = None
     self_version = 1
+    heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
 
     def push_self(number, reason):
         # Delta for the live self subscription: versions must advance by one (0x41b75c).
@@ -700,12 +702,22 @@ def handle(conn, peer, args):
                         push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
                         conn.sendall(push)
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
+                if args.ah_heartbeat:
+                    heartbeat_at = time.time() + args.ah_heartbeat[0]
                 for spec in args.ah_after_join:
                     subtype, _, data = spec.partition(":")
                     push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0), bytes.fromhex(data),
                                                                                host_id))
                     conn.sendall(push)
                     log(f"[{tag}] pushed b->c not subtype {subtype} ({len(data) // 2} bytes) after the join")
+            if kind == 1 and msg_type == AH_NOT and heartbeat_at is not None and time.time() >= heartbeat_at:
+                # In the activity (host session status 6, 0x308b94) the client declares the host
+                # crashed (status 36, reason 0x67, "baboon") once the time since the host's last
+                # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
+                seconds, subtype = args.ah_heartbeat
+                conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
+                heartbeat_at = time.time() + seconds
+                log(f"[{tag}] pushed heartbeat subtype {subtype} from host {host_id:#x}")
             if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
                 subtype, _, data = args.ah_not_push.partition(":")
                 push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
@@ -825,6 +837,9 @@ def main():
                     help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
     ap.add_argument("--ah-zone", type=lambda v: tuple(int(x, 0) for x in v.split(":")), metavar="INDEX:HASH",
                     help="with --ah-state, zone record (u32 @0x54, i32 @0x58); -1:0x811c9dc5 = none")
+    ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
+                    metavar="SECONDS[:SUBTYPE]",
+                    help="with --ah-join, push an empty host message (default type 11) every SECONDS")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-join-fields", default=[],

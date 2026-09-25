@@ -225,3 +225,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 112–158: see `notes/checkpoint-2026-09-25-orbit.md` (activity selection, unlock and permission
   checks, checksum/bubble count, lobster). 158b: with the activity state's zone record set to -1
   (`--ah-zone -1:0x811c9dc5`), the client stays in the activity ~72 s, then **baboon**.
+- 159–162: baboon = activity-host status 36 `private_activity_host_host_crashed` (no host message
+  within the timeout). `--ah-heartbeat 1` (type 11 every second) removes it: 162 stayed in the
+  activity 6+ minutes, on the loading screen (no host simulation stream yet).

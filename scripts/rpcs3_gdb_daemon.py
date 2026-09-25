@@ -9,7 +9,7 @@ accepts one-line commands on a loopback control port (default 127.0.0.1:2346):
                                   break on ADDRs until N hits or SECONDS pass, then clear
                                   them; per hit: pc, r3-r8, lr, ctr, saved-LR chain, 16
                                   bytes at *r4, for 0x41c0e0 the soid at *r6, and LEN bytes
-                                  at each listed register (e.g. r5:512)
+                                  at each listed register (e.g. r5:512; rN:0 prints the register value)
   mem ADDR LEN                    hex dump of guest memory (big-endian guest addresses)
   ping                            liveness check
 
@@ -124,6 +124,9 @@ class Session:
                             pass
                     for reg_no, size in dumps:
                         value = self.reg(reg_no)
+                        if size == 0:  # rN:0 prints the register itself (any GPR, e.g. a loop index)
+                            text += f" r{reg_no}={value:#x}" if value is not None else f" r{reg_no}=?"
+                            continue
                         try:
                             text += f" m{reg_no}={self.read(value, size).hex()}"
                         except Exception:
