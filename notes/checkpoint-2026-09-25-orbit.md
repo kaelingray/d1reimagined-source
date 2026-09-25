@@ -243,3 +243,13 @@ Full run (about 10 minutes):
   So the remaining blocker is again the travel-only activity selection (+4 = 0, `0x30c448`).
 - `scripts/rpcs3_activity_poll.py` now also shows the zone object `*(0x18ea618)` and the object
   table's active zone set and first slots.
+- The leave check's state-12 test (`0x31bfe0`, world controller object r30 = `*(0x18ea570)`):
+  for group session `0x315450(2)` (lobby state +0x7eb8) it reads record +0x90 (or +0x130 for
+  the target group): i32 object index at +0, state byte at +0x11 (== 2 -> check), and requires
+  that object to exist in the scenario object table (`0x140820`, index 0 here). The leader's
+  activity selection is always travel-only (+4 = 0; only the fireteam-follow path `0x3291a4`
+  writes 1), so travel is the normal path for a leader; the missing piece is the group's
+  activity-host object that a real host would provide (via its simulation stream) before the
+  world-controller record says it should exist.
+- The in-activity state object 0x18eb978 uses vtable 0x12b8888 (+0x18 leave check `0x327d90`,
+  +0x1c update `0x332dec`); the zone machine `0x4b2d00` is not called from it.
