@@ -101,3 +101,20 @@ Host type 38 (`0x25b9a8`) looks like that stream's carrier: a typed header (`*(0
 then u32 bit length and up to 0x1f40 bytes of raw bit stream. Next: decode the simulation
 stream framing (types 38/5/7) and the world controller RPC for the activity index, or find
 the map name / activity index for world 125 so the activity itself loads.
+
+## Update (comparisons 108–112): why the activity never loads
+- The loader (`0x3362c0`) now starts loading the requested scenario (`--ah-map act_cosmo_m0_highway`
+  reached `0x1f4a54(rm, "act_cosmo_m0_highway")`), but within ~2 s switches to state 3 (orbit
+  fallback) without computing the activity index: `0x30c448` says abort. Its test `0x323ed0`
+  aborts while the **group target** session record (group manager `*(0x18ea68c)`, record
+  +0x7f8, valid bit +0xd0, world i16 at +0xd8) is pending and the **group current** record
+  (+0x450, hash at +0x524) still equals the hash latched on entering orbit (`0x323e6c`, global
+  `0x18ecdb8`). I.e. the fireteam's move from the current group session to the target group
+  session (the Demonware lobby session from createSession) has not completed, so the client
+  follows the group instead of loading the activity; the world transition then ends with
+  "no active activity".
+- Scenario names are in guest memory as registry keys (`act_cosmo_m0_highway:scenario_client`,
+  `city_tower_default1:…`, `.map:cosmo…`), so valid names can be listed from a running game.
+- Next: find what promotes the group target to current (lobby session join/state in
+  `lobby_probe.py`: bdMatchMaking joinSession / session updates, or a BAP fireteam message),
+  then the loader should compute the index, post event 0x36 and load the scenario.
