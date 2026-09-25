@@ -376,3 +376,16 @@ Full run (about 10 minutes):
   16-byte network-game id at setup +0x2730 (posted by the world change `0x302728` or
   `0x6884c4`/`0x68b9ac` through `0x4282d4` -> `0xd340fc` -> `0x66b730`) stays zero after a
   world change. Next: what fills the player manager's member list (`0x69c874`, 20 x 0xe0).
+- Local player binding (TEST167/168): the world change (`0x302728`) builds the game setup with
+  `0x66be30`: machine table mask 1 + own machine id (setup +0x20/+0x24) and own id at +0xc4;
+  `0x6884c4` -> `0x66b958` loads it into the player manager's machine table (`0x674294`,
+  `*(0x197f9dc)`) and binds the local user via `0x674054(own id)` (-> `0x682fe0`). One second
+  later **world-controller RPC 16** (event 0xd, type 0x80802d76 = u32 mask + 20 machine ids,
+  receiver `0x82cd68` -> `0x674294`) arrives with mask 0 and clears the table again. RPC 16 is
+  posted by `0x82b998` from `0x81df58`, which copies the member list (+0x2c mask, +0x3c ids,
+  valid flag +0xdc) of the current group entry of the group/session manager
+  (`*(0x19b7224)`, index +0xd8640, 0x42350-byte entries from +0x11c50; the entry is the
+  fireteam group object, helpers `0x80f2f8`/`0x80f304`, version counter `0x8129f0`). That
+  member list is empty in the local flow, presumably because the BAP peer/roster families
+  (subscriptions 0 and 2, pushed empty by the stand-in) carry the fireteam's machines. Next:
+  what those families must contain for the local machine to be a member.
