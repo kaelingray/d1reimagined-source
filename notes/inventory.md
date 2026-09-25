@@ -46,3 +46,37 @@ Note whether the USB has a `$TitleUpdate` folder and record any Destiny Title Up
 - The Xbox drive was unmounted, the PC was shut down, and `D:` was reconnected. The complete capture was copied to `D:\Destiny360\00_ORIGINAL_DUMP\HDD_CAPTURE_2026-09-23` on 2026-09-23. Both original manifests were copied to `D:\Destiny360\HASHES`.
 - D: archive manifest: `D:\Destiny360\HASHES\hdd_destiny_d_archive_2026-09-23.csv`. It contains the same 11 paths, 15,049,613,312 bytes, and SHA-256 hashes as the Xbox source and C: copy. All three manifest files on `D:` have identical SHA-256 `0E54E9E3EBF9A0374778FDAAD5E81DA1AC76E9A01088A4BEAAC8EA1217E419F2`.
 - The verified C: copy remains available as a second copy.
+
+## Appendix: original capture procedure and first Xenia experiment (moved from the README, 2026-09-26)
+
+### Capture procedure
+
+1. On the Xbox 360, confirm Destiny launches from the physical disc and record the version shown in game, if available. Bungie identifies Update 2.3.1 as the final Xbox 360 branch.
+2. In **Settings → System → Storage → Games and Apps → Destiny**, write down every Destiny item, its type, size, and storage device. Keep the console's existing installation intact.
+3. Prepare the USB in Xbox 360 Storage. Formatting erases its current contents.
+4. Use the Xbox storage **Copy** action to put the installed game and each Destiny update/add-on package on the USB. Check the USB in Xbox Storage before removing it, and confirm the original content is still on the console.
+5. On Windows, copy the USB's contents to a separate archive outside this repository, including hidden files and any `$TitleUpdate` folder. If the disc installation appears as one main file plus a matching `.data` folder, preserve both together. Do not rename files inside the archive. Record the actual paths found; content may not all sit under one Destiny folder.
+6. Generate a SHA-256 manifest for the archive using `scripts/New-Manifest.ps1`. Keep the manifest and a second copy of the archive on another drive if possible.
+
+Do not put game dumps, profile data, update packages, or logs containing account details in Git. `.gitignore` excludes local capture directories as an extra guard.
+
+### First Xenia experiment
+
+After the archive is complete, make a working copy and open its game container in the pinned Xenia Canary build under `D:\Destiny360\XENIA`. Use `scripts/Start-XeniaTest.ps1` to keep a separate log and config snapshot for each run. Record the visible result in `notes/test-log.md`.
+
+The installed build (`74c4e4acb`, 2026-09-21) generated `xenia-canary.config.toml` and already has `mount_cache = true`. Keep that initial setting for Test 001. Only compare with `false` later if the log gives a reason. The [existing Destiny compatibility report](https://github.com/xenia-project/game-compatibility/issues/269) marks cache mounting as required and records a title screen and Xbox Live sign-in blocker; use it as prior evidence, not as a prediction for the current build.
+
+### Prepared PC environment
+
+- Windows 11 Pro, Ryzen 5 7600X, NVIDIA RTX 5070, about 32 GB RAM.
+- Official Xenia Canary `74c4e4a` is in `D:\Destiny360\XENIA`; the original downloaded archive is in `D:\Destiny360\TOOLS`.
+- `D:` had about 173 GB free before setup. Confirm free space again before making multiple full copies.
+- The pinned archive and executable hashes are recorded in `notes/environment.md`.
+
+### References
+
+- [Xenia Canary Quickstart](https://github.com/xenia-canary/xenia-canary/wiki/Quickstart)
+- [Xenia Canary FAQ](https://github.com/xenia-canary/xenia-canary/wiki/FAQ)
+- [Bungie Xbox 360 installation guide](https://help.bungie.net/hc/en-us/articles/360048720032-Installing-Reinstalling-and-Updating-Destiny-on-the-Xbox-360-Legacy-Console)
+- [Bungie Destiny 1 legacy support](https://help.bungie.net/hc/en-us/articles/360049024352-Legacy-Support-Guide-for-Destiny-1)
+- [Candidate Destiny data tools](notes/research-tools.md)
