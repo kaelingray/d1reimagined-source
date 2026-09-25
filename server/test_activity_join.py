@@ -64,6 +64,18 @@ class ActivityState(unittest.TestCase):
         # bool, bubble count 1 (biased), index -1 biased to 0x7fffffff, hash
         self.assertEqual(data, bytes.fromhex("c0000000bfffffffc08e4ee2") + bytes([0x80]))
 
+    def test_bubble_states(self):
+        schema = {
+            f"{b.STATE_TYPE:#x}": {"size": 0xA20, "fields": [nested(0, 0x80800B8F)]},
+            "0x80800b8f": {"size": 0xA20, "fields": [
+                prim(0, 2, 1), prim(0x10, 5, 32, 0x80000000), nested(0x14, 0x80804050)]},
+            "0x80804050": {"size": 0x40, "fields": [prim(i, 7, 8) for i in range(4)]},
+        }
+        data = b.activity_state(schema, bubbles=4, bubble_states={None: 0, 2: -1})
+        values = investment.decode(schema, b.STATE_TYPE, data)[0]
+        self.assertEqual(values[0x10], 4)
+        self.assertEqual([values[0x14][i] & 0xFF for i in range(4)], [0, 0, 0xFF, 0])
+
 
 if __name__ == "__main__":
     unittest.main()

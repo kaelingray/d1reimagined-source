@@ -305,3 +305,39 @@ Full run (about 10 minutes):
   simulation stream (type 5: roster, replicated objects - see above), which the stand-in
   does not send. F12 screenshots need the game window to have focus (Qt shortcut); the
   PrintWindow capture of the game window works while it is unfocused.
+
+## Update (comparisons 162–163): the in-activity loading screen
+- After arrival the game-flow state is base+0x1d50 (vtable 0x12b7ff8, update `0x3281d0`): an
+  11-task list at +0x30 (0x18-byte entries {u64 dependency mask, desc}; runner `0xd264dc`:
+  a task runs once its dependencies are done, returns 0 not started / 1 running / 2 done;
+  masks +0x138 required, +0x140 started, +0x148 done). When done == required it posts
+  transition step 0x22 (the black loading screen ends there). Tasks: 0 `0x32895c`, 1
+  `0x328a38`, 2 `0x328260`, 3 `0x3282e0`, 4 `0x328310`, 5 `0x328ae0`, 6 `0x3283b8`, 7 `0x3284b8`,
+  8 `0x328610`, 9 `0x3286a8`, 10 `0x3287e4`. TEST162 (zone record -1): done 0xfb, task 2 stuck.
+- Task 2 = world-controller zone readiness (`0x31ba0c`): a current record (slice +0x90 / zone +8)
+  exists, or the target record's (zone +0xa8) index has status 3/4 in the scenario object
+  table (`0x140820`: entry -1 -> 5; +0x1154 bit -> 6; +0x1194 bit -> 7; +0x110c active -> 4;
+  +0x1110 pending -> 2; +0x1114 bit loaded -> 3; else 1).
+- The table (`*(0x18a9440)`: +0 scenario handle, +8 0x200 entries of 8 bytes, +0x100c list of
+  the scenario's bubble zone handles (22 for act_cosmo_m0_highway), +0x110c active, +0x1110
+  pending, +0x1114 loaded bitset) is indexed bubble*8 + sub-slot: `0x14a8dc(i)` = 8*i (the
+  bubble's base), `0x14a8e8(i, s)` = 8*i + s + 1. The sim start (`0x1c7608`, loop at
+  `0x1c7800`) registers entries (`0x13f570`) from the host activity state's bubble states
+  (@0x14): -1 leaves the base entry absent (only bubbles 13 and 14 got sub-slot entries, 105
+  and 113); a state >= 0 registers the base and its sub-states. Scenario definition: +0x14
+  count / +0x18 offset of 0x90-byte bubble entries (+0x28 name hash).
+- With the target record at a present entry (`--ah-zone 105:0x811c9dc5`, TEST163) the world
+  controller loads that zone set itself (`0x31f6bc`: status 1 -> `0x13f8ec(table, 105)`), it
+  reaches status 3 and **tasks 0-7 complete** (done 0xff). Task 9 waits for task 8; task 8
+  (`0x328610`) finishes when a current record exists or once zone byte 2 bit 0x80 is set,
+  which then sets world-controller state 2 so the zone machine (`0x31eaf8`) posts the zone-set
+  switch. Bit 0x80 (slice +0x8a) is set by `0x31c750` (via `0x31d054`) only when slice +0x310
+  (group-1 host record, 0xd8 bytes) matches: with an activity host session (`0x304b78(0,0)`
+  != 0) the record comes from the host simulation object (`0x25a988(host)` = host +0xbb8,
+  records at +0x2e50 / +0x2f28: i32 zone index == slice +0x138, per-peer byte at +0x38 +
+  `0x25bc10(host)` == slice +0x1d0), copied by `0x31d06c`. The stand-in never fills it (both
+  records are defaults), so the load stops there. Next: which host message carries these
+  records (not types 1, 2, 4, 18, 27, 29, 38, 39, 42, 43 by struct size; likely the type-5
+  simulation stream).
+- `bap_server.py --ah-bubble-states DEFAULT[,BUBBLE=STATE...]` sets the activity state's
+  per-bubble states (default -1).

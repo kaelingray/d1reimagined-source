@@ -228,3 +228,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 159–162: baboon = activity-host status 36 `private_activity_host_host_crashed` (no host message
   within the timeout). `--ah-heartbeat 1` (type 11 every second) removes it: 162 stayed in the
   activity 6+ minutes, on the loading screen (no host simulation stream yet).
+- 163: `--ah-zone 105:0x811c9dc5` (bubble 13 sub-slot 1): the world controller loads that zone
+  set, loading tasks 0-7 complete; tasks 8-10 wait for the host simulation's zone record.
