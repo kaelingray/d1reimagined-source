@@ -195,6 +195,13 @@ CLIENT_CONFIG_REQ, CLIENT_CONFIG_RSP = 0x12, 0x13
 # Activity host request (sent when joining an activity): 8-byte request; the reply decoder
 # (0x416f14) copies exactly 16 raw bytes. Their meaning is still unknown.
 AHP_REQ, AHP_RSP = 0x10, 0x11
+# b->c notification push (type 9; decoder 0x416064): u8 flag, u64 id (flag 1), u32 subtype,
+# u32 length, data. Subtype 1 appears to reach the ahp consumer 0x42a5a0 (16 bytes).
+BC_NOT = 0x09
+
+
+def bc_notification(subtype, data, ident=0):
+    return struct.pack(">BQII", 1, ident, subtype, len(data)) + data
 # Service replies that need more than the default: 104 carries the universe object at +8
 # (type 0x80801941, as in the sign-in reply); an absent universe root gives pig (0xa2).
 WS_REPLY_VALUES = {104: {8: {0: 0x7FFFFFFFFFFFFFFF, 8: 1}}}
@@ -558,6 +565,13 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-11.bin").write_bytes(reply)
                 log(f"[{tag}] sent ahp rsp {args.ahp_reply.hex()} (request {payload.hex()})")
+                if args.ahp_push is not None:
+                    subtype, _, data = args.ahp_push.partition(":")
+                    push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
+                                                                               bytes.fromhex(data)))
+                    conn.sendall(push)
+                    folder.joinpath(f"{number:03}-server-bcnot.bin").write_bytes(push)
+                    log(f"[{tag}] pushed b->c not subtype {subtype} data {data}")
             if kind == 1 and msg_type == CLIENT_CONFIG_REQ and args.ws_signin:
                 reply = encrypted_frame(tx, CLIENT_CONFIG_RSP, msg_id, 200, client_config_reply())
                 conn.sendall(reply)
@@ -628,6 +642,7 @@ def main():
                          '(e.g. "1;2@B0": all false, B0 true)')
     ap.add_argument("--ahp-reply", type=bytes.fromhex,
                     help="experiment: 16-byte hex payload for ahp rsp (0x11)")
+    ap.add_argument("--ahp-push", help="experiment: SUBTYPE:HEX b->c not pushed after the ahp rsp")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,

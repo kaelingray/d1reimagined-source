@@ -213,3 +213,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 
 - 082: lobby_probe decrypts/answers encrypted lobby frames (`LobbyCrypto`). A task reply (type byte 0x01, typed uint64 transaction 0x8000000000000000, uint32 error, uint8 task id, uint32 count, uint32 total) with no results: the client followed up with bdMatchMaking task 3 (deleteSession) of a zero session id and failed the join (currant).
 - 083: createSession reply with one 8-byte session-id blob result: the later deleteSession carried **our** id, so the reply format is right. The join now fails differently: **cloudberry** ("Could not connect to the Destiny servers").
+
+- 084–089: the post-ahp wait is the activity-join step; `c->b_ahp` (0x10) is consumed by `0x42a5a0`: 16 bytes = u64 request id (must equal the request's, here 0) | u32 IPv4 | u16 unused | u16 port, stored via `0x1dac14`; then `0x429c64` opens a second BAP connection to that address. (A patterned id was ignored; an all-zero reply gave address 0.0.0.0 and failed at once.)
+- 090: ahp reply `0000000000000000 7f010180 0000 3233`: the client connected to a second BAP stand-in (127.1.1.128:12851), shello with field 2 = 2, then sent **`c->ah mgr req`** (0x06, 3103 bytes: activity host manager / host startup request). Unanswered: join fails after ~11 s. Next: the 0x07 reply (decoder `0x415be4`).
