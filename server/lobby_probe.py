@@ -12,10 +12,17 @@ iv_seed and 128-byte server ticket, followed by an 8-byte challenge. The
 client (0xa3af98) computes H = SHA1(transcript), PRK = HMAC-SHA1(H, auth3
 session key), then HKDF-Expand(PRK, "CLIENTCHAL", 16). It sends bytes 0-7;
 server_auth_done (AB 83) must return bytes 8-15 (compared at 0xa3a4e0).
-HKDF-Expand(PRK, "BDDATA", 72) keys the encrypted frames that follow.
+HKDF-Expand(PRK, "BDDATA", 72) keys the encrypted frames that follow: bytes 0-19 and
+20-39 are the client and server HMAC-SHA1 keys, 40-55 and 56-71 the client and server
+AES-128 keys. An encrypted frame (send path 0xa391bc, receive 0xa3a640) is
+  u32le length | AB 85 | u32le sequence | IV[16] | AES-CBC(u32le msg length | msg | zero pad)
+  | first 8 bytes of HMAC-SHA1(mac key, everything before them, length prefix included).
+Lobby service requests start 86 <service> (e.g. 86 8a: bdMatchMaking) and continue as a
+typed bdByteBuffer (server/bdbuffer.py).
 """
 
 import argparse
+import sys
 import base64
 import datetime
 import hashlib
@@ -28,6 +35,10 @@ import socket
 import struct
 import threading
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bdbuffer  # noqa: E402
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # noqa: E402
 
 ROOT = Path(r"D:\Destiny360\SIGNON_LOCAL\captures")
 MAX_FRAME = 1 << 20
@@ -102,6 +113,48 @@ def auth_done(verify):
     return struct.pack("<IBB8s", 10, 0xAB, 0x83, verify)
 
 
+class LobbyCrypto:
+    """Post-auth lobby frame envelope (see module docstring). Server side: opens client
+    frames with the client keys and seals replies with the server keys."""
+
+    def __init__(self, keys):
+        self.client_mac, self.server_mac = keys["bddata_20"]
+        self.client_aes, self.server_aes = keys["bddata_16"]
+        self.seq = 0
+
+    def open(self, frame):
+        if frame[4:6] != b"\xab\x85":
+            raise ValueError("not an encrypted lobby frame")
+        tag = hmac.new(self.client_mac, frame[:-8], hashlib.sha1).digest()[:8]
+        if not hmac.compare_digest(tag, frame[-8:]):
+            raise ValueError("lobby frame HMAC mismatch")
+        seq = struct.unpack_from("<I", frame, 6)[0]
+        iv, ct = frame[10:26], frame[26:-8]
+        dec = Cipher(algorithms.AES(self.client_aes), modes.CBC(iv)).decryptor()
+        pt = dec.update(ct) + dec.finalize()
+        size = struct.unpack_from("<I", pt)[0]
+        return seq, pt[4:4 + size]
+
+    def seal(self, message):
+        self.seq += 1
+        pt = struct.pack("<I", len(message)) + message
+        pt += bytes(-len(pt) % 16)
+        iv = secrets.token_bytes(16)
+        enc = Cipher(algorithms.AES(self.server_aes), modes.CBC(iv)).encryptor()
+        body = b"\xab\x85" + struct.pack("<I", self.seq) + iv + enc.update(pt) + enc.finalize()
+        frame = struct.pack("<I", len(body) + 8) + body
+        return frame + hmac.new(self.server_mac, frame, hashlib.sha1).digest()[:8]
+
+
+def task_reply(msg_type, task_id, error=0, results=b"", count=0, transaction=0x8000000000000000):
+    """Experimental Demonware task reply: type byte, then typed uint64 transaction id,
+    uint32 error, uint8 task id, uint32 result count, uint32 total, results."""
+    w = bdbuffer.Writer()
+    w.fixed(bdbuffer.UINT64, transaction).fixed(bdbuffer.UINT32, error).fixed(bdbuffer.UINT8, task_id)
+    w.fixed(bdbuffer.UINT32, count).fixed(bdbuffer.UINT32, count)
+    return bytes([msg_type]) + w.data() + results
+
+
 def log(message):
     print(f"{datetime.datetime.now().isoformat(timespec='milliseconds')} {message}", flush=True)
 
@@ -162,6 +215,24 @@ def handle(conn, peer, args):
             folder.joinpath(f"{number:02}-client-frame.bin").write_bytes(frame)
             kind = frame[4:6].hex() if size >= 2 else "empty"
             log(f"[{tag}] received {len(frame)} bytes, type={kind}")
+            if authenticated and kind == "ab85":
+                seq, message = crypto.open(frame)
+                folder.joinpath(f"{number:02}-client-message.bin").write_bytes(message)
+                log(f"[{tag}] message seq={seq} len={len(message)} head={message[:2].hex()} "
+                    f"values={bdbuffer.Reader(message[2:]).values()[:6]}")
+                if args.reply_type is not None and message[:1] == b"\x86":
+                    task_id = message[3] if len(message) > 3 and message[2] == bdbuffer.UINT8 else 0
+                    results, count = b"", 0
+                    if task_id == 1 and args.session_result:
+                        # createSession: one bdSessionID result (8-byte blob, experimental)
+                        results = bdbuffer.Writer().blob(bytes.fromhex("5e5510c0de0d1e55")).data()
+                        count = 1
+                    out = crypto.seal(task_reply(args.reply_type, task_id, error=args.reply_error,
+                                                 results=results, count=count))
+                    conn.sendall(out)
+                    folder.joinpath(f"{number:02}-server-frame.bin").write_bytes(out)
+                    log(f"[{tag}] sent experimental task reply type {args.reply_type:#x} task {task_id}")
+                continue
             if authenticated or kind != "ab82":
                 continue
             title, _, _ = client_auth_fields(frame)
@@ -170,6 +241,8 @@ def handle(conn, peer, args):
             if not match:
                 continue  # Stay silent; the client times out with cattle.
             save_keys(folder / "lobby-keys.json", *match)
+            keys = match[1]
+            crypto = LobbyCrypto({"bddata_20": keys["bddata_20"], "bddata_16": keys["bddata_16"]})
             done = auth_done(match[1]["verify"])
             conn.sendall(done)
             folder.joinpath(f"{number:02}-server-auth-done.bin").write_bytes(done)
@@ -188,6 +261,11 @@ def main():
     ap.add_argument("--timeout", type=float, default=60)
     ap.add_argument("--capture-dir", type=Path, default=ROOT / "lobby210")
     ap.add_argument("--session-dir", type=Path, default=ROOT)
+    ap.add_argument("--reply-type", type=lambda v: int(v, 0),
+                    help="experiment: answer lobby service requests with this reply type byte")
+    ap.add_argument("--reply-error", type=lambda v: int(v, 0), default=0)
+    ap.add_argument("--session-result", action="store_true",
+                    help="experiment: answer createSession with one 8-byte session id blob")
     args = ap.parse_args()
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
