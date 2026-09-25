@@ -118,3 +118,26 @@ the map name / activity index for world 125 so the activity itself loads.
 - Next: find what promotes the group target to current (lobby session join/state in
   `lobby_probe.py`: bdMatchMaking joinSession / session updates, or a BAP fireteam message),
   then the loader should compute the index, post event 0x36 and load the scenario.
+
+## Update (comparisons 113–116): fireteam target blocks the activity load
+Polling guest memory directly (no GDB; `rpcs3_guest_read.py`) during a join shows the group
+manager `*(0x18ea68c)` with two groups (names table: fireteam_target / posse_target /
+group_target; group g at mgr + g*0x11938, session buffer +0x10 + [+8]*0x8c98, lobby state
++0x7eb8, data +0x63b0). Group 0 = fireteam: current record at data+0x450 (vtable 0x12b7f58),
+target record at data+0x7f8 (vtable 0x12c3ae0), each with valid +0xd0.
+- When the director launches (about 6 s before the join), the fireteam **target** becomes valid
+  (world i16 0x7e at +0xd8, 64-bit ids at +0xe0/+0xe8, +0xf0) and the **current** record is
+  re-validated with hash +0xd4 = 0x811c9dc5 (FNV-1 of an empty string) - the same value latched
+  on entering orbit (`0x323e6c`, global 0x18ecdb8). `0x323ed0` therefore reports "fireteam is
+  travelling" and the activity loader aborts (`0x30c448` -> state 3).
+- The world transition state object (static 0x18eba30, vtable 0x1725c40..: enter `0x333c04`,
+  update `0x334004`) runs in phases: +0xa20 odd = copy the host scene (world 125,
+  `act_cosmo_m0_highway`) - works; then `0x333dfc` bumps +0xa28 and phase 1 needs an active
+  scenario in the resource manager, which the aborted loader never loaded -> "Transition
+  completed, but we don't have an active activity."
+- `--ah-world 126` (the fireteam target's world) fails the DLC check; 125 is right for the state.
+- Host type 2 (`{bool, float}`, sets join flag 0x80) did not change this.
+Open question: what makes the fireteam current record's hash non-empty (or clears the
+target) once the target activity host is joined. The record is rebuilt locally by the
+leader (`0x7bc690` -> `0x807d58` -> `0x805c28` diff -> `0x8045ac` copy); its source is built
+in the session/peer code around `0x7bc600` (fields at +0x21b4..+0x21d8 of that object).
