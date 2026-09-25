@@ -141,3 +141,25 @@ Open question: what makes the fireteam current record's hash non-empty (or clear
 target) once the target activity host is joined. The record is rebuilt locally by the
 leader (`0x7bc690` -> `0x807d58` -> `0x805c28` diff -> `0x8045ac` copy); its source is built
 in the session/peer code around `0x7bc600` (fields at +0x21b4..+0x21d8 of that object).
+
+## Update (comparisons 117–125): destination travel, not an activity
+- The director's launch after the story cutscene is a **destination travel**: `0x32f5e0`
+  calls `0x41eec8(sel, {destination 0x7e = 126, flag}, activity 0)` on the
+  investment_activity_selection_manager `*(0x1906960)` (+0 i16 destination, +2 u8, +4 u32
+  activity) and enters state 0x18. With activity 0, `0x30c448` makes the activity loader skip
+  the activity index/event 0x36 (state 3), so the destination is expected to load through the
+  world change. (Changing the latched fireteam value at runtime did not help: experiment
+  TEST118.) Event 0x36 is what sets the activity index and loads a scenario plus its three
+  parts (`0x30d488` -> `0x1f4a54`, `0x1f4f00`/`0x1f4e60`, commit `0x1f5300`).
+- World change = engine request slot 3 (`*(0x18a4328)`, flags +0x114 + 4*i: 1 posted, 2/3 in
+  progress; handler `0x302728` -> `0x66be30`). With world 125 (service 105's value, which looks
+  like the client's *current* world) the loaded scenario (`ambient_cosmo`, `cosmo_patrols_1`)
+  becomes active and is dropped at once -> "no active activity"; orbit's own
+  `ambient_bootstrap` stays active with the same flow. So the state's world must be the
+  destination's: 126.
+- World 126 needs the destination's unlocks: with `--self-flags 1;2@B0,C0-1023` it fails the DLC
+  check (`0x4105c4`, unlock expression via `0xb67bc4`); with `--self-flags 2` (all true) it
+  passes and the next gate is "World-transition requires permissions." (0x18, 0x17) from
+  `0x40ddc4` -> `0xb4f494`: three destination checks `0xb51c64` (uses a float from `0xb5016c`,
+  probably level), `0xb51894`, `0xb51698` (the last only for the fireteam leader).
+- `scripts/rpcs3_activity_poll.py` polls these structures (read-only) beside a GDB trace.
