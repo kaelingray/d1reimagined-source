@@ -21,6 +21,7 @@ import datetime
 import hashlib
 import hmac
 import ipaddress
+import itertools
 import json
 import secrets
 import socket
@@ -144,11 +145,19 @@ def handle(conn, peer, args):
         folder.joinpath("02-server-hello.bin").write_bytes(reply)
         log(f"[{tag}] accepted greeting; sent protocol 210 header")
         authenticated = False
-        for number in range(3, 100):
+        # Keepalives also advance the counter, so it must not be bounded: a fixed limit
+        # closed the lobby after ~65 idle minutes (caterpillar, comparison 054).
+        for number in itertools.count(3):
             size_bytes = exact(conn, 4)
             size = struct.unpack("<I", size_bytes)[0]
             if size > MAX_FRAME:
                 raise ValueError("frame exceeds 1 MiB limit")
+            if size == 0 and authenticated:
+                # The client sends an empty frame every 40 seconds while idle.
+                # Acknowledge it so the lobby connection remains live.
+                conn.sendall(size_bytes)
+                log(f"[{tag}] replied to empty keepalive frame")
+                continue
             frame = size_bytes + exact(conn, size)
             folder.joinpath(f"{number:02}-client-frame.bin").write_bytes(frame)
             kind = frame[4:6].hex() if size >= 2 else "empty"

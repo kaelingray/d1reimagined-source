@@ -7,8 +7,10 @@ it is kept outside Git). Encoding mirrors the client's deserializer (0x25d2dc ->
 
   * fields in order, MSB-first bit stream;
   * an optional field is preceded by one presence bit;
-  * kind 1 is a nested struct; with array mode 1 its element count is the value of the
-    field at struct offset `width` in the enclosing struct;
+  * kind 1 is a nested struct; with array mode 1 it is a fixed-capacity array whose
+    slots are the nested type's fields (e.g. ten u64 fields = u64[10]). The count is the
+    value at struct offset `width` in the enclosing struct, and only the first `count`
+    fields are serialized (0xd0f058). Such a field's value is a list of slot values;
   * primitives (readers at 0x175d5c8) store `value + min` in `width` bits: kind 2 bool
     (1 bit), 3/7 u8, 4/8 u16, 5/9 u32, 6/10 u64, 11 real32 (32 bits).
 
@@ -42,6 +44,52 @@ class BitWriter:
         return bytes(int("".join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
 
 
+class BitReader:
+    def __init__(self, data):
+        self.data = data
+        self.position = 0
+
+    def get(self, width):
+        if self.position + width > len(self.data) * 8:
+            raise ValueError("truncated investment value")
+        value = 0
+        for _ in range(width):
+            value = (value << 1) | ((self.data[self.position >> 3] >> (7 - self.position % 8)) & 1)
+            self.position += 1
+        return value
+
+
+def _slots(schema, handle):
+    return [f["off"] for f in schema[f"{handle:#x}"]["fields"]]
+
+
+def decode_from(reader, schema, handle, limit=None):
+    values = {}
+    for field in schema[f"{handle:#x}"]["fields"][:limit]:
+        if field["opt"] and not reader.get(1):
+            continue
+        off = field["off"]
+        kind = field["kind"]
+        if kind == 1 and field["arr"] == 1:
+            count = values.get(field["width"], 0)
+            slots = decode_from(reader, schema, field["nested"], count)
+            values[off] = [slots.get(o) for o in _slots(schema, field["nested"])[:count]]
+        elif kind == 1:
+            values[off] = decode_from(reader, schema, field["nested"])
+        elif kind == 2:
+            values[off] = bool(reader.get(1))
+        elif kind == 11:
+            values[off] = struct.unpack(">f", struct.pack(">I", reader.get(32)))[0]
+        else:
+            values[off] = reader.get(field["width"]) - field["min"]
+    return values
+
+
+def decode(schema, handle, data):
+    reader = BitReader(data)
+    return decode_from(reader, schema, handle)
+
+
 def load_schema(path=DEFAULT_SCHEMA):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
@@ -59,9 +107,9 @@ def _primitive(w, field, value):
     w.put((int(value or 0) + field["min"]) & ((1 << width) - 1), width)
 
 
-def encode_into(w, schema, handle, values=None):
+def encode_into(w, schema, handle, values=None, limit=None):
     values = values or {}
-    for field in schema[f"{handle:#x}"]["fields"]:
+    for field in schema[f"{handle:#x}"]["fields"][:limit]:
         off = field["off"]
         present = off in values
         if field["opt"]:
@@ -72,11 +120,13 @@ def encode_into(w, schema, handle, values=None):
         if field["kind"] != 1:
             _primitive(w, field, value)
         elif field["arr"] == 1:
-            items = value or []
+            items = list(value or [])
             if len(items) != int(values.get(field["width"], 0)):
                 raise ValueError(f"array at {off:#x} needs its count at {field['width']:#x}")
-            for item in items:
-                encode_into(w, schema, field["nested"], item)
+            slots = _slots(schema, field["nested"])
+            if len(items) > len(slots):
+                raise ValueError(f"array at {off:#x} holds at most {len(slots)} items")
+            encode_into(w, schema, field["nested"], dict(zip(slots, items)), len(items))
         else:
             encode_into(w, schema, field["nested"], value)
 

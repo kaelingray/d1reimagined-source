@@ -42,6 +42,7 @@ import datetime
 import hashlib
 import hmac
 import ipaddress
+import itertools
 import json
 import secrets
 import socket
@@ -63,9 +64,11 @@ import signon_proto  # noqa: E402
 # looks up (0x293108); select_character (3) type 0 is its roster header.
 ROOT_OBJECTS = {4: (0x88190FE1, 0x80801803, lambda soid: {0: {0: soid}}),
                 3: (0xA2AC2C74, 0x80801951, lambda soid: {0: soid})}
+SELECT_CHARACTER_OBJECT = (0xF65ABD52, 0x80801954)
+SELF_CHARACTER_OBJECT = (0x242B2F61, 0x80801743)
 
 
-def default_ws_response(schema, wire):
+def default_ws_response(schema, wire, values=None):
     """Service reply with its response type encoded by default (result error_none, other
     fields absent or zero) and no blob; None if the service is not in the schema."""
     entry = (schema or {}).get("services", {}).get(str(wire))
@@ -73,18 +76,67 @@ def default_ws_response(schema, wire):
         return None
     w = investment.BitWriter()
     w.put(wire, 16)
-    investment.encode_into(w, schema, int(entry[1], 16))
+    investment.encode_into(w, schema, int(entry[1], 16), values)
     w.put(0, 1)  # no blob
     return w.data()
 
 
-def family_blob(schema, family_type, root):
+def character_from_request(schema, character_id, request_payload):
+    """Profile of a created character: its id plus the class and appearance structs of the
+    service-501 request (request offsets 0 and 4 -> character offsets 8 and 0xc)."""
+    profile = {0: character_id}
+    request_handle = int(schema["services"]["501"][0], 16)
+    if f"{request_handle:#x}" in schema:
+        request = investment.decode(schema, request_handle, request_payload)
+        profile.update({8: request[0], 12: request[4]})
+    return profile
+
+
+def load_store(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path else {}
+    except FileNotFoundError:
+        return {}
+
+
+def save_character(path, account_id, character_id, request_payload):
+    """Remember one created character per local account (JSON; kept outside Git)."""
+    store = load_store(path)
+    store[f"{account_id:#x}"] = {"id": character_id, "request": request_payload.hex()}
+    path.write_text(json.dumps(store, indent=1), encoding="utf-8")
+
+
+def family_blob(schema, family_type, root, character_id=None, character_profile=None,
+                version=1, flags=1, active_id=None):
+    """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
+    character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
+    character object with that id exists (0x29305c), and the bootflow's character step
+    (0x32f748 via 0x325350) proceeds only when it is set."""
     objects = []
     if schema and family_type in ROOT_OBJECTS:
         type_hash, handle, values = ROOT_OBJECTS[family_type]
-        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, values(root))))
+        fields = values(root)
+        if character_id is not None and family_type in (3, 4):
+            character_list = {0: 1, 8: [character_id]}
+            if family_type == 3:
+                fields[8] = character_list
+            else:
+                fields[0][8] = character_list
+                if active_id is not None:
+                    fields[0][0x60] = active_id
+        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
+        if family_type == 3 and character_id is not None and character_profile is not None:
+            type_hash, handle = SELECT_CHARACTER_OBJECT
+            objects.append(investment.obj(type_hash, character_id,
+                                          investment.encode(schema, handle, character_profile)))
+        if family_type == 4 and character_id is not None and character_profile is not None:
+            type_hash, handle = SELF_CHARACTER_OBJECT
+            objects.append(investment.obj(type_hash, character_id,
+                                          investment.encode(schema, handle, {0: character_profile})))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
-    return investment.qz_payload([investment.family(family_type, root, objects, flags=1)])
+    # Updates to an existing subscription use a delta and the next family version.
+    return investment.qz_payload([investment.family(family_type, root, objects,
+                                                     version=version, flags=flags)])
 
 CAPTURE_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\captures\bap")
 SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
@@ -93,6 +145,27 @@ ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
 WS_REQ, WS_RSP = 0x0A, 0x0B
 SUB_REQ, SUB_RSP = 0x0C, 0x0D
 QZ_UPDATE = 0x7B
+ACCT_ID_TRANS_REQ, ACCT_ID_TRANS_RSP = 0x17, 0x18
+CLIENT_CONFIG_REQ, CLIENT_CONFIG_RSP = 0x12, 0x13
+# Service replies that need more than the default: 104 carries the universe object at +8
+# (type 0x80801941, as in the sign-in reply); an absent universe root gives pig (0xa2).
+WS_REPLY_VALUES = {104: {8: {0: 0x7FFFFFFFFFFFFFFF, 8: 1}}}
+
+
+def client_config_reply(value=1, version=1):
+    """client config rsp (0x13): nanopb message at 0x11d0bf0 - required 1 uint64, required
+    2 uint32, 3 a fixed64 callback field (omitted). Values are local placeholders."""
+    return bytes([0x08]) + signon_proto.varint(value) + bytes([0x10]) + signon_proto.varint(version)
+
+
+def acct_id_trans_reply(request, account_ids):
+    """Reply to "acct id trans" (0x17): the request echoed - u16 count, u8 7, u8 0xff and
+    `count` name entries (decoder 0x415764 requires the same header and reads the entries
+    with 0x113090) - followed by one u64 account id per entry (64 bits each, MSB first)."""
+    count = struct.unpack_from(">H", request)[0]
+    if request[2:4] != b"\x07\xff" or len(account_ids) != count:
+        raise ValueError("unexpected acct id trans request")
+    return request + b"".join(struct.pack(">Q", a) for a in account_ids)
 UNIVERSE_SOID = 0x7FFFFFFFFFFFFFFF
 FAMILY_TYPES = {"peer": 0, "inspection": 1, "roster": 2, "select_character": 3, "self": 4,
                 "universe": 5, "party_details": 6, "party_network_details": 7}  # 0xb6068c
@@ -290,8 +363,25 @@ def handle(conn, peer, args):
     conn.settimeout(args.timeout)
     log(f"[{tag}] connection from {peer[0]}:{peer[1]}")
     rx = tx = None
+    account_id = character_id = character_profile = active_id = None
+    self_version = 1
+
+    def push_self(number, reason):
+        # Delta for the live self subscription: versions must advance by one (0x41b75c).
+        nonlocal self_version
+        if account_id is None:
+            return
+        self_version += 1
+        push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
+            args.schema, 4, account_id, character_id, character_profile,
+            version=self_version, flags=0, active_id=active_id))
+        conn.sendall(push)
+        folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
+        log(f"[{tag}] pushed self v{self_version} ({reason}): character "
+            f"{character_id:#x}, active {active_id:#x}" if active_id else
+            f"[{tag}] pushed self v{self_version} ({reason}), no active character")
     try:
-        for number in range(1, 200):
+        for number in itertools.count(1):
             head = exact(conn, 6)
             version, kind, length = struct.unpack(">BBI", head)
             if version != 1 or length > 1 << 20:
@@ -319,17 +409,57 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent sign-in rsp (account id {account_id:#x})")
+                saved = load_store(args.store).get(f"{account_id:#x}") if args.store else None
+                if saved and args.schema:
+                    character_id = saved["id"]
+                    character_profile = character_from_request(args.schema, character_id,
+                                                               bytes.fromhex(saved["request"]))
+                    log(f"[{tag}] restored stored character {character_id:#x}")
+            elif kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f5") and args.ws_signin:
+                # Service 501 creates a character; its response carries the new character soid.
+                # Keep the id stable for this local account during this connection.
+                character_id = (account_id or 1) + 1
+                character_profile = character_from_request(args.schema, character_id, payload[2:])
+                if args.store and account_id is not None:
+                    save_character(args.store, account_id, character_id, payload[2:])
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200,
+                                        default_ws_response(args.schema, 501, {8: character_id}))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-501.bin").write_bytes(reply)
+                log(f"[{tag}] sent create-character rsp (id {character_id:#x})")
+                # Creation changes the subscribed self profile: publish the new character
+                # and make it the active one (the client does not send 504 after 501).
+                active_id = character_id
+                push_self(number, "after-501")
+            elif kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f8") and args.ws_signin:
+                # Service 504 selects a character: u64 character id, then a flag byte.
+                # Reply error_none and publish it as the self root's active character.
+                active_id = int.from_bytes(payload[2:10], "big")
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(args.schema, 504))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-504.bin").write_bytes(reply)
+                log(f"[{tag}] sent select-character rsp (id {active_id:#x}, flag {payload[10:11].hex()})")
+                push_self(number, "after-504")
             elif kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("00ce") and args.ws_signin:
                 family_type, root = family_fetch_request(payload)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
-                    family_type, root, blob=family_blob(args.schema, family_type, root)))
+                    family_type, root, blob=family_blob(args.schema, family_type, root, character_id,
+                                                       character_profile)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
-                log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, no objects")
+                log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, "
+                    f"character {character_id:#x}" if character_id is not None else
+                    f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, no character")
+            elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
+                  and int.from_bytes(payload[:2], "big") in args.ws_no_reply):
+                # Experiment switch: leaving 701 unanswered shows "Contacting Destiny Servers"
+                # and fails sooner (comparison 059), so replies are the default.
+                log(f"[{tag}] no reply for service {int.from_bytes(payload[:2], 'big')} (one-way)")
             elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
-                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(args.schema, wire))
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
+                    args.schema, wire, WS_REPLY_VALUES.get(wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
@@ -350,6 +480,22 @@ def handle(conn, peer, args):
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed qz update {args.qz_push} root={args.qz_root:#x}")
+            if kind == 1 and msg_type == ACCT_ID_TRANS_REQ and args.ws_signin:
+                # Replies must answer the oldest pending request first (0x7c3458); leaving
+                # this unanswered made the next ws replies unmatched: BAP failure, centipede.
+                # Entries are 36-byte names; the local test has one account.
+                names = [payload[4 + 36 * i:40 + 36 * i].split(b"\0")[0].decode("latin1")
+                         for i in range(struct.unpack_from(">H", payload)[0])]
+                body = acct_id_trans_reply(payload, [account_id or 0] * len(names))
+                reply = encrypted_frame(tx, ACCT_ID_TRANS_RSP, msg_id, 200, body)
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-18.bin").write_bytes(reply)
+                log(f"[{tag}] sent acct id trans rsp {names} -> {account_id or 0:#x}")
+            if kind == 1 and msg_type == CLIENT_CONFIG_REQ and args.ws_signin:
+                reply = encrypted_frame(tx, CLIENT_CONFIG_RSP, msg_id, 200, client_config_reply())
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-13.bin").write_bytes(reply)
+                log(f"[{tag}] sent client config rsp (request {payload.hex()})")
             if kind == 1 and msg_type in EMPTY_REPLIES:
                 reply = encrypted_frame(tx, EMPTY_REPLIES[msg_type], msg_id, 200, b"")
                 conn.sendall(reply)
@@ -359,7 +505,9 @@ def handle(conn, peer, args):
                     # sub req payload: u8 family type, u64 root soid. Answer with that family
                     # (version 1, no objects) as a queuez update push.
                     family_type, root = payload[0], int.from_bytes(payload[1:9], "big")
-                    push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(args.schema, family_type, root))
+                    push = encrypted_frame_kind(tx, QZ_UPDATE, 0,
+                                                family_blob(args.schema, family_type, root, character_id,
+                                                            character_profile, active_id=active_id))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
@@ -402,6 +550,11 @@ def main():
                     help="ws result code in the first 4 bits (0 error_none, 1 unknown, 2 no_content, "
                          "3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout)")
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
+    ap.add_argument("--ws-no-reply", type=lambda v: {int(x) for x in v.split(",") if x},
+                    default=set(),
+                    help="comma-separated ws services to leave unanswered (experiments only)")
+    ap.add_argument("--store", type=Path,
+                    help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args()

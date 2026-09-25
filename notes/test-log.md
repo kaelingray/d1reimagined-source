@@ -190,3 +190,15 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 031: GDB checkpoints showed the second success predicate (`0x294a5c`, user entry state 3) never passes.
 - 032: GDB entry trace of the user-manager range `0x286000`–`0x297000`. Sign-in is started by posting event 0x22.
 - Details are in `notes/ps3-route.md`.
+
+## PS3 comparisons 049–062 — Character creation to orbit
+
+- Date: 2026-09-24/25. RPCS3 copy `RPCS3_TEST048_SETUP` (XInput pad, async shaders) reused for every run; logs `SIGNON_LOCAL/logs/TEST05x_*`/`TEST06x_*`.
+- 049–054 (Codex): lobby keepalive echo; service 501 (create character) answered with an id; select_character/self families carry the character. Finish still spun. See `notes/checkpoint-2026-09-24-character.md`.
+- 054 (idle ~1 h): **caterpillar**. `lobby_probe.py` read at most 97 frames, and 40 s keepalives used them up. The loop is now unbounded.
+- 055: GDB showed the 501 reply delegate is the table's no-op; creation succeeded client-side. Killing an attached GDB client froze the emulator: RPCS3's stub serves only the first connection per session. Added `scripts/rpcs3_gdb_daemon.py` (holds the one connection, serves `hits`/`mem` on 127.0.0.1:2346).
+- 056: `bap_server.py --store` remembers the created character; the next boot showed **character select** with the Titan (level 0). Pressing it sent service 504 and the screen went black.
+- 057–058: the bootflow's character step (`0x32f748`) needs the user entry's active character (+0x20), copied from the self root's u64 at +0x60 (`0x2942fc`). 504 now sets it via a versioned self delta; the step then completed, followed by **centipede**.
+- 058b–060: centipede is BAP health condition 15 (connection state != 7). The connection failed with reason 0x12 because replies must answer the oldest pending request (`0x7c3458`), and "acct id trans" (0x17) was unanswered, so the next 701/702 replies matched nothing. (059: leaving 701 unanswered showed "Contacting Destiny Servers" and failed at once, so replies stay on.)
+- 061: 0x18 reply (the request echoed plus one u64 account id per name) fixed centipede. The game subscribed to peer (0) and roster (2), called service 104, sent `client config req`, then **pig** (0x18, 0xa2): 104's reply carries the universe object, whose root must be `0x7fffffffffffffff`.
+- 062: 104 reply with the universe root plus a `client config rsp` (`{1: 1, 2: 1}`): **the game reached orbit** ("Set Destination", player card d1localtest, level 0).

@@ -30,8 +30,13 @@ python -u server/session_listener.py
 
 The local RPCN server (`D:\Destiny360\RPCN_LOCAL\rpcn.exe`) must also be running for PSN sign-in. Then boot `PS3_GAME\USRDIR\EBOOT.BIN` from the new RPCS3 folder and press X/A at the title screen.
 
-## Current gate (2026-09-24)
+## Current gate (2026-09-25)
 
-With the comparison-022 setup plus `python -u server/bap_server.py` in place of `session_listener.py`, Destiny completes the BAP session hello and three encrypted requests (comparisons 023–025). It then sends a web-service call (`c->ws req`, service 503) and, without a valid reply, shows **chicken** (character servers). Character selection is not implemented. See `notes/ps3-route.md`.
+The local stack signs in, shows character select with the stored character, and loads into
+**orbit** (comparison 062). See [`notes/checkpoint-2026-09-25-orbit.md`](../notes/checkpoint-2026-09-25-orbit.md)
+for the running setup and next steps.
 
-For this test, also run `python -u server/lobby_probe.py --timeout 60`. Run the unit tests with `python -m unittest discover -s server -p "test_*.py" -v`.
+For this test, also run `python -u server/lobby_probe.py --timeout 60` and
+`python -u server/bap_server.py --ws-signin --schema <merged character schema> --store <characters.json>`
+(both private files live outside Git). Run the unit tests with
+`python -m unittest discover -s server -p "test_*.py" -v`.

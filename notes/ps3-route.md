@@ -153,3 +153,15 @@ Destiny now passes the investment sign-in on the local stack and shows its first
 GDB tracing through RPCS3's stub (`scripts/rpcs3_gdb*.py`) located each step: the error/milestone calls, the pending-request completion (`0x28c3b8`), the family/object manager (`0x41b75c`, `0x41b9ec`) and the sign-in reason codes (`0x28d4c0`: 2 = no subscription, 3 = unknown object type, 4 = no free object, 6 = version gap).
 
 After the setup screens the client calls service 701 (1080-byte request). Unhandled services now receive their response type encoded by default (result error_none) from the exported schema.
+
+## Character select to orbit (comparisons 049–062)
+
+The game now reaches orbit on the local stack. Chain of fixes (details in `notes/test-log.md`):
+
+1. **Stored character.** `bap_server.py --store` replays the created character in the select_character (3) and self (4) families at sign-in. `investment.py` array mode 1 is a fixed-capacity slot list: the nested type's first `count` fields are serialized (`0xd0f058`).
+2. **Active character.** The character bootflow step (`0x32f748`, state query `0x325350` = 6) needs the user entry +0x20, which `0x2942fc` copies from the self root's u64 at +0x60 once `0x29305c` finds a self character object with that id. Service 504 (select) and 501 (create) now publish it in a versioned self delta.
+3. **Reply order.** `0x7c3458` matches each reply against the oldest pending request (type and id). An unanswered request makes the next replies unmatched: connection failure reason 0x12, state 8, health condition 15, **centipede**. Failure names are at `0x122b000`; message descriptors are at runtime table `0x175fba8`.
+4. **acct id trans (0x17/0x18).** Decoder `0x415764`: u16 count, u8 7, u8 0xff, the name entries (as in the request), then one u64 account id per entry.
+5. **Service 104 and client config.** 104's reply embeds the universe object (root `0x7fffffffffffffff`, else **pig** 0xa2). `client config rsp` (0x13) is a nanopb message (`0x11d0bf0`: required uint64 1, required uint32 2).
+
+RPCS3's GDB stub serves only one debugger connection per emulator session; `scripts/rpcs3_gdb_daemon.py` holds it and serves trace requests locally.
