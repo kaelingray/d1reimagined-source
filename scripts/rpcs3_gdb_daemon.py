@@ -5,12 +5,13 @@ session: after that client disconnects the emulator stays paused and later conne
 are refused or never answered. This daemon connects once, keeps the game running, and
 accepts one-line commands on a loopback control port (default 127.0.0.1:2346):
 
-  hits N SECONDS ADDR[,ADDR...] [REG:LEN,...]
+  hits N SECONDS ADDR[,ADDR...] [REG:LEN,...]   (wADDR = write watchpoint, if the stub has them)
                                   break on ADDRs until N hits or SECONDS pass, then clear
                                   them; per hit: pc, r3-r8, lr, ctr, saved-LR chain, 16
                                   bytes at *r4, for 0x41c0e0 the soid at *r6, and LEN bytes
                                   at each listed register (e.g. r5:512; rN:0 prints the register value)
   mem ADDR LEN                    hex dump of guest memory (big-endian guest addresses)
+  raw PACKET                      send one GDB packet while paused and print the reply
   ping                            liveness check
 
 Each reply ends with a line "." . Usage:
@@ -91,11 +92,13 @@ class Session:
                 break
         return out
 
-    def hits(self, limit, seconds, addrs, dumps=()):
+    def hits(self, limit, seconds, addrs, dumps=(), watches=()):
         lines = []
         self.pause()
         for a in addrs:
             self.cmd(f"Z0,{a:x},4")
+        for a in watches:  # write watchpoints; the stub's reply is logged in case it refuses them
+            lines.append(f"Z2 {a:#x}: {self.cmd(f'Z2,{a:x},4')!r}")
         end = time.time() + seconds
         count = 0
         try:
@@ -104,7 +107,7 @@ class Session:
                 self.g.cmd("vCont;c", wait=False)
                 self.running = True
                 try:
-                    self.wait_stop()
+                    stop = self.wait_stop()
                 except (TimeoutError, OSError):
                     break
                 self.running = False
@@ -112,7 +115,7 @@ class Session:
                 for tid in self.threads():
                     self.cmd(f"Hg{tid}")
                     pc = self.reg(64)
-                    if pc not in addrs:
+                    if pc not in addrs and not (watches and "watch" in stop):
                         continue
                     r = {i: self.reg(i) for i in (1, 3, 4, 5, 6, 7, 8)}
                     lr, ctr = self.reg(67), self.reg(68)
@@ -140,6 +143,8 @@ class Session:
             self.pause()
             for a in addrs:
                 self.cmd(f"z0,{a:x},4")
+            for a in watches:
+                self.cmd(f"z2,{a:x},4")
             self.resume()
         return lines + [f"hits {count}"]
 
@@ -165,8 +170,16 @@ def serve():
                     if line[:1] == ["hits"]:
                         dumps = [(int(d.split(":")[0].lstrip("r")), int(d.split(":")[1], 0))
                                  for d in line[4].split(",")] if len(line) > 4 else []
+                        targets = line[3].split(",")
                         out = session.hits(int(line[1]), float(line[2]),
-                                           [int(a, 16) for a in line[3].split(",")], dumps)
+                                           [int(a, 16) for a in targets if not a.startswith("w")], dumps,
+                                           [int(a[1:], 16) for a in targets if a.startswith("w")])
+                    elif line[:1] == ["raw"]:
+                        session.pause()
+                        try:
+                            out = [repr(session.cmd(line[1]))]
+                        finally:
+                            session.resume()
                     elif line[:1] == ["mem"]:
                         out = session.mem(int(line[1], 16), int(line[2], 0))
                     else:

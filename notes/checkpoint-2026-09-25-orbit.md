@@ -389,3 +389,11 @@ Full run (about 10 minutes):
   member list is empty in the local flow, presumably because the BAP peer/roster families
   (subscriptions 0 and 2, pushed empty by the stand-in) carry the fireteam's machines. Next:
   what those families must contain for the local machine to be a member.
+- The group entry that RPC 16 reads belongs to the manager `*(0x19b7224)` (entries keyed by a
+  u64 group id at entry +0x10; all users in `0x82a264`-`0x82cbd4`, next to the RPC receivers of
+  the table at 0x12c3ee0). Its RPC 0 (event 0x15, type 0x80802d3c, receiver `0x828714` ->
+  `0x82af3c` -> `0x7e4e40`) is posted by session method 0x190 (`0x2d417c` -> `0x827ea8`) from
+  **host message type 24** (`0xd0da9c`, type 0x80800d10 = {u3, 384-word bitmap}). The group
+  objects of the fireteam manager (`*(0x18ea68c)`, sessions at +0x10 + group*0x11938) do contain
+  the local member (TEST170: `0x802650` adds it at the join), but the RPC 16 entry stays
+  empty. RPCS3's GDB stub rejects write watchpoints (Z2 -> empty reply; TEST171).
