@@ -230,3 +230,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   activity 6+ minutes, on the loading screen (no host simulation stream yet).
 - 163: `--ah-zone 105:0x811c9dc5` (bubble 13 sub-slot 1): the world controller loads that zone
   set, loading tasks 0-7 complete; tasks 8-10 wait for the host simulation's zone record.
+- 164: + `--ah-world-state 105:1` (type-11 world-state delta): zone set 105 active, loading tasks
+  0-8 complete; task 9 still running.

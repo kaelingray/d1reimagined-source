@@ -341,3 +341,19 @@ Full run (about 10 minutes):
   simulation stream).
 - `bap_server.py --ah-bubble-states DEFAULT[,BUBBLE=STATE...]` sets the activity state's
   per-bubble states (default -1).
+- **Host type 11 is the world state** (TEST164): its handler `0x25715c` reads the body as one
+  present bit + a delta of world state 0x808009ed (0x5038 bytes; `0x1ca478` -> `0x25d2dc`, the
+  same encoding as other host messages) onto the host simulation's copy (host +0xbc0 =
+  simulation +8), normalizes it (`0x25bbec`) and posts it to the world controller as RPC 6
+  (session method slot 0x1a4 `0x2d424c` -> `0x8283ac`, event 0x1b; receiver `0x8288d0` ->
+  `0x1c8944`). Layout: +0/+4 i32, +8 20 peer slots of 0x80800a39 (0x250: opt identity
+  0x80800c2d = join request @0x10, opt 0x80800c56 {opt 0x80800b1f = join request @0x38, ...}),
+  +0x2e48 opt 0x80800bd7 {40 group records 0x80800c6f (0xd8: u32 zone-set index @0, u2 @4,
+  {i8, u2 state, u5 peer, bool} @8, i32 @0x20, {i8, i32, i8[20] per-peer @0x38, u8+i8[128]
+  @0x4c} @0x28), ...}, opt 20-bit masks @0x5028/0x502c (occupied peers)/0x5030. The local
+  peer slot is the one whose identity's first 8 bytes equal the simulation id (`0x1c9ab8`).
+  `bap_server.py --ah-world-state ZONE[:PEERBYTE]` sends the client in slot 0 and group
+  record 0 = {ZONE, state 1, peer 0, per-peer byte}. With `--ah-zone 105:0x811c9dc5
+  --ah-world-state 105:1`: the world controller copied the record, set the zone-byte-2 flag,
+  and **zone set 105 became active** (table +0x110c = 0x69, slice current record = 105);
+  loading tasks 0-8 done, task 9 running, task 10 pending; still the loading screen.

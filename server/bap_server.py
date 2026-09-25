@@ -285,6 +285,29 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
     return investment.encode(schema, STATE_TYPE, {0: values})
 
 
+WORLD_STATE_TYPE = 0x808009ED
+
+
+def world_state_delta(schema, request, zone=None, peer_byte=1):
+    """Body of host type 11 (0x25715c): one present bit, then a world-state delta (type
+    0x808009ed, decoded with 0x1ca478 onto the host simulation's copy at +0xbc0 and posted to
+    the world controller as RPC 6). Peer slot 0 is the joining client: its identity (@0x10)
+    and player data (@0x38) from the join request, occupied mask @0x502c bit 0 (0x1c9ab8
+    finds the local slot by the 8-byte id). With `zone`, group record 0 (@0x2e48, 0x80800c6f)
+    names that zone-set index with state 1 for peer 0 and per-peer byte `peer_byte`, which
+    the world controller copies to slice +0x310 when it matches its own +0x1d0 (0x31d06c)
+    and which gates the zone-set switch (0x31c750)."""
+    values = {8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}}, 0x502C: 1}
+    if zone is not None:
+        records = {0xD8 * i: {0: -1} for i in range(1, 40)}  # unused groups: index -1
+        records[0] = {0: zone, 8: {1: 1, 2: 0}, 0x28: {0x10: {0: peer_byte}}}
+        values[0x2E48] = {0: records}
+    w = investment.BitWriter()
+    w.put(1, 1)
+    investment.encode_into(w, schema, WORLD_STATE_TYPE, values)
+    return w.data()
+
+
 def join_response(schema, request_body, session_id="d1local-activity", result=0, extra=None):
     request = join_request(schema, request_body)
     values = {0: request, 0xF8: result, 0xF9: char_array(session_id)}
@@ -703,7 +726,13 @@ def handle(conn, peer, args):
                     conn.sendall(push)
                     log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
                 if args.ah_state:
-                    for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
+                    establish = b""
+                    if args.ah_world_state:
+                        zone, _, byte = args.ah_world_state.partition(":")
+                        establish = world_state_delta(args.activity_schema, request,
+                                                      None if zone == "peer" else int(zone, 0),
+                                                      int(byte or "1", 0))
+                    for subtype, data in ((AH_ESTABLISH, establish), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
                                                                       args.ah_bubbles, args.ah_zone,
                                                                       args.ah_bubble_states))):
                         push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
@@ -849,6 +878,9 @@ def main():
                     help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
     ap.add_argument("--ah-zone", type=lambda v: tuple(int(x, 0) for x in v.split(":")), metavar="INDEX:HASH",
                     help="with --ah-state, zone record (u32 @0x54, i32 @0x58); -1:0x811c9dc5 = none")
+    ap.add_argument("--ah-world-state", nargs="?", const="peer", metavar="ZONE[:PEERBYTE]",
+                    help="with --ah-state, the type-11 body carries a world-state delta: the client "
+                         "in peer slot 0 and, with ZONE, group record 0 for that zone-set index")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
                     help="with --ah-join, push an empty host message (default type 11) every SECONDS")
