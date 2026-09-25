@@ -106,8 +106,46 @@ def save_character(path, account_id, character_id, request_payload):
     path.write_text(json.dumps(store, indent=1), encoding="utf-8")
 
 
+def parse_flag_spec(spec):
+    """"2" (every flag) or "2@A0-511,B0-15" - value, then index ranges in account table A
+    (+0x12a8, 1024 flags), account table B (+0x16a8+1, 256 flags) and character table C
+    (self character object +0x3bc0, 1024 flags)."""
+    value, _, ranges = str(spec).partition("@")
+    out = {"A": set(), "B": set(), "C": set()}
+    if not ranges:
+        out = {"A": set(range(1024)), "B": set(range(256)), "C": set(range(1024))}
+    for part in filter(None, ranges.split(",")):
+        table, span = part[0].upper(), part[1:]
+        lo, _, hi = span.partition("-")
+        out[table].update(range(int(lo), int(hi or lo) + 1))
+    return int(value), out
+
+
+def account_flag_values(spec):
+    """Layered specs separated by ";" - later ones win, e.g. "1;2@B0" = every flag false
+    (1) except B0 true (2). Returns {"A": {index: value}, "B": {...}}."""
+    values = {"A": {}, "B": {}, "C": {}}
+    for part in filter(None, str(spec).split(";")):
+        value, chosen = parse_flag_spec(part)
+        for table, indexes in chosen.items():
+            values[table].update(dict.fromkeys(indexes, value))
+    return values
+
+
+def account_flags(schema, spec):
+    """Self root account flag tables, read by the unlock-expression evaluator (0xb674ec /
+    0xb67564). Values are tri-state (the evaluator writes 2 for true). Setting all to 2
+    unlocks destinations but also trophies, message-of-the-day and restriction flags."""
+    values = account_flag_values(spec)
+    def slots(handle, table):
+        return {f["off"]: values[table][i] for i, f in enumerate(schema[handle]["fields"])
+                if i in values[table]}
+    return {0x12a8: slots("0x80804595", "A"),
+            0x16a8: {0: False, 1: slots("0x808047d8", "B")}}
+
+
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
-                version=1, flags=1, active_id=None):
+                version=1, flags=1, active_id=None, self_flags=None):
     """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
@@ -124,6 +162,8 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                 fields[0][8] = character_list
                 if active_id is not None:
                     fields[0][0x60] = active_id
+        if family_type == 4 and self_flags is not None:
+            fields[0].update(account_flags(schema, self_flags))
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
@@ -131,8 +171,13 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                                           investment.encode(schema, handle, character_profile)))
         if family_type == 4 and character_id is not None and character_profile is not None:
             type_hash, handle = SELF_CHARACTER_OBJECT
+            profile = dict(character_profile)
+            if self_flags is not None:
+                chosen = account_flag_values(self_flags)["C"]
+                profile[0x3bc0] = {f["off"]: chosen[i] for i, f in
+                                   enumerate(schema["0x80804595"]["fields"]) if i in chosen}
             objects.append(investment.obj(type_hash, character_id,
-                                          investment.encode(schema, handle, {0: character_profile})))
+                                          investment.encode(schema, handle, {0: profile})))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
     # Updates to an existing subscription use a delta and the next family version.
     return investment.qz_payload([investment.family(family_type, root, objects,
@@ -147,9 +192,22 @@ SUB_REQ, SUB_RSP = 0x0C, 0x0D
 QZ_UPDATE = 0x7B
 ACCT_ID_TRANS_REQ, ACCT_ID_TRANS_RSP = 0x17, 0x18
 CLIENT_CONFIG_REQ, CLIENT_CONFIG_RSP = 0x12, 0x13
+# Activity host request (sent when joining an activity): 8-byte request; the reply decoder
+# (0x416f14) copies exactly 16 raw bytes. Their meaning is still unknown.
+AHP_REQ, AHP_RSP = 0x10, 0x11
 # Service replies that need more than the default: 104 carries the universe object at +8
 # (type 0x80801941, as in the sign-in reply); an absent universe root gives pig (0xa2).
 WS_REPLY_VALUES = {104: {8: {0: 0x7FFFFFFFFFFFFFFF, 8: 1}}}
+# Universe +8 behaves like the server clock (the director compares character timestamps
+# with it, and the client reads no calendar clock of its own); its unit is still unknown.
+UNIVERSE_TIME_UNITS = {"one": lambda t: 1, "s": lambda t: int(t), "ms": lambda t: int(t * 1e3),
+                       "us": lambda t: int(t * 1e6),
+                       "filetime": lambda t: int((t + 11644473600) * 1e7)}
+
+
+def universe_time(unit, now=None):
+    import time as _time
+    return UNIVERSE_TIME_UNITS[unit](_time.time() if now is None else now)
 
 
 def client_config_reply(value=1, version=1):
@@ -374,7 +432,7 @@ def handle(conn, peer, args):
         self_version += 1
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
-            version=self_version, flags=0, active_id=active_id))
+            version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
@@ -404,7 +462,8 @@ def handle(conn, peer, args):
                     body = signin_response(0x3333333333333333, word1=0x44444444, word2=0x55555555,
                                            opt_values=(0x1111111111111111, 0x2222222222222222))
                 else:
-                    body = signin_response(account_id, optional_ids=not args.ws_no_optional)
+                    body = signin_response(account_id, optional_ids=not args.ws_no_optional,
+                                           opt_values=(UNIVERSE_SOID, universe_time(args.universe_time)))
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
@@ -459,7 +518,8 @@ def handle(conn, peer, args):
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
-                    args.schema, wire, WS_REPLY_VALUES.get(wire)))
+                    args.schema, wire, {8: {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}}
+                    if wire == 104 else WS_REPLY_VALUES.get(wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
@@ -491,6 +551,11 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-18.bin").write_bytes(reply)
                 log(f"[{tag}] sent acct id trans rsp {names} -> {account_id or 0:#x}")
+            if kind == 1 and msg_type == AHP_REQ and args.ahp_reply is not None:
+                reply = encrypted_frame(tx, AHP_RSP, msg_id, 200, args.ahp_reply)
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-11.bin").write_bytes(reply)
+                log(f"[{tag}] sent ahp rsp {args.ahp_reply.hex()} (request {payload.hex()})")
             if kind == 1 and msg_type == CLIENT_CONFIG_REQ and args.ws_signin:
                 reply = encrypted_frame(tx, CLIENT_CONFIG_RSP, msg_id, 200, client_config_reply())
                 conn.sendall(reply)
@@ -507,7 +572,8 @@ def handle(conn, peer, args):
                     family_type, root = payload[0], int.from_bytes(payload[1:9], "big")
                     push = encrypted_frame_kind(tx, QZ_UPDATE, 0,
                                                 family_blob(args.schema, family_type, root, character_id,
-                                                            character_profile, active_id=active_id))
+                                                            character_profile, active_id=active_id,
+                                                            self_flags=args.self_flags))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
@@ -553,6 +619,13 @@ def main():
     ap.add_argument("--ws-no-reply", type=lambda v: {int(x) for x in v.split(",") if x},
                     default=set(),
                     help="comma-separated ws services to leave unanswered (experiments only)")
+    ap.add_argument("--universe-time", choices=sorted(UNIVERSE_TIME_UNITS), default="one",
+                    help="value sent in universe +8 (suspected server clock): 1 or now in a unit")
+    ap.add_argument("--self-flags",
+                    help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
+                         '(e.g. "1;2@B0": all false, B0 true)')
+    ap.add_argument("--ahp-reply", type=bytes.fromhex,
+                    help="experiment: 16-byte hex payload for ahp rsp (0x11)")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,

@@ -34,6 +34,21 @@ class Session:
         self.running = False
         self.resume()
 
+    def cmd(self, data):
+        """Send a command and return its reply, dropping stray stop packets (S/T) that
+        a late interrupt can leave queued (they once desynchronized the session and left
+        the emulator paused)."""
+        reply = self.g.cmd(data)
+        while reply[:1] in ("S", "T") and not data.startswith(("?", "vCont")):
+            reply = self.g._read()
+        return reply
+
+    def wait_stop(self):
+        while True:
+            reply = self.g._read()
+            if reply[:1] in ("S", "T"):
+                return reply
+
     def resume(self):
         self.g.cmd("vCont;c", wait=False)
         self.running = True
@@ -42,30 +57,33 @@ class Session:
         if self.running:
             self.g.s.sendall(b"\x03")
             self.g.s.settimeout(10)
-            self.g._read()
+            self.wait_stop()
             self.running = False
 
     def reg(self, num):
         try:
-            return int(self.g.cmd(f"p{num:x}"), 16) & 0xFFFFFFFF
+            return int(self.cmd(f"p{num:x}"), 16) & 0xFFFFFFFF
         except ValueError:
             return None
 
     def threads(self):
-        out, r = [], self.g.cmd("qfThreadInfo")
+        out, r = [], self.cmd("qfThreadInfo")
         while r and r[0] == "m":
             out += r[1:].split(",")
-            r = self.g.cmd("qsThreadInfo")
+            r = self.cmd("qsThreadInfo")
         return out
+
+    def read(self, addr, size):
+        return bytes.fromhex(self.cmd(f"m{addr:x},{size:x}"))
 
     def chain(self, sp, depth=8):
         out = []
         for _ in range(depth):
             try:
-                nxt = struct.unpack(">Q", self.g.mem(sp, 8))[0] & 0xFFFFFFFF
+                nxt = struct.unpack(">Q", self.read(sp, 8))[0] & 0xFFFFFFFF
                 if not nxt:
                     break
-                out.append(hex(struct.unpack(">Q", self.g.mem(nxt + 16, 8))[0] & 0xFFFFFFFF))
+                out.append(hex(struct.unpack(">Q", self.read(nxt + 16, 8))[0] & 0xFFFFFFFF))
                 sp = nxt
             except Exception:
                 break
@@ -75,7 +93,7 @@ class Session:
         lines = []
         self.pause()
         for a in addrs:
-            self.g.cmd(f"Z0,{a:x},4")
+            self.cmd(f"Z0,{a:x},4")
         end = time.time() + seconds
         count = 0
         try:
@@ -84,13 +102,13 @@ class Session:
                 self.g.cmd("vCont;c", wait=False)
                 self.running = True
                 try:
-                    self.g._read()
+                    self.wait_stop()
                 except (TimeoutError, OSError):
                     break
                 self.running = False
                 self.g.s.settimeout(10)
                 for tid in self.threads():
-                    self.g.cmd(f"Hg{tid}")
+                    self.cmd(f"Hg{tid}")
                     pc = self.reg(64)
                     if pc not in addrs:
                         continue
@@ -98,21 +116,21 @@ class Session:
                     lr, ctr = self.reg(67), self.reg(68)
                     text = " ".join(f"r{i}={v:#x}" for i, v in r.items() if i != 1 and v is not None)
                     if pc == LOOKUP and r[6]:
-                        text += f" soid={struct.unpack('>Q', self.g.mem(r[6], 8))[0]:#x}"
+                        text += f" soid={struct.unpack('>Q', self.read(r[6], 8))[0]:#x}"
                     lines.append(f"{time.strftime('%H:%M:%S')} pc={pc:#x} {text} lr={lr:#x} "
                                  f"ctr={ctr:#x} chain {self.chain(r[1])}")
                     count += 1
         finally:
             self.pause()
             for a in addrs:
-                self.g.cmd(f"z0,{a:x},4")
+                self.cmd(f"z0,{a:x},4")
             self.resume()
         return lines + [f"hits {count}"]
 
     def mem(self, addr, size):
         self.pause()
         try:
-            return [self.g.mem(addr, size).hex()]
+            return [self.read(addr, size).hex()]
         finally:
             self.resume()
 
