@@ -260,3 +260,24 @@ Full run (about 10 minutes):
   absent -> lobster. The join response's trailing fields (`--ah-join-fields`) do not affect it.
   Open: what sets the zone object's target record to index 0 / hash 0 at arrival (probably a
   default when the host provided no zone set), and what the real host supplies instead.
+- Where the zone record comes from: the world controller is authoritative on the client. When
+  slice set +0x88..+0x1d8 differs from the zone object, `0x31b8b0`/`0x31bf00`/`0x31e6d8` send
+  it as event 0x4a (`0x828688` -> poster `0x262bc4`, struct 0x80802e0e = {u8, u8, i8,
+  0x80800d9f {optional record 0x80800d82 @8, optional record @0xa0, i8 @0x140, i8 @0x141,
+  u8 @0x142}}); the receiver (RPC table 0x12c3ee0 entry 11, decoder `0xeb4f28`, receiver
+  `0x8289f0` -> `0x31bca0`) copies it into the zone object. The target record itself is written
+  by `0x31d358(slice, state, index, &hash)` (+0x89 state, +0x130 index, +0x134 hash); on arrival
+  `0x31d778` calls it with state 2 and the index/hash from: slice +0x1e8 if set and present in
+  the object table, else the zone selection global `*(0x1a7134c)` (+8 name hash, looked up with
+  `0x1406f0`, `0xb25bec`), else the **host activity state @0x54 (u32 index) / @0x58 (i32
+  hash)** (activity object +0x50b0, `0x1c9298`). Our state left both 0, hence record {0, 0}.
+  The leave check's final test (`0x31c2f8`) looks the index up with `0x140820`: status 0 or 5 ->
+  state 12 (lobster), 6 -> 13, 7 -> 14; index -1 skips it. The zone machine `0x31eaf8` also
+  skips index -1, and for a present object (status 2/3) posts the slot-2 zone switch with the
+  record's index and hash. `bap_server.py --ah-zone INDEX:HASH` sets the two fields.
+- TEST158b (`--ah-zone -1:0x811c9dc5`): the arrival record is -1 (`0x31d358` r5 = -1), slice +0x89
+  stays 2 and **lobster is gone**: the client stays in the activity world for ~72 s (slice
+  +0x1d2 counts 2 -> 3 -> 4 at +10 s / +17 s), then leaves with **baboon** ("Removed from the game
+  world"), service 505, back to orbit. (TEST158 itself stalled at character select: the client
+  stopped sending BAP frames, unrelated.) Next: what baboon checks (probably host simulation
+  traffic the stand-in never sends).

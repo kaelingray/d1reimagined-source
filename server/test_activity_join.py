@@ -50,6 +50,20 @@ class EntityIndices(unittest.TestCase):
         self.assertEqual(data[8:16], b"\xff" * 8)
         self.assertEqual(data[16:], bytes(0x600 - 16))
 
+class ActivityState(unittest.TestCase):
+    def test_zone_record_none(self):
+        schema = {
+            f"{b.STATE_TYPE:#x}": {"size": 0xA20, "fields": [nested(0, 0x80800B8F)]},
+            "0x80800b8f": {"size": 0xA20, "fields": [
+                prim(0, 2, 1), prim(0x10, 5, 32, 0x80000000), prim(0x54, 5, 32, 0x80000000), prim(0x58, 9, 32)]},
+        }
+        data = b.activity_state(schema, zone=(-1, 0x811C9DC5))
+        values = investment.decode(schema, b.STATE_TYPE, data)[0]
+        self.assertEqual(values[0x54] & 0xFFFFFFFF, 0xFFFFFFFF)
+        self.assertEqual(values[0x58] & 0xFFFFFFFF, 0x811C9DC5)
+        # bool, bubble count 1 (biased), index -1 biased to 0x7fffffff, hash
+        self.assertEqual(data, bytes.fromhex("c0000000bfffffffc08e4ee2") + bytes([0x80]))
+
 
 if __name__ == "__main__":
     unittest.main()

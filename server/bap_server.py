@@ -251,8 +251,14 @@ def entity_indices(schema, first, last):
     return investment.encode(schema, ENTITY_INDICES_TYPE, {0: {4 * i: w for i, w in enumerate(words)}})
 
 
-def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=None):
+def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=None, zone=None):
     values = {0: True, 0x10: 1}
+    if zone is not None:
+        # u32 @0x54 object index / i32 @0x58 name hash: the zone record the world controller
+        # adopts on arrival (0x31d778 via activity object +0x50b0, slice set +0x130). The leave
+        # check (0x31bfe0) then requires that object in the scenario object table; index -1
+        # (hash 0x811c9dc5, FNV of "") is the game's default and skips the check.
+        values[0x54], values[0x58] = zone
     if bubbles:
         # i32 @0x10 = bubble count (must equal the scenario's, def +0x30; 0x1c7608 "activity
         # client bubble count mismatch"), i8[64] @0x14 = per-bubble state index (-1 = default).
@@ -690,7 +696,7 @@ def handle(conn, peer, args):
                     log(f"[{tag}] pushed entity indices {args.ah_entities} from host {host_id:#x}")
                 if args.ah_state:
                     for subtype, data in ((AH_ESTABLISH, b""), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
-                                                                      args.ah_bubbles))):
+                                                                      args.ah_bubbles, args.ah_zone))):
                         push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, data, host_id))
                         conn.sendall(push)
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
@@ -817,6 +823,8 @@ def main():
                     help="with --ah-state, bubble count of the scenario (states left at default)")
     ap.add_argument("--ah-checksum", type=lambda v: int(v, 0),
                     help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
+    ap.add_argument("--ah-zone", type=lambda v: tuple(int(x, 0) for x in v.split(":")), metavar="INDEX:HASH",
+                    help="with --ah-state, zone record (u32 @0x54, i32 @0x58); -1:0x811c9dc5 = none")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-join-fields", default=[],
