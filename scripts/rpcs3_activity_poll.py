@@ -64,6 +64,9 @@ def snapshot():
             c, t = rd(data + 0x450, 0x3A8), rd(data + 0x7F8, 0x3A8)
             if len(c) == 0x3A8 and len(t) == 0x3A8:
                 out["fireteam"] = (c[0xD0], c[0xD4:0xD8].hex(), t[0xD0], t[0xD8:0xDC].hex())
+    slices = u32(0x18EA604)  # world controller slice set (0x410 bytes; records at +0x90 / +0x130)
+    if slices:
+        out["slices"] = rd(slices, 0x410).hex()
     zone = u32(0x18EA618)  # world controller zone state (0x30e128()): byte 0 state, records +8/+0xa8
     if zone:
         out["zone"] = rd(zone, 0x150).hex()

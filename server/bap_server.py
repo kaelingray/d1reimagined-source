@@ -272,10 +272,11 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
     return investment.encode(schema, STATE_TYPE, {0: values})
 
 
-def join_response(schema, request_body, session_id="d1local-activity", result=0):
+def join_response(schema, request_body, session_id="d1local-activity", result=0, extra=None):
     request = join_request(schema, request_body)
-    return investment.encode(schema, JOIN_RESPONSE_TYPE,
-                             {0: request, 0xF8: result, 0xF9: char_array(session_id)})
+    values = {0: request, 0xF8: result, 0xF9: char_array(session_id)}
+    values.update(extra or {})
+    return investment.encode(schema, JOIN_RESPONSE_TYPE, values)
 
 
 def bc_notification(subtype, data, ident=0):
@@ -676,7 +677,7 @@ def handle(conn, peer, args):
                 request = join_request(args.activity_schema, body)
                 log(f"[{tag}] host join request {request.get(0, 0):#x} / {request.get(8, 0):#x} "
                     f"ids {request.get(0x10)}")
-                data = join_response(args.activity_schema, body, args.ah_session)
+                data = join_response(args.activity_schema, body, args.ah_session, extra=dict(args.ah_join_fields))
                 push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_JOIN_RESPONSE, data, host_id))
                 conn.sendall(push)
                 folder.joinpath(f"{number:03}-server-bcnot.bin").write_bytes(push)
@@ -818,6 +819,10 @@ def main():
                     help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
+    ap.add_argument("--ah-join-fields", default=[],
+                    type=lambda v: [tuple(int(y, 0) for y in x.split("=")) for x in v.split(",") if x],
+                    help="experiment: OFFSET=VALUE,... for the join response's trailing fields "
+                         "(i32 @0x17c/0x184, biased i32 @0x180/0x188, u8 @0x18c, u16 @0x18e/0x190, i32 @0x194)")
     ap.add_argument("--ah-session", default="d1local-activity",
                     help="activity session id sent in the host join response")
     ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,

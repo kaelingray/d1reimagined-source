@@ -253,3 +253,10 @@ Full run (about 10 minutes):
   world-controller record says it should exist.
 - The in-activity state object 0x18eb978 uses vtable 0x12b8888 (+0x18 leave check `0x327d90`,
   +0x1c update `0x332dec`); the zone machine `0x4b2d00` is not called from it.
+- Slice set (TEST156/157): `*(0x18ea604)` (0x410 bytes) gets a 0x150-byte copy of the zone object
+  `*(0x18ea618)` at +0x88 on arrival (`0x31b5c8`). On arrival the zone object becomes byte0 = 1,
+  byte1 = 2, target record +0xa8 = {i32 index 0, u32 hash 0, i32 0} (default {-1, 0x811c9dc5,
+  -1}), +0x148 = 01000200; the leave check then looks up object 0 (slice set +0x130), which is
+  absent -> lobster. The join response's trailing fields (`--ah-join-fields`) do not affect it.
+  Open: what sets the zone object's target record to index 0 / hash 0 at arrival (probably a
+  default when the host provided no zone set), and what the real host supplies instead.
