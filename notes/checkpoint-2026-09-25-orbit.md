@@ -357,3 +357,22 @@ Full run (about 10 minutes):
   --ah-world-state 105:1`: the world controller copied the record, set the zone-byte-2 flag,
   and **zone set 105 became active** (table +0x110c = 0x69, slice current record = 105);
   loading tasks 0-8 done, task 9 running, task 10 pending; still the loading screen.
+- Loading task 9 (`0x3286a8`) also needs a resource of kind 0x10 (`0xb26e4c` -> `0x1483c4`) and
+  the local player's object: `0x1226ec` (session method +0x88 `0x2d2e40`) = local user 0's
+  player index `*(0x197fa80)+0xe4[4]` (-1 here), bound by `0x682fe0(user, player)` (player
+  records 0x27b0 bytes at `*(0x197f9d4)+4`).
+- **Host type 5 = simulation packets** (TEST165/166): event 0x13 -> `0x827d18` -> `0x1c85e0`:
+  u8 epoch, roster-present bit, 65 changed-slot bits, roster delta (present bit + type
+  0x80800cf7 {opt u32, 65 x {opt 8-byte peer id, opt u16, bool active}}), u32 host tick, then
+  the replicated object stream (`0x1ce4a4`: per object a more-bit, typed object id, u32 length,
+  state-present bit and a typed state; only read when the session's simulation is active and
+  the epoch equals session +0x11). `bap_server.py --ah-roster SLOT[:GEN]` sends the client in a
+  roster slot (resent with each heartbeat: a packet sent with the join is dropped because the
+  host session does not exist yet). In TEST166 the peer joined (`0x123478`, then `0x1234c8`).
+- Still no local player: the player manager (`0x66eb78` -> `0x66dd6c`, `0x66e808` only when
+  `0x66c2d4()`; `0x81db98` -> `0x674054(machine id)`) binds the local user once its machine id
+  (peer table `*(0x197f9dc)`: +4 mask, +8 20 x 8-byte ids, +0xa8 {1, own id}) is in the
+  table; the table is empty (mask 0). `0x66c2d4()` is 0 because `*(*(0x197ede4))` = 0: the
+  16-byte network-game id at setup +0x2730 (posted by the world change `0x302728` or
+  `0x6884c4`/`0x68b9ac` through `0x4282d4` -> `0xd340fc` -> `0x66b730`) stays zero after a
+  world change. Next: what fills the player manager's member list (`0x69c874`, 20 x 0xe0).

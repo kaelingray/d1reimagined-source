@@ -232,3 +232,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   set, loading tasks 0-7 complete; tasks 8-10 wait for the host simulation's zone record.
 - 164: + `--ah-world-state 105:1` (type-11 world-state delta): zone set 105 active, loading tasks
   0-8 complete; task 9 still running.
+- 165–166: `--ah-roster 0` (type-5 simulation packet with the client in roster slot 0, resent
+  with the heartbeat): the client adds the peer; no local player yet (peer table empty).

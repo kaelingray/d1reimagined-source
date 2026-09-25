@@ -286,6 +286,26 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
 
 
 WORLD_STATE_TYPE = 0x808009ED
+ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
+AH_SIMULATION = 5
+
+
+def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0):
+    """Host type 5 (0x25b920 -> session receive -> event 0x13 -> 0x1c85e0): u8 epoch, roster
+    present bit, 65 changed-slot bits, roster delta (present bit + type 0x80800cf7: 65 slots of
+    {opt 8-byte peer id, opt u16, bool active}; changed slots add/remove peers via 0x1c8280),
+    u32 host tick, then the replicated object stream (0x1ce4a4; a single 0 bit = none; only
+    read when the session's simulation is active and the epoch matches)."""
+    w = investment.BitWriter()
+    w.put(epoch, 8)
+    w.put(1, 1)
+    for i in range(ROSTER_SLOTS):
+        w.put(1 if i == slot else 0, 1)
+    w.put(1, 1)
+    investment.encode_into(w, schema, ROSTER_TYPE, {4: {0xC * slot: {0: peer_id, 8: generation, 0xA: True}}})
+    w.put(tick, 32)
+    w.put(0, 1)
+    return w.data()
 
 
 def world_state_delta(schema, request, zone=None, peer_byte=1):
@@ -576,6 +596,7 @@ def handle(conn, peer, args):
     account_id = character_id = character_profile = active_id = None
     self_version = 1
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
+    sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
 
     def push_self(number, reason):
         # Delta for the live self subscription: versions must advance by one (0x41b75c).
@@ -740,6 +761,12 @@ def handle(conn, peer, args):
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
                 if args.ah_heartbeat:
                     heartbeat_at = time.time() + args.ah_heartbeat[0]
+                if args.ah_roster:
+                    slot, _, gen = args.ah_roster.partition(":")
+                    data = sim_repeat = sim_packet(args.activity_schema, request[0x10][0], int(slot, 0),
+                                                   int(gen or "1", 0))
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, data, host_id)))
+                    log(f"[{tag}] pushed simulation packet (type 5): roster slot {slot} = client")
                 for spec in args.ah_after_join:
                     subtype, _, data = spec.partition(":")
                     push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0), bytes.fromhex(data),
@@ -752,6 +779,9 @@ def handle(conn, peer, args):
                 # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
                 seconds, subtype = args.ah_heartbeat
                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
+                if sim_repeat:
+                    # the roster packet is dropped until the client's host session exists
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, sim_repeat, host_id)))
                 heartbeat_at = time.time() + seconds
                 log(f"[{tag}] pushed heartbeat subtype {subtype} from host {host_id:#x}")
             if kind == 1 and msg_type == AH_NOT and args.ah_not_push is not None and len(payload) >= 17:
@@ -881,6 +911,8 @@ def main():
     ap.add_argument("--ah-world-state", nargs="?", const="peer", metavar="ZONE[:PEERBYTE]",
                     help="with --ah-state, the type-11 body carries a world-state delta: the client "
                          "in peer slot 0 and, with ZONE, group record 0 for that zone-set index")
+    ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
+                    help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
                     help="with --ah-join, push an empty host message (default type 11) every SECONDS")

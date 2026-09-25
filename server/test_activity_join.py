@@ -77,5 +77,34 @@ class ActivityState(unittest.TestCase):
         self.assertEqual([values[0x14][i] & 0xFF for i in range(4)], [0, 0, 0xFF, 0])
 
 
+ID_TYPE = {"0x8080405e": {"size": 8, "fields": [prim(i, 7, 8) for i in range(8)]}}
+
+
+def opt_nested(off, handle):
+    return dict(nested(off, handle), opt=1)
+
+
+class SimulationPacket(unittest.TestCase):
+    def test_roster_slot(self):
+        schema = dict(ID_TYPE)
+        schema["0x80800b83"] = {"size": 0xC, "fields": [
+            opt_nested(0, 0x8080405E), prim(8, 4, 16, 0, 1), prim(0xA, 2, 1)]}
+        schema["0x8080540e"] = {"size": 0x30C, "fields": [nested(0xC * i, 0x80800B83) for i in range(65)]}
+        schema[f"{b.ROSTER_TYPE:#x}"] = {"size": 0x310, "fields": [
+            prim(0, 5, 32, 0x80000000, 1), nested(4, 0x8080540E)]}
+        peer = {i: i + 1 for i in range(8)}
+        data = b.sim_packet(schema, peer, slot=2, generation=7, epoch=3, tick=9)
+        r = investment.BitReader(data)
+        self.assertEqual(r.get(8), 3)
+        self.assertEqual(r.get(1), 1)
+        self.assertEqual([r.get(1) for _ in range(65)], [int(i == 2) for i in range(65)])
+        self.assertEqual(r.get(1), 1)
+        roster = investment.decode_from(r, schema, b.ROSTER_TYPE)
+        self.assertEqual(roster[4][0x18], {0: peer, 8: 7, 0xA: True})
+        self.assertEqual(roster[4][0], {0xA: False})
+        self.assertEqual(r.get(32), 9)
+        self.assertEqual(r.get(1), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
