@@ -185,3 +185,29 @@ in the session/peer code around `0x7bc600` (fields at +0x21b4..+0x21d8 of that o
   +4) before the loader runs.
 - Tooling: `Invoke-JoinCycle.ps1 -TraceAfter 'ahp req'` starts the trace at the join, so polled
   functions do not use up -Hits.
+
+## Update (comparisons 137–148): into the activity world, then "lobster"
+Full run (about 10 minutes):
+
+    scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','--session-result') `
+      -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host `
+      -ExtraBap @('--self-flags','2','--universe-flag-values','215=1') `
+      -AhArgs @('--ah-join','--ah-entities','8192:12288','--ah-state','--ah-map','act_cosmo_m0_highway',
+                '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22')
+
+- Resource manager (`*(0x18b477c)`): names +0 / +0x148 (active buffers), +0x294 (requested);
+  part slots +0x100 (active) / +0x394 (requested), kinds = suffix table 0x175ccb0 (4
+  `:scenario_client`, 15 `:root`, 6..14 transition cinematics = index*3 + in/filler/out,
+  index 0 spaceflight / 1 same_dest / 2 no_ship). Parts move to the active buffer only when the
+  load completes with status 2 (`0x1f50fc`); an empty buffer loses its name.
+- The world change (engine request slot 3, handler `0x302728`) loaded the scenario, then
+  `0x147cd4` -> game `0x304628` failed and logged `load-failed` (unloading it again). Causes, in
+  order: `0x258550` "activity checksum mismatch" (host state u32 @0x5c must equal the scenario
+  definition's word at +8: 0x79130968, read at compare time), then `0x1c7608` "activity client
+  bubble count mismatch" (host state i32 @0x10 = scenario bubble count, 22; i8[64] @0x14 bubble
+  state indices, -1 = default).
+- With both: the world load succeeds, the transition completes (status 0x21) and the client is
+  in the activity world for ~1 s, sends activity-host messages 37, 20 (1536 zero bytes), 36
+  (4 bytes), then 14/21 and leaves: "You have been returned to Orbit due to an error"
+  (**lobster**, failure (0x18, 0xfe) from `0x327e44`, reason via `0x326fe4`/`0x3268d8`).
+  Next: what the host must answer after arrival (types 20/36) / what `0x326fe4` checks.
