@@ -198,6 +198,10 @@ AHP_REQ, AHP_RSP = 0x10, 0x11
 # b->c notification push (type 9; decoder 0x416064): u8 flag, u64 id (flag 1), u32 subtype,
 # u32 length, data. Subtype 1 appears to reach the ahp consumer 0x42a5a0 (16 bytes).
 BC_NOT = 0x09
+# Activity host proxy connection (address from the ahp reply): the client sends
+# c->ah mgr req (0x06, 3103 bytes: u8 subtype + body); the reply c->ah mgr rsp (0x07) must be
+# exactly 137 bytes, subtype 2 + 136 bytes (decoder 0x415be4). Contents still unknown.
+AH_MGR_REQ, AH_MGR_RSP = 0x06, 0x07
 
 
 def bc_notification(subtype, data, ident=0):
@@ -560,6 +564,11 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-18.bin").write_bytes(reply)
                 log(f"[{tag}] sent acct id trans rsp {names} -> {account_id or 0:#x}")
+            if kind == 1 and msg_type == AH_MGR_REQ and args.ah_mgr_reply is not None:
+                reply = encrypted_frame(tx, AH_MGR_RSP, msg_id, 200, args.ah_mgr_reply)
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-07.bin").write_bytes(reply)
+                log(f"[{tag}] sent c->ah mgr rsp ({len(args.ah_mgr_reply)} bytes)")
             if kind == 1 and msg_type == AHP_REQ and args.ahp_reply is not None:
                 reply = encrypted_frame(tx, AHP_RSP, msg_id, 200, args.ahp_reply)
                 conn.sendall(reply)
@@ -643,6 +652,8 @@ def main():
     ap.add_argument("--ahp-reply", type=bytes.fromhex,
                     help="experiment: 16-byte hex payload for ahp rsp (0x11)")
     ap.add_argument("--ahp-push", help="experiment: SUBTYPE:HEX b->c not pushed after the ahp rsp")
+    ap.add_argument("--ah-mgr-reply", type=bytes.fromhex,
+                    help="experiment: hex payload for c->ah mgr rsp (0x07), normally 137 bytes")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,

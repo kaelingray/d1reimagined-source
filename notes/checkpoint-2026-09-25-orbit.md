@@ -55,3 +55,20 @@ rainbow-distorted in places; that is a separate graphics issue.
   `0xa3e8ac`). The ahp reply (16 bytes) likely identifies the activity host/session.
 - Unattended loop: `Start-LocalStack.ps1 -Name X -BapArgs ...` then
   `Invoke-TitanLogin.ps1 -Name X`, then arm traces via the GDB daemon.
+## Update (comparisons 082–093): activity join protocol
+
+The activity join is a **private activity instance**: the client runs activity-host-side
+logic partly itself, but negotiates through Bungie services. Steps now answered locally:
+1. Demonware lobby bdMatchMaking createSession (encrypted AB 85 frames; `lobby_probe.py
+   --reply-type 0x01 --session-result`).
+2. `c->b_ahp` (0x10) on the main BAP: reply `u64 request id | IPv4 | u16 | port` = address of
+   the **activity host proxy** (a second BAP server; `bap_server.py --ahp-reply ...`).
+3. On the AHP connection: shello (field 2 = 2), `c->ah mgr req` (0x06, 3103 bytes) answered by
+   `c->ah mgr rsp` (0x07, `02 | u64 host id | char[128]`; `--ah-mgr-reply`).
+4. The client then sends `c->ah not` (0x08) to the host (u64 host id, type 3, 232 bytes) and
+   waits for the host's answer: currently failure (0x18, 0x2a).
+Next: the activity host messages (startup response, host identifier, host join/response,
+entity indices). The error-name table `0x175eafc` lists every step. Test loop:
+`%TEMP%\...\scratchpad\cycle2.ps1` pattern (stack + login + trace + AHP stand-in), about 8 min.
+The TEST048 copy uses a keyboard pad now; the user's XInput config is saved as
+`config\input_configs\global\Default.xinput.user.yml.bak`.
