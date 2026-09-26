@@ -13,8 +13,9 @@ The loading screen belongs to an 11-task list in the game's arrival state. After
 - That binding happens at the world change: the game setup's machine table holds just our machine.
 - About one second later it is undone. World-controller RPC 16 copies the activity-host connection's member list into the machine table, and that list is empty in the local flow.
 - The client posts RPC 16 itself, because after a world change it acts as the session host and world-controller authority (the network role in the game setup is 0).
+- There is no player record to bind in any case. Player records come from a player-join event that the group code emits only for players already on the manager's expected-player list. That list stays empty, although our player ID is in the host's join participants and in the world state we send.
 
-Current work: finding what should put the local machine into that connection's member list. Ruled out so far:
+Current work: finding what should fill the expected-player list (and the connection's member list). Ruled out so far:
 
 - Host message type 43 is a *boot list*: naming the client produces error **bass**.
 - Host type 24 is a per-host entity-index grant.

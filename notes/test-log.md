@@ -238,3 +238,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   from an empty group entry; host machine list; RPCS3 GDB has no watchpoints). 174: host type 24
   (per-host index grant) sent at the join had no visible effect. 176: host type 43 naming the
   client = boot list -> error **bass**.
+- 177–179: listeners never fire from boot; player creation is event 0xc from the RPC 16 sender,
+  gated on the manager's expected-player list (empty) - see the checkpoint note.

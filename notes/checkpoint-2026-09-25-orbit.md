@@ -425,3 +425,19 @@ Full run (about 10 minutes):
   to `0x8242a0`/`0x8243b0` -> `0x82087c` -> `0x672dec`/`0x672510`, which create players and bind
   them (`0x671560` -> `0x682fe0`). Next: who posts group messages of kind 12 (probably the
   peer/session layer when a machine joins the group) and whether the host can trigger it.
+- Player creation traced further (TEST178/179, live traces 2026-09-26 10:30): all queued events
+  pass first through the group dispatcher `0x82cd90` (registered in `*(0x18aed70)` by
+  `0x82a264`; kind = event type), so event 0xc/0xe = player join. Event 0xc is posted by
+  `0x8241a8` (bit-serialized record) for each record returned by `0x81eacc`, called from the
+  RPC 16 sender `0x82b998` right after RPC 16. `0x81eacc` maps the activity host to its
+  fireteam group session (`0x305c18(host)` -> `0x305ab8`: session B here, group object
+  0x405dc548, lobby state 6) and, for lobby states 4-9, `0x81e404` builds join records: for each
+  group player (mask +0x1cf4, 0xe0-byte records at +0x1cf8; player 0 = id `cadefb79e05fb7b0`,
+  name "d1localtest") it emits a record only when the manager's **expected-player list**
+  (obj = manager X + 0xd8650: mask +0x10, 0xe0-byte records from +0x18 with the player id at
+  +0x18) holds that id with its +0x20 flag clear. The expected list is empty (mask 0), so no
+  record, no event 0xc, no player, no binding. The player id also sits in the host's join
+  participants (host +0x548 identity +8) and in world-state peer 0 (sent by the stand-in), but
+  nothing copies it into the expected list. Next: find the writer of obj +0x10/+0x18 (obj
+  methods around `0x81d000`-`0x820000`; not an OR/AND mask update) - likely fed by host data
+  (world state peers or another world-controller RPC).
