@@ -820,3 +820,21 @@ Full run (about 10 minutes):
     before and after the SPU writes, so the change goes unnoticed and stale surface data wins.
     Movement triggers it because the HUD elements drive the surface splitting. TEST228 adds a
     6x5 grid of samples.
+- TEST228: 33 memory samples per surface (3 + a 6x5 grid) fixed most frames but not all
+  (blocks back for three frames in the second movement pass; a thin noise stripe at y ~185).
+- **Fix (TEST229).** `rsx::g_local_mem_write_gen` (new `Emu/RSX/Common/local_mem_writes.h`) holds
+  a write generation per 4KB page of RSX local memory (0xC0000000-0xCFFFFFFF).
+  `spu_thread::do_dma_transfer` (via a scope guard, after the write) and the inline put path of
+  `do_list_transfer` bump it for puts into video memory. `render_target_descriptor::sync_tag`
+  snapshots the sum over the surface's pages, and `test()` fails when it changed. The existing
+  memory-barrier logic then reloads the surface (or skips a stale inheritance source) from guest
+  memory. Two full movement passes: 14/14 frames clean, with no blocks, overexposure or noise
+  stripe, and lighting correct in dark interiors. `patches/rpcs3-destiny-fix.patch` holds the
+  fix alone (plus the CPU path for VRAM -> main memory blits, TEST216).
+  `patches/rpcs3-destiny-main-memory-blit.patch` holds the fix plus all diagnostics (D1T/D1DIAG
+  tracing, one-frame dumps). The deployed `rpcs3.exe` is the diagnostic build, which is idle
+  unless the marker files exist. Needed game config: Write/Read Color Buffers,
+  Write/Read Depth Buffer, Handle RSX Memory Tiling.
+- Open: whether the blit CPU path is still needed with the write tracking (it is harmless);
+  PPU writes to unprotected video memory are not tracked; an upstream RPCS3 report/PR needs
+  the user's go-ahead.

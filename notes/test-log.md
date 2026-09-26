@@ -318,3 +318,9 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   RPCS3 writes that into the FP16 light-buffer surface (fresh tag). Guest memory under the
   block holds real lighting values (read live) that RPCS3's surface lacks: the light buffer is
   written outside the RSX (SPU lighting), and RPCS3's 3-point memory check misses it.
+- 228: surface memory check with 33 samples instead of 3: first movement pass clean (a thin
+  noise stripe remained), blocks back for three frames in the second pass - better, not fixed.
+- 229: **fix**: per-4KB-page write generations for RSX local memory, bumped by SPU DMA puts;
+  a surface whose pages changed since its last sync fails its memory check and is reloaded
+  from guest memory (3 samples again). Two full movement passes: 14/14 frames clean - no
+  blocks, no overexposure, no stripe.

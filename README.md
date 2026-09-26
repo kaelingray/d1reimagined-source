@@ -2,7 +2,7 @@
 
 This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active route is now the PS3 build (BLES01857 01.00) in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay outside Git under `D:\Destiny360` (see [Data policy](#data-policy)).
 
-## Current status (2026-09-26)
+## Current status (2026-09-27)
 
 **The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`), loads it, and spawns the guardian in the mission world.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
 
@@ -11,9 +11,10 @@ After the latest runs (TEST194):
 - All 11 arrival loading tasks complete and the loading screen is dismissed. Zone set 104 (bubble 13's base) is loaded and active.
 - The stand-in activity host replicates all 121 of the mission's objects (type-5 object stream): the local player's **simulation player** (with the spawn grant) and the game-mode object in its "playing" state.
 - The peer family carries the character summary, so the client builds the player's appearance and blueprint. The spawner picks a spawn point and **creates the player's unit**.
-- The screen shows the world with the HUD radar. On top are an "Urgent message" dialog (dismissed with X) and a "Level Up" toast. The right half of the frame renders overexposed, which looks like an RPCS3 rendering issue.
+- The screen shows the world with the HUD radar. On top are an "Urgent message" dialog (dismissed with X) and a "Level Up" toast.
+- **In-mission rendering is fixed with a patched RPCS3 build (TEST229).** Stock RPCS3 showed black/magenta blocks and overexposure after moving. Destiny's SPU lighting jobs write the HDR light buffer directly in video memory, and HUD targets alias that memory. RPCS3's surface cache checks only three memory samples per surface, so it missed the SPU writes and rebuilt the buffer from stale cached pieces. [`patches/rpcs3-destiny-fix.patch`](patches/rpcs3-destiny-fix.patch) tracks SPU DMA writes to video memory per page, so affected surfaces are reloaded from guest memory. The same patch also does VRAM-to-main-memory blits on the CPU. The game config needs Write Color Buffers, Read Color Buffers, Read/Write Depth Buffer and Handle RSX Memory Tiling enabled.
 
-Next: stability in the world (host heartbeats, the replicated state that a real host would keep updating), the urgent-message flag, the rendering issue, and controller input. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Next: stability in the world (host heartbeats, the replicated state that a real host would keep updating), the urgent-message flag, and controller input. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
@@ -69,7 +70,8 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register.
 - `scripts/rpcs3_tiger_types.py`: dumps the game's runtime type definitions, used to export the typed message schemas.
 - `scripts/rpcs3_replicated_objects.py`: lists the client's replicated objects in the `--ah-baselines` format.
-- `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots.
+- `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots; `scripts/Invoke-MovementCheck.ps1` with `scripts/frame_blocks.py` scores in-mission frames.
+- `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
 
@@ -78,7 +80,7 @@ Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
 - `server/`: loopback service stand-ins (DNS, STUN, SignOn/auth3, Demonware lobby, BAP session server and activity-host proxy, investment/bit-stream encoder) and their tests. See [`server/README.md`](server/README.md).
 - `scripts/`: stack control, unattended input, the GDB tracing daemon, guest-memory readers and pollers, and the Xbox/Xenia helper scripts.
 - `notes/`: research notes. [`ps3-route.md`](notes/ps3-route.md) covers setup, the dated checkpoints ([character](notes/checkpoint-2026-09-24-character.md), [orbit and activity](notes/checkpoint-2026-09-25-orbit.md)) record findings and addresses, and [`test-log.md`](notes/test-log.md) holds per-run results.
-- `patches/`: Xenia source patches from the Xbox 360 route.
+- `patches/`: RPCS3 source patches for the PS3 route (`rpcs3-destiny-fix.patch`: the rendering fix; `rpcs3-destiny-main-memory-blit.patch`: the fix plus the `D1T`/`D1DIAG` tracing and one-frame surface dump used to find it) and Xenia patches from the Xbox 360 route.
 
 ## Xbox 360 / Xenia route (paused)
 
