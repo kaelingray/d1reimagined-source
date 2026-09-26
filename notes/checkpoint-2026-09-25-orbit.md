@@ -798,3 +798,25 @@ Full run (about 10 minutes):
   happened to be clean. Next (TEST226): trace draws, clears, inheritance (`old_contents`
   transfers) and background erases for this range to see why the light pass does not
   overwrite the inherited HUD data.
+- TEST226/227 (draw, clear, inherit, blit traces for 0xCEB60000-0xCF040000):
+  - End of frame N: the HUD target 0xCEDD0000 (1280x228) is bound and cleared, then two blits
+    copy the top 127 rows of the frame (0xCE825400/0xCE826400, pitch 5120) into
+    0xCEB60000/0xCEB61000 as ARGB8 at pitch 8192, and 0xCEB60000 is bound as a 1280x127 ARGB8
+    HUD target. RPCS3 sends the blits into the FP16 light-buffer surface (prepare_transfer_target,
+    inheriting 0xCEDD0000 first), then splits the light buffer into pieces 0xCEB61400 (384x624)
+    and 0xCEC5E000 (640x497) when the 1280x127 target is bound.
+  - Frame N+1: the first light-buffer draw is the sun (additive ONE/ONE; samples normals, depth,
+    shadow map, exposure); the next pass samples the light buffer itself. RPCS3 rebuilds the
+    surface from 0xCEDD0000, the two pieces and the 1280x127 target. Only 0xCEB61400 fails its
+    memory check and is reloaded from guest memory; the rest keeps cached data (zeros from the
+    HUD clear in the block, stale lighting elsewhere).
+  - No RSX pass writes this range between the HUD and the first light draw, yet guest memory
+    under the block holds real lighting values (mean 0.072 vs zeros in RPCS3's surface). The
+    light buffer is filled outside the RSX - by the SPU lighting jobs, which read the G-buffer
+    copies. The clean dump frame (TEST225) was clean because the forced write-backs made RPCS3
+    reload the surface from guest memory.
+  - Root cause: RPCS3's surface memory check (`render_target_descriptor::test`) samples only
+    3 u64 values per surface (top-left, centre, bottom-right). Dark interiors are mostly zero
+    before and after the SPU writes, so the change goes unnoticed and stale surface data wins.
+    Movement triggers it because the HUD elements drive the surface splitting. TEST228 adds a
+    6x5 grid of samples.

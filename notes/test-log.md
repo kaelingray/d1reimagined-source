@@ -311,3 +311,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   blocks are already in the HDR light buffer 0xCEB60000 after its first pass, and match exactly
   the HUD targets that alias that memory (0xCEB60000 1280x127 and 0xCEDD0000 1280x228 ARGB8,
   pitch 8192). Surface aliasing in RPCS3's surface cache, not SPU data.
+- 226: draw/clear/inheritance trace of the light buffer: each frame RPCS3 rebuilds 0xCEB60000
+  from cached pieces (HUD target 0xCEDD0000, split-off pieces of the old light buffer, the
+  1280x127 HUD target); the block gets the HUD's cleared (zero) data.
+- 227: blit trace: the HUD stage blits the top 127 rows of the frame into 0xCEB60000 as ARGB8;
+  RPCS3 writes that into the FP16 light-buffer surface (fresh tag). Guest memory under the
+  block holds real lighting values (read live) that RPCS3's surface lacks: the light buffer is
+  written outside the RSX (SPU lighting), and RPCS3's 3-point memory check misses it.
