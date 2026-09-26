@@ -105,6 +105,41 @@ class SimulationPacket(unittest.TestCase):
         self.assertEqual(r.get(32), 9)
         self.assertEqual(r.get(1), 0)
 
+    def test_replicated_sim_player(self):
+        schema = dict(ID_TYPE)
+        schema["0x80800b83"] = {"size": 0xC, "fields": [opt_nested(0, 0x8080405E)]}
+        schema["0x8080540e"] = {"size": 0x30C, "fields": [nested(0xC * i, 0x80800B83) for i in range(65)]}
+        schema[f"{b.ROSTER_TYPE:#x}"] = {"size": 0x310, "fields": [nested(4, 0x8080540E)]}
+        schema[f"{b.OBJECT_ID_TYPE:#x}"] = {"size": 8, "fields": [
+            prim(0, 9, 32), prim(4, 3, 6, 1), prim(6, 4, 16, 0x8000)]}
+        schema["0x80800540"] = {"size": 0x10, "fields": [prim(0, 5, 32, 0x80000000), prim(8, 2, 0), prim(9, 2, 0)]}
+        schema["0x80800646"] = {"size": 0x30, "fields": [prim(0, 0x23, 0)]}
+        schema[f"{b.SIM_PLAYER_TYPE:#x}"] = {"size": 0x50, "fields": [
+            nested(0, 0x80800540), nested(0x18, 0x80800646), prim(0x4C, 5, 32, 0x80000000)]}
+        peer = {i: 0 for i in range(8)}
+        obj = b.sim_player(schema, 0x4786C0E0, 5, 0xAF769890229AB8FB)
+        data = b.sim_packet(schema, peer, objects=[obj, b.default_baseline(1, 0x10, 3)])
+        r = investment.BitReader(data)
+        r.get(8 + 1 + 65 + 1)
+        investment.decode_from(r, schema, b.ROSTER_TYPE)
+        r.get(32)
+        self.assertEqual(r.get(1), 1)
+        self.assertEqual(r.get(1), 1)
+        self.assertEqual(investment.decode_from(r, schema, b.OBJECT_ID_TYPE), {0: 0x4786C0E0, 4: 0xC, 6: 5})
+        length = r.get(32)
+        start = r.position
+        self.assertEqual((r.get(1), r.get(1)), (1, 1))
+        state = investment.decode_from(r, schema, b.SIM_PLAYER_TYPE)
+        self.assertEqual(state[0], {0: -1, 8: True, 9: True})
+        self.assertEqual(state[0x18], {0: 0xAF769890229AB8FB})
+        self.assertEqual(r.get(1), 0)
+        self.assertEqual(r.position - start, length)
+        self.assertEqual(r.get(1), 1)
+        self.assertEqual(investment.decode_from(r, schema, b.OBJECT_ID_TYPE), {0: 1, 4: 0x10, 6: 3})
+        self.assertEqual(r.get(32), 2)
+        self.assertEqual((r.get(1), r.get(1)), (1, 0))
+        self.assertEqual(r.get(1), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

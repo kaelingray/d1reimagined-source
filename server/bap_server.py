@@ -288,6 +288,7 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
 WORLD_STATE_TYPE = 0x808009ED
 ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
 AH_SIMULATION = 5
+OBJECT_ID_TYPE, SIM_PLAYER_TYPE, GAME_MODE_TYPE = 0x808004B1, 0x808022A5, 0x808008A3
 AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
 
 
@@ -300,12 +301,18 @@ def machine_list(schema, machine_ids):
     return investment.encode(schema, MACHINES_TYPE, {0: {0: len(machine_ids), 4: list(machine_ids)}})
 
 
-def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0):
+def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=()):
     """Host type 5 (0x25b920 -> session receive -> event 0x13 -> 0x1c85e0): u8 epoch, roster
     present bit, 65 changed-slot bits, roster delta (present bit + type 0x80800cf7: 65 slots of
     {opt 8-byte peer id, opt u16, bool active}; changed slots add/remove peers via 0x1c8280),
-    u32 host tick, then the replicated object stream (0x1ce4a4; a single 0 bit = none; only
-    read when the session's simulation is active and the epoch matches)."""
+    u32 host tick, then the replicated object stream (0x1ce4a4; only read when the session's
+    simulation is active and the epoch matches): a start bit (0 = no objects), then per object
+    a 1 bit, its id (type 0x808004b1), the u32 bit length of the rest (used to skip unknown
+    objects), state A (reset bit + present bit + the record's +0xc type) and, when the record has
+    a state B type (+8), a 0 bit for it; a 0 bit ends the list. `objects` holds (id values,
+    state A type or None for a default baseline, state values, has state B). Replicated state is
+    applied only once every object of the active bubbles has had a baseline (`0x1ce1b8`: record
+    +0x15), so all of them must be listed."""
     w = investment.BitWriter()
     w.put(epoch, 8)
     w.put(1, 1)
@@ -314,8 +321,46 @@ def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0):
     w.put(1, 1)
     investment.encode_into(w, schema, ROSTER_TYPE, {4: {0xC * slot: {0: peer_id, 8: generation, 0xA: True}}})
     w.put(tick, 32)
-    w.put(0, 1)
+    w.put(1 if objects else 0, 1)
+    for object_id, state_type, state, has_b in objects:
+        w.put(1, 1)
+        investment.encode_into(w, schema, OBJECT_ID_TYPE, object_id)
+        body = investment.BitWriter()
+        body.put(1, 1)
+        body.put(0 if state_type is None else 1, 1)
+        if state_type is not None:
+            investment.encode_into(body, schema, state_type, state)
+        if has_b:
+            body.put(0, 1)
+        w.put(len(body.bits), 32)
+        w.bits += body.bits
+    if objects:
+        w.put(0, 1)
     return w.data()
+
+
+def sim_player(schema, group, index, machine_id):
+    """Replicated state of simulation player INDEX (kind 0xc entities of the world's entity group
+    GROUP; record +0xc type 0x808022a5 = the entity's 0x50-byte block at +0x144): the bools at +8
+    (loading task 9, 0x3286a8) and +9 (spawn readiness 0x35793c) set, owner machine id at
+    +0x18 (0x80800646, entity +0x15c), which 0x4ed7b4 -> 0x14a270 matches against the local
+    player (pla +0x18) to bind it (pla +0x50)."""
+    object_id = {0: group, 4: 0xC, 6: index}
+    state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True}, 0x18: {0: machine_id}, 0x4C: -1}
+    return object_id, SIM_PLAYER_TYPE, state, True
+
+
+def game_mode(group, index, state):
+    """Replicated state of the game-mode object (kind 0x10; type 0x808008a3 at entity +0x110).
+    Its first field, a 4-bit state, is what loading task 9 (`0xb26e4c`, must be non-zero) and the
+    spawn check `0x35793c` (jump table 0x11ed724: only 2 continues) read."""
+    values = {0: state, 8: 0x811C9DC5, 0xC: -1, 0x984: -1, 0x988: 0x811C9DC5}
+    return {0: group, 4: 0x10, 6: index}, GAME_MODE_TYPE, values, False
+
+
+def default_baseline(key, kind, index, has_b=False):
+    """A baseline without fields (reset to the type's defaults) for replicated object key/kind/index."""
+    return {0: key, 4: kind, 6: index}, None, None, has_b
 
 
 def world_state_delta(schema, request, zone=None, peer_byte=1):
@@ -781,8 +826,22 @@ def handle(conn, peer, args):
                     log(f"[{tag}] pushed boot list (type 43): client")
                 if args.ah_roster:
                     slot, _, gen = args.ah_roster.partition(":")
-                    data = sim_repeat = sim_packet(args.activity_schema, request[0x10][0], int(slot, 0),
-                                                   int(gen or "1", 0))
+                    peer = request[0x10][0]
+                    objects = []
+                    if args.ah_sim_player:
+                        group, index, owner = args.ah_sim_player
+                        objects.append(sim_player(args.activity_schema, group, index, owner))
+                        log(f"[{tag}] simulation player {group:#x}:{index} owner {owner:016x}")
+                    if args.ah_game_mode:
+                        group, index, state = args.ah_game_mode
+                        objects.append(game_mode(group, index, state))
+                        log(f"[{tag}] game mode {group:#x}:{index} state {state}")
+                    sent = {(o[0][0], o[0][4], o[0][6]) for o in objects}
+                    for key, kind, index, has_b in args.ah_baselines:
+                        if (key, kind, index) not in sent:
+                            objects.append(default_baseline(key, kind, index, has_b))
+                    data = sim_repeat = sim_packet(args.activity_schema, peer, int(slot, 0),
+                                                   int(gen or "1", 0), objects=objects)
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, data, host_id)))
                     log(f"[{tag}] pushed simulation packet (type 5): roster slot {slot} = client")
                 for spec in args.ah_after_join:
@@ -935,6 +994,19 @@ def main():
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
                     help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
+    ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
+                    metavar="GROUP:INDEX:OWNER",
+                    help="with --ah-roster, the type-5 packets also replicate simulation player INDEX "
+                         "of entity group GROUP owned by player id OWNER (the local pla +0x18, e.g. "
+                         "0x4786c0e0:5:0x0a3d4a2c8fbea6ba)")
+    ap.add_argument("--ah-game-mode", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
+                    metavar="GROUP:INDEX:STATE",
+                    help="with --ah-roster, replicate the game-mode object (kind 0x10) with this state "
+                         "(2 = spawning allowed), e.g. 0x4786c0e0:3:2")
+    ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...",
+                    type=lambda v: [tuple(int(y, 0) for y in (x.split("/") + ["0"])[:4]) for x in v.split(",") if x],
+                    help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
+                         "record has a state B type)")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
                     help="with --ah-join, push an empty host message (default type 11) every SECONDS")

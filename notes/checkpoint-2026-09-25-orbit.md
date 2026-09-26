@@ -463,3 +463,44 @@ Full run (about 10 minutes):
   player's in-world object not being spawned. Bubble states 0 for all bubbles (TEST181) and
   bubble 0's base zone set (TEST182: `--ah-zone 0 --ah-world-state 0:1`, zone set 0 active)
   change neither.
+- **Simulation player** (TEST183, 2026-09-26): correction - the local player's `pla` object
+  (pool 0x18a8ee0, 0x1a0 bytes; +0x18 machine id, +0x4c player handle, +0x50 simulation player
+  entity) does exist; what task 9 lacks is its **simulation player** (+0x50 = -1). `0x14a12c` ->
+  `0x14a05c` resolves +0x50 and the entity's +0x134/+0x138 to the entity's 0x50-byte block at
+  +0x144 (type 0x808022a5); task 9 needs its bool +8, the spawn readiness check `0x35793c`
+  ("can't spawn because no simulation player exists") its bool +9. The world holds 16
+  simulation-player entities (kind 0xc, entity group 3 = key 0x4786c0e0, indices 5-20; group
+  table at world+0x10 in 0x14-byte steps, key +0x10 / base slot +0xc, slot records
+  world+0x510+slot*0x1c = {handle, offset, type}), all with owner machine id 0 at +0x15c. The
+  binder `0x14a270(machine id)` (from the component handler `0x4ed7b4`, message table
+  0x1249c60) finds the pla with that machine id and the kind-0xc entity whose owner id matches,
+  then sets pla +0x50 (`0x128298`). The per-frame spawner (`0x35a3e0` -> `0x359ab0` for players
+  whose record +0x644 unit is -1, event 0x4c = spawn, receiver `0x35acc8`) stops at `0x35793c`
+  (traced: returns 0 every frame).
+- Each entity's replication record (entity +0x104; e.g. {id 0x4786c0e0/0xc/5, +8 type
+  0x80802c30, +0xc type 0x808022a5, +0x15 awaiting baseline, +0x3c bubble -1}) is updated by the
+  type-5 object stream (`0x1ce4a4`): start bit, then per object 1 bit, id (type 0x808004b1 =
+  {u32 group key, u8 kind (6 bits, +1), u16 index (+0x8000)}), u32 bit length, state A (reset
+  bit, present bit, plain encode - `0x1ca478`), state B (present bit); 0 bit ends the list.
+  Unknown ids are skipped by the length. Field kind 0x23 (machine id) is 64 raw bits
+  (`0xd1d184`). `bap_server.py --ah-sim-player 0x4786c0e0:5:OWNER` replicates simulation player 5
+  with that owner id and bools +8/+9 set.
+- TEST184: the object is accepted (record +0x15 cleared, +0x42 set) and the state lands in the
+  record's receive buffer (record +0x28/+0x2c = offset/world index 0x218), but it is not applied
+  to the entity: the end-of-list pass (`0x1ce818`) first requires every replication record of
+  the active bubbles to have had a baseline (`0x1ce1b8` checks +0x15), then applies received
+  records (`0x1cfa1c` -> `0x1cf8f4` -> `0x25f6b8`). The client has 22 records, all bubble -1:
+  0x992bb471/6/29, and group 0x4786c0e0 kinds 0xf/0, 0x22/1, 0x11/2, 0x10/3 (the game-mode
+  object), 0x27/4 (with state B), 0xc/5-20. Also the owner id the binder compares is pla +0x18 =
+  the player id 0x0a3d4a2c8fbea6ba, not the roster peer id. `--ah-baselines KEY/KIND/INDEX[/B],...`
+  sends default baselines (reset bit, no fields) for the others.
+- TEST185: with default baselines for all 22 objects the gate opens: the client applies the
+  received states (`0x25f6b8` per record), the sim-player component handler runs the binder
+  (`0x4ede14` -> `0x14a270`) and **pla +0x50 = simulation player 5**; the spawner then posts
+  spawn event 0x4c for the player (`0x35acc8`, player +0xc bit 0) and continues in `0x358fc4`,
+  which still fails `0x35793c`. Loading task 9 still waits on the game-mode check.
+- The game-mode object (kind 0x10, group 0x4786c0e0 index 3) holds its replicated state (type
+  0x808008a3, 0x9a0 bytes) at entity +0x110; `0xb26e4c`'s "slot byte" is that state's first
+  field (4-bit u8). Task 9 needs it non-zero; `0x35793c` switches on it (table 0x11ed724) and
+  only 2 continues. The default baseline sets it to 0. `--ah-game-mode 0x4786c0e0:3:2`
+  replicates state 2.

@@ -244,3 +244,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   player pool 1, local user bound. Task 9 now waits for the player's object and a kind-0x10 lookup.
 - 181–182: all bubble states 0 / bubble 0's zone set active: no change; task 9 waits for the
   game-mode object's slot byte and the player's world object (not spawned).
+- 183: traces: the spawner runs for our player every frame and `0x35793c` returns 0 - the
+  player has no simulation player (pla +0x50); the 16 kind-0xc simulation-player entities have
+  owner id 0. See the checkpoint note.
+- 184: `--ah-sim-player` (owner = peer id, wrong: the binder compares pla +0x18, the player id):
+  the object is received into the record buffer but nothing is applied (other records still
+  await a baseline).
+- 185: `--ah-baselines` for all 22 replicated objects + owner 0x0a3d4a2c8fbea6ba: states
+  applied, the local player is bound to simulation player 5, spawn event 0x4c posted; task 9
+  and the spawn check wait on the game-mode state (0).

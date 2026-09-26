@@ -12,7 +12,8 @@ it is kept outside Git). Encoding mirrors the client's deserializer (0x25d2dc ->
     value at struct offset `width` in the enclosing struct, and only the first `count`
     fields are serialized (0xd0f058). Such a field's value is a list of slot values;
   * primitives (readers at 0x175d5c8) store `value + min` in `width` bits: kind 2 bool
-    (1 bit), 3/7 u8, 4/8 u16, 5/9 u32, 6/10 u64, 11 real32 (32 bits).
+    (1 bit), 3/7 u8, 4/8 u16, 5/9 u32, 6/10 u64, 11 real32 (32 bits), 0x23 machine id (64 raw
+    bits: 0xd1d184 reads type 0x80801932 or 0x808004ac, both 8 bytes MSB-first).
 
 `values` maps a struct offset to a value (or, for nested fields, a dict or list of dicts for
 that struct) at each level; everything not given is encoded as absent (optional) or zero.
@@ -30,6 +31,7 @@ import struct
 from pathlib import Path
 
 DEFAULT_SCHEMA = Path(r"D:\Destiny360\SIGNON_LOCAL\investment_schema.json")
+MACHINE_ID_KIND = 0x23
 
 
 class BitWriter:
@@ -80,6 +82,8 @@ def decode_from(reader, schema, handle, limit=None):
             values[off] = bool(reader.get(1))
         elif kind == 11:
             values[off] = struct.unpack(">f", struct.pack(">I", reader.get(32)))[0]
+        elif kind == MACHINE_ID_KIND:
+            values[off] = reader.get(64)
         else:
             values[off] = reader.get(field["width"]) - field["min"]
     return values
@@ -98,6 +102,9 @@ def _primitive(w, field, value):
     kind = field["kind"]
     if kind == 2:
         w.put(1 if value else 0, 1)
+        return
+    if kind == MACHINE_ID_KIND:
+        w.put(int(value or 0), 64)
         return
     width = 32 if kind == 11 else field["width"]
     if kind == 11:
