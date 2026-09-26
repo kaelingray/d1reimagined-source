@@ -504,3 +504,9 @@ Full run (about 10 minutes):
   field (4-bit u8). Task 9 needs it non-zero; `0x35793c` switches on it (table 0x11ed724) and
   only 2 continues. The default baseline sets it to 0. `--ah-game-mode 0x4786c0e0:3:2`
   replicates state 2.
+- **Loading screen dismissed** (TEST186): with the game-mode state 2 all 11 loading tasks
+  complete (required/started/done = 0x7ff) and the loading screen goes away; the screen is black
+  (only the "BETA BUILD" watermark) because the player has no unit yet. The spawn check
+  `0x35793c` now fails its first test: the active zone set (object table +0x110c) must be a
+  bubble's base entry (`0x14a934`: index != -1 and index & 7 == 0); 105 is bubble 13's second
+  entry.

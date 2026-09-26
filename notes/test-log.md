@@ -253,3 +253,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 185: `--ah-baselines` for all 22 replicated objects + owner 0x0a3d4a2c8fbea6ba: states
   applied, the local player is bound to simulation player 5, spawn event 0x4c posted; task 9
   and the spawn check wait on the game-mode state (0).
+- 186: + `--ah-game-mode 0x4786c0e0:3:2`: **all loading tasks done, loading screen gone** (black
+  screen, no unit). Spawn check now fails on the active zone set (105 is not a bubble base).
