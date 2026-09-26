@@ -408,3 +408,11 @@ Full run (about 10 minutes):
 - The RPC 16 source entry (manager `*(0x19b7224)`, host mode +4 = 2, own machine id at +8,
   state +0x28 = 4) is entry 0 = the activity host connection (+8 host object); its member
   list (+0x28 count, +0x2c mask, +0x3c ids) stays empty.
+- Correction on the binding: `0x674054(machine id)` binds local users only to **existing player
+  records** (pool "players" `*(0x197f9d4)`: +4 records of 0x27b0 bytes, +0xc count; +0x628 machine
+  slot, +0x62c user, +0x630) whose machine slot equals the local slot (+0xb4). The pool is
+  empty (count 0) in the activity, so even the valid one-machine table at the world change binds
+  nothing (`0x682fe0` never runs). Player records come from the player manager (`0x66dd6c`, run
+  by the listener `0x66eaec` with flag bit 2), which is not invoked in this flow. The manager
+  mode (+4) is `0x66c2c0()` = the first word of the setup's network id (0 after any world change
+  -> host mode 2, RPC 16 posted by the client; 1 -> client mode).
