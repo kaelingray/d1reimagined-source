@@ -6,22 +6,13 @@ This repository tracks an attempt to run a personally owned copy of Destiny 1 wi
 
 **The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`) and stays inside the activity indefinitely. It sits on the activity's loading screen, which is not yet dismissed.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
 
-The loading screen belongs to an 11-task list in the game's arrival state. After the latest runs:
+The loading screen belongs to an 11-task list in the game's arrival state. After the latest runs (TEST180):
 
-- Tasks 0–8 complete. The mission's zone set is loaded and **active** in the scenario object table.
-- Task 9 is still running and task 10 has not started. They wait for the local player to be bound to a player slot.
-- That binding happens at the world change: the game setup's machine table holds just our machine.
-- About one second later it is undone. World-controller RPC 16 copies the activity-host connection's member list into the machine table, and that list is empty in the local flow.
-- The client posts RPC 16 itself, because after a world change it acts as the session host and world-controller authority (the network role in the game setup is 0).
-- There is no player record to bind in any case. Player records come from a player-join event that the group code emits only for players already on the manager's expected-player list. That list stays empty, although our player ID is in the host's join participants and in the world state we send.
+- Tasks 0–8 complete. The mission's zone set is loaded and **active**.
+- The local player now exists: the host's world state lists our machine as a session member, the game creates a player record and binds local user 0 to it.
+- Task 9 is still running and task 10 has not started. Task 9 now waits for the player's **in-world object** (the avatar entity in the world object pool) and one content lookup (kind 0x10). Neither exists yet.
 
-Current work: finding what should fill the expected-player list (and the connection's member list). Ruled out so far:
-
-- Host message type 43 is a *boot list*: naming the client produces error **bass**.
-- Host type 24 is a per-host entity-index grant.
-- The session-change listeners never fire in this flow.
-
-Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Current work: what creates the player's in-world object. It is probably spawned through the host's replicated object stream (host message type 5), or locally once the player is bound. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
@@ -46,6 +37,7 @@ Each gate was cleared one at a time. Destiny's error code names are in bold.
 | **baboon** (`private_activity_host_host_crashed`) | Periodic host messages (`--ah-heartbeat`). |
 | Zone set load and activation | Host world-state delta in host message type 11 (`--ah-world-state`); zone set 105 becomes active. |
 | Peer in the simulation roster | Host type-5 simulation packets with the client in the roster (`--ah-roster`). |
+| Local player created and bound | World-state member mask (+0x5028) in the type-11 delta: the machine table keeps our machine and the group code creates the player. |
 
 ## Reproducing a run
 
