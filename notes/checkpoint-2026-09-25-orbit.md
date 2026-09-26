@@ -416,3 +416,12 @@ Full run (about 10 minutes):
   by the listener `0x66eaec` with flag bit 2), which is not invoked in this flow. The manager
   mode (+4) is `0x66c2c0()` = the first word of the setup's network id (0 after any world change
   -> host mode 2, RPC 16 posted by the client; 1 -> client mode).
+- Where player records come from (static, 2026-09-26 02:15): the module notifier `0x68c4b0(flags)`
+  (31 callbacks at 0x1764664, including the player manager `0x66eaec` and the session listener
+  `0x818794`) is only called from `0x68b9ac`, which runs when a ".cor" file is loaded
+  (`0x303150` -> `0x68bde0`) - not in the normal flow; TEST177 confirmed neither listener fires
+  from boot to the activity. The normal-flow player creation found so far: the group message
+  dispatcher `0x82cd90` (73 kinds by msg byte 0; registered at `0x82a280`) sends kinds 12/14
+  to `0x8242a0`/`0x8243b0` -> `0x82087c` -> `0x672dec`/`0x672510`, which create players and bind
+  them (`0x671560` -> `0x682fe0`). Next: who posts group messages of kind 12 (probably the
+  peer/session layer when a machine joins the group) and whether the host can trigger it.
