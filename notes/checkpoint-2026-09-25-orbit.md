@@ -743,3 +743,15 @@ Full run (about 10 minutes):
   `patches/rpcs3-destiny-main-memory-blit.patch`.
 - TEST218: patched build + RSX FIFO Fetch Accuracy "PS3" + Accurate RSX reservation access:
   no change (blocks after movement, no recovery in 45 s). Config restored.
+- Timeline trace (TEST219; marker-file gated `D1T` lines, `scripts/d1trace_timeline.py`):
+  per frame the game does one blit of depth (0xCF400000 -> 0x445A3A80), one of normals from a
+  *rotating* triple-buffered VRAM target (0xCDE10000 / 0xCE1A8000 / 0xCE540000 -> 0x44813A80)
+  and the NV0039 byte extract 0xCE8E0000 -> 0x444EFA80 (1 of 4 bytes of a 1024-wide 32-bit
+  surface: most likely the stencil byte of D24S8, values 3-10 = material ids). During gameplay
+  the RSX samples only the depth copy (X32_FLOAT, then A8R8G8B8); the half-float samples of
+  0x44813A80 seen in TEST217 all fall in the loading period. RSX semaphore acquires (labels
+  0x603004x0) never wait. With tracing on, frames stretch to ~500 ms and the image was clean -
+  consistent with a timing-dependent staleness. Current hypothesis: the copies read VRAM
+  surfaces (stencil/normals) that RPCS3 has not written back yet, so the SPUs classify pixels
+  with the previous frame's data - invisible when still, wrong after movement. TEST220 forces a
+  write-back of the VRAM source (per-page `on_access_violation`) before every VRAM -> main copy.
