@@ -665,3 +665,14 @@ Full run (about 10 minutes):
   `0x5afc34` -> `0x5afcd0`, per-light batches of up to 200 lights, jobs via `0xaf3bfc`) is not
   dispatched in the mission (state +0x9ac stays 1; no calls in 5 s). Next suspect: the
   SPU-built light command lists (lights view job) read by the RSX FIFO.
+- TEST213: RSX FIFO Fetch Accuracy "PS3": same random mix of clean and broken frames. Reverted;
+  the per-game config is back to the TEST196 settings.
+- Upstream context: the reporter of RPCS3 issue #12802 (2022, real private servers) showed the
+  same overexposed right side; their fork (`cohaereo/rpcs3-v4nguard`, last pushed 2022-09) only
+  implements `sys_net_bnet_sendmsg` and comments out RSX verification asserts - no rendering
+  fix. So this is a long-standing RPCS3 emulation fault, not something our stand-in causes.
+  No per-game setting tried (TEST195-213) removes it. Remaining routes: (1) debug RPCS3 itself
+  (build from source, log surface-cache decisions for the 1024x624 targets and the
+  0xCEA18000 1024x312/512x312 alias), or (2) find the game pass that renders the lit scene
+  into those regions from guest memory (Write Color Buffers is on, so surfaces are written back)
+  and work around it in the game.

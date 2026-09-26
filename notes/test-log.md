@@ -295,3 +295,4 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 209: aliasing bias Prefer Color: broken after movement, no recovery.
 - 210: vertex cache off: RSX hung before the mission. 211 (retry): mixed frames, still broken.
 - 212: tiling off (read/write buffers on): same pattern.
+- 213: RSX FIFO accuracy PS3: no change. Settings search closed (see checkpoint).
