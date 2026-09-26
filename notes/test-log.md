@@ -255,3 +255,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   and the spawn check wait on the game-mode state (0).
 - 186: + `--ah-game-mode 0x4786c0e0:3:2`: **all loading tasks done, loading screen gone** (black
   screen, no unit). Spawn check now fails on the active zone set (105 is not a bubble base).
+- 187–188: `--ah-zone 104` / `0` without bubble states: **lobster** (base entries absent).
+- 189: `--ah-bubble-states -1,13=0` + zone 104: zone set 104 active, 121 replication records,
+  99 without a baseline -> nothing applied.
+- 190: `--ah-baselines @FILE` (all 121, dumped with `scripts/rpcs3_replicated_objects.py`):
+  loading done, sim player bound; spawn check refuses game-mode state 2.
+- 191: game-mode state 3: readiness passes, spawn event state 1; the spawner waits for the sim
+  player's entity +0x154 byte (grant).

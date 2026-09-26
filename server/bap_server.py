@@ -339,7 +339,7 @@ def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=(
     return w.data()
 
 
-def sim_player(schema, group, index, machine_id):
+def sim_player(schema, group, index, machine_id, spawn=None):
     """Replicated state of simulation player INDEX (kind 0xc entities of the world's entity group
     GROUP; record +0xc type 0x808022a5 = the entity's 0x50-byte block at +0x144): the bools at +8
     (loading task 9, 0x3286a8) and +9 (spawn readiness 0x35793c) set, owner machine id at
@@ -347,15 +347,26 @@ def sim_player(schema, group, index, machine_id):
     player (pla +0x18) to bind it (pla +0x50)."""
     object_id = {0: group, 4: 0xC, 6: index}
     state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True}, 0x18: {0: machine_id}, 0x4C: -1}
+    if spawn is not None:
+        # +0x10 (0x80802619 = entity +0x154): the spawn processing (0x358688) sets the request flag
+        # on another component and waits for this block's first byte to be non-zero.
+        state[0x10] = {0: spawn}
     return object_id, SIM_PLAYER_TYPE, state, True
 
 
 def game_mode(group, index, state):
     """Replicated state of the game-mode object (kind 0x10; type 0x808008a3 at entity +0x110).
     Its first field, a 4-bit state, is what loading task 9 (`0xb26e4c`, must be non-zero) and the
-    spawn check `0x35793c` (jump table 0x11ed724: only 2 continues) read."""
+    spawn check `0x35793c` (jump table 0x11ed724 indexed by the value: only 3 continues) read."""
     values = {0: state, 8: 0x811C9DC5, 0xC: -1, 0x984: -1, 0x988: 0x811C9DC5}
     return {0: group, 4: 0x10, 6: index}, GAME_MODE_TYPE, values, False
+
+
+def baseline_list(value):
+    """Parse KEY/KIND/INDEX[/B],... (or @FILE holding that list) into (key, kind, index, has_b)."""
+    if value.startswith("@"):
+        value = Path(value[1:]).read_text(encoding="utf-8")
+    return [tuple(int(y, 0) for y in (x.strip().split("/") + ["0"])[:4]) for x in value.split(",") if x.strip()]
 
 
 def default_baseline(key, kind, index, has_b=False):
@@ -829,8 +840,9 @@ def handle(conn, peer, args):
                     peer = request[0x10][0]
                     objects = []
                     if args.ah_sim_player:
-                        group, index, owner = args.ah_sim_player
-                        objects.append(sim_player(args.activity_schema, group, index, owner))
+                        group, index, owner = args.ah_sim_player[:3]
+                        spawn = args.ah_sim_player[3] if len(args.ah_sim_player) > 3 else None
+                        objects.append(sim_player(args.activity_schema, group, index, owner, spawn))
                         log(f"[{tag}] simulation player {group:#x}:{index} owner {owner:016x}")
                     if args.ah_game_mode:
                         group, index, state = args.ah_game_mode
@@ -994,19 +1006,21 @@ def main():
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
                     help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
-    ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
-                    metavar="GROUP:INDEX:OWNER",
+    ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) if i < 3 else float(x)
+                                                           for i, x in enumerate(v.split(":"))),
+                    metavar="GROUP:INDEX:OWNER[:SPAWN]",
                     help="with --ah-roster, the type-5 packets also replicate simulation player INDEX "
                          "of entity group GROUP owned by player id OWNER (the local pla +0x18, e.g. "
-                         "0x4786c0e0:5:0x0a3d4a2c8fbea6ba)")
+                         "0x4786c0e0:5:0x0a3d4a2c8fbea6ba); SPAWN sets the real32 at state +0x10 (entity +0x154), "
+                         "whose first byte the spawner waits for")
     ap.add_argument("--ah-game-mode", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
                     metavar="GROUP:INDEX:STATE",
                     help="with --ah-roster, replicate the game-mode object (kind 0x10) with this state "
-                         "(2 = spawning allowed), e.g. 0x4786c0e0:3:2")
-    ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...",
-                    type=lambda v: [tuple(int(y, 0) for y in (x.split("/") + ["0"])[:4]) for x in v.split(",") if x],
+                         "(non-zero ends the loading screen, 3 lets the spawner continue), e.g. 0x4786c0e0:3:3")
+    ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
-                         "record has a state B type)")
+                         "record has a state B type); @FILE reads the list from a file written by "
+                         "scripts/rpcs3_replicated_objects.py")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
                     help="with --ah-join, push an empty host message (default type 11) every SECONDS")

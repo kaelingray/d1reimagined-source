@@ -501,12 +501,28 @@ Full run (about 10 minutes):
   which still fails `0x35793c`. Loading task 9 still waits on the game-mode check.
 - The game-mode object (kind 0x10, group 0x4786c0e0 index 3) holds its replicated state (type
   0x808008a3, 0x9a0 bytes) at entity +0x110; `0xb26e4c`'s "slot byte" is that state's first
-  field (4-bit u8). Task 9 needs it non-zero; `0x35793c` switches on it (table 0x11ed724) and
-  only 2 continues. The default baseline sets it to 0. `--ah-game-mode 0x4786c0e0:3:2`
-  replicates state 2.
+  field (4-bit u8). Task 9 needs it non-zero; `0x35793c` switches on it (table 0x11ed724,
+  indexed by the value) and only 3 continues (0-2 and 4-8 refuse). The default baseline sets it
+  to 0. `--ah-game-mode 0x4786c0e0:3:STATE` replicates it.
 - **Loading screen dismissed** (TEST186): with the game-mode state 2 all 11 loading tasks
   complete (required/started/done = 0x7ff) and the loading screen goes away; the screen is black
   (only the "BETA BUILD" watermark) because the player has no unit yet. The spawn check
   `0x35793c` now fails its first test: the active zone set (object table +0x110c) must be a
   bubble's base entry (`0x14a934`: index != -1 and index & 7 == 0); 105 is bubble 13's second
   entry.
+- Zone set for spawning (TEST187-189): `--ah-zone 104`/`0` alone end in **lobster** - base
+  entries (8*i) exist only for bubbles whose host bubble state (activity state @0x14) is >= 0.
+  With `--ah-bubble-states -1,13=0 --ah-zone 104:0x811c9dc5 --ah-world-state 104:1` zone set 104
+  (bubble 13's base) becomes active, but loading bubble 13 instantiates its content: the client
+  then has 121 replication records (groups 0x992bb471, 0x3c2f5ed5, 0x4786c0e0 and bubble 13's
+  0x062dd95d; kinds 1/3/4 with state B), 99 awaiting a baseline, so nothing is applied and the
+  simulation player stays unbound. `scripts/rpcs3_replicated_objects.py` dumps the record list
+  from a running game in the `--ah-baselines` format; `--ah-baselines @FILE` reads it.
+- Spawn processing (TEST190-191): with all 121 baselines, zone set 104 and game-mode state 3 the
+  readiness check passes (`0x35793c` returns 1; `0x34cd48` returns 0) and the spawn event carries
+  state 1 (player +0x5b0). The spawn processing `0x358688` then needs `0x3577b8`, the sim
+  player's components `0x4ec7b4` (entity +0x1ec/+0x1f0 -> entity +0x154, the replicated state's
+  +0x10 block, type 0x80802619) and `0x4ec808` (`0x4ee5f4`), and player record +0x560 = 1 or 2
+  (it is 1); it sets byte +4 of the second component (a spawn request) and returns until the
+  first byte at entity +0x154 is non-zero - presumably the host's grant. `--ah-sim-player
+  ...:SPAWN` sets that real32.
