@@ -397,3 +397,14 @@ Full run (about 10 minutes):
   objects of the fireteam manager (`*(0x18ea68c)`, sessions at +0x10 + group*0x11938) do contain
   the local member (TEST170: `0x802650` adds it at the join), but the RPC 16 entry stays
   empty. RPCS3's GDB stub rejects write watchpoints (Z2 -> empty reply; TEST171).
+- Host machine list (TEST175/176): the host object keeps the activity's machines at +0x6204
+  (count) / +0x6208 (10-byte records: 8-byte machine id, flag, flag); the client adds its own
+  machine from the join participants (+0x540 count, 0x28-byte identities at +0x548). Host
+  type 10 (`0xd0d6a8` -> `0x256eec`, raw bytes: u64 != 0 + 0x88 bytes to host +0x880, needs host
+  flag 0x2 and not 0x4) rebuilds it. **Host type 43** (`0xd0e214`, type 0x80800f1a = 5-bit count
+  + up to 20 machine ids) is a boot list: the per-host update (`0x30956c` -> `0x25afcc`) moves a
+  listed machine to state 4 and the client shows **bass** ("Removed from the game world").
+  The session listeners (`0x818794`, `0x66eaec`) never fire in this flow.
+- The RPC 16 source entry (manager `*(0x19b7224)`, host mode +4 = 2, own machine id at +8,
+  state +0x28 = 4) is entry 0 = the activity host connection (+8 host object); its member
+  list (+0x28 count, +0x2c mask, +0x3c ids) stays empty.

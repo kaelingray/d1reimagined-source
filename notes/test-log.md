@@ -234,3 +234,7 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   0-8 complete; task 9 still running.
 - 165–166: `--ah-roster 0` (type-5 simulation packet with the client in roster slot 0, resent
   with the heartbeat): the client adds the peer; no local player yet (peer table empty).
+- 167–176: local player binding traced (machine table set at the world change, cleared by RPC 16
+  from an empty group entry; host machine list; RPCS3 GDB has no watchpoints). 174: host type 24
+  (per-host index grant) sent at the join had no visible effect. 176: host type 43 naming the
+  client = boot list -> error **bass**.

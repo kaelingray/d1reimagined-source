@@ -288,6 +288,16 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
 WORLD_STATE_TYPE = 0x808009ED
 ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
 AH_SIMULATION = 5
+AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
+
+
+def machine_list(schema, machine_ids):
+    """Host type 43 (0xd0e214): {5-bit count, up to 20 8-byte machine ids} - a **boot list**.
+    Each listed id sets the flag of the matching entry of the host's machine list (host
+    +0x6204 count, 10-byte records at +0x6208 = id + flag); the per-host update (0x30956c ->
+    0x25afcc) then moves that machine to state 4 and the client is removed from the game
+    world (error bass, TEST176)."""
+    return investment.encode(schema, MACHINES_TYPE, {0: {0: len(machine_ids), 4: list(machine_ids)}})
 
 
 def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0):
@@ -597,6 +607,7 @@ def handle(conn, peer, args):
     self_version = 1
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
+    confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def push_self(number, reason):
         # Delta for the live self subscription: versions must advance by one (0x41b75c).
@@ -761,6 +772,10 @@ def handle(conn, peer, args):
                     log(f"[{tag}] pushed host flag (type 11) and activity state (type 1) from host {host_id:#x}")
                 if args.ah_heartbeat:
                     heartbeat_at = time.time() + args.ah_heartbeat[0]
+                if args.ah_boot:
+                    confirm_repeat = machine_list(args.activity_schema, [request[0x10][0]])
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
+                    log(f"[{tag}] pushed boot list (type 43): client")
                 if args.ah_roster:
                     slot, _, gen = args.ah_roster.partition(":")
                     data = sim_repeat = sim_packet(args.activity_schema, request[0x10][0], int(slot, 0),
@@ -779,6 +794,8 @@ def handle(conn, peer, args):
                 # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
                 seconds, subtype = args.ah_heartbeat
                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
+                if confirm_repeat:
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
                 if sim_repeat:
                     # the roster packet is dropped until the client's host session exists
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, sim_repeat, host_id)))
@@ -911,6 +928,8 @@ def main():
     ap.add_argument("--ah-world-state", nargs="?", const="peer", metavar="ZONE[:PEERBYTE]",
                     help="with --ah-state, the type-11 body carries a world-state delta: the client "
                          "in peer slot 0 and, with ZONE, group record 0 for that zone-set index")
+    ap.add_argument("--ah-boot", action="store_true",
+                    help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
                     help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
