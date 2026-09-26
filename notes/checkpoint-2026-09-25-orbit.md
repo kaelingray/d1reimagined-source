@@ -643,3 +643,14 @@ Full run (about 10 minutes):
   360-592), so it is one specific surface/region, not general inaccuracy. Next: find which
   render target or SPU job covers that region (RSX capture from TEST201, or tracing the
   post-processing SPU job's output addresses), then report it upstream or work around it.
+- Rendering checks are now scripted: `scripts/Invoke-MovementCheck.ps1` (dismiss, walk W/A/S/D,
+  settle 45 s; one F12 frame per step) and `scripts/frame_blocks.py` (scores each frame: black /
+  magenta fraction in the two fixed blocks and mean brightness left/right of x = 800; a normal
+  frame of the dark interior averages 10-20, broken ones > 90 or > 35 % black in a block).
+- The RPCS3 log shows RSX local address 0xCEA18000 reused every frame as both a 1024x312 and a
+  512x312 texture ("Cached object ... does not match stored parameters", ~300 per 10 s each
+  way). The game renders internally at 1024x624; 312 is half height, and the lower block starts
+  at screen row 360 = internal row 312. The blocks in internal coordinates are x 0-640,
+  y 0-~128 and 312-~512.
+- TEST208: + Disable ZCull Occlusion Queries: worse - every frame after movement is broken and
+  it does not recover after 45 s. Reverted.

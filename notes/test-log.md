@@ -291,3 +291,4 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 206: accurate SPU xfloat: same split (vertical at x=800 after moving).
 - 207: + accurate SPU DMA + cache line stores: short moves clean, sustained movement brings the
   same blocks back; recovers when still.
+- 208: ZCull occlusion queries disabled: broken after movement and no recovery - worse.
