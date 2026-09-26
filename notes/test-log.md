@@ -302,3 +302,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 216: VRAM->main blits on the CPU path: normals copy complete in memory, frame still breaks.
 - 217: texture-upload diagnostics: inputs and texture reuse look consistent; blocks remain.
 - 218: patched build + FIFO PS3 + RSX reservation accuracy: still broken.
+- 219-221: timeline traces (see checkpoint): SPU-built RSX command lists, written before use.
+- 222: Disable FIFO Reordering: RSX hung before the mission. 223 (retry): blocks after
+  movement - no fix.
+- 224: render-graph trace (`d1trace_timeline.py --graph`): per-frame pass order recorded (see
+  checkpoint); the trace slowed the game so much that all frames came out clean.

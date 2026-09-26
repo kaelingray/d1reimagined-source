@@ -5,6 +5,7 @@ and releases, texture uploads from the SPU-shared region and SPU DMA runs (conse
 puts by the same SPU collapsed into an address range).
 
 Usage: python scripts/d1trace_timeline.py RPCS3.log [FRAMES]
+       python scripts/d1trace_timeline.py --graph RPCS3.log [FRAMES]   (render targets/textures only)
 """
 
 import re
@@ -105,7 +106,37 @@ def command_writers(frame, t0):
     return out
 
 
+GRAPH = ("rtt[", "zeta ", "tex ", "blit ", "memcpy ")
+
+
+def graph(path, limit):
+    """Render graph per frame: render/depth target setups, texture samples and copies, with
+    consecutive duplicates collapsed."""
+    shown = 0
+    for frame in frames(events(path)):
+        items = [(t, e) for t, e in sorted(frame) if e.startswith(GRAPH)]
+        if len(items) < 5:
+            continue
+        t0 = items[0][0]
+        print(f"=== frame ({len(items)} graph events)")
+        prev, count = None, 0
+        for t, e in items:
+            if e == prev:
+                count += 1
+                continue
+            if prev is not None and count > 1:
+                print(f"            (x{count})")
+            print(f"  +{(t - t0) / 1000:8.2f}ms {e}")
+            prev, count = e, 1
+        shown += 1
+        if shown >= limit:
+            break
+
+
 def main():
+    if sys.argv[1] == "--graph":
+        graph(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 2)
+        return
     path = sys.argv[1]
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else 3
     shown = 0

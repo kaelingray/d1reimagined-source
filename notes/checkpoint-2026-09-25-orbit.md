@@ -766,3 +766,21 @@ Full run (about 10 minutes):
   jump-to-self and no FIFO errors/recoveries are logged. Fragment programs are reloaded on every
   SET_SHADER_PROGRAM, so SPU-patched programs would be picked up. TEST222 tries Disable FIFO
   Reordering (untested so far).
+- TEST222/223 (Disable FIFO Reordering): the first run hung the RSX before the mission; the
+  retry reached it with the same blocks after movement. Reverted.
+- Render graph of one gameplay frame (TEST224, `scripts/d1trace_timeline.py --graph`), internal
+  resolution 1024x624:
+  1. G-buffer: rtt0 0xCE8E0000 + rtt1 0xCE540000 (A8R8G8B8), zeta 0xCF400000.
+  2. Copies to main memory (depth -> 0x445A3A80, normals -> 0x44813A80, stencil byte ->
+     0x444EFA80). The depth copy holds valid linear floats (checked live).
+  3. Small passes: 256x156 / 128x78 RGBA16F, zeta 0xCF330000 256x156 sampling the depth copy
+     0x445A3A80; 32x32 rtt0-2 at 0xCF8B2800/4800/6800 (luminance/exposure chain).
+  4. Shadow depth 0xCF680000 (1024x1024).
+  5. Light accumulation 0xCEB60000 (1024x624 RGBA16F, pitch 8192) sampling normals 0xCE540000,
+     depth 0xCF400000, the shadow map, 1x1 0xCF8BBF00 (exposure), 0xCF2E0000 256x156, the depth
+     copy and 0xCE8E0000.
+  6. Bloom/downsample chain (512x312 MRT at 0xCE702000/0xCEA18000/0xCE540000) and composite.
+  Magenta/black blocks plus a whole-screen exposure change fit NaN/Inf values in part of the
+  HDR light buffer feeding the 1x1 exposure average. Next: a one-frame dump of every render
+  target (instrumented build, marker `C:/dev/d1dump.on`) during movement, to find the first
+  pass whose output has the blocks.
