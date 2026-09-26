@@ -24,7 +24,8 @@ if ($TraceAfter) {
     while (-not (Select-String -Path "D:\Destiny360\SIGNON_LOCAL\logs\$Name-bap.log" -Pattern $TraceAfter -Quiet) -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
 }
 "=== trace"
-C:\Python314\python.exe scripts/rpcs3_gdb_daemon.py send hits $Hits $Seconds $Trace $Dumps | ForEach-Object { $_.Substring(0,[Math]::Min(300,$_.Length)) }
+C:\Python314\python.exe scripts/rpcs3_gdb_daemon.py send hits $Hits $Seconds $Trace $Dumps |
+    Tee-Object -FilePath "D:\Destiny360\SIGNON_LOCAL\logs\$Name-trace.log" | ForEach-Object { $_.Substring(0,[Math]::Min(300,$_.Length)) }
 "=== lobby"; Get-Content "D:\Destiny360\SIGNON_LOCAL\logs\$Name-lobby.log" | Where-Object { $_ -notmatch 'keepalive' } | Select-Object -Last 6 | ForEach-Object { $_.Substring(0,[Math]::Min(200,$_.Length)) }
 "=== bap"; Select-String -Path "D:\Destiny360\SIGNON_LOCAL\logs\$Name-bap.log" -Pattern 'echo|payload=1080|payload=2119|service 70[12]' -NotMatch | Select-Object -Last 14 | ForEach-Object { $_.Line.Substring(0,[Math]::Min(170,$_.Line.Length)) }
 "=== screen"; .\scripts\Invoke-RpcsStep.ps1 -WaitSeconds 0

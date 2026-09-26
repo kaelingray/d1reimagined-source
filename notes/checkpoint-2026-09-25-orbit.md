@@ -605,3 +605,13 @@ Full run (about 10 minutes):
   completing the RPCS3 welcome dialog. `Utilities > Open RSX Capture` asks to close the running
   game; inspection of the capture is the next step. TEST201 service logs are in
   `D:\Destiny360\SIGNON_LOCAL\logs\TEST201-*`.
+- TEST202 (run launched as "TEST199" in parallel with the other agent's TEST199; its logs were
+  renamed to `TEST202-*`, the other agent's TEST199 service logs were overwritten - its result
+  is recorded above): full mission run with `--self-flags 2`, tracing the unlock-expression
+  evaluator `0xb67984` and the account-flag copies (`0xb674c8`, `0xb67540`) from the join for
+  300 s: **no hits**, although the guardian spawned and the urgent-message dialog appeared. So
+  the urgent message is not raised by an unlock expression evaluated after the join; the
+  content check ("banana") must also run before `ahp req`. The universe object (family 5 kind 3)
+  has no scheduled entries (+0x90 count 0, +0xc4 = 0) and the stand-in never sends BAP
+  "shutdown not" (0x14); the dialog's trigger is still unknown.
+  `Invoke-JoinCycle.ps1` now also writes the full trace to `logs\<Name>-trace.log`.
