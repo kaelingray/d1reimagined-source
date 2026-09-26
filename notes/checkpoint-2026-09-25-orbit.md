@@ -630,3 +630,16 @@ Full run (about 10 minutes):
   assembled from regions that are updated at different times; this fits SPU-side post
   processing writing into video memory in strips, some of which RSX does not pick up (or reads
   stale). Reverted.
+- TEST207: + Accurate SPU DMA + Accurate Cache Line Stores: a short move (W 800 ms) and the frame
+  a minute later were clean, but sustained movement (W 2.5 s, A, S, D) brought back the same
+  fixed blocks (magenta x 0-800 y 0-145, black x 0-800 y 360-592, overexposed elsewhere); it
+  recovers when standing still. At most a partial improvement.
+- Summary of the RPCS3 settings search (TEST195-207): Read Color Buffers + Read Depth Buffer +
+  Write Depth Buffer (with tiling and Write Color Buffers) are needed for a correctly lit frame
+  at rest. Nothing tried removes the movement-triggered blocks: host GPU labels, strict
+  rendering, strict texture flushing (worse), Force CPU Blit (crash), OpenGL (crash), RSX
+  reservation accuracy, synchronous memory manager, accurate SPU xfloat, accurate SPU DMA /
+  cache line stores. The block geometry never changes (always the left 800 px, rows 0-145 and
+  360-592), so it is one specific surface/region, not general inaccuracy. Next: find which
+  render target or SPU job covers that region (RSX capture from TEST201, or tracing the
+  post-processing SPU job's output addresses), then report it upstream or work around it.

@@ -289,3 +289,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   movement, recovers when still - no fix.
 - 205: strict texture flushing: purple/white band, frozen image - worse.
 - 206: accurate SPU xfloat: same split (vertical at x=800 after moving).
+- 207: + accurate SPU DMA + cache line stores: short moves clean, sustained movement brings the
+  same blocks back; recovers when still.
