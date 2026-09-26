@@ -57,7 +57,7 @@ scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','-
             '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22','--ah-bubble-states','-1,13=0',
             '--ah-zone','104:0x811c9dc5','--ah-world-state','104:1','--ah-roster','0',
             '--ah-sim-player','0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1','--ah-game-mode','0x4786c0e0:3:3',
-            '--ah-baselines','@D:\Destiny360\SIGNON_LOCALaselines_highway_z104.txt','--ah-heartbeat','1') `
+            '--ah-baselines','@D:\Destiny360\SIGNON_LOCAL\baselines_highway_z104.txt','--ah-heartbeat','1') `
   -TraceAfter 'ahp req' -Trace 0x3204a8 -Dumps 'r5:64'
 ```
 
