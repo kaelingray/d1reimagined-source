@@ -269,3 +269,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 194: `--peer-family` (family 0 = account + character summaries): blueprint set, player unit
   created - **the guardian spawns in the mission** (HUD radar, world rendered; "Urgent message"
   dialog and "Level Up" toast on top).
+- 195: game config: tiling + write color buffers: same black blocks / exposure drift.
+- 196: + read color/depth, write depth: correct lighting at first, black block back after ~1 min.

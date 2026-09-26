@@ -548,3 +548,11 @@ Full run (about 10 minutes):
   offline - presumably from the all-true account flag tables of `--self-flags 2`) and a
   "Level Up" toast; X dismisses the dialog. Rendering: the right half of the frame is
   overexposed/white, the left half dark (RPCS3 issue to look at separately).
+- Rendering in the mission (TEST195-196): with the global RPCS3 config (Vulkan, all buffer
+  read/write options off) the frame has fixed black rectangles (e.g. x 0-800, y 360-592) and the
+  exposure drifts to saturated red/yellow within ~30 s (auto-exposure fed by the black areas);
+  the emulator died ~12 min in with an RSX fatal (`simple_array<VkDescriptorImageInfo,8>::reserve`
+  verification). A per-game config (`config/custom_configs/config_BLES01857.yml` in the private
+  RPCS3 copy) with Handle RSX Memory Tiling + Write Color Buffers alone changed nothing; adding
+  Read Color Buffers, Read Depth Buffer and Write Depth Buffer (TEST196) gives a correctly lit
+  frame at first, but after ~1 min a black block and the overexposure return (surface aliasing?).
