@@ -741,3 +741,5 @@ Full run (about 10 minutes):
   The patched `rpcs3.exe` stays deployed (original: `rpcs3.orig.exe`); the patch (fix +
   `D1DIAG` logging of blits, copies, faults and texture uploads in 0x44000000-0x46000000) is in
   `patches/rpcs3-destiny-main-memory-blit.patch`.
+- TEST218: patched build + RSX FIFO Fetch Accuracy "PS3" + Accurate RSX reservation access:
+  no change (blocks after movement, no recovery in 45 s). Config restored.
