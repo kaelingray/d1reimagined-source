@@ -1,0 +1,122 @@
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp b/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
+index 2a5079496..30a92a3be 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv0039.h"
+ 
+ #include "Emu/RSX/RSXThread.h"
+@@ -101,6 +102,10 @@ namespace rsx
+ 			const auto read_length = in_pitch * (line_count - 1) + in_width_in_bytes;
+ 			const auto write_length = out_pitch * (line_count - 1) + out_width_in_bytes;
+ 
++			if ((d1diag::hit(write_address, write_length) || d1diag::hit(read_address, read_length)) && d1diag::sampled())
++			{
++				rsx_log.warning("D1DIAG memcpy 0x%x (pitch %d) -> 0x%x (pitch %d) len=%u lines=%u", read_address, in_pitch, write_address, out_pitch, line_length, line_count);
++			}
+ 			RSX(ctx)->invalidate_fragment_program(dst_dma, dst_offset, write_length);
+ 
+ 			if (const auto result = RSX(ctx)->read_barrier(read_address, read_length, !is_block_transfer);
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
+index 6e2e7162b..027c4bf81 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv3089.h"
+ 
+ #include "Emu/RSX/RSXThread.h"
+@@ -585,11 +586,25 @@ namespace rsx
+ 			// Lock here. RSX cannot execute any locking operations from this point, including ZCULL read barriers
+ 			const u32 read_length = src.pitch * src.height;
+ 			const u32 write_length = dst.pitch * dst.clip_height;
++			if ((d1diag::hit(dst.rsx_address, write_length) || d1diag::hit(src.rsx_address, read_length)) && d1diag::sampled())
++			{
++				rsx_log.warning("D1DIAG blit src=0x%x dma=0x%x %ux%u pitch=%u -> dst=0x%x dma=0x%x %ux%u clip=%u,%u %ux%u pitch=%u",
++					src.rsx_address, src.dma, src.width, src.height, src.pitch,
++					dst.rsx_address, dst.dma, dst.width, dst.height, dst.clip_x, dst.clip_y, dst.clip_width, dst.clip_height, dst.pitch);
++			}
+ 			auto res = ::rsx::reservation_lock<true>(
+ 				dst.rsx_address, write_length,
+ 				src.rsx_address, read_length);
+ 
+-			if (!g_cfg.video.force_cpu_blit_processing &&
++			// Copies from video memory into main memory are made so the CPU/SPUs can read the result
++			// (e.g. Destiny's G-buffer copies consumed by SPU lighting jobs). The GPU path keeps the
++			// result in the texture cache and only writes it back lazily on access, which loses data
++			// when several blits target the same address between SPU reads. Do these on the CPU so the
++			// data is in guest memory immediately.
++			const bool copy_to_main_memory =
++				dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER && src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER;
++
++			if (!g_cfg.video.force_cpu_blit_processing && !copy_to_main_memory &&
+ 				(dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER || src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER) &&
+ 				RSX(ctx)->scaled_image_from_memory(src, dst, in_inter == blit_engine::transfer_interpolator::foh))
+ 			{
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRender.cpp b/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+index 9e27132fa..e996b9082 100644
+--- a/rpcs3/Emu/RSX/VK/VKGSRender.cpp
++++ b/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+@@ -1,5 +1,6 @@
+ #include "Emu/RSX/VK/vkutils/descriptors.h"
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "../Overlays/overlay_compile_notification.h"
+ #include "../Overlays/Shaders/shader_loading_dialog_native.h"
+ 
+@@ -896,6 +897,11 @@ VKGSRender::~VKGSRender()
+ 
+ bool VKGSRender::on_access_violation(u32 address, bool is_writing)
+ {
++	if (d1diag::hit(address, 1) && d1diag::sampled())
++	{
++		rsx_log.warning("D1DIAG access violation addr=0x%x write=%d thread=%s", address, is_writing, thread_ctrl::get_name());
++	}
++
+ 	rsx::mm_flush(address);
+ 
+ 	vk::texture_cache::thrashed_set result;
+@@ -2572,6 +2578,12 @@ void VKGSRender::prepare_rtts(rsx::framebuffer_creation_context context)
+ 
+ 			m_texture_cache.notify_surface_changed(m_surface_info[index].get_memory_range(m_framebuffer_layout.aa_factors));
+ 			m_draw_buffers.push_back(index);
++			if (d1diag::hit(m_surface_info[index].address, m_surface_info[index].pitch * m_framebuffer_layout.height) && d1diag::budget())
++			{
++				rsx_log.warning("D1DIAG rtt[%u] addr=0x%x pitch=%u layout %ux%u targets=%u surface %ux%u",
++					index, m_surface_info[index].address, m_surface_info[index].pitch, m_framebuffer_layout.width, m_framebuffer_layout.height,
++					static_cast<u32>(draw_buffers.size()), surface->get_surface_width(), surface->get_surface_height());
++			}
+ 		}
+ 	}
+ 
+diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
+new file mode 100644
+index 000000000..f9602804c
+--- /dev/null
++++ b/rpcs3/Emu/RSX/d1diag.h
+@@ -0,0 +1,22 @@
++#pragma once
++// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
++// the SPU lighting reads (0x44000000-0x46000000). Throttled.
++#include "util/types.hpp"
++#include <atomic>
++namespace d1diag
++{
++	inline bool hit(u32 addr, u32 len)
++	{
++		return addr < 0x46000000u && addr + len > 0x44000000u;
++	}
++	inline bool sampled()
++	{
++		static std::atomic<u32> n{0};
++		return (n.fetch_add(1) & 255) == 0;
++	}
++	inline bool budget()
++	{
++		static std::atomic<u32> n{0};
++		return n.fetch_add(1) < 40000;
++	}
++}

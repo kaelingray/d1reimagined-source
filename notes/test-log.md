@@ -297,3 +297,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 212: tiling off (read/write buffers on): same pattern.
 - 213: RSX FIFO accuracy PS3: no change. Settings search closed (see checkpoint).
 - 214: Force CPU Blit: 24.7 GB, never signed in - not usable.
+- 215: diagnostic RPCS3 build: G-buffer copies are RSX blits into main memory read (and
+  written) by SPU jobs; see checkpoint.
+- 216: VRAM->main blits on the CPU path: normals copy complete in memory, frame still breaks.

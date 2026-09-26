@@ -696,3 +696,36 @@ Full run (about 10 minutes):
   usable; reverted. The remaining fix is inside RPCS3: make the write-back/flush cover the whole
   main-memory G-buffer the SPUs read (or flush the full surface on SPU DMA access), which needs
   a source build of RPCS3.
+- **RPCS3 source build** (2026-09-26): RPCS3 at our release commit b5a174e9 cloned to
+  `C:\dev\rpcs3` (submodules), Qt 6.11.2 msvc2022_64 from the Qt online repository (package
+  archives downloaded directly: aqtinstall 3.3.0 does not know the 6.11 repository layout) to
+  `C:\dev\qt`, a minimal Vulkan SDK (`C:\dev\vulkansdk`: Vulkan-Headers v1.4.341 + an import
+  lib generated from `System32\vulkan-1.dll`), RPCS3's precompiled LLVM libs
+  (`llvmlibs_mt.7z`, sha256 verified, extracted with 7-Zip's `7zr.exe`). `MSBuild rpcs3.sln
+  /p:Configuration=Release` builds `bin\rpcs3.exe` in ~15 min (only the gtest test project
+  fails). The private RPCS3 copy keeps the original as `rpcs3.orig.exe`.
+- **Diagnosis with the instrumented build (TEST215)**: per frame the game uses the RSX blit
+  engine (NV3089) to copy G-buffer data from VRAM into main memory for the SPUs: depth
+  0xCF400000 -> 0x445A3A80 (1024x624), and **three different sources** (0xCE540000,
+  0xCE1A8000, 0xCDE10000; pitch 5120) -> the same destination 0x44813A80; plus an NV0039
+  copy 0xCE8E0000 -> 0x444EFA80 (1024 bytes x 624 lines). The SPU lighting jobs
+  (`JQSPURSCellSpursKernel0-5`) read those buffers between the blits and fault into RPCS3's
+  lazy write-back (thousands of access violations at 0x44813000-0x44813280 and 0x445A3A80+).
+  RPCS3 does these blits on the GPU and keeps the result in its texture cache, writing it back
+  only on access; with several blits to one address between SPU reads, the SPUs get stale or
+  missing data -> the black/magenta blocks.
+- Fix (patch `patches/rpcs3-destiny-main-memory-blit.patch`): in `nv3089::image_in`, a blit
+  from VRAM (frame buffer DMA) into main memory (host buffer DMA) takes the existing CPU path,
+  so the result is in guest memory immediately. Only these transfers change; the global
+  Force CPU Blit (which bloats memory) stays off.
+- TEST216 (blit fix deployed): the normals copy is now complete in guest memory right after the
+  blit (rapid snapshots show the full normal map, then a partially written one, then the
+  buffer overwritten) - but the frame still breaks after movement. So the blit write-back was
+  a real defect but not the whole cause. New observations: the SPUs also *write* into
+  0x44813A80 (write faults from `JQSPURSCellSpursKernel*`): between blits the first ~45 rows
+  hold a compact table of 16-bit pairs (e.g. 0x014a/0x014b), most likely per-tile depth
+  min/max that the RSX then samples for tiled light culling. Stale tile bounds would cull all
+  lights in those tiles -> black blocks of tile-grid shape; the magenta garbage in dumps is
+  this table read as colour. The 8-bit mask copy (NV0039 0xCE8E0000 -> 0x444EFA80, values
+  3-10) has no block-shaped holes. Next diagnostic: log which textures the RSX samples from
+  0x44000000-0x46000000 and whether RPCS3 serves them from its cache or re-uploads from memory.
