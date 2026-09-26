@@ -85,6 +85,26 @@ def collapse(frame):
     return out
 
 
+CALL = re.compile(r"fifo (call|jump) io=0x([0-9a-f]+) addr=0x([0-9a-f]+)")
+
+
+def command_writers(frame, t0):
+    """For each FIFO call/jump target, the SPU puts into [target, target+64K) in the same frame."""
+    out = []
+    for t, e in frame:
+        m = CALL.match(e)
+        if not m:
+            continue
+        target = int(m.group(3), 16)
+        puts = [(tt, int(mm.group(3), 16)) for tt, ee in frame
+                if (mm := SPU.match(ee)) and mm.group(2) == "put" and target <= int(mm.group(3), 16) < target + 0x10000]
+        if puts:
+            last = max(tt for tt, _ in puts)
+            out.append(f"  {m.group(1)} 0x{target:x} at +{(t - t0) / 1000:.2f}ms: {len(puts)} SPU puts, last at +{(last - t0) / 1000:.2f}ms"
+                       + ("  <-- written AFTER the RSX got there" if last > t else ""))
+    return out
+
+
 def main():
     path = sys.argv[1]
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else 3
@@ -100,6 +120,8 @@ def main():
                 print(f"  +{(t - t0) / 1000:8.2f}ms {e}")
         for (r, kind), (a, b, lo, hi, n) in sorted(spans(frame, t0).items(), key=lambda kv: kv[1][0]):
             print(f"  spu {kind:3} {r:8} x{n:<5} +{a:7.2f} .. +{b:7.2f}ms  0x{lo:x}-0x{hi:x}")
+        for line in command_writers(frame, t0):
+            print(line)
         shown += 1
         if shown >= limit:
             break

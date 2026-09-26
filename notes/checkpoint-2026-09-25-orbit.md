@@ -755,3 +755,14 @@ Full run (about 10 minutes):
   surfaces (stencil/normals) that RPCS3 has not written back yet, so the SPUs classify pixels
   with the previous frame's data - invisible when still, wrong after movement. TEST220 forces a
   write-back of the VRAM source (per-page `on_access_violation`) before every VRAM -> main copy.
+- TEST220: forcing a write-back of the VRAM source (per-page `on_access_violation`) before every
+  VRAM -> main copy: still broken - stale VRAM sources are not the cause. With the trace on,
+  broken frames also occur, so it is not a pure timing artefact.
+- TEST221 (FIFO call/jump tracing): the RSX command stream JUMPs into main-memory command
+  segments at 0x4443xxxx-0x445xxxxx that the SPUs write (SPU-built RSX command lists -
+  presumably the per-tile light draws of `spu_render_submit_lights_view_job`) and CALLs
+  subroutines at 0x40Axxxxx-0x40Dxxxxx. The SPUs finish each segment well before the RSX jumps
+  into it (only 16-byte link patches just before a target come later); the RSX never spins on a
+  jump-to-self and no FIFO errors/recoveries are logged. Fragment programs are reloaded on every
+  SET_SHADER_PROGRAM, so SPU-patched programs would be picked up. TEST222 tries Disable FIFO
+  Reordering (untested so far).
