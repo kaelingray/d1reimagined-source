@@ -676,3 +676,18 @@ Full run (about 10 minutes):
   0xCEA18000 1024x312/512x312 alias), or (2) find the game pass that renders the lit scene
   into those regions from guest memory (Write Color Buffers is on, so surfaces are written back)
   and work around it in the game.
+- **Root cause located (TEST213, live guest memory)**: the RPCS3 log names two 1024x624 textures
+  in *main* memory, 0x445A3A80 and 0x44813A80 (adjacent, 1024*624*4 apart). Dumped from guest
+  memory (big-endian A8R8G8B8; scratch helper `dumpimg.py`): 0x445A3A80 is the scene **depth**
+  (complete), 0x44813A80 the G-buffer **normals** - but in guest memory only one 128-row band
+  (e.g. rows 352-480, moving between samples) holds current data; the rest is black, the top
+  rows magenta garbage. The SPUs (`spu_*lighting*` / lights-view jobs) read these main-memory
+  copies, so lighting for regions with missing normals comes out black (or magenta, matching
+  the magenta top-left block) and auto exposure then overexposes the rest. When the camera is
+  still the partial write-backs of successive frames carry the same image, so it converges;
+  movement exposes stale regions.
+- RPCS3 source (VKGSRender.cpp, texture_cache.h): with Write Color Buffers, a render target's
+  memory is locked for write-back over `m_surface_info` = the *current* framebuffer layout
+  (width x height of the active surface setup). If the game fills the buffer in 128-row
+  bands (separate surface setups or blits), only the latest band is protected and flushed on
+  SPU access. Next test: Force CPU Blit (TEST214) in case the bands are RSX copies.
