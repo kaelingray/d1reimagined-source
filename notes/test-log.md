@@ -287,3 +287,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 203: OpenGL: RSX fatal before sign-in.
 - 204: + RSX reservation accuracy + no async memory manager: movement works; split after
   movement, recovers when still - no fix.
+- 205: strict texture flushing: purple/white band, frozen image - worse.
+- 206: accurate SPU xfloat: same split (vertical at x=800 after moving).

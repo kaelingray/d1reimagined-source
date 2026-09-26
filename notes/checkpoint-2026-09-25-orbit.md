@@ -622,3 +622,11 @@ Full run (about 10 minutes):
   Same fault as TEST200: right after moving the frame splits (black rectangles x 0-800 at
   y 0-145 and 360-592, rest overexposed); after ~60 s standing still it is correctly lit
   again. These options do not fix it (config restored from `before-test204`).
+- TEST205: + Strict Texture Flushing: worse - a purple/white band over the lower half that did
+  not change for a minute. Reverted.
+- TEST206: + SPU XFloat Accuracy: Accurate: same fault. Right after moving the frame showed a
+  clean vertical split at x = 800 (left normally exposed, right overexposed); a minute later the
+  left part had black blocks at y 0-145 and 360-592 and a bright band between. The image is
+  assembled from regions that are updated at different times; this fits SPU-side post
+  processing writing into video memory in strips, some of which RSX does not pick up (or reads
+  stale). Reverted.
