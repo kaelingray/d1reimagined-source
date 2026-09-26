@@ -521,8 +521,30 @@ Full run (about 10 minutes):
 - Spawn processing (TEST190-191): with all 121 baselines, zone set 104 and game-mode state 3 the
   readiness check passes (`0x35793c` returns 1; `0x34cd48` returns 0) and the spawn event carries
   state 1 (player +0x5b0). The spawn processing `0x358688` then needs `0x3577b8`, the sim
-  player's components `0x4ec7b4` (entity +0x1ec/+0x1f0 -> entity +0x154, the replicated state's
-  +0x10 block, type 0x80802619) and `0x4ec808` (`0x4ee5f4`), and player record +0x560 = 1 or 2
-  (it is 1); it sets byte +4 of the second component (a spawn request) and returns until the
-  first byte at entity +0x154 is non-zero - presumably the host's grant. `--ah-sim-player
-  ...:SPAWN` sets that real32.
+  player's components `0x4ec7b4` (entity +0x1ec/+0x1f0 -> entity +0x18c, the replicated state's
+  bool +0x48) and `0x4ec808` (`0x4ee5f4`), and player record +0x560 = 1 or 2 (it is 1); it sets
+  byte +4 of the second component (a spawn request) and returns until that bool is set -
+  presumably the host's grant. `--ah-sim-player ...:1` sets it (TEST192 set the real32 at +0x10
+  by mistake: no change).
+- Spawn body (TEST193): with the grant set the spawner enters the spawn body every frame
+  (`0x358814`): spawn-point search over the 4 strategies (table 0x175f5ac) succeeds, then the
+  player object creation `0x358210` fails at once: player record +0x1428 (appearance block whose
+  first word is the player blueprint handle; "can't spawn because the player blueprint handle
+  is invalid") is -1. It is set by `0x2bef68` from `0x2f5b28`/`0x2f6044(player, 0xff0-byte
+  appearance)`, built by `0x670e40` from the player's character data at +0x8b0, which
+  `0x673180` fills from the player manager's character cache (`0x299528`: 20 entries of 0xbb0
+  bytes keyed by account soid). Our entry sits in state 1 (needs 5): the cache state machine
+  `0x2998e0` looks up BAP family 0 (peer) kind 0 by the account soid (type 0x80801921, hash
+  0x1d7bb8f6: {u64 account, u64 character, ...}) and then kind 1 by its character soid (type
+  0x808017fd, hash 0xa0a1bc80: {u64 id, class, appearance, +0x30 0x80801855, ...}). The stand-in
+  pushed family 0 empty. Object store pools: store + 0x2a3c0 + family*0x40 + kind*0x10 = {data
+  offset from store+0x2298, count, stride, type}. `bap_server.py --peer-family` fills family 0
+  with both objects from the stored character.
+- **Guardian spawned in the mission** (TEST194, 2026-09-26 13:05): with `--peer-family` the
+  character cache entry reaches state 6, `0x673180` fills player +0x8b0, the appearance/blueprint
+  is set (player +0x1428 = 0x80a6a022), the spawner creates the player object (`0x358210` ->
+  `0x3584ac` -> ...) and the player record gets its unit (+0x644 = 0x29fac5c7). The screen shows
+  the mission world with the HUD (radar) behind an "Urgent message" dialog (servers going
+  offline - presumably from the all-true account flag tables of `--self-flags 2`) and a
+  "Level Up" toast; X dismisses the dialog. Rendering: the right half of the frame is
+  overexposed/white, the left half dark (RPCS3 issue to look at separately).

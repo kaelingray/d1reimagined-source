@@ -262,3 +262,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   loading done, sim player bound; spawn check refuses game-mode state 2.
 - 191: game-mode state 3: readiness passes, spawn event state 1; the spawner waits for the sim
   player's entity +0x154 byte (grant).
+- 192: grant attempt on the wrong field (real32 +0x10): no change.
+- 193: `--ah-sim-player ...:1` (state bool +0x48 = entity +0x18c): the spawner runs the spawn
+  body, finds a spawn point, and fails creating the player object: blueprint handle (player
+  +0x1428) is -1 because the peer family (0) is empty.
+- 194: `--peer-family` (family 0 = account + character summaries): blueprint set, player unit
+  created - **the guardian spawns in the mission** (HUD radar, world rendered; "Urgent message"
+  dialog and "Level Up" toast on top).

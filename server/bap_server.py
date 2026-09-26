@@ -67,6 +67,12 @@ ROOT_OBJECTS = {4: (0x88190FE1, 0x80801803, lambda soid: {0: {0: soid}}),
                 3: (0xA2AC2C74, 0x80801951, lambda soid: {0: soid})}
 SELECT_CHARACTER_OBJECT = (0xF65ABD52, 0x80801954)
 SELF_CHARACTER_OBJECT = (0x242B2F61, 0x80801743)
+# Peer family (0): up to 20 peers, kind 0 = account summary keyed by the account soid (+8 = its
+# character soid), kind 1 = character summary (id, class, appearance like the self character).
+# The player manager's character cache (0x2998e0) builds a player's appearance and blueprint
+# (player record +0x8b0 / +0x1428, needed to spawn) from these two objects.
+PEER_ACCOUNT_OBJECT = (0x1D7BB8F6, 0x80801921)
+PEER_CHARACTER_OBJECT = (0xA0A1BC80, 0x808017FD)
 
 
 def default_ws_response(schema, wire, values=None):
@@ -146,7 +152,7 @@ def account_flags(schema, spec):
 
 
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
-                version=1, flags=1, active_id=None, self_flags=None):
+                version=1, flags=1, active_id=None, self_flags=None, peer=False):
     """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
@@ -179,6 +185,12 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                                    enumerate(schema["0x80804595"]["fields"]) if i in chosen}
             objects.append(investment.obj(type_hash, character_id,
                                           investment.encode(schema, handle, {0: profile})))
+    if peer and schema and family_type == 0 and character_id is not None and character_profile is not None:
+        type_hash, handle = PEER_ACCOUNT_OBJECT
+        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, {0: root, 8: character_id})))
+        type_hash, handle = PEER_CHARACTER_OBJECT
+        summary = {off: character_profile[off] for off in (0, 8, 12) if off in character_profile}
+        objects.append(investment.obj(type_hash, character_id, investment.encode(schema, handle, summary)))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
     # Updates to an existing subscription use a delta and the next family version.
     return investment.qz_payload([investment.family(family_type, root, objects,
@@ -347,10 +359,10 @@ def sim_player(schema, group, index, machine_id, spawn=None):
     player (pla +0x18) to bind it (pla +0x50)."""
     object_id = {0: group, 4: 0xC, 6: index}
     state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True}, 0x18: {0: machine_id}, 0x4C: -1}
-    if spawn is not None:
-        # +0x10 (0x80802619 = entity +0x154): the spawn processing (0x358688) sets the request flag
-        # on another component and waits for this block's first byte to be non-zero.
-        state[0x10] = {0: spawn}
+    if spawn:
+        # bool +0x48 (entity +0x18c, reached through entity +0x1ec/+0x1f0 by 0x4ec7b4): the spawn
+        # processing (0x358688) sets a request flag on another component and waits for it.
+        state[0x48] = True
     return object_id, SIM_PLAYER_TYPE, state, True
 
 
@@ -916,7 +928,7 @@ def handle(conn, peer, args):
                     push = encrypted_frame_kind(tx, QZ_UPDATE, 0,
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
-                                                            self_flags=args.self_flags))
+                                                            self_flags=args.self_flags, peer=args.peer_family))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
@@ -970,6 +982,9 @@ def main():
                     type=lambda v: [tuple(int(y, 0) for y in x.split("=")) for x in v.split(",") if x],
                     help="universe flag overrides INDEX=VALUE,... (tri-state: 2 true, 1 false) in the "
                          "universe object's +0x3c list (sign-in and service 104)")
+    ap.add_argument("--peer-family", action="store_true",
+                    help="fill the peer family (0) subscription with the local account and character "
+                         "summaries (the player's appearance and blueprint in activities come from it)")
     ap.add_argument("--self-flags",
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')
@@ -1006,13 +1021,12 @@ def main():
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
                     help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
-    ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) if i < 3 else float(x)
-                                                           for i, x in enumerate(v.split(":"))),
+    ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
                     metavar="GROUP:INDEX:OWNER[:SPAWN]",
                     help="with --ah-roster, the type-5 packets also replicate simulation player INDEX "
                          "of entity group GROUP owned by player id OWNER (the local pla +0x18, e.g. "
-                         "0x4786c0e0:5:0x0a3d4a2c8fbea6ba); SPAWN sets the real32 at state +0x10 (entity +0x154), "
-                         "whose first byte the spawner waits for")
+                         "0x4786c0e0:5:0x0a3d4a2c8fbea6ba); SPAWN=1 sets the state's bool +0x48 (entity +0x18c), "
+                         "which the spawner waits for")
     ap.add_argument("--ah-game-mode", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
                     metavar="GROUP:INDEX:STATE",
                     help="with --ah-roster, replicate the game-mode object (kind 0x10) with this state "

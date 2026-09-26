@@ -4,16 +4,16 @@ This repository tracks an attempt to run a personally owned copy of Destiny 1 wi
 
 ## Current status (2026-09-26)
 
-**The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`) and now gets past the activity's loading screen.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
+**The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`), loads it, and spawns the guardian in the mission world.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
 
-After the latest runs (TEST186):
+After the latest runs (TEST194):
 
-- All 11 tasks of the arrival loading screen complete and the loading screen is dismissed. The mission's zone set is loaded and active.
-- The local player exists and is bound to a **simulation player** replicated by the stand-in host (type-5 object stream).
-- The game-mode object is in its "spawning allowed" state, and the client's spawner posts a spawn request for the player.
-- The screen is black (only the "BETA BUILD" watermark) because the player's unit has not spawned yet. The spawn check wants the active zone set to be a bubble's base entry; that is being tested now.
+- All 11 arrival loading tasks complete and the loading screen is dismissed. Zone set 104 (bubble 13's base) is loaded and active.
+- The stand-in activity host replicates all 121 of the mission's objects (type-5 object stream): the local player's **simulation player** (with the spawn grant) and the game-mode object in its "playing" state.
+- The peer family carries the character summary, so the client builds the player's appearance and blueprint. The spawner picks a spawn point and **creates the player's unit**.
+- The screen shows the world with the HUD radar. On top are an "Urgent message" dialog (dismissed with X) and a "Level Up" toast. The right half of the frame renders overexposed, which looks like an RPCS3 rendering issue.
 
-Current work: getting the guardian to spawn. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Next: stability in the world (host heartbeats, the replicated state that a real host would keep updating), the urgent-message flag, the rendering issue, and controller input. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
@@ -41,7 +41,9 @@ Each gate was cleared one at a time. Destiny's error code names are in bold.
 | Local player created and bound | World-state member mask (+0x5028) in the type-11 delta: the machine table keeps our machine and the group code creates the player. |
 | Replicated objects applied | Baselines for all 22 replicated objects in the type-5 object stream (`--ah-baselines`); the client applies nothing until every object has one. |
 | Simulation player | Simulation player 5 replicated with the local player's id as owner (`--ah-sim-player`); the client binds its player to it. |
-| Loading screen dismissed | Game-mode object replicated in state 2 (`--ah-game-mode`): all loading tasks complete. |
+| Loading screen dismissed | Game-mode object replicated in a non-zero state (`--ah-game-mode`): all loading tasks complete. |
+| Spawn allowed | Zone set at a bubble base (`--ah-bubble-states -1,13=0 --ah-zone 104`), game-mode state 3, sim-player spawn grant (`--ah-sim-player ...:1`). |
+| Guardian spawned | Peer family (0) with the account and character summaries (`--peer-family`): appearance and blueprint built, player unit created. |
 
 ## Reproducing a run
 
@@ -50,22 +52,23 @@ Everything runs on one Windows PC against a private RPCS3 copy (`RPCS3_TEST048_S
 ```powershell
 scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','--session-result') `
   -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host `
-  -ExtraBap @('--self-flags','2','--universe-flag-values','215=1') `
+  -ExtraBap @('--self-flags','2','--universe-flag-values','215=1','--peer-family') `
   -AhArgs @('--ah-join','--ah-entities','8192:12288','--ah-state','--ah-map','act_cosmo_m0_highway',
-            '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22',
-            '--ah-zone','105:0x811c9dc5','--ah-world-state','105:1','--ah-roster','0',
-            '--ah-sim-player','0x4786c0e0:5:0x0a3d4a2c8fbea6ba','--ah-game-mode','0x4786c0e0:3:2',
-            '--ah-baselines',$baselines,'--ah-heartbeat','1') `
+            '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22','--ah-bubble-states','-1,13=0',
+            '--ah-zone','104:0x811c9dc5','--ah-world-state','104:1','--ah-roster','0',
+            '--ah-sim-player','0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1','--ah-game-mode','0x4786c0e0:3:3',
+            '--ah-baselines','@D:\Destiny360\SIGNON_LOCALaselines_highway_z104.txt','--ah-heartbeat','1') `
   -TraceAfter 'ahp req' -Trace 0x3204a8 -Dumps 'r5:64'
 ```
 
-`$baselines` lists the mission's 22 replicated objects as `KEY/KIND/INDEX[/B]`: `0x992bb471/6/29`, `0x4786c0e0/0xf/0`, `0x4786c0e0/0x22/1`, `0x4786c0e0/0x11/2`, `0x4786c0e0/0x10/3`, `0x4786c0e0/0x27/4/1` and `0x4786c0e0/0xc/N/1` for N = 5..20, comma-separated. The sim-player owner is the local player id (`pla +0x18`), which follows from the stand-in account.
+The baselines file lists the mission's replicated objects as `KEY/KIND/INDEX[/B]`, comma-separated. It is dumped from a running game with `scripts/rpcs3_replicated_objects.py` once zone set 104 has loaded (121 objects for this mission). The sim-player owner is the local player id (`pla +0x18`), which follows from the stand-in account.
 
 One cycle takes 8–10 minutes. Useful companions:
 
 - `scripts/rpcs3_activity_poll.py`: read-only watcher for the activity loader, world controller, zone state and object table.
 - `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register.
 - `scripts/rpcs3_tiger_types.py`: dumps the game's runtime type definitions, used to export the typed message schemas.
+- `scripts/rpcs3_replicated_objects.py`: lists the client's replicated objects in the `--ah-baselines` format.
 - `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots.
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
