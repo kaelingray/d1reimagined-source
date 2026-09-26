@@ -556,3 +556,40 @@ Full run (about 10 minutes):
   RPCS3 copy) with Handle RSX Memory Tiling + Write Color Buffers alone changed nothing; adding
   Read Color Buffers, Read Depth Buffer and Write Depth Buffer (TEST196) gives a correctly lit
   frame at first, but after ~1 min a black block and the overexposure return (surface aliasing?).
+- TEST198 (2026-09-26): an experiment overriding `--self-flags` with
+  `1;2@A0-1023,B0,C0-1023` reached the activity host but returned **banana** (required content)
+  before the mission. This narrower flag set is not a valid graphics comparison with the
+  successful `--self-flags 2` baseline. An RPCS3 `PrintWindow` capture appeared stuck on a
+  shader-preload screen, but the emulator's F12 screenshot at 13:51:43 showed banana. Use F12
+  captures for the actual frame; `PrintWindow` may return an old frame. Test log:
+  `D:\Destiny360\SIGNON_LOCAL\logs\TEST198-bap.log`.
+- RPCS3 upstream issue [#12802](https://github.com/RPCS3/rpcs3/issues/12802) (2022) reports
+  a white square on the right in Destiny and says Force CPU Blit avoided an older RSX
+  verification error but caused flicker/corruption. It is related evidence, not a confirmed fix
+  for this build. The RPCS3 wiki did not yield a Destiny-specific configuration page.
+- TEST199: with the TEST196 buffer settings and `Force CPU Blit: true`, RPCS3 crashed at the
+  character screen, before service 504/select-character or the mission. Windows Application
+  Error at 13:59:34 records exception `0xc0000005`, offset `0x3a56cb8`; the last attempted
+  F12 screenshot is a zero-byte file. This run cannot determine whether the setting improves
+  the mission image. `Force CPU Blit` was restored to false; the original per-game config is
+  backed up as `config_BLES01857.before-test199.yml`. `scripts/Invoke-RpcsStep.ps1` now waits
+  for a nonempty new screenshot and errors on timeout instead of returning a zero-byte file.
+- TEST200 (2026-09-26): only `Allow Host GPU Labels: true` differed from the TEST196 game config,
+  using the proven `--self-flags 2` baseline. This tests an RPCS3 developer's suggestion on
+  [issue #17413](https://github.com/RPCS3/rpcs3/issues/17413) for a different game's flicker.
+  The mission loaded. The initial frame (F12 14:09:44) was reasonably lit; after dismissing the
+  urgent-message dialog the left side darkened and right side overexposed (14:10:08). The
+  lighting briefly recovered (14:10:29) and stayed even while stationary (14:11:37), but after
+  holding W for 800 ms it split again (14:12:11) and remained split at 14:13:01. A later live
+  window capture showed the same split while a Level Up prompt appeared. Thus Host GPU Labels
+  does not resolve the movement-triggered rendering fault. Screenshot files are under
+  `D:\Destiny360\RPCS3_TEST048_SETUP\screenshots\BLES01857\`; the service logs are
+  `D:\Destiny360\SIGNON_LOCAL\logs\TEST200-*.log`. The config was restored from
+  `config_BLES01857.before-test200.yml` (`Allow Host GPU Labels: false`, `Force CPU Blit: false`).
+  A still-running TEST200 process retains its launch-time setting until restarted.
+- Next rendering diagnostic: capture the bad frame with RPCS3's RSX capture facility and inspect
+  the affected render target/texture history. The unattended `--no-gui` game process exposes no
+  main RPCS3 menu; a separate `Welcome to RPCS3` window was visible during inspection, so no
+  RSX capture was taken yet. Do not treat a `PrintWindow` screenshot as live evidence. Do not
+  commit game content, private service data, or multi-gigabyte captures. There is no confirmed
+  Destiny-specific RPCS3 setting fix in the checked upstream sources.

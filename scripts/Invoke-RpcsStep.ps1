@@ -12,8 +12,12 @@ param(
 $shots = 'D:\Destiny360\RPCS3_TEST048_SETUP\screenshots\BLES01857'
 if ($Keys) { & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys $Keys -HoldMs $HoldMs | Out-Null }
 Start-Sleep $WaitSeconds
-$before = (Get-ChildItem $shots -ErrorAction SilentlyContinue | Measure-Object).Count
+$before = (Get-ChildItem $shots -File -ErrorAction SilentlyContinue | Where-Object Length -gt 0 | Measure-Object).Count
 & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys F12 | Out-Null
 $deadline = (Get-Date).AddSeconds(10)
-do { Start-Sleep -Milliseconds 500 } until (((Get-ChildItem $shots -ErrorAction SilentlyContinue | Measure-Object).Count -gt $before) -or (Get-Date) -gt $deadline)
-(Get-ChildItem $shots | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+do {
+    Start-Sleep -Milliseconds 500
+    $valid = @(Get-ChildItem $shots -File -ErrorAction SilentlyContinue | Where-Object Length -gt 0)
+} until (($valid.Count -gt $before) -or (Get-Date) -gt $deadline)
+if ($valid.Count -le $before) { throw 'RPCS3 did not save a complete screenshot within 10 seconds' }
+($valid | Sort-Object LastWriteTime | Select-Object -Last 1).FullName

@@ -271,3 +271,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   dialog and "Level Up" toast on top).
 - 195: game config: tiling + write color buffers: same black blocks / exposure drift.
 - 196: + read color/depth, write depth: correct lighting at first, black block back after ~1 min.
+- 198: narrower self flags `1;2@A0-1023,B0,C0-1023` led to banana (required content) before the
+  mission. The F12 screenshot is authoritative; PrintWindow showed a stale shader screen.
+- 199: Force CPU Blit enabled with the TEST196 buffer options; RPCS3 crashed at character
+  selection (Windows access violation `0xc0000005`, offset `0x3a56cb8`) before entering the
+  mission. Setting restored. See the checkpoint for paths and external RSX issue references.
+- 200: Allow Host GPU Labels enabled as the single graphics change. Mission reached; lighting
+  temporarily even while stationary, then split dark-left/overexposed-right after movement
+  (F12 14:12:11, persisting at 14:13:01). Level Up prompt appeared over the broken frame.
+  Per-game setting restored to false. Next: obtain an RSX frame capture in a GUI-enabled run.
