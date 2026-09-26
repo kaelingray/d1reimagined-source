@@ -307,3 +307,7 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   movement - no fix.
 - 224: render-graph trace (`d1trace_timeline.py --graph`): per-frame pass order recorded (see
   checkpoint); the trace slowed the game so much that all frames came out clean.
+- 225: one-frame render-target dumps (`C:/dev/d1dump.on`, `scripts/d1dump_scan.py`): the black
+  blocks are already in the HDR light buffer 0xCEB60000 after its first pass, and match exactly
+  the HUD targets that alias that memory (0xCEB60000 1280x127 and 0xCEDD0000 1280x228 ARGB8,
+  pitch 8192). Surface aliasing in RPCS3's surface cache, not SPU data.

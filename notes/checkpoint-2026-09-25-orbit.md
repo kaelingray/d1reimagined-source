@@ -784,3 +784,17 @@ Full run (about 10 minutes):
   HDR light buffer feeding the 1x1 exposure average. Next: a one-frame dump of every render
   target (instrumented build, marker `C:/dev/d1dump.on`) during movement, to find the first
   pass whose output has the blocks.
+- **Blocks traced to surface aliasing (TEST225).** The build can dump every render/depth
+  target of one frame when the RSX switches away from it (marker `C:/dev/d1dump.on`, output
+  `D:\Destiny360\d1dump\<id>\`, analysis `scripts/d1dump_scan.py`, driver
+  `scripts/Invoke-MoveDump.ps1`). In a broken frame, G-buffer, depth, stencil and the small
+  passes are clean. The first light pass into 0xCEB60000 (1024x624 RGBA16F, pitch 8192) leaves
+  exactly x 0-639, y 312-539 at zero, and the top rows 0-126 dark. Those byte ranges are the
+  HUD scratch targets the game renders at the end of every frame into the same memory:
+  0xCEB60000 as 1280x127 ARGB8 and 0xCEDD0000 (= row 312 of the light buffer) as 1280x228
+  ARGB8, both pitch 8192 (5120 bytes = 640 RGBA16F pixels per row). HUD elements (radar,
+  toasts) appear on movement and fade when still, which explains the movement dependence. The
+  final image takes those rectangles from the stale HUD data. The first dump (TEST225, dump 1)
+  happened to be clean. Next (TEST226): trace draws, clears, inheritance (`old_contents`
+  transfers) and background erases for this range to see why the light pass does not
+  overwrite the inherited HUD data.
