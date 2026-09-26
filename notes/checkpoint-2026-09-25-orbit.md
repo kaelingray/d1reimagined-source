@@ -441,3 +441,14 @@ Full run (about 10 minutes):
   nothing copies it into the expected list. Next: find the writer of obj +0x10/+0x18 (obj
   methods around `0x81d000`-`0x820000`; not an OR/AND mask update) - likely fed by host data
   (world state peers or another world-controller RPC).
+- **Player created and bound** (TEST180, 2026-09-26): the manager entry's member list is filled
+  when the entry attaches to the activity host (`0x81c0c4(entry +0x1c, host)`, called from the
+  manager reset `0x82a698` -> `0x82a5b0` -> `0x81aba4`): member mask = world state **+0x5028**
+  (`0x1c9b98`), ids from the peers (`0x1c9a20`). The world-state delta now sets +0x5028 bit 0 as
+  well as +0x502c: RPC 16 carries mask 1 + our machine id, the expected-player list fills, the
+  group dispatcher gets event 0xc (`0x8241a8`) -> `0x8243a0` -> `0x820e0c` -> `0x672fdc` ->
+  `0x671b64` -> `0x682fe0`: the player pool has 1 player and local user 0 is bound (the machine
+  table keeps our machine). Loading tasks: still 0-8 done, task 9 running: its two remaining
+  checks are the kind-0x10 lookup (`0xb26e4c` -> `0x1483c4(0x10, 0, &out)`) and the local player's
+  object (`0x129db8` -> `0x129c8c` -> `0x14a12c`, +8 byte) - the player's in-world object is not
+  created yet.

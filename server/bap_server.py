@@ -322,12 +322,15 @@ def world_state_delta(schema, request, zone=None, peer_byte=1):
     """Body of host type 11 (0x25715c): one present bit, then a world-state delta (type
     0x808009ed, decoded with 0x1ca478 onto the host simulation's copy at +0xbc0 and posted to
     the world controller as RPC 6). Peer slot 0 is the joining client: its identity (@0x10)
-    and player data (@0x38) from the join request, occupied mask @0x502c bit 0 (0x1c9ab8
-    finds the local slot by the 8-byte id). With `zone`, group record 0 (@0x2e48, 0x80800c6f)
+    and player data (@0x38) from the join request, member mask @0x5028 and occupied mask
+    @0x502c bit 0 (0x1c9ab8 finds the local slot by the 8-byte id). With `zone`, group record 0 (@0x2e48, 0x80800c6f)
     names that zone-set index with state 1 for peer 0 and per-peer byte `peer_byte`, which
     the world controller copies to slice +0x310 when it matches its own +0x1d0 (0x31d06c)
     and which gates the zone-set switch (0x31c750)."""
-    values = {8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}}, 0x502C: 1}
+    # Masks (bit per peer slot): @0x5028 = session members - the manager entry's member list
+    # (0x81c0c4 via 0x1c9b98) that world-controller RPC 16 turns into the machine table, @0x502c
+    # = identities to search for the local slot (0x1c9ab8).
+    values = {8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}}, 0x5028: 1, 0x502C: 1}
     if zone is not None:
         records = {0xD8 * i: {0: -1} for i in range(1, 40)}  # unused groups: index -1
         records[0] = {0: zone, 8: {1: 1, 2: 0}, 0x28: {0x10: {0: peer_byte}}}
