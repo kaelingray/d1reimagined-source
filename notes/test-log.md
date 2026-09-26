@@ -280,3 +280,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   temporarily even while stationary, then split dark-left/overexposed-right after movement
   (F12 14:12:11, persisting at 14:13:01). Level Up prompt appeared over the broken frame.
   Per-game setting restored to false. Next: obtain an RSX frame capture in a GUI-enabled run.
+- 201: Strict Rendering Mode enabled as the single graphics change. Mission reached but the
+  first F12 image already showed a purple band and dark blocks. Setting restored. An RPCS3 RSX
+  capture was saved at `D:\Destiny360\RPCS3_TEST048_SETUP\captures\BLES01857_20260926143340_capture.rrc.gz`.

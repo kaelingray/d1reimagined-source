@@ -587,9 +587,21 @@ Full run (about 10 minutes):
   `D:\Destiny360\SIGNON_LOCAL\logs\TEST200-*.log`. The config was restored from
   `config_BLES01857.before-test200.yml` (`Allow Host GPU Labels: false`, `Force CPU Blit: false`).
   A still-running TEST200 process retains its launch-time setting until restarted.
-- Next rendering diagnostic: capture the bad frame with RPCS3's RSX capture facility and inspect
-  the affected render target/texture history. The unattended game run exposed no
-  main RPCS3 menu; a separate `Welcome to RPCS3` window was visible during inspection, so no
-  RSX capture was taken yet. Do not treat a `PrintWindow` screenshot as live evidence. Do not
-  commit game content, private service data, or multi-gigabyte captures. There is no confirmed
+- The next rendering diagnostic was to capture the bad frame with RPCS3's RSX capture facility
+  and inspect the affected render target/texture history. Initially, the unattended game run
+  exposed no main RPCS3 menu because a `Welcome to RPCS3` dialog was still open; TEST201
+  completed that dialog and obtained the capture. Do not treat a `PrintWindow` screenshot as
+  live evidence. Do not commit game content, private service data, or multi-gigabyte captures.
+  There is no confirmed
   Destiny-specific RPCS3 setting fix in the checked upstream sources.
+- TEST201 (2026-09-26): enabled only `Strict Rendering Mode: true` on top of the TEST196
+  per-game settings. The mission loaded with the proven `--self-flags 2` account baseline, but
+  the first F12 frame at 14:30:56 already had a bright purple horizontal band and large dark
+  blocks behind the urgent-message dialog. Strict mode therefore does not fix the artifact.
+  Restored the per-game config from `config_BLES01857.before-test201.yml` (strict false).
+  RPCS3 `Utilities > Create RSX Capture` saved
+  `D:\Destiny360\RPCS3_TEST048_SETUP\captures\BLES01857_20260926143340_capture.rrc.gz`
+  (42,555,130 bytes); `RPCS3.log` confirms capture success. The menu was accessible after
+  completing the RPCS3 welcome dialog. `Utilities > Open RSX Capture` asks to close the running
+  game; inspection of the capture is the next step. TEST201 service logs are in
+  `D:\Destiny360\SIGNON_LOCAL\logs\TEST201-*`.
