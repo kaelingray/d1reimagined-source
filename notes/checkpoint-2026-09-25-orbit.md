@@ -588,7 +588,7 @@ Full run (about 10 minutes):
   `config_BLES01857.before-test200.yml` (`Allow Host GPU Labels: false`, `Force CPU Blit: false`).
   A still-running TEST200 process retains its launch-time setting until restarted.
 - Next rendering diagnostic: capture the bad frame with RPCS3's RSX capture facility and inspect
-  the affected render target/texture history. The unattended `--no-gui` game process exposes no
+  the affected render target/texture history. The unattended game run exposed no
   main RPCS3 menu; a separate `Welcome to RPCS3` window was visible during inspection, so no
   RSX capture was taken yet. Do not treat a `PrintWindow` screenshot as live evidence. Do not
   commit game content, private service data, or multi-gigabyte captures. There is no confirmed
