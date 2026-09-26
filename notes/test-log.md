@@ -292,3 +292,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 207: + accurate SPU DMA + cache line stores: short moves clean, sustained movement brings the
   same blocks back; recovers when still.
 - 208: ZCull occlusion queries disabled: broken after movement and no recovery - worse.
+- 209: aliasing bias Prefer Color: broken after movement, no recovery.
+- 210: vertex cache off: RSX hung before the mission. 211 (retry): mixed frames, still broken.
+- 212: tiling off (read/write buffers on): same pattern.

@@ -654,3 +654,14 @@ Full run (about 10 minutes):
   y 0-~128 and 312-~512.
 - TEST208: + Disable ZCull Occlusion Queries: worse - every frame after movement is broken and
   it does not recover after 45 s. Reverted.
+- TEST209 (aliasing bias Prefer Color), TEST211 (Disable Vertex Cache; TEST210 with the same
+  config hung the RSX thread at 3:31 before the mission) and TEST212 (Handle RSX Memory Tiling
+  off with read/write buffers on): all still break after movement; none changes the pattern.
+  The game runs at a steady 30 FPS (window title), so it is not a speed problem.
+- In a broken frame the lens flare draws *inside* the black block: later passes are fine, only
+  the lit scene in those regions is missing. The executable has SPU render jobs
+  (`spu_deferred_lighting_job`, `spu_lighting_lights_array`, `spu_render_submit_lights_view_job`,
+  `render_submit_lights_view_job`). The deferred-lighting job (state `*(0x1761280)`, dispatch
+  `0x5afc34` -> `0x5afcd0`, per-light batches of up to 200 lights, jobs via `0xaf3bfc`) is not
+  dispatched in the mission (state +0x9ac stays 1; no calls in 5 s). Next suspect: the
+  SPU-built light command lists (lights view job) read by the RSX FIFO.
