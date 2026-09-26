@@ -10,9 +10,17 @@ The loading screen belongs to an 11-task list in the game's arrival state. After
 
 - Tasks 0–8 complete. The mission's zone set is loaded and **active** in the scenario object table.
 - Task 9 is still running and task 10 has not started. They wait for the local player to be bound to a player slot.
-- That binding is undone about one second after the world change. World-controller RPC 16 replaces the machine table with the fireteam group's member list, which is empty in the local flow.
+- That binding happens at the world change: the game setup's machine table holds just our machine.
+- About one second later it is undone. World-controller RPC 16 copies the activity-host connection's member list into the machine table, and that list is empty in the local flow.
+- The client posts RPC 16 itself, because after a world change it acts as the session host and world-controller authority (the network role in the game setup is 0).
 
-Current work: finding what fills the fireteam group's member list (the Demonware group/session layer and the BAP peer/roster families). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Current work: finding what should put the local machine into that connection's member list. Ruled out so far:
+
+- Host message type 43 is a *boot list*: naming the client produces error **bass**.
+- Host type 24 is a per-host entity-index grant.
+- The session-change listeners never fire in this flow.
+
+Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
