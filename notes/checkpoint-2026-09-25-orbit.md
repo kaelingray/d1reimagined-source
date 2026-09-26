@@ -691,3 +691,8 @@ Full run (about 10 minutes):
   (width x height of the active surface setup). If the game fills the buffer in 128-row
   bands (separate surface setups or blits), only the latest band is protected and flushed on
   SPU access. Next test: Force CPU Blit (TEST214) in case the bands are RSX copies.
+- TEST214: Force CPU Blit on the current baseline: RPCS3 grew to 24.7 GB and never finished
+  signing in (the other agent's TEST199 crashed at character select with the same option). Not
+  usable; reverted. The remaining fix is inside RPCS3: make the write-back/flush cover the whole
+  main-memory G-buffer the SPUs read (or flush the full surface on SPU DMA access), which needs
+  a source build of RPCS3.
