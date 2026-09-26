@@ -452,3 +452,14 @@ Full run (about 10 minutes):
   checks are the kind-0x10 lookup (`0xb26e4c` -> `0x1483c4(0x10, 0, &out)`) and the local player's
   object (`0x129db8` -> `0x129c8c` -> `0x14a12c`, +8 byte) - the player's in-world object is not
   created yet.
+- Task 9's remaining checks (TEST181/182): (1) `0xb26e4c`: the game-mode object (world object of
+  kind 0x10 in the per-world object registry: world index u16 `0x18a9680`, registry at
+  `*(0x17d2d00)[idx]+0x30`, per-kind start/count at +0x16d10, ids at +0x15510; kind 0x10 has 1
+  object, here at 0x70794f80, tag 0x80cd0ef4) must have its byte +0x110 set (not -1/0). That byte
+  (`0xb26d88` returns it) is computed at object init (`0xb2d638`): +0x111 = `0xb30874(def)`,
+  +0x110 = `0x18b88c(0xb308c8(def, tag))` = a per-world-object byte table (`*(0x18aae60)`, index
+  from the object id) -> -1 here: the referenced object has no slot yet. (2) the local player's
+  world object (`0x129c8c` in the entity pool 0x18a8ee0) does not exist. Both point at the
+  player's in-world object not being spawned. Bubble states 0 for all bubbles (TEST181) and
+  bubble 0's base zone set (TEST182: `--ah-zone 0 --ah-world-state 0:1`, zone set 0 active)
+  change neither.

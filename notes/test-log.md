@@ -242,3 +242,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   gated on the manager's expected-player list (empty) - see the checkpoint note.
 - 180: world-state member mask (+0x5028) -> RPC 16 carries our machine, player join event 0xc,
   player pool 1, local user bound. Task 9 now waits for the player's object and a kind-0x10 lookup.
+- 181–182: all bubble states 0 / bubble 0's zone set active: no change; task 9 waits for the
+  game-mode object's slot byte and the player's world object (not spawned).
