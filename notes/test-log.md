@@ -300,3 +300,4 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 215: diagnostic RPCS3 build: G-buffer copies are RSX blits into main memory read (and
   written) by SPU jobs; see checkpoint.
 - 216: VRAM->main blits on the CPU path: normals copy complete in memory, frame still breaks.
+- 217: texture-upload diagnostics: inputs and texture reuse look consistent; blocks remain.

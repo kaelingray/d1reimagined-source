@@ -729,3 +729,15 @@ Full run (about 10 minutes):
   this table read as colour. The 8-bit mask copy (NV0039 0xCE8E0000 -> 0x444EFA80, values
   3-10) has no block-shaped holes. Next diagnostic: log which textures the RSX samples from
   0x44000000-0x46000000 and whether RPCS3 serves them from its cache or re-uploads from memory.
+- TEST217 (texture diagnostics): the RSX samples 0x44813A80 as a 1024x624 texture (fmt 0x9f)
+  re-uploaded from memory on every use, and the depth copy 0x445A3A80 (fmt 0x9c/0x85) mostly
+  from RPCS3's cache - legitimately: the CPU-path blit's writes fault and invalidate it. SPU and
+  RSX write faults on these buffers are only a few per frame, no `semaphore_acquire` timeouts,
+  and the fragment-program decode errors ("Bad src reg num", "Invalid Src type 3") happen only
+  while the shader cache compiles at boot. The SPU-written table at the start of 0x44813A80 is
+  linear (row groups 0-7, 21-29, 40-45), not a plain tile grid. Status: the blit write-back fix
+  makes the SPUs' inputs correct in memory, but the movement-triggered blocks remain, so a second
+  stale/ordering problem sits after the SPU stage (their output, or how the RSX consumes it).
+  The patched `rpcs3.exe` stays deployed (original: `rpcs3.orig.exe`); the patch (fix +
+  `D1DIAG` logging of blits, copies, faults and texture uploads in 0x44000000-0x46000000) is in
+  `patches/rpcs3-destiny-main-memory-blit.patch`.

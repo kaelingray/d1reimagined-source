@@ -1,3 +1,27 @@
+diff --git a/rpcs3/Emu/RSX/Common/texture_cache.h b/rpcs3/Emu/RSX/Common/texture_cache.h
+index 0de533fb0..c89263872 100644
+--- a/rpcs3/Emu/RSX/Common/texture_cache.h
++++ b/rpcs3/Emu/RSX/Common/texture_cache.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "Emu/RSX/d1diag.h"
+ 
+ #include "Emu/RSX/Common/simple_array.hpp"
+ #include "Emu/RSX/Core/RSXContext.h"
+@@ -3178,6 +3179,13 @@ namespace rsx
+ 				options, lookup_range, extended_dimension, m_rtts,
+ 				std::forward<Args>(extras)...);
+ 
++			if (d1diag::hit(attributes.address, attributes.pitch * required_surface_height) && d1diag::sampled16())
++			{
++				rsx_log.warning("D1DIAG tex addr=0x%x %ux%u pitch=%u fmt=0x%x dim=%d valid=%d ctx=%d handle=%d",
++					attributes.address, attributes.width, attributes.height, attributes.pitch, attributes.gcm_format,
++					static_cast<int>(extended_dimension), result.validate(), static_cast<int>(result.upload_context), result.image_handle != nullptr);
++			}
++
+ 			if (result.validate())
+ 			{
+ 				if (!result.image_handle) [[unlikely]]
 diff --git a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp b/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
 index 2a5079496..30a92a3be 100644
 --- a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
@@ -94,10 +118,10 @@ index 9e27132fa..e996b9082 100644
  
 diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
 new file mode 100644
-index 000000000..f9602804c
+index 000000000..97a5048a6
 --- /dev/null
 +++ b/rpcs3/Emu/RSX/d1diag.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +#pragma once
 +// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
 +// the SPU lighting reads (0x44000000-0x46000000). Throttled.
@@ -113,6 +137,11 @@ index 000000000..f9602804c
 +	{
 +		static std::atomic<u32> n{0};
 +		return (n.fetch_add(1) & 255) == 0;
++	}
++	inline bool sampled16()
++	{
++		static std::atomic<u32> n{0};
++		return (n.fetch_add(1) & 15) == 0;
 +	}
 +	inline bool budget()
 +	{
