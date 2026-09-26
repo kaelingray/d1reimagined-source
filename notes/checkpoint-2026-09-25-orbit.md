@@ -615,3 +615,10 @@ Full run (about 10 minutes):
   has no scheduled entries (+0x90 count 0, +0xc4 = 0) and the stand-in never sends BAP
   "shutdown not" (0x14); the dialog's trigger is still unknown.
   `Invoke-JoinCycle.ps1` now also writes the full trace to `logs\<Name>-trace.log`.
+- TEST203: OpenGL renderer with the TEST196 buffer options: RSX fatal 63 s after boot
+  ("Memory allocation cannot fit image contents"), never signs in. Not usable; back to Vulkan.
+- TEST204: TEST196 options + Accurate RSX reservation access + Disable Asynchronous Memory
+  Manager: mission reached; the keyboard pad moves the guardian (W held 800 ms walks forward).
+  Same fault as TEST200: right after moving the frame splits (black rectangles x 0-800 at
+  y 0-145 and 360-592, rest overexposed); after ~60 s standing still it is correctly lit
+  again. These options do not fix it (config restored from `before-test204`).

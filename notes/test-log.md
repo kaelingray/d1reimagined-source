@@ -284,3 +284,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   first F12 image already showed a purple band and dark blocks. Setting restored. An RPCS3 RSX
   capture was saved at `D:\Destiny360\RPCS3_TEST048_SETUP\captures\BLES01857_20260926143340_capture.rrc.gz`.
 - 202: unlock-expression trace after the join: no evaluations; urgent message still shown.
+- 203: OpenGL: RSX fatal before sign-in.
+- 204: + RSX reservation accuracy + no async memory manager: movement works; split after
+  movement, recovers when still - no fix.
