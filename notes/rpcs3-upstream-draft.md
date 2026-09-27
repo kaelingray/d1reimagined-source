@@ -119,3 +119,33 @@ over 18 minutes, all frames clean.
 Open question: a shared pool (with set revalidation) might be the cleaner design. The idle
 release keeps the existing per-table ownership model.
 
+
+## Check against upstream master (2026-09-27, cloud session, not built)
+
+- Upstream `master` is `3fa07db78` (2026-09-27), 26 commits after our base `b5a174e9`.
+  `git apply --check` passes for both `rpcs3-destiny-fix.patch` and
+  `rpcs3-destiny-main-memory-blit.patch` on the base and on master. Every `vm::` identifier the
+  patches use (`check_addr`, `page_readable`, `read8`/`read64`, `_ref`, `g_sudo_addr`,
+  `get_super_ptr`) still exists after `a70f69856` renamed the block-size flags
+  (`page_size_*` -> `block_size_*`). Not compiled here (no MSVC/Qt toolchain in the container).
+- None of the 26 commits touches the surface cache, SPU DMA tracking or the Vulkan descriptor
+  code, so both fixes are still needed and the drafts above are current.
+- Commits worth having in the next rebuild:
+  - `77cb9423d` "LV2: Wait for new PPU threads to start in sys_ppu_thread_start" and
+    `4514ad621` "Fix PPU start delay accumulation" rework the thread-start wait our base commit
+    introduced (`b5a174e9`: a 1 ms yield loop after `sys_ppu_thread_start` for a lower-priority
+    caller). `4514ad621` resets `hw_sleep_time` in `cpu_sleep`/`cpu_wait` so start delays stop
+    accumulating.
+  - `7f5f8c4a7` "vk: Use all available threads for shader compilation during bootup": the
+    445k-pipeline cache rebuild that froze the second PC's desktop (TEST320).
+  - `13eaa2b03` "rsx/vm: Do not pause RSX on non-RSX allocations".
+  - `38eba804f` "gdb: fix address check in the memory read routine" (the GDB daemon's `mem`).
+- The login-cinematic freeze (5 of 12 boots after the 15:01 build, TEST266-275) is not explained
+  by upstream: the morning build and the 15:01 build share the base `b5a174e9`. The functional
+  changes of 15:01 were the `d1/` control folder (marker files polled from the RSX flip, SPU DMA
+  and fragment-program paths) and moving the game files into `local\`. An A/B of the 09:30
+  patch (`git show 3ceb417:patches/rpcs3-destiny-main-memory-blit.patch`) against the current one,
+  with game files in the same place, would separate the two. Minor, not a hang: `tracing()` and
+  `fp_logging()` compute `now - last_check` in unsigned arithmetic, so a thread whose `now` is
+  older than another thread's freshly stored `last_check` wraps around and stats the marker file
+  again. Harmless, but a signed difference or a compare-exchange on `last_check` avoids it.
