@@ -351,3 +351,14 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   `simple_array::reserve` verification) fits the same leak. ~72 texture-cache "does not match
   stored parameters" warnings per second (0xCF8B7600 32x78 <-> 64x39, 0xCF8C6000, 0xCEA18000).
   241: same run on the official build to see whether the leak predates the patches.
+- 241: official RPCS3 build, same mission: private commit +14-15 GB/min (24.9 -> 106.7 GB in
+  6 min), process gone ~7 min in. The leak predates the patches.
+- 242: VRAM allocation limit 8192 MB: same growth (the budget is not the issue). Config restored.
+- 243: `D1MEM` log (RPCS3's own Vulkan pools, texture/surface cache): all flat at ~500 MB total.
+- 244: address-space diff: ~7 new 16.47 MB committed private regions per second, all segments of
+  one NT heap (signature ffeeffee), ~1950 segments / 32 GB; mostly free blocks between live
+  blocks of ~0x60600 bytes.
+- 245: counters: 185,570 VK programs created at boot (none destroyed); in the mission ~270
+  descriptor sets per second get their first `init()`, each reserving 16448-entry image/buffer
+  info pools (~0.9 MB) -> ~14 GB/min. Fix in 246: pools of 256 + 64 entries, flushed at bind
+  once 256 are used (~18 KB per set).
