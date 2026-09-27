@@ -386,22 +386,25 @@ def default_baseline(key, kind, index, has_b=False):
     return {0: key, 4: kind, 6: index}, None, None, has_b
 
 
-def world_state_delta(schema, request, zone=None, peer_byte=1):
+def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0):
     """Body of host type 11 (0x25715c): one present bit, then a world-state delta (type
     0x808009ed, decoded with 0x1ca478 onto the host simulation's copy at +0xbc0 and posted to
     the world controller as RPC 6). Peer slot 0 is the joining client: its identity (@0x10)
     and player data (@0x38) from the join request, member mask @0x5028 and occupied mask
     @0x502c bit 0 (0x1c9ab8 finds the local slot by the 8-byte id). With `zone`, group record 0 (@0x2e48, 0x80800c6f)
-    names that zone-set index with state 1 for peer 0 and per-peer byte `peer_byte`, which
+    names that zone-set index with state 1, 5-bit peer field `group_peer`, and per-peer byte
+    `peer_byte`, which
     the world controller copies to slice +0x310 when it matches its own +0x1d0 (0x31d06c)
     and which gates the zone-set switch (0x31c750)."""
     # Masks (bit per peer slot): @0x5028 = session members - the manager entry's member list
     # (0x81c0c4 via 0x1c9b98) that world-controller RPC 16 turns into the machine table, @0x502c
     # = identities to search for the local slot (0x1c9ab8).
+    if not 0 <= group_peer < 20:
+        raise ValueError("group peer must be a world-state peer slot (0-19)")
     values = {8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}}, 0x5028: 1, 0x502C: 1}
     if zone is not None:
         records = {0xD8 * i: {0: -1} for i in range(1, 40)}  # unused groups: index -1
-        records[0] = {0: zone, 8: {1: 1, 2: 0}, 0x28: {0x10: {0: peer_byte}}}
+        records[0] = {0: zone, 8: {1: 1, 2: group_peer}, 0x28: {0x10: {0: peer_byte}}}
         values[0x2E48] = {0: records}
     w = investment.BitWriter()
     w.put(1, 1)
@@ -831,10 +834,14 @@ def handle(conn, peer, args):
                 if args.ah_state:
                     establish = b""
                     if args.ah_world_state:
-                        zone, _, byte = args.ah_world_state.partition(":")
+                        parts = args.ah_world_state.split(":")
+                        if len(parts) > 3:
+                            raise ValueError("--ah-world-state expects ZONE[:PEERBYTE[:GROUPPEER]]")
+                        zone = parts[0]
                         establish = world_state_delta(args.activity_schema, request,
                                                       None if zone == "peer" else int(zone, 0),
-                                                      int(byte or "1", 0))
+                                                      int(parts[1] or "1", 0) if len(parts) > 1 else 1,
+                                                      int(parts[2], 0) if len(parts) > 2 else 0)
                     for subtype, data in ((AH_ESTABLISH, establish), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
                                                                       args.ah_bubbles, args.ah_zone,
                                                                       args.ah_bubble_states))):
@@ -1017,9 +1024,10 @@ def main():
                     help="with --ah-state, activity checksum (u32 @0x5c) matching the scenario")
     ap.add_argument("--ah-zone", type=lambda v: tuple(int(x, 0) for x in v.split(":")), metavar="INDEX:HASH",
                     help="with --ah-state, zone record (u32 @0x54, i32 @0x58); -1:0x811c9dc5 = none")
-    ap.add_argument("--ah-world-state", nargs="?", const="peer", metavar="ZONE[:PEERBYTE]",
+    ap.add_argument("--ah-world-state", nargs="?", const="peer", metavar="ZONE[:PEERBYTE[:GROUPPEER]]",
                     help="with --ah-state, the type-11 body carries a world-state delta: the client "
-                         "in peer slot 0 and, with ZONE, group record 0 for that zone-set index")
+                         "in peer slot 0 and, with ZONE, group record 0 for that zone-set index; "
+                         "GROUPPEER sets the record's 5-bit peer field (default 0, valid 0-19)")
     ap.add_argument("--ah-boot", action="store_true",
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",

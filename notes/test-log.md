@@ -399,3 +399,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   37); its own movement is not sent. The 99 bubble-13 objects (groups 0x062dd95d, 0x3c2f5ed5,
   0x992bb471; kinds 1/3/4/5/6/0x1d/0x20/0x21) sit at the stand-in's empty default baselines, so
   whatever they are (spawners, combatants, doors, objectives) nothing drives them.
+- 254: diagnostic `--ah-world-state 104:1:1` (group peer 1 instead of 0): **no mission
+  result**. RPCS3 first opened a welcome prompt behind an NVIDIA Overlay crash dialog;
+  after clearing both, sign-in succeeded but the unattended run's F12 screenshot timed
+  out. The game remained at Set Screen Bounds. Do not treat this as a peer comparison.
+  Static analysis below shows the existing group peer 0 is already the local slot.

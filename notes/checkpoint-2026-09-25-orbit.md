@@ -925,3 +925,45 @@ Full run (about 10 minutes):
 - Deployed `rpcs3.exe` = the diagnostic build (rendering fix, memory fixes, D1T/D1DIAG/D1MEM
   logging, PPU call hook, `C:/dev/d1noblitfix.on` switch); `rpcs3.orig.exe` = official.
   `C:/dev/d1ppu.txt` holds no watches. RPCS3 and the loopback stand-ins are stopped.
+
+## World-state group peer (2026-09-27, after TEST253)
+
+- The next milestone is to drive the 99 bubble-13 object baselines and mission objectives.
+  TEST253 already showed a movable Guardian in Dock 13, with no objective, waypoint or
+  enemies. The world-state group record `0x80800c6f` is **not** obviously assigning
+  simulation to a missing peer: its nested `0x80800e4a` at +8 has state at +1 and a
+  5-bit peer at +2. The stand-in sets both state 1 and peer 0.
+- `0x31d06c` writes the world controller's local slot at slice +0x230 from `0x25bc10`.
+  That calls `0x1c9ab8` with the world-state identity table. `0x1c9ab8` scans the
+  +0x502c occupied mask and compares each slot's 8-byte identity to the local machine
+  identity. The stand-in occupies slot 0, so this returns 0 in a valid mission session.
+  `0x31ca20`/`0x31cb80` compare the group record's peer byte at slice +0x31a with
+  local slot +0x230 before following their local-group path. `0x31d06c` also uses
+  this equality while processing changed group records. This supports peer 0 as the
+  correct value for the current single-client world; it does **not** prove which
+  component is responsible for spawning NPCs/objectives.
+- New diagnostic: `scripts/rpcs3_world_peer.py` reads the live slice (zone at +0x310,
+  local slot +0x230, group state +0x319, group peer +0x31a, per-peer byte +0x348).
+  At setup, it returned zone -1 and local slot -1; it still needs an in-mission read.
+  `bap_server.py --ah-world-state ZONE[:PEERBYTE[:GROUPPEER]]` can override the group
+  peer for controlled comparisons, defaulting to 0. A real-schema encode/decode
+  roundtrip confirmed `104:1:1` puts 1 in the nested peer field and both world-state
+  masks remain 1.
+- TEST254_PEER1 was interrupted before any mission comparison. A first-run RPCS3
+  welcome prompt and NVIDIA Overlay crash dialog delayed startup; the screenshot
+  helper timed out after sign-in. RPCS3 remained at Set Screen Bounds, and short UI
+  simulated X presses did not advance the keyboard pad. The BAP connection stayed
+  healthy (5 s echo responses); no activity-host join occurred. Do not use TEST254
+  as evidence for owner-peer behavior. On a future run, confirm the dialogs are gone
+  and the keyboard pad can advance setup, then compare the live `+0x230`/`+0x31a`
+  values in the mission. This run has been stopped, its local stand-ins closed, and
+  `Set-PadConfig.ps1 -Mode xinput` restored the user's controller mapping.
+- `scripts/rpcs3_replicated_objects.py` now accepts `--json-out PATH` to export each
+  object's group, kind, index, bubble, state A/B type handles and pending-baseline
+  flag, plus `--schema-out PATH` to export the live type trees for those state handles.
+  The existing stdout baseline-list format is unchanged. These options have been
+  syntax-checked but require the next mission run for live verification. Suggested
+  next capture: run the proven TEST253 configuration, then from a separate shell
+  `python scripts/rpcs3_replicated_objects.py --json-out <path> --schema-out <path>`
+  while in Dock 13. Group the 99 bubble-13 records by state type before constructing
+  targeted replicated updates. No enemy or objective state has been synthesized yet.
