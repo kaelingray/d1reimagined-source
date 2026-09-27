@@ -7,8 +7,10 @@
 # the instrumented build before the boot and empties the list afterwards; the D1P lines end up in
 # the copied RPCS3 log.
 #   Invoke-ObjectExperiment.ps1 -Name TEST361 -Bubble 14 -Zone 113 -ExtraAh @('--ah-object', '...')
-#   Invoke-ObjectExperiment.ps1 -Name TEST367 -Bubble 14 -ExtraAh @('--ah-bubble-states', '-1,14=0,3=0', '--ah-zone-schedule', '24@150') `
-#     -Watch @('42a498 4000 u r3:48 r4:48 r5:48', '258778 4000 u r3:32 r4:32 r5:32')
+#   Invoke-ObjectExperiment.ps1 -Name TESTnnn -Bubble 14 -Watch @('42a498 4000 u r3:48 r4:48 r5:48')
+# (the watch lists of planned runs are in notes\next-session-playbook.md). The watch file is
+# always rewritten - emptied when -Watch is not given - so a previous run's list cannot carry
+# over, and the list used is kept as $D1Logs\<Name>-watch.txt next to the logs.
 param(
     [Parameter(Mandatory)][string]$Name,
     [Parameter(Mandatory)][int]$Bubble,
@@ -25,7 +27,8 @@ if ($Zone -lt 0) { $Zone = 8 * $Bubble }
 $watch = "$D1Signon\$Name-baselines.txt"
 if (Test-Path $watch) { [IO.File]::Delete($watch) }
 $ppuWatch = Join-Path $D1Control 'd1ppu.txt'
-if ($Watch) { [IO.File]::WriteAllLines($ppuWatch, $Watch) }
+[IO.File]::WriteAllLines($ppuWatch, [string[]]$Watch)
+[IO.File]::WriteAllLines("$D1Logs\$Name-watch.txt", [string[]]$Watch)
 & "$PSScriptRoot\Set-PadConfig.ps1" -Mode keyboard
 try {
     # Feed the client's replication records back every 15 s from the start: an object without a
@@ -51,7 +54,7 @@ try {
     & $D1Python "$PSScriptRoot\rpcs3_replicated_objects.py" --json-out "$D1Signon\$Name-objects.json" --schema-out "$D1Signon\$Name-object-types.json" 2> "$D1Signon\$Name-objects-final.txt" | Out-Null
 } finally {
     if ($feeder) { Stop-Job $feeder; Remove-Job $feeder -Force }
-    if ($Watch) { [IO.File]::WriteAllText($ppuWatch, '') }
+    [IO.File]::WriteAllText($ppuWatch, '')
     Copy-Item "$D1Rpcs3\log\RPCS3.log" "$D1Logs\$Name-rpcs3.log" -ErrorAction SilentlyContinue
     Get-Process rpcs3 -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
     Start-Sleep 3

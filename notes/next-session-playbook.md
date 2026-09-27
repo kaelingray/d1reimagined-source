@@ -36,6 +36,11 @@ PS3 tag block is compressed with the 0xB7 Oodle framing.
 
 ## 2. TEST367: the slice-set switch chain, host-pushed (expected: no switch)
 
+Ran once (test log, 367): no switch, as expected. That run used an older watch list, though, so
+the hooks below did not run. Repeat it as TEST367b with this list only if TEST368 leaves
+questions. `Invoke-ObjectExperiment.ps1` now always rewrites the watch file and saves the list it
+used as `<Name>-watch.txt`.
+
 Static analysis (orbit checkpoint, "how a slice-set switch starts") says a mid-mission switch
 starts from the player's position (`0x31dab0`) or from a pending request (`0x31bcd0`, fed by the
 record at simulation +0x5080), and ends in engine request slot 2 (`0x11f91c`). These watches cover

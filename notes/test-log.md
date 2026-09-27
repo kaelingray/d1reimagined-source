@@ -553,3 +553,20 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   checkpoint, "how a slice-set switch starts").
 - 353 (second PC): **bubble 9 = TERRESTRIAL COMPLEX** (underground hangar with containers and a
   truck; no bubble-local group; 4 D1FPRELOAD).
+- 367 (second PC, logs uploaded 2026-09-27): highway start, bubble 3 registered,
+  `--ah-zone-schedule 24@150`.
+  - **Stand-in log.** The client's type-21 slice record settles at join: target 112 (state 4),
+    then current 112, target -1, state 0. The stand-in pushed zone set 24 at join +151 s. The
+    client sent no further type 21 and no new message type, and stayed in the world until the
+    run ended at +284 s: **a host-pushed zone set is ignored**, as the static analysis predicted.
+  - **Hooks.** They did not run the runbook's TEST367 watch list. The hits are for 0x42a498 (7),
+    0x258778 (2), 0x25715c (5), 0x13f8ec (3) and 0x3204a8. That matches the older example that
+    `Invoke-ObjectExperiment.ps1`'s header showed under the name TEST367, or a stale
+    `d1\d1ppu.txt` (the script only rewrote the file when `-Watch` was given).
+  - **Handler calls.** `0x25715c` ran for the join delta (emu 5:07, r5=0x771) and four more
+    times (5:08, 5:09, 5:23, 6:05, the last two with content). It did not run for the zone push
+    at about emu 7:38. `0x42a498` last ran at 5:23. Without the budgets of that list, "the
+    world-state handler stops in the world" stays unconfirmed.
+  - **Fix.** The script now always rewrites the watch file and saves the list as
+    `<Name>-watch.txt`. TEST367's own list (runbook step 2) is still to run; TEST368 (walk into
+    The Breach) is the more useful next run.
