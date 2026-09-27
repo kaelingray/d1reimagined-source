@@ -9,14 +9,14 @@
 param([Parameter(Mandatory)][string[]]$Bubbles, [Parameter(Mandatory)][int]$FirstTest, [int]$Attempts = 3)
 # accept "21,14" as one string too (pwsh -File passes it unsplit, and [int] would read 2114)
 # (a new variable: assigning back to the [string[]] parameter would turn the numbers into strings)
-[int[]]$list = @($Bubbles -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
-if ($list | Where-Object { $_ -lt 0 -or $_ -gt 21 }) { throw "bubbles must be 0-21 (act_cosmo_m0_highway has 22): $($list -join ',')" }
+[int[]]$bubbleList = @($Bubbles -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
+if ($bubbleList | Where-Object { $_ -lt 0 -or $_ -gt 21 }) { throw "bubbles must be 0-21 (act_cosmo_m0_highway has 22): $($bubbleList -join ',')" }
 . "$PSScriptRoot\Paths.ps1"
 $watch = "$D1Signon\sweep-baselines.txt"
 & "$PSScriptRoot\Set-PadConfig.ps1" -Mode keyboard
 try {
     $test = $FirstTest
-    foreach ($n in $list) {
+    foreach ($n in $bubbleList) {
         $zone = 8 * $n
         foreach ($attempt in 1..$Attempts) {
             $name = "TEST$test"; $test++
