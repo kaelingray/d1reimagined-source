@@ -149,9 +149,10 @@ error_none, fields absent. Only a few are understood:
 | 1303 | reply with a 500-byte blob list |
 
 Missing:
-- **Request types.** The exported schema holds only the replies (and 501's request). A PC run of
-  `scripts/rpcs3_tiger_types.py schema OUT.json` now exports every request type too. The request
-  fields name the services (item instance ids, bucket indexes, vendor ids).
+- **Request types (done 2026-09-28).** `scripts/d1_types.py` reads every type definition from
+  the EBOOT and the service table from the investment globals, so each service's request and
+  response layout is known without a run. See [`investment-services.md`](investment-services.md)
+  for the table, the wrapper function per service, and tentative meanings.
 - **Inventory, equip, vault.** The character and inventory screens act through the 12xx services.
   Each needs a handler that changes the stored character and pushes a self-family delta. The
   pattern already exists for 504's `push_self`.

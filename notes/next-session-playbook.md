@@ -136,8 +136,8 @@ scripts\Invoke-ObjectExperiment.ps1 -Name TEST370 -Bubble 14 -Seconds 120 `
 python scripts\rpcs3_tiger_types.py schema local\SIGNON_LOCAL\investment_schema_full.json
 ```
 
-The second command (with the game running) exports every service's request type, which names
-the 66 services (`feature-gaps.md`, section 3). Add the JSON to the data repo.
+The schema export is optional now: `scripts/d1_types.py` reads the same types, and the service
+table, offline.
 
 Read the result:
 - **Solid armour:** the slot order is confirmed.

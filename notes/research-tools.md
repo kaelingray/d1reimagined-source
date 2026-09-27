@@ -22,6 +22,11 @@ schemas. How they apply to the activity-host work: [`public-research.md`](public
 English name) from `ps3_investment_globals_012c/012e` plus the string tables; `items --buckets`
 lists the 14 equippable buckets. The item indexes are what `bap_server.py --character-gear`
 takes.
+`d1_types.py` reads every runtime type definition (4,387) straight from the decrypted EBOOT;
+they match the run-time exports field for field. With `--packages`, it also reads the 66 web
+services from the investment globals. `schema OUT.json` writes the same JSON the stand-in loads,
+`type HANDLE` prints one type, and `services` lists each service's request and response
+layout ([`investment-services.md`](investment-services.md)). No running game is needed.
 
 ## Destiny 2 asset tools: background only for now
 
