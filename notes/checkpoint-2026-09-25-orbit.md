@@ -1117,3 +1117,27 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
   Mothyards, 13 Dock 13 (mission end, extra slice set 105), **14 highway start outside the Wall**
   (extra slice set 113), 7 The Steppes, 21 The Devils' Lair; 8-12 and 15-20 still to map. Mission start = zone
   set 112 (`--ah-bubble-states -1,14=0 --ah-zone 112:0x811c9dc5 --ah-world-state 112:1`).
+
+## Intro cinematic and slice-set transitions (TEST350-366)
+- Slot 113 (bubble 14's second slice set) holds only activity-group kind 4 index 0 (bubble 14)
+  and kind 6 index 1 and 2: a spawn slot and two player-id lists (EBOOT string
+  "cinematic_with_roster"). Kind 4 (`0x2000e0` -> `0x200014`) is a **spawn slot with a
+  generation counter**: a higher u32 destroys the tracked entity (`0x1323e0`) so it is
+  recreated. Setting the roster and stepping kind 4 (TEST360-363) left the screen black.
+- Coverage diff 113 vs 112 (TEST365 vs TEST364, `scripts/d1coverage_diff.py`): 113 reaches
+  128 functions 112 does not, 112 reaches 24,513 more (gameplay). In 113 the spawner refuses at
+  `0x35799c` (active slice set not a bubble base), and the world-controller state `0x329660`
+  takes its non-base branch (`0x3296a4`: countdown cleared) and posts event 0x23 via `0x3204a8`
+  (`0x3296fc`), as 112 does after its 5 s countdown. Nothing there waits on our objects.
+- Video path (not the Ghost intro): `0x3298xx` reads a u16 "video activity index" from
+  `0x3174c8(0)+0x7f8` ("invalid video activity index!" / "failed to find activity video!"),
+  starts the CRI/Bink player (`0xb7ba88`, `0xb7bcc8`; "bink\%s_%d.bik") and sets world
+  controller state 4; world-controller activity states are `activity:initial_slice_set_loading`,
+  `activity:physics_join`, `activity:in_world`, `activity:watch_video`; the client reports
+  `finished-watching-video`. Transition kinds: `transitioning:initial_slice_set`,
+  `normal_z_leg`, `debug_initiated`, `teleportation`. Realtime cinematics live in
+  `ps3_cinematic_trv_*` / `ps3_cinematic_queen_*` packages.
+- A second world-state delta naming another zone set is sent but not acted on (TEST350), so the
+  host must command slice-set transitions some other way. TEST366 traces the type-11 handler
+  `0x25715c`, the slice-set loader `0x13f8ec`, `0x31f6bc` and the reason/state poster
+  `0x3204a8` across a 112 -> 24 (The Breach) switch.
