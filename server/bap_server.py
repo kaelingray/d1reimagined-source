@@ -704,6 +704,8 @@ def handle(conn, peer, args):
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
     baselines_stamp = None  # modification time of --ah-baselines-watch when last read
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
+    world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
+    zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def push_self(number, reason):
@@ -861,10 +863,12 @@ def handle(conn, peer, args):
                         if len(parts) > 3:
                             raise ValueError("--ah-world-state expects ZONE[:PEERBYTE[:GROUPPEER]]")
                         zone = parts[0]
-                        establish = world_state_delta(args.activity_schema, request,
-                                                      None if zone == "peer" else int(zone, 0),
-                                                      int(parts[1] or "1", 0) if len(parts) > 1 else 1,
-                                                      int(parts[2], 0) if len(parts) > 2 else 0)
+                        world_params = (request, int(parts[1] or "1", 0) if len(parts) > 1 else 1,
+                                        int(parts[2], 0) if len(parts) > 2 else 0)
+                        zone_now = None if zone == "peer" else int(zone, 0)
+                        establish = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                      *world_params[1:])
+                        zone_joined = time.time()
                     for subtype, data in ((AH_ESTABLISH, establish), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
                                                                       args.ah_bubbles, args.ah_zone,
                                                                       args.ah_bubble_states))):
@@ -934,6 +938,16 @@ def handle(conn, peer, args):
                             objects_.extend(default_baseline(*b) for b in new)
                             sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                             log(f"[{tag}] {len(new)} new baselines from {args.ah_baselines_watch}")
+                if world_params and args.ah_zone_schedule:
+                    # A zone change the way the real host moves a player between bubbles: a new
+                    # world-state delta (type 11) naming another zone set in group record 0.
+                    # The target zone set needs its base entry, i.e. a bubble state >= 0.
+                    due = [z for z, sec in args.ah_zone_schedule if time.time() - zone_joined >= sec]
+                    if due and due[-1] != zone_now:
+                        zone_now = due[-1]
+                        data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:])
+                        conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
+                        log(f"[{tag}] world state: zone set -> {zone_now}")
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
@@ -1081,6 +1095,11 @@ def main():
                     help="with --ah-state, the type-11 body carries a world-state delta: the client "
                          "in peer slot 0 and, with ZONE, group record 0 for that zone-set index; "
                          "GROUPPEER sets the record's 5-bit peer field (default 0, valid 0-19)")
+    ap.add_argument("--ah-zone-schedule", default=[], metavar="ZONE@SECONDS,...",
+                    type=lambda v: [tuple(int(y, 0) for y in x.split("@")) for x in v.split(",")],
+                    help="with --ah-world-state ZONE and --ah-heartbeat, send a new world-state delta "
+                         "naming each ZONE (zone-set index, 8*bubble for a bubble's base) SECONDS after "
+                         "the join (e.g. 16@120,24@240); the bubbles need states >= 0 (--ah-bubble-states)")
     ap.add_argument("--ah-boot", action="store_true",
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
