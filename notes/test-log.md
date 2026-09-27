@@ -509,3 +509,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   (0x1ce1b8). The steps also went out while the client was still loading. New
   `scripts/Invoke-ObjectExperiment.ps1` always feeds baselines, dismisses the urgent message and
   takes timed screenshots; TEST361 repeats with steps at 90/120/150 s.
+- 351 (second PC): **bubble 7 = THE STEPPES** (daytime scrubland under the colony ship; no
+  bubble-local group; 20 D1FPRELOAD).
