@@ -39,6 +39,23 @@
           "sha256": "3438887685cdf90702ea18c3876d21931f21d0b0bea8d823661ded04d5c37219"
         }
       ]
+    },
+    {
+      "filename": "ps3_gear_player_0104_0.pkg",
+      "size": 123914240,
+      "sha256": "b4cc926d9e75ae54bc092c5898d892158f81aad1cdf1efc39882425f7a2f0c07",
+      "parts": [
+        {
+          "path": "packages/ps3_gear_player_0104_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "07e18499017e098123419dc19bd5eda16d8a107c82f4edf23c77a368aec5f6dd"
+        },
+        {
+          "path": "packages/ps3_gear_player_0104_0.pkg.part001",
+          "size": 56805376,
+          "sha256": "974d1fd0af6bcff7188f92b3ad75094f044e35718bcc1451fe3e231aa4ba0315"
+        }
+      ]
     }
   ]
 }
