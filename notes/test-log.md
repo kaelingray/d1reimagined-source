@@ -502,3 +502,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   when the u32 at +0 rises above its value at object +0x110 (`0x200014`), bool +4 gates the
   follow-up. Both were default zeros. Next: TEST360 with the player id in kind 6's roster and
   kind 4 stepped 1, 2, 3 at 20/40/60 s (`--ah-object-at`), OK pressed on the urgent message.
+- 360 (second PC): slot 113 again with the player id in kind 6 index 1's roster and kind 4
+  stepped 1/2/3 at 20/40/60 s: black screen with a turning loading glyph for 150 s, no
+  cinematic. Cause (test design): slot 113's kind 6 index 2 had no baseline (the Dock 13 file only
+  lists index 10) and the live feed was not running, so no replicated state applied at all
+  (0x1ce1b8). The steps also went out while the client was still loading. New
+  `scripts/Invoke-ObjectExperiment.ps1` always feeds baselines, dismisses the urgent message and
+  takes timed screenshots; TEST361 repeats with steps at 90/120/150 s.
