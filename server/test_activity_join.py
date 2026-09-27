@@ -151,6 +151,13 @@ class ObjectSpec(unittest.TestCase):
         self.assertTrue(has_b)
         self.assertEqual(b.object_spec("1:2:3:0x80800463")[2], {})
 
+    def test_timed(self):
+        seconds, (obj, state_type, state, has_b) = b.timed_object_spec(
+            '60@0xfc0e45a3:3:0:0x808004fa:1={"0": {"0": 2}}')
+        self.assertEqual(seconds, 60)
+        self.assertEqual(obj, {0: 0xFC0E45A3, 4: 3, 6: 0})
+        self.assertEqual((state_type, state, has_b), (0x808004FA, {0: {0: 2}}, True))
+
 
 if __name__ == "__main__":
     unittest.main()

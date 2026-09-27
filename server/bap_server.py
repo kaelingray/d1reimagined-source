@@ -401,6 +401,12 @@ def object_spec(value):
     return {0: group, 4: kind, 6: index}, state_type, keys(json.loads(body or "{}")), has_b
 
 
+def timed_object_spec(value):
+    """Parse --ah-object-at SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON: (seconds, object_spec)."""
+    seconds, _, spec = value.partition("@")
+    return float(seconds), object_spec(spec)
+
+
 def default_baseline(key, kind, index, has_b=False):
     """A baseline without fields (reset to the type's defaults) for replicated object key/kind/index."""
     return {0: key, 4: kind, 6: index}, None, None, has_b
@@ -703,6 +709,7 @@ def handle(conn, peer, args):
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
     baselines_stamp = None  # modification time of --ah-baselines-watch when last read
+    objects_applied = 0  # --ah-object-at entries already sent (they are sorted by time)
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
@@ -948,6 +955,23 @@ def handle(conn, peer, args):
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:])
                         conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                         log(f"[{tag}] world state: zone set -> {zone_now}")
+                if sim_build and objects_applied < len(args.ah_object_at):
+                    # Object state changes over time, the way the host advances script state
+                    # (e.g. a bubble's objective sensor, kind 3): replace the object's state.
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    changed = False
+                    while (objects_applied < len(args.ah_object_at)
+                           and time.time() - joined_ >= args.ah_object_at[objects_applied][0]):
+                        seconds, spec = args.ah_object_at[objects_applied]
+                        ident = (spec[0][0], spec[0][4], spec[0][6])
+                        objects_[:] = [o for o in objects_ if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
+                        objects_applied += 1
+                        changed = True
+                        log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {spec[2]} (at {seconds:g} s)")
+                    if changed:
+                        at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
+                        sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
+                        sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
@@ -1122,6 +1146,11 @@ def main():
                     metavar="GROUP:KIND:INDEX:TYPE[:B]=JSON",
                     help="with --ah-roster, replicate this object with an explicit state of TYPE (fields "
                          "by offset, e.g. 0x992bb471:0x20:7:0x80802a1b={\"0\": 1}); repeatable")
+    ap.add_argument("--ah-object-at", action="append", default=[], type=timed_object_spec,
+                    metavar="SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON",
+                    help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
+                         "after the join, replacing any earlier state of the object (repeatable; e.g. "
+                         "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
     ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "
@@ -1148,6 +1177,7 @@ def main():
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args()
+    args.ah_object_at.sort(key=lambda entry: entry[0])
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
