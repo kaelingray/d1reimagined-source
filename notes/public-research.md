@@ -53,7 +53,10 @@ checkpoint notes stay the record of what the client actually does.
    message type/body once, in time order next to the stand-in's pushes. Once a report is
    known, `bap_server.py --ah-on TYPE/REGEX=>SECONDS@OBJECT` steps the next object when the
    client sends it, the way the real script reacts to sense state.
-2. **Transitions start on the client.** From the highway start (bubble 14) with bubble 3
+2. **Transitions start on the client.** (Static analysis since then supports this: the
+   world-controller update `0x31dab0` maps the local player's position to a bubble and targets
+   its base slice set, with no host message involved; orbit checkpoint, "how a slice-set switch
+   starts". Runbook TEST368 tests it.) From the highway start (bubble 14) with bubble 3
    registered, walk through the Wall into The Breach instead of sending a zone schedule. Hook the
    slice-set loader `0x13f8ec`, the progress poster `0x3204a8` and the notification entry
    `0x42a498`, and watch the lobby log for a new `createSession`. Expectation: precaching (package

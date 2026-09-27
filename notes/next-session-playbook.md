@@ -17,68 +17,67 @@ python -m unittest discover -s scripts -p "test_*.py"
 `server\test_ah_session.py` now drives the stand-in end to end (handshake, join, heartbeats,
 object steps) with a fake client, so a stand-in change that breaks the join shows up here first.
 
-## 1. Offline static analysis (no emulator)
+## 1. Offline analysis (done in the cloud session; what is left)
 
-EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`):
+The cloud session ran the EBOOT and package analysis on the uploaded data (orbit checkpoint,
+"Static analysis of the uploaded EBOOT" and "PS3 packages read offline"). Left for the PC:
 
 ```powershell
-python scripts\d1_eboot.py xref "Change slice-set"     # PS4 build has this; the formatter is on the switch path
-python scripts\d1_eboot.py xref "Change world"
-python scripts\d1_eboot.py strings --grep slice
-python scripts\d1_eboot.py xref "objective sensor client update state"   # sanity: expect 0x1f6e98 in 0x1f6aa4
-python scripts\d1_eboot.py callers 0x13f8ec            # who loads slice sets
-python scripts\d1_eboot.py callers 0x42a498
+# the disc's package names, so manifest package ids map to names (cloud has only ten packages)
+Get-ChildItem local\01_WORKING\ps3_destiny\PS3_GAME\USRDIR\packages -Name > local\package-names.txt
+python scripts\d1_pkg.py named local\01_WORKING\ps3_destiny\PS3_GAME\USRDIR\packages > local\named-tags.txt
 python scripts\d1_addresses.py --ghidra local\d1_labels_ghidra.py        # optional: labels for Ghidra
 ```
 
-The sanity line checks the tool against a known result first. If "Change slice-set" exists, put
-its function into the TEST367 watch list below (`d1_eboot.py func <xref pc>` gives the start).
+Both text files are small and hold no game data; adding them to the data repo lets the next cloud
+session map the 136 bubble definitions and 81 activity infos in the manifests to packages. Tag
+contents need a user-owned `oo2core_3_win64.dll` (`d1_pkg.py extract ... --oodle <dll>`): every
+PS3 tag block is compressed with the 0xB7 Oodle framing.
 
-Packages (`local\01_WORKING\ps3_destiny\PS3_GAME\USRDIR\packages`):
+## 2. TEST367: the slice-set switch chain, host-pushed (expected: no switch)
 
-```powershell
-python scripts\d1_pkg.py named --grep cosmo            # activity/bubble roots by name
-python scripts\d1_pkg.py named --grep highway
-python scripts\d1_pkg.py info <one package from the output above>   # codec of the compressed blocks
-python scripts\d1_pkg.py blocks <same package> --verify              # confirms the layout (SHA-1)
-```
-
-Record in the notes: the named tags and class hashes for `act_cosmo_m0_highway`, and the block
-header `info` prints. D1 PS4 blocks start with 0xB7 and need `oo2core_3_win64.dll`; if the PS3
-ones do too, extraction (`d1_pkg.py extract ... --oodle <dll>`) needs a user-owned copy.
-
-## 2. TEST367: what carries a mid-session switch
+Static analysis (orbit checkpoint, "how a slice-set switch starts") says a mid-mission switch
+starts from the player's position (`0x31dab0`) or from a pending request (`0x31bcd0`, fed by the
+record at simulation +0x5080), and ends in engine request slot 2 (`0x11f91c`). These watches cover
+the whole chain; the budgets are large so none runs out (TEST366 stopped at 10 hits):
 
 ```powershell
+$w = @('25715c 5000 r5:0',                 # type-11 world state still handled in the world?
+       '31dab0 3000 u r3+0x89:1 r3+0x90:4', # player-bubble follower: slice state / current object
+       '31d358 500 r4:0 r5:0 r6:4',         # target written: state (2 arrival, 3 player bubble, 5 request), index, hash
+       '31bcd0 500 r3:0 r4:4 r5:0',         # pending request raised
+       '4e9470 3000 u r5:16 r6:20',         # record at sim+0x5080 vs the spawner's copy
+       '11f91c 500 r4:0 r5:12')             # engine request posted (slot 2 = change slice set)
 scripts\Invoke-ObjectExperiment.ps1 -Name TEST367 -Bubble 14 `
-  -ExtraAh @('--ah-bubble-states','-1,14=0,3=0','--ah-zone-schedule','24@150') `
-  -Watch @('42a498 4000 u r3:48 r4:48 r5:48','258778 4000 u r3:32 r4:32 r5:32')
+  -ExtraAh @('--ah-bubble-states','-1,14=0,3=0','--ah-zone-schedule','24@150') -Watch $w
+Select-String 'D1P' local\SIGNON_LOCAL\logs\TEST367-rpcs3.log | Select-Object -Last 60
 ```
 
-Add a watch line for the "Change slice-set" function from step 1 if it was found. Afterwards:
-`Select-String D1P local\SIGNON_LOCAL\logs\TEST367-rpcs3.log`. Look for hits after the switch at
-150 s and the subtype at payload+9.
+Read: whether `0x25715c` keeps hitting about once a second after 5:21 (type 11 is handled in
+the world); `0x31d358` with r4 = 2 at arrival and no 3/5 later; no `0x11f91c` with r4 = 2 after
+the join. The 150 s zone schedule should change nothing.
 
-## 3. Prediction 2: walk into The Breach instead of scheduling a switch
+## 3. TEST368: walk into The Breach (expected: the client switches by itself)
 
-Same setup without `--ah-zone-schedule`. The login automation needs the keyboard pad, so walk
-with the keyboard too: `scripts\Set-PadConfig.ps1 -Mode keyboard`, write the TEST367 watches to
-`local\RPCS3_TEST048_SETUP\d1\d1ppu.txt`, then
-`scripts\Invoke-MissionRun.ps1 -Name TEST368 -ExtraAh @('--ah-bubble-states','-1,14=0,3=0')`.
-Dismiss the urgent message (`scripts\Invoke-RpcsStep.ps1 -Keys X`) and walk through the break in
-the Wall towards The Breach, in the game window with the keyboard mapping (W forward, J/L turn,
-Space = the Ghost's nav mode, as in `Invoke-Explore.ps1`), or step by step with
-`Invoke-RpcsStep.ps1 -Keys W -HoldMs 3000` and a screenshot after each step. Afterwards close
-RPCS3 and run `Set-PadConfig.ps1 -Mode xinput`. Then:
+Same watches, no zone schedule, and a person walking. `Invoke-ObjectExperiment.ps1` switches to
+the keyboard pad, dismisses the urgent message and takes screenshots; during its `-Seconds`
+window walk in the game window with the keyboard mapping (W forward, J/L turn, Space = the
+Ghost's nav mode, as in `Invoke-Explore.ps1`) through the break in the Wall towards The Breach:
 
 ```powershell
+scripts\Invoke-ObjectExperiment.ps1 -Name TEST368 -Bubble 14 -Seconds 600 `
+  -ExtraAh @('--ah-bubble-states','-1,14=0,3=0') -Watch $w
 python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST368-ahl.log
+Select-String 'D1P' local\SIGNON_LOCAL\logs\TEST368-rpcs3.log | Select-Object -Last 60
 Select-String 'createSession' local\SIGNON_LOCAL\logs\TEST368-lobby.log
 ```
 
-Expected if the talk's model holds: package opens about 15 s before the edge of the bubble, a
-new client -> host message type (or a new type-15 body) near the edge, and either no host action
-needed or a lobby request.
+Expected from the static analysis: at the bubble edge `0x31d358` with r4 = 3 and r5 = 24 (The
+Breach's base slice set), then `0x11f91c` with r4 = 2, and the Breach loading, all without any
+host action. Bubble 3 must be registered (`3=0`), or its slice set is not in the scenario object
+table and the follower ignores it. Also look at what the client sends around the edge
+(`ah_log_summary.py`) and whether the lobby sees a new `createSession` (public bubble
+matchmaking, `public-research.md`).
 
 ## 4. Prediction 1: sense state from an armed objective
 

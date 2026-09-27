@@ -547,5 +547,9 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   notifications enter at `0x42a498` (subtype at payload+9, 1..0x2d) and go to the receiver object
   registered at +4 (virtual call); the host-session type table is `0x258778` (17 entries at
   0x175cf5c). TEST367 traces both across the switch.
+  Later check (uploaded log): both `0x25715c` and `0x31f6bc` stop at exactly 10 hits, which
+  looks like the watch's hit budget, so the "no type 11 in the world" reading is unconfirmed;
+  static analysis shows mid-mission switches start from the player's position instead (orbit
+  checkpoint, "how a slice-set switch starts").
 - 353 (second PC): **bubble 9 = TERRESTRIAL COMPLEX** (underground hangar with containers and a
   truck; no bubble-local group; 4 D1FPRELOAD).

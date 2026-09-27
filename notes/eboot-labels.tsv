@@ -132,3 +132,27 @@
 0x18eb978	g_in_activity_state	in-activity state object (leave-condition mask at +8)
 0x18ea618	g_zone_object	zone object
 0x18ea604	g_slice_set	slice-set object (0x410 bytes)
+# --- engine requests and slice-set transitions (static analysis of the uploaded EBOOT)
+0x11f690	engine_requests	returns the engine request table *(0x18a4328)
+0x11f80c	engine_request_register	(table, slot, handler, describer, flags): +0x80/+0xc8 + 4*slot
+0x11f91c	engine_request_post	(table, slot, params): flag 0 -> 1, copy 0x1804-byte params, flag 2
+0x11fa88	engine_request_is_posted	slot has a handler and flag == 2
+0x302100	engine_requests_register_all	registers the 18 engine request slots
+0x30256c	engine_request_slice_set_handler	slot 2 handler (change slice set)
+0x303330	describe_deinstantiate_slice_set	slot 1 describer "De-instantiate CURRENT slice-set."
+0x30335c	describe_change_slice_set	slot 2 describer "Change slice-set (slice-set='%d', spawn='%s')."
+0x3033a0	describe_change_world	slot 3 describer "Change world (...)"
+0x30e128	wc_zone_state	zone state object (state +0, target index +0xa8, hash +0xac)
+0x31e658	wc_update	world-controller update: pending request, player bubble, arrival, group copy
+0x31e300	wc_apply_pending_request	slice +0x220/+0x224 request -> target state 5
+0x31dab0	wc_follow_player_bubble	player position -> bubble -> base slice set -> target state 3
+0x31d778	wc_arrival_target	arrival target (state 2)
+0x31bcd0	wc_request_slice_set	writes the pending request slice +0x220/+0x224/+0x228
+0x35bfec	spawner_transition_request	request state machine (vtable slot 29): record at sim+0x5080
+0x4e9470	spawner_vslot29	thunk -> 0x35bfec
+0x35be78	spawner_component_ctor	installs the spawner component vtable 0x12bbc18
+0x12bbc18	g_spawner_component_vtable	spawner component vtable (slot 28 0x4e9444, slot 29 0x4e9470)
+0x1c922c	sim_update_spawner_records	calls vtable slots 28/29 with sim+0x5078 / sim+0x5080
+0x1c5f08	host_sims_update	walks the host sessions' simulations -> 0x1c922c
+0x2572e4	host_type11_thunk	type-11 dispatch entry -> 0x25715c
+0x1f6e70	objective_sensor_string_user	references "objective sensor client update state" (from 0x35b844)

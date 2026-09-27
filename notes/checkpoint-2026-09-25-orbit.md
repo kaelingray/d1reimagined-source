@@ -1141,3 +1141,84 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
   host must command slice-set transitions some other way. TEST366 traces the type-11 handler
   `0x25715c`, the slice-set loader `0x13f8ec`, `0x31f6bc` and the reason/state poster
   `0x3204a8` across a 112 -> 24 (The Breach) switch.
+
+## Static analysis of the uploaded EBOOT: how a slice-set switch starts (2026-09-27 evening)
+From the decrypted EBOOT in the private `d1xenia-data` repo (`scripts/d1_eboot.py`), the TEST364-366
+logs there and the exported schemas. Nothing here has run yet; the hooks in
+`next-session-playbook.md` step 2 check it.
+- **Engine requests.** `0x302100` registers 18 request slots through `0x11f80c` (table from
+  `0x11f690()` = `*(0x18a4328)`: handler descriptors at +0x80 + 4*slot, describers at +0xc8,
+  flags at +0x114, a 0x1804-byte parameter block per slot from +0x15c). Describers name them:
+  slot 1 = "De-instantiate CURRENT slice-set." (`0x303330`), slot 2 = "Change slice-set
+  (slice-set='%d', spawn='%s')." (`0x30335c`; handler `0x30256c`), slot 3 = "Change world
+  (...)" (`0x3033a0`; handler `0x302728`). `0x11f91c(table, slot, params)` posts one (flag 0 ->
+  1, parameters copied, flag 2); `0x11fa88` tests a slot for "posted".
+- **Only two places post slot 2**: the world load machine `0x4b2d00` (`0x4b3330`, at load) and
+  the world-controller zone machine `0x31eaf8` (`0x31ebf4`, in the world). The zone machine reads
+  the zone state object (`0x30e128()`): state byte +0, target slice-set index +0xa8 and hash
+  +0xac; when the target exists in the scenario object table (`0x140820` status 2/3) and slot 2
+  is free, it posts {0xc, index, hash}. The zone state is filled from the world controller's
+  slice record by event 0x4a / RPC entry 11 (see "Where the zone record comes from" above).
+- **Who sets the slice record's target** (`0x31d358(slice, state, index, &hash)`): the
+  world-controller update `0x31e658`, which runs only while `0x66c2d4()` == 0 (this machine is
+  the authority over the slice set; string "authority-over-current-slice-set") and slice +0x81
+  == 0, +0x88 != 0, state +0x89 < 6, +0x80 == 0. It calls, in order:
+  - `0x31e300`: a **pending request** at slice +0x220 (i32 index), +0x224 (hash), +0x228 (u8):
+    when the index is not -1, the target becomes {state 5, index, hash} and the request is
+    cleared (+0x220 = -1, +0x224 = 0x811c9dc5).
+  - `0x31dab0`: **follows the local player**. It resolves the local player's entity
+    (`0x68324c(0)` -> `0x2d6544`), walks a list of volumes testing positions, takes the bubble the
+    player is in, converts it with `0x14a8dc` (8 * bubble) and, when that base slice set is present
+    in the scenario object table (`0x140820` status not 5), writes target {state 3, index}.
+  - `0x31d778`: the arrival target (state 2) described earlier.
+  So a mid-mission bubble change starts on the client, from the player's position (a z-leg), as
+  in Bungie's description of bubble transitions (`public-research.md`). A host world-state delta
+  naming another zone set is not part of this path, which fits TEST350 and TEST366.
+- The pending request (+0x220) is written only by `0x31bcd0(index, &hash, u8)` (when
+  `0x66c2d4()` == 0 and slice +0x88 != 0). Its one caller is `0x35bfec`, a small request state
+  machine in the player spawner, reached through the spawner component's vtable (`0x12bbc18`,
+  installed by `0x35be78`; slot 29 = `0x4e9470` -> `0x35bfec`). Every tick `0x1c922c(sim)` (from
+  `0x1c5f08`, which walks the host sessions' simulations) calls vtable slot 28 with
+  (sim, sim+0x5078, sim+0x18) and slot 29 with (sim, sim+0x5080, sim+0x20). Slot 29 compares the
+  record at sim+0x5080 {u8 state @0, u8 @4, i32 index @8, u32 hash @0xc} with its copy at sim+0x20
+  and, on a new request, raises the pending slice-set request: a **host-driven teleport /
+  slice-set change** path (EBOOT transition kinds include `teleportation`). What fills sim+0x5080
+  is still open: it lies between the world-state copy (sim+8, 0x5038 bytes) and the activity
+  state (sim+0x50b0), and no host message handler touches it directly (checked two call levels
+  deep for all 17 types).
+- **Host message dispatch.** `0x258778` looks the subtype up in 17 {type, handler descriptor}
+  pairs at `0x175cf5c`: 0 `0xd0d020`, 1 `0xd0d250`, 2 `0xd0d3f0`, 4 `0xd0d560`, 5 `0x25b920`, 7
+  `0x257028`, 10 `0xd0d6a8`, 11 `0x2572e4` (a thunk to `0x25715c`), 18 `0xd0d6e8`, 23 `0xd0d88c`,
+  24 `0xd0da9c`, 27 `0xd0dca4`, 29 `0xd0dde8`, 38 `0x25b9a8`, 39 `0xd0df2c`, 42 `0xd0e08c`, 43
+  `0xd0e214`.
+- **TEST366 caveat.** Its hook log (in the data repo) has exactly 10 hits each for `0x25715c` and
+  `0x31f6bc`; six of the `0x25715c` hits fall within 1.6 ms at emu 5:15.95 (queued type-11
+  messages handled in one burst). Two watches ending at exactly 10 hits looks like the watch's hit
+  budget running out, so "type 11 no longer reaches the handler in the world" is not
+  established. Re-check with a large budget (`25715c 5000 ...`).
+- **Correction:** the string "objective sensor client update state" is referenced at
+  `0x1f6e98` in `0x1f6e70` (called from `0x35b844`), the function after the kind-3 handler;
+  `0x1f6aa4` ends at the tail branch `0x1f6e6c`.
+- Client -> host messages in TEST366 (`scripts/ah_log_summary.py`): 3 (join), 17 (8 bytes), 37
+  (1087), 21 (164, 10, 16, 28 bytes: different bodies), 15 (1 byte, ~30/s), 20 (1536), 36 (4), 6
+  (41 bytes, three times with a counter 1/2/3 at the end, from emu ~5:27) and 18 (54 bytes). After
+  the zone-set switch at 20:25:46 the client sent nothing new. The client -> host type table
+  (`*(0x179eba4)` = 0x18cffe0) is filled at run time, so the struct types need a run-time dump.
+
+## PS3 packages read offline (2026-09-27 evening)
+`scripts/d1_pkg.py` on the ten packages in the data repo: every header, table and block SHA-1
+checks (791 blocks), so the big-endian v24 layout is right. Build string `live tool_lib test
+pc_x64 41345.14.06.30.2046.live`, build time 2014-06-30/07-01.
+- Compressed blocks (flag 0x100) start with 0xB7, the older Oodle framing of the PS4 D1 study:
+  reading tag data needs a user-owned `oo2core_3_win64.dll`. Uncompressed blocks in the activity
+  packages hold only Wwise streams (type 8:21), so no mission data is readable without it.
+- **Charm's Rise of Iron class ids hold for this 2014 build**: the named tags are
+  `map:cosmo:root` / `map:bootstrap:root` (class 0x8080052e = SActivity), `ambient_cosmo:
+  scenario_client` / `ambient_bootstrap:scenario_client` (0x80800616, the activity info type),
+  `ambient_cosmo` / `ambient_bootstrap` / `map:cosmo:unused` (0x808008ba).
+- The shared manifests (packages 0x0430/0x0431) are stored uncompressed: 12,159 global-tag
+  records {u32 size, u32 own tag, u32 child class, u32 child tag, dependency package-id list},
+  14 classes. Among them 21 SActivity roots, 81 activity infos (0x80800616), 100 x 0x808008ba and
+  136 bubble definitions (manifest class 0x80800580, as in the PS4 study); 8 bubble definitions
+  sit in the Cosmodrome destination package 0x026d. Mapping the other package ids to names needs
+  the disc's package file list.
