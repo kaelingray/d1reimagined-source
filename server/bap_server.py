@@ -304,6 +304,34 @@ ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
 AH_SIMULATION = 5
 OBJECT_ID_TYPE, SIM_PLAYER_TYPE, GAME_MODE_TYPE = 0x808004B1, 0x808022A5, 0x808008A3
 AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
+# Client -> host type 21 (sent by 0x257d28): one present bit + a delta of the client's 0x220-byte
+# state 0x80800c56 (host +0x6498 against the last sent copy at +0x66b8, encoder 0x1ca00c). Its
+# +0xb8 is the world controller's slice-set record 0x80800d9f: current record @0, target record
+# @0xa0 (0x80800d82: i32 slice-set index, u32 hash, i32), i8 @0x140/0x141, u3 state @0x142. The
+# client is the authority over its slice set and reports switches here (TEST366: target 112,
+# then current 112 with state 0).
+AH_CLIENT_STATE, CLIENT_STATE_TYPE = 21, 0x80800C56
+
+
+def client_slice_state(schema, body):
+    """Summary of the slice-set part of a type-21 client state delta, or None when the delta
+    does not carry it (or the schema lacks the type)."""
+    if not schema or f"{CLIENT_STATE_TYPE:#x}" not in schema or not body:
+        return None
+    reader = investment.BitReader(body)
+    if not reader.get(1):
+        return None
+    zone = investment.decode_from(reader, schema, CLIENT_STATE_TYPE).get(0xB8)
+    if not zone:
+        return None
+    parts = []
+    for name, off in (("current", 0), ("target", 0xA0)):
+        if off in zone:
+            rec = zone[off]
+            parts.append(f"{name} {rec.get(0)}:{rec.get(4, 0):#010x}")
+    if 0x142 in zone:
+        parts.append(f"state {zone[0x142]}")
+    return ", ".join(parts) or None
 
 
 def machine_list(schema, machine_ids):
@@ -871,6 +899,13 @@ def handle(conn, peer, args):
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
                 body = payload[21:21 + ah_len]
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+                if ah_type == AH_CLIENT_STATE:
+                    try:
+                        summary = client_slice_state(args.activity_schema, body)
+                    except ValueError:
+                        summary = None
+                    if summary:
+                        log(f"[{tag}] client slice set: {summary}")
                 for rule_index, (on_type, on_body, delay, spec) in enumerate(args.ah_on):
                     # Script steps driven by what the client reports (sense state), not by time
                     if (rule_index not in reactions_fired and ah_type == on_type

@@ -1199,6 +1199,21 @@ logs there and the exported schemas. Nothing here has run yet; the hooks in
 - **Correction:** the string "objective sensor client update state" is referenced at
   `0x1f6e98` in `0x1f6e70` (called from `0x35b844`), the function after the kind-3 handler;
   `0x1f6aa4` ends at the tail branch `0x1f6e6c`.
+- **Client -> host senders** (each sends through the host messaging object, host +0xba8, virtual
+  +0x18, message number in r5; most encode a struct with a per-message descriptor global at
+  0x179eb80-0x179ec10 through `0x25bd0c`): 3 join (`0x259c84`), 6 raw (`0x258678`, reached only
+  through the interface table at 0x12b70b0), 8 (`0x259300`), 12 (`0x259904`), 13 (`0x259afc`), 14
+  (`0x259da4`), 15 (`0x258138`, the ~30/s one), 17 (`0x259f10`), 18 (`0x25a21c`), 19 (`0x2587ec`),
+  20 (`0x258934`), 21 (`0x257d28`), 22 (`0x257e18`), 25 (`0x25b274`), 26 (`0x25b46c`), 28
+  (`0x258c08`), 30 (`0x258d2c`), 31 (`0x258f0c`), 32 (`0x25b63c`), 33 (`0x25a548`), 35
+  (`0x25a094`), 36 (`0x25a73c`), 37 (`0x25a360`), 44 (`0x2590d8`), 45 (`0x2591ec`).
+- **Type 21 = the client's own state, including its slice set.** `0x257c80` encodes one present
+  bit + a delta (`0x1ca00c`) of the 0x220-byte struct 0x80800c56 at host +0x6498 against the last
+  sent copy at +0x66b8. Its +0xb8 is 0x80800d9f, the world controller's slice-set record: current
+  record @0, target record @0xa0 (0x80800d82: i32 slice-set index, u32 hash, i32), u3 state
+  @0x142. TEST366 decoded: join -> state 5; 20:23:22 target 112 (state 4); 20:23:27 current 112,
+  target -1, state 0. So the client reports every slice-set change to the host; the BAP stand-in
+  now logs these as "client slice set: ..." (`client_slice_state`).
 - Client -> host messages in TEST366 (`scripts/ah_log_summary.py`): 3 (join), 17 (8 bytes), 37
   (1087), 21 (164, 10, 16, 28 bytes: different bodies), 15 (1 byte, ~30/s), 20 (1536), 36 (4), 6
   (41 bytes, three times with a counter 1/2/3 at the end, from emu ~5:27) and 18 (54 bytes). After

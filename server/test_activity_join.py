@@ -171,3 +171,20 @@ class ObjectSpec(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientSliceState(unittest.TestCase):
+    def test_type21_slice_record(self):
+        schema = {
+            f"{b.CLIENT_STATE_TYPE:#x}": {"size": 0x220, "fields": [opt_nested(0xB8, 0x80800D9F)]},
+            "0x80800d9f": {"size": 0x148, "fields": [
+                opt_nested(0, 0x80800D82), opt_nested(0xA0, 0x80800D82), prim(0x142, 3, 3, 1, 1)]},
+            "0x80800d82": {"size": 0xA0, "fields": [prim(0, 5, 32, 0x80000000), prim(4, 9, 32)]},
+        }
+        w = investment.BitWriter()
+        w.put(1, 1)
+        investment.encode_into(w, schema, b.CLIENT_STATE_TYPE,
+                               {0xB8: {0: {0: 112, 4: 0x811C9DC5}, 0xA0: {0: -1, 4: 0x811C9DC5}, 0x142: 0}})
+        self.assertEqual(b.client_slice_state(schema, w.data()),
+                         "current 112:0x811c9dc5, target -1:0x811c9dc5, state 0")
+        self.assertIsNone(b.client_slice_state({}, w.data()))
