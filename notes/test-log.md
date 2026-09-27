@@ -533,3 +533,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   `0xb2f2e0` sits next to kind 0x1d's `0xb2f99c` (mission-script code) and just copies the
   12-byte state {object id, u32} to the component at +0x108, so it is kind 0x1c; the other two
   are kinds 2 and 0x28 (pairing by the r4 state-type dump still to do).
+- 352 (second PC): **bubble 8 = LUNAR COMPLEX** (dark interior with a Fallen shrine; no
+  bubble-local group; 9 D1FPRELOAD).
