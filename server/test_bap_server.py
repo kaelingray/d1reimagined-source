@@ -41,3 +41,10 @@ class ShelloReply(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientConfigReply(unittest.TestCase):
+    def test_fields_are_protobuf_varints(self):
+        self.assertEqual(bap.client_config_reply(), bytes.fromhex("08011001"))
+        self.assertEqual(bap.client_config_reply(0, 1), bytes.fromhex("08001001"))
+        self.assertEqual(bap.client_config_reply(300, 2), bytes.fromhex("08ac021002"))
