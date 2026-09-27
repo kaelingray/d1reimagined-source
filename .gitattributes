@@ -1,0 +1,8 @@
+/eboot/* -text -diff
+/logs/* -text -diff
+/packages/* -text -diff
+/schema/* -text -diff
+/SHA256SUMS.txt text eol=lf
+/README.md text eol=lf
+/.gitignore text eol=lf
+/.gitattributes text eol=lf
