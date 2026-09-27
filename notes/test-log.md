@@ -519,3 +519,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   client kept sending type-15 notifications, ~30/s, body 00 with an occasional 0x41, throughout).
   Fixed; the cinematic test repeats as TEST363. The end-of-run export failed because the client
   had already left the world.
+- 363 (second PC, fixed stand-in): slot 113 with roster and kind-4 values 1/2/3: heartbeats
+  held (233 over 4 min, no baboon), every record awaiting 0, but the screen stayed black (Level Up
+  toast, no HUD) - no cinematic. Static re-reading of kind 4: `0x200014` compares the new u32
+  with the counter of the entity the object tracks (+0x2e4 via `0x1feff0`) and, if higher,
+  destroys that entity (`0x1323e0`) and clears the handles so it is recreated: kind 4 is a
+  **spawn slot with a generation counter**, not a play trigger (28 in the highway start, 20 in
+  The Breach, 5 in Dock 13). Next: first-call coverage in 112 (TEST364) vs 113 (TEST365) to see
+  how far the cinematic code gets.
