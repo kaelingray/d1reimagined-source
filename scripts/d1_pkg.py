@@ -35,6 +35,7 @@ Usage:
   python scripts/d1_pkg.py extract PKG INDEX|TAGHASH OUT [--oodle DLL]
   python scripts/d1_pkg.py scan [DIR] --find TEXT|--hex HEX [--oodle DLL]  (search entry data)
   python scripts/d1_pkg.py bubbles 80cda002 [DIR] --oodle DLL   (a destination's bubbles and names)
+  python scripts/d1_pkg.py groups PKG --oodle DLL [--key K] [--objects]  (replicated entity groups)
 """
 
 import argparse
@@ -425,6 +426,46 @@ def cmd_bubbles(a):
             names.get(r[2], f"{r[2]:#010x}") + f" (kind {r[3] >> 24})" for r in others[:12]) + " ...")
 
 
+# Replicated entity groups (class 0x8080076e): {u32 size, u32 destination hash, u32 group key
+# (FNV-1 of the group's name, the key of its replicated object ids), u32, array @0x10 of objects
+# {u8 kind, 3 bytes, u32}, u32, array @0x1c, ...}, then one NUL-terminated dev name per object in
+# the same order. An object's replicated id is (group key, kind, position in this list): bubble
+# 14's group 0xecf574b5 has kind 4 at 0-27 (o_ghost_*, pigeon_1-22), kind 1 sq_ghost at 28, as in
+# the live client's records (TEST362).
+GROUP_CLASS = 0x8080076E
+
+
+def entity_group(data):
+    key = struct.unpack_from(">I", data, 8)[0]
+    count, off, _ = dyn_array(data, 0x10)
+    kinds = [data[off + 8 * i] for i in range(count)]
+    names = [m.group(1).decode("latin-1")
+             for m in __import__("re").finditer(rb"([\x20-\x7e]+)\x00", data[off + 8 * count:])]
+    names = names[-count:] if len(names) >= count else names + [""] * (count - len(names))
+    return key, list(zip(kinds, names))
+
+
+def cmd_groups(a):
+    oodle = Oodle(a.oodle) if a.oodle else None
+    want = {parse_int(k) for k in a.key.split(",")} if a.key else None
+    for path in packages(a.paths):
+        p = Package(path)
+        for e in p.entries:
+            if e["reference"] != GROUP_CLASS:
+                continue
+            try:
+                key, objects = entity_group(p.entry_data(e["index"], oodle))
+            except (ValueError, struct.error, RuntimeError) as exc:
+                print(f"# {path.name} entry {e['index']}: {exc}", file=sys.stderr)
+                continue
+            if want and key not in want:
+                continue
+            print(f"group {key:#010x} ({len(objects)} objects) tag {tag_hash(p.pkg_id, e['index']):#010x} {path.name}")
+            if a.objects:
+                for i, (kind, name) in enumerate(objects):
+                    print(f"  {key:#010x}/{kind:#x}/{i} {name}")
+
+
 def cmd_scan(a):
     needle = bytes.fromhex(a.hex) if a.hex else a.find.encode()
     oodle = Oodle(a.oodle) if a.oodle else None
@@ -463,6 +504,10 @@ def main(argv=None):
     s = sub.add_parser("bubbles"); s.add_argument("root", help="destination root tag, e.g. 80cda002")
     s.add_argument("paths", nargs="*"); s.add_argument("--oodle"); s.add_argument("--names")
     s.set_defaults(fn=cmd_bubbles)
+    s = sub.add_parser("groups"); s.add_argument("paths", nargs="*"); s.add_argument("--oodle")
+    s.add_argument("--key", help="only these group keys (comma-separated)")
+    s.add_argument("--objects", action="store_true", help="list each object: key/kind/index name")
+    s.set_defaults(fn=cmd_groups)
     s = sub.add_parser("scan"); s.add_argument("paths", nargs="*")
     g = s.add_mutually_exclusive_group(required=True); g.add_argument("--find"); g.add_argument("--hex")
     s.add_argument("--oodle"); s.set_defaults(fn=cmd_scan)
