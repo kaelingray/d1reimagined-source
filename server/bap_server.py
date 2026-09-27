@@ -579,6 +579,9 @@ def replace_object(objects, spec):
     return ident
 
 
+ANY_MESSAGE = -1  # --ah-on / mission rule type matching every client message type
+
+
 class ObjectIdMatcher:
     """Matches a client message body (hex, as `--ah-on` regexes see it) whose bits contain the
     encoded id of one replicated object (type 0x808004b1: u32 group key, 6-bit kind, 16-bit
@@ -610,15 +613,16 @@ class SliceSetMatcher:
 def resolve_values(value, context):
     """Fill mission placeholders at the moment a state is sent: "$player" (the local player's
     machine id, the --ah-sim-player owner) and "$now" (the host simulation tick, see
-    --ah-sim-clock; 0 without it)."""
+    --ah-sim-clock; 0 without it), optionally with an offset ("$now+300")."""
     if isinstance(value, dict):
         return {k: resolve_values(v, context) for k, v in value.items()}
     if isinstance(value, list):
         return [resolve_values(v, context) for v in value]
     if isinstance(value, str) and value.startswith("$"):
-        if value[1:] not in context:
+        match = re.fullmatch(r"\$(\w+)([+-]\d+)?", value)
+        if not match or match.group(1) not in context:
             raise ValueError(f"unknown mission placeholder {value}")
-        return context[value[1:]]
+        return context[match.group(1)] + int(match.group(2) or 0)
     return value
 
 
@@ -647,7 +651,7 @@ def expand_mission(mission, schema):
             timed += [(float(step["at"]), change) for change in changes]
             continue
         on = step.get("on")
-        if not on or "type" not in on:
+        if not on or "type" not in on:  # "type": "any" matches every client message type
             raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
         if "object" in on:
             ident = heads[on["object"]][0]
@@ -656,7 +660,8 @@ def expand_mission(mission, schema):
             matcher = SliceSetMatcher(schema, int(on["slice_set"]))
         else:
             matcher = re.compile(on["regex"]) if on.get("regex") else None
-        reactive += [(int(on["type"]), matcher, float(step.get("delay", 0)), change) for change in changes]
+        on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
+        reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
     return timed, reactive
 
 
@@ -1132,7 +1137,7 @@ def handle(conn, peer, args):
                             log(f"[{tag}] world state: zone set -> {zone_now} (following the client)")
                 for rule_index, (on_type, on_body, delay, spec) in enumerate(args.ah_on):
                     # Script steps driven by what the client reports (sense state), not by time
-                    if (rule_index not in reactions_fired and ah_type == on_type
+                    if (rule_index not in reactions_fired and on_type in (ah_type, ANY_MESSAGE)
                             and (on_body is None or on_body.search(body.hex()))):
                         reactions_fired.add(rule_index)
                         reactions_due.append((time.time() + delay, spec, f"type {on_type} rule {rule_index}"))

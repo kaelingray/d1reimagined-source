@@ -96,6 +96,10 @@ class MissionScript(unittest.TestCase):
         self.assertEqual((t1, d1, s1[0][6]), (6, 1.0, 31))
         self.assertEqual(bap.resolve_spec(s1, {"now": 0, "player": 7})[2], {4: 7})
         self.assertTrue(m2.search("b80000") and not m2.search("00b8"))
+        self.assertEqual(bap.resolve_values(["$now+30", "$now-5"], {"now": 100}), [130, 95])
+        any_rule = bap.expand_mission({"objects": self.MISSION["objects"], "steps": [
+            {"on": {"type": "any", "object": "trig"}, "set": {"other": {"0": True}}}]}, self.SCHEMA)[1][0]
+        self.assertEqual(any_rule[0], bap.ANY_MESSAGE)
         with self.assertRaises(ValueError):
             bap.resolve_values("$later", {"now": 0})
         with self.assertRaises(ValueError):

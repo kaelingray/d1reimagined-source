@@ -5,7 +5,13 @@
     "Order from the reference recording: revival cinematic (third person, then first person), 'Enter the Wall',",
     "trigger at the Wall, 'Find a Weapon' in The Breach, the Ghost's light (pf_104a_pwr), 'Grab the Rifle'.",
     "Field meanings are from the EBOOT handlers; the values marked in the note as guesses are what the runs test.",
-    "Squads (kind 1): a new +0x44 generation re-runs the squad, +0x5c picks the action (1 = spawn is the guess); the Breach squads are placed 20 s after the client reports slice set 24."
+    "Triggers (kind 0x1d): +0 true arms the trigger; the client reports once per arming, when its last report is older than",
+    "the arming time at +4 (0xb2fb68), so +4 = \"$now\" and --ah-sim-clock is required. Which client message carries the",
+    "report is not known yet, so the trigger steps match the trigger's object id in any client message type.",
+    "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
+    "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
+    "the squad; +0x5c says what happens to its current members (0 destroy, 1 release, -1 nothing). What makes the client",
+    "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24."
   ],
   "objects": {
     "cine_revival": "0x992bb471:0x6:1:0x8080254d",
@@ -91,18 +97,19 @@
           "4": 1
         },
         "trig_enter_wall": {
-          "0": true
+          "0": true,
+          "4": "$now"
         }
       }
     },
     {
       "on": {
-        "type": 6,
+        "type": "any",
         "object": "trig_enter_wall"
       },
       "set": {
         "obj_enter_wall": {
-          "0": 2,
+          "0": 3,
           "0x2c0": -1
         },
         "seq_enter_wall_done": {
@@ -118,18 +125,19 @@
           "4": 1
         },
         "trig_investigate": {
-          "0": true
+          "0": true,
+          "4": "$now"
         }
       }
     },
     {
       "on": {
-        "type": 6,
+        "type": "any",
         "object": "trig_investigate"
       },
       "set": {
         "obj_investigate": {
-          "0": 2,
+          "0": 3,
           "0x2c0": -1
         },
         "seq_investigate_done": {
@@ -137,7 +145,8 @@
           "4": 1
         },
         "trig_ghost_light": {
-          "0": true
+          "0": true,
+          "4": "$now"
         },
         "obj_get_weapon": {
           "0": 1,
@@ -148,13 +157,14 @@
           "4": 1
         },
         "trig_get_weapon": {
-          "0": true
+          "0": true,
+          "4": "$now"
         }
       }
     },
     {
       "on": {
-        "type": 6,
+        "type": "any",
         "object": "trig_ghost_light"
       },
       "set": {
@@ -173,12 +183,12 @@
     },
     {
       "on": {
-        "type": 6,
+        "type": "any",
         "object": "trig_get_weapon"
       },
       "set": {
         "obj_get_weapon": {
-          "0": 2,
+          "0": 3,
           "0x2c0": -1
         },
         "seq_get_weapon_done": {
@@ -194,7 +204,8 @@
           "4": 1
         },
         "trig_graveyard": {
-          "0": true
+          "0": true,
+          "4": "$now"
         }
       }
     },
@@ -207,15 +218,15 @@
       "set": {
         "sq_breach_floor_a": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_breach_floor_b": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_breach_wall_l_a": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         }
       }
     }

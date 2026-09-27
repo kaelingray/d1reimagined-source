@@ -2,7 +2,7 @@
   "comment": [
     "The Tower (city_tower_default1): place the vendors and NPCs, which are squads (kind 1) the activity host places.",
     "Groups: 0x8d3f1166 boulevard, 0x19d43443 military/hangar area, 0x8cc31436 underwatch and plaza (see notes/tower.md).",
-    "Squad action as in the mission: a new +0x44 generation, +0x5c = 1 (spawn, still a guess)."
+    "Squad state: a new +0x44 generation re-runs the squad; +0x5c = -1 leaves existing members alone. What makes the client spawn members is still unknown (notes/mission-director.md)."
   ],
   "objects": {
     "obj_patrol_upper": "0x8d3f1166:0x1:2:0x8080071e:1",
@@ -65,215 +65,215 @@
       "set": {
         "obj_patrol_upper": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_vendor_avatar__vendor1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_vendor_nm__vendor1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_kneelers1__kneeler1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_standers_arms_behind_back1__stander2": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_standers_arms_at_sides1__stander2_alt": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_standers_arms_folded1__stander1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_couch_sitters1__sitter3": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_railing_inward1__leaner1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_railing_outward1__leaner1_alt": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_box_sitters1__sitter1_alt": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_the_mask__mask_c": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_walkers1__walker1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_civ_walkers2__walker1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_vendor_black_market__vendor_rail": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_boulevard_vendor_playtest__vendor": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_military_droid_guard1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_ships": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_vanguard": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_future_war_cult": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_dead_orbit": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "hunter_clubhouse_sitters1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "hunter_clubhouse_sitters2": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "hunter_clubhouse_keyboarders1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_ships_helpers1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_weapons_helpers1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "future_war_cult_sitters1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "future_war_cult_sitters2": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "ship_signalers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "ship_welders": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "dead_orbit_standers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "vendor_black_market": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_droid_repair": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_vendor_guardian_mentor": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_vendor_hunter_mentor": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_vendor_warlock_mentor": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_cannon_workers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_workstation_workers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_droid_greeters": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_welder_workers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_crate_workers": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_walkers1": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_walkers2": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_shaxx": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_artcite": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_droid_greeters": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_vendor_cryptarch": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_vendor_postmaster": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_vendor_gunsmith": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_vendor_mtx": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_vendor_city_bounty": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_underwatch_vendor_black_market": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         },
         "sq_plaza_temp": {
           "0x44": 1,
-          "0x5c": 1
+          "0x5c": -1
         }
       }
     }

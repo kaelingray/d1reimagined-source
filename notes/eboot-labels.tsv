@@ -172,3 +172,9 @@
 0xb942a0	sequence_should_play	kind-5: start time (+0x0) + duration vs simulation now; returns expired / play / pending
 0x1c94e0	simulation_now	last host tick (type 5) plus elapsed time in ticks
 0x54a634	hud_objective_notify	posted by the objective handler when an objective becomes active for the local player
+0xb2fb68	player_trigger_update	kind-0x1d component update: while armed (+0x10c) and last report (+0x108) < arming time (+0x110), reports through 0xb2f9ec
+0xb2f9ec	player_trigger_report	posts the trigger's engine event (0x251d04) and stamps the last report time
+0x355abc	objective_state_switch	switch on the objective state (jump table 0x11ed49c, cases 1-7)
+0x2335f8	squad_destroy_members	squad +0x5c = 0: destroys the members, then clears the list
+0x233388	squad_release_members	squad +0x5c = 1: releases each member (virtual call), then clears the list
+0x233470	squad_clear_members	empties the squad's member list

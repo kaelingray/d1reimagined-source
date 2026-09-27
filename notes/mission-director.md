@@ -14,8 +14,14 @@ object reference (type `0x808004b1`) is {u32 group key, 6-bit kind, 16-bit index
 
 **Objective, kind 0x20, state `0x80802a1b`.** Handler `0x3561d8`. It copies the 0x2d0-byte state
 to component +0x110.
-- `+0x0`, u3: the objective state. The handler treats 3 specially (clears +0x3f2). Our guess is
-  1 = active, 2 = complete; the run tests it.
+- `+0x0`, u3: the objective state. `0x355abc` switches on it (jump table `0x11ed49c`, cases 1-7):
+  - 1: the plain case;
+  - 2: formats numbers several times (`0x17f10`), which looks like progress counters;
+  - 3 and 4: call into the character/progress code (`0x295a58`, `0x426fd4`);
+  - 5, 6, 7: small tracker updates.
+
+  The apply handler also special-cases 3. So the script uses 1 = active and 3 = complete; the
+  run confirms it. The value does not decide whether the objective shows; the mask below does.
 - **`+0x2c0`, i32: player mask.** Bit n is player slot n, where the slot is byte +4 of the
   player table entry. The objective is active for the local player only if its bit is set.
   **The stand-in never set this mask, so no objective could show.** The mission uses −1 (all
@@ -54,17 +60,37 @@ Ghost dialogue and the objective banners. Handler `0xb94414`.
   in ticks. **The stand-in sent tick 0 in every packet**, so the client's mission clock stays
   near 0. `--ah-sim-clock 30` now sends an advancing tick. Start times use `"$now"`.
 
-**Player trigger, kind 0x1d, state `0x80800463`.** The state is {bool, i32}. Our guess is that
-the bool arms the trigger. The client should report a trigger through the upstream object
-stream (type 6), the way it reports its own player object `0x4786c0e0/0xc/5` (id at bit 11 in
-TEST366/367). The mission matches the trigger's encoded id anywhere in a type-6 body.
+**Player trigger, kind 0x1d, state `0x80800463`.** The state is {bool, i32}. The handler
+`0xb2f99c` copies it to component +0x10c. The update `0xb2fb68`:
+- runs only while +0x0 is true (**armed**);
+- reports only while its last report time (component +0x108) is earlier than **+0x4, the
+  arming time**;
+- reports through `0xb2f9ec`. That function posts an engine event (`0x251d04`, event hash from
+  `0x18bc524`) and sets the last report time to now (`0x1fb424`).
+
+So each arming reports once: the host arms with {0: true, 4: "$now"}, which needs
+`--ah-sim-clock`. The client message that carries the report is not known yet. TEST366/367 saw
+type 6 (the client's own player object) and one type 18, which decodes as 8 object references
+of type `0x808004b1` but not this mission's. The script therefore matches the trigger's encoded
+id in any client message type (`"type": "any"`).
 
 **Squad, kind 0x1, state `0x8080071e`.** Handler `0x1f8d20`.
 - `+0x44` (u31) is a generation: a new value re-runs the squad.
-- `+0x5c` (2 bits, bias 1) picks the action:
-  - 1: `0x233388` + `0x233470`, probably spawn;
-  - 0: `0x2335f8`, probably despawn;
+- `+0x5c` (2 bits, bias 1) decides what happens to the squad's current members when the
+  generation changes:
+  - 0: destroy them (`0x2335f8` -> `entity_destroy`);
+  - 1: release them (`0x233388`: a virtual call per member);
   - −1: nothing.
+
+  Either way `0x233470` then clears the member list. It is **not** a spawn switch; the scripts
+  use −1.
+- `+0x40` (2 bits): a per-member value applied to every member when it changes (`0x857cd8`),
+  probably an AI state.
+- `+0x50` goes to component +0x110 and is applied to the members as well. `+0x54`, `+0x58` and
+  `+0x4c` go to +0x348 / +0x34c / +0x354.
+- **What makes the client spawn members is still open.** It is not in the apply handler. Per
+  the Truman talk, placement is auth state and the physics host spawns, so the likely trigger is
+  a new generation in a loaded bubble. The run shows whether that is enough.
 - `+0x10`: 6 × u32, copied to component +0x31c.
 - `+0x0`, `+0x8`: object references (for example the firing area).
 - Per the Truman talk, the host places the squad and the physics host (the client) spawns and
