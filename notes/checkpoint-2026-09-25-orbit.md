@@ -1090,3 +1090,14 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
   `pf_104_res` (Ghost revival), so **bubble 14 (base 112) = the highway start**. The real host
   would start the client in 113 and switch to 112 after the cinematic
   (`--ah-zone-schedule 112@90` mirrors that with a second world-state delta).
+- **Objective sensor = replicated kind 3** (one per mission bubble: Dock 13 and The Breach have one
+  each). The string "objective sensor client update state" is referenced at `0x1f6e98`, inside the
+  kind-3 apply handler `0x1f6aa4`. State A `0x808004fa` (28 bytes) = `0x808040b9`: **24 u7 values,
+  one per objective of the bubble**, plus a u31 at +24. State B `0x80800830` (632 bytes) = 24 x
+  `0x8080086c` {u7, bool, `0x8080411b`} plus u31 and u32. The handler walks the definition's
+  entries (count +0x4c, offset +0x50) and, when a received byte differs from the copy at object
+  +0x124+i, stores it and runs the entry's follow-up. That fits the mission script's per-objective
+  phases (`_incoming_sequence`, `_player_objective`, `_completion_sequence`). The stand-in's
+  default baselines leave all 24 at 0 - no objective ever starts, hence no "ENTER THE WALL". Test:
+  `--ah-object <bubble group>:3:<index>:0x808004fa={"0": {"0": N}}` for N = 1..4 in the start
+  bubble once it is confirmed.
