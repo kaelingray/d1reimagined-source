@@ -1067,3 +1067,26 @@ that run), grouped by phase. Each objective has `_player_objective`, `_incoming_
 - `cosmo_m0_phase04_outro`: `pf_105_cto` (end cinematic).
 Entity group keys are FNV-1 hashes of names: 0x992bb471 = "act_cosmo_m0_highway" (the other
 groups did not match any string in guest memory).
+
+## Slice sets and cinematics (static analysis, 2026-09-27)
+From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses = file offset +
+0x10000, TOC base 0x175a5e8; SNC forms addresses with `lis` + `addic`, not `addi`).
+- The "zone sets" of the object table (bubble*8 + sub-slot) are the world controller's **slice
+  sets** ("world controller slice set manager" `0x30dbf4` region, strings
+  `activity:initial_slice_set_loading`, `transitioning:initial_slice_set`,
+  `switching_orbit_slice_set`, activity-host debug `/ah_slice_set_names:`; the client prints
+  `activity-slice-set-index` / `map-slice-set-index`).
+- Spawn readiness `0x35793c` refuses, in order, per the message table at 0x11eda20..: FAH / GAH
+  not instantiated, no slice set loaded, **in a cinematic slice set**, gear still loading, no
+  simulation player. The cinematic test (`0x357a34`-`0x357b1c`): two slice-set handles from the
+  interface `*(0x175cb1c)` vtable slots 0x170 / 0x178 (`0x1230bc`, `0x123138`), each resolved
+  through the tag table; byte +0x10 of either definition == 0 -> no spawn. So +0x10 marks a
+  gameplay slice set; a cinematic slice set clears it.
+- World-controller cinematics: "world controller cinematics manager" referenced at `0x30dbf4`,
+  "... cinematics nondeterministic globals" at `0x30c4d8`, "cinematics globals" at `0x3cc2c8`.
+- Hypothesis (to test on the second PC, TEST345/350): the sub-slot entries registered at sim
+  start even with every bubble state -1 - 105 (bubble 13) and 113 (bubble 14) - are the
+  mission's cinematic slice sets: 105 = outro `pf_105_cto` in Dock 13, 113 = intro
+  `pf_104_res` (Ghost revival), so **bubble 14 (base 112) = the highway start**. The real host
+  would start the client in 113 and switch to 112 after the cinematic
+  (`--ah-zone-schedule 112@90` mirrors that with a second world-state delta).
