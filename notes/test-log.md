@@ -386,3 +386,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   Result: two full movement passes, 14/14 frames clean. With the local-memory write tracking the
   CPU path for VRAM->main blits (TEST216) is not needed; it was dropped from
   `patches/rpcs3-destiny-fix.patch` (the diagnostic build keeps it behind the switch).
+- 251: PPU hook on 0x401048/0x40130c (object 0x18d9500: state 6, hash 0x6f7125cb), 0x5531bc,
+  0x553154, 0x5524f0: all run every frame from `0x286cec`/`0x286da4` (a per-frame UI/loading
+  manager), not the urgent-message trigger. Hunt paused.
