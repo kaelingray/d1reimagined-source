@@ -404,3 +404,9 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   after clearing both, sign-in succeeded but the unattended run's F12 screenshot timed
   out. The game remained at Set Screen Bounds. Do not treat this as a peer comparison.
   Static analysis below shows the existing group peer 0 is already the local slot.
+- 255: TEST253 configuration plus Codex's new captures in Dock 13
+  (`rpcs3_replicated_objects.py --json-out/--schema-out`, private files
+  `D:\Destiny360\SIGNON_LOCAL\TEST255-objects.json` / `TEST255-object-types.json`): all 121
+  records have baselines (awaiting 0). `rpcs3_world_peer.py` read zone -1, group peer -1,
+  local slot 0 at the slice it reads (not zone 104 - the slice pointer or record offset
+  needs checking). State types by kind: see checkpoint.

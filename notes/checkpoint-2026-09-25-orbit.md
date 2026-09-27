@@ -967,3 +967,28 @@ Full run (about 10 minutes):
   `python scripts/rpcs3_replicated_objects.py --json-out <path> --schema-out <path>`
   while in Dock 13. Group the 99 bubble-13 records by state type before constructing
   targeted replicated updates. No enemy or objective state has been synthesized yet.
+
+## Replicated object state types in Dock 13 (TEST255)
+| Kind | Group(s) | Count | State A (size, fields) | State B |
+|------|----------|-------|------------------------|---------|
+| 0x01 | 0x062dd95d (bubble 13) | 8 | 0x8080071e (96, 13) | 0x80800357 |
+| 0x03 | 0x062dd95d | 1 | 0x808004fa (28, 2) | 0x80800830 |
+| 0x04 | 0x062dd95d | 5 | 0x808007d9 (224, 4) | 0x80800387 |
+| 0x05 | 0x3c2f5ed5 / 0x992bb471 | 46 / 16 | 0x808029a1 (44, 4: i32, u8, 28-byte struct, object id) | - |
+| 0x06 | 0x992bb471 | 1 | 0x8080254d (212, 9) | - |
+| 0x0c | 0x4786c0e0 | 16 | 0x808022a5 sim players | 0x80802c30 |
+| 0x0f | 0x4786c0e0 | 1 | 0x808008d0 (13424, 6; a 12816-byte sub-struct) | - |
+| 0x10 | 0x4786c0e0 | 1 | 0x808008a3 game mode | - |
+| 0x11 | 0x4786c0e0 | 1 | 0x80800725 (36, 3) | - |
+| 0x1d | all three bubble groups | 14 | 0x80800463 (8, 2) | - |
+| 0x20 | 0x992bb471 | 8 | 0x80802a1b (720, 13: two object ids, ten 64-byte 0x8080293c records) | - |
+| 0x21 | 0x062dd95d | 1 | 0x80800750 (400, 1) | - |
+| 0x22 | 0x4786c0e0 | 1 | 0x808004a4 (32, 4) | - |
+| 0x27 | 0x4786c0e0 | 1 | 0x80802aef (712, 2) | 0x80802b18 |
+
+- Working hypothesis (unverified): kind 0x20 = squad/encounter state (up to ten member records),
+  kind 0x05 = its members (62 objects for 8 squads), kind 0x0f = mission-wide script/objective
+  state. The type handles are not immediates in the EBOOT (runtime type registry), so the
+  consuming component handlers have to be found at run time: hook the record apply path
+  (`0x1cfa1c` -> `0x1cf8f4` -> `0x25f6b8`) with the PPU hook and follow the per-kind handler
+  calls, as was done for the sim-player binder (`0x4ede14` -> `0x14a270`).
