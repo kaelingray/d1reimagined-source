@@ -27,6 +27,7 @@ def build(path):
         lis(6, s1 >> 16), ori(6, 6, s1 & 0xffff), BLR, NOP,                             # refs s1 via ori
         lis(7, (s1 + 0x8000) >> 16), addi(7, 0, 5), addic(8, 7, s1), BLR,              # r7 overwritten
         lwz(9, 2, (TOC + 0x10 - TOC)), bl(CODE + 0x44, CODE + 0x40), BLR, NOP,          # f @0x40: TOC ref
+        0x7C0802A6, BLR,                                  # @0x50: pointer-only function (mflr r0)
     ]
     code_bytes = b"".join(struct.pack(">I", w) for w in code)
     data = bytearray(0x9000)
@@ -77,6 +78,7 @@ class EbootTest(unittest.TestCase):
     def test_calls_and_functions(self):
         self.assertEqual(self.eb.callers(CODE + 0x40), [CODE + 8, CODE + 0x44])
         self.assertEqual(self.eb.function_of(CODE + 0x48)[0], CODE + 0x40)
+        self.assertEqual(self.eb.function_of(CODE + 0x54)[0], CODE + 0x50)  # prologue after nop
 
 
 if __name__ == "__main__":

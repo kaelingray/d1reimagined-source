@@ -5,8 +5,9 @@ function, the function around an address, and disassembly.
 The SNC compiler forms addresses as `lis rX, hi` followed by `addic`/`addi`/`ori` or a D-form
 load/store with base rX, or loads them from the TOC (`lwz/ld rX, off(r2)`; TOC base 0x175a5e8,
 orbit checkpoint "Slice sets and cinematics"). Function starts are taken from `bl` targets and
-the .opd descriptors, so a function only reached through pointers may be merged with the one
-before it.
+frame-setup prologues after an unconditional branch (`mflr r0` for SNC's out-of-line register
+save helpers, or `stdu r1`) and the .opd descriptors; a leaf function without a frame that is
+only reached through a pointer can still merge with the one before it.
 
   python scripts/d1_eboot.py strings [--grep TEXT] [--min 6]
   python scripts/d1_eboot.py xref 0x11b7218 | "Change slice-set"    (code, TOC and data refs)
@@ -16,7 +17,7 @@ before it.
 
 Default EBOOT: local/RESEARCH/ps3_decrypt/EBOOT.elf (or --elf PATH). Addresses print with their
 curated names from notes/eboot-labels.tsv. The first run builds a small index next to the ELF
-(`.d1index.npz`, call targets) to keep later queries fast.
+(`.d1index-v2.npz`, function starts) to keep later queries fast.
 """
 
 import argparse
@@ -87,8 +88,6 @@ class Eboot:
     def strings(self, minimum=6):
         pattern = re.compile(rb"[\x20-\x7e\t\n]{%d,}\x00" % minimum)
         for vaddr, off, filesz, flags in self.segments:
-            if flags & 1:
-                continue
             for m in pattern.finditer(self.data, off, off + filesz):
                 yield vaddr + m.start() - off, m.group()[:-1].decode("latin-1")
 
@@ -151,8 +150,6 @@ class Eboot:
         op, rd, ra, imm = self.fields
         out = []
         for vaddr, off, filesz, flags in self.segments:
-            if flags & 1:
-                continue
             words = np.frombuffer(self.data, dtype=">u4", count=filesz // 4, offset=off)
             for k in np.nonzero(words == target)[0]:
                 slot = vaddr + 4 * int(k)
@@ -163,10 +160,10 @@ class Eboot:
         return out
 
     def data_refs(self, target):
+        """Aligned 32-bit words equal to target in any segment (pointer tables, vtables; the
+        executable segment also holds the read-only data)."""
         out = []
         for vaddr, off, filesz, flags in self.segments:
-            if flags & 1:
-                continue
             words = np.frombuffer(self.data, dtype=">u4", count=filesz // 4, offset=off)
             out += [vaddr + 4 * int(k) for k in np.nonzero(words == target)[0]]
         return out
@@ -184,21 +181,28 @@ class Eboot:
 
     def function_starts(self):
         if self._targets is None:
-            cache = self.path.with_suffix(".d1index.npz")
+            cache = self.path.with_suffix(".d1index-v2.npz")  # bump when the start rules change
             if cache.exists() and cache.stat().st_mtime >= self.path.stat().st_mtime:
                 self._targets = np.load(cache)["starts"]
             else:
                 _, targets = self.call_sites()
+                # Functions reached only through pointers: a frame setup (`mflr r0`, used with
+                # SNC's out-of-line register-save helpers, or `stdu r1, -N(r1)`) right after an
+                # unconditional b / blr / bctr or padding.
+                w = self.words
+                prev = np.concatenate([[0x4e800020], w[:-1]])
+                after_end = ((prev == 0x4e800020) | (prev == 0x4e800420) | ((prev >> 26 == 18) & (prev & 3 == 0))
+                             | (prev == 0x60000000) | (prev == 0))
+                frame = (w == 0x7c0802a6) | ((w & 0xffff0003) == 0xf8210001)
+                prologues = self.code_va + 4 * np.nonzero(after_end & frame)[0].astype(np.int64)
                 opd = []
                 for vaddr, off, filesz, flags in self.segments:
-                    if flags & 1:
-                        continue
                     words = np.frombuffer(self.data, dtype=">u4", count=filesz // 4, offset=off)
                     # .opd descriptors: {u32 function, u32 toc}
                     pairs = np.nonzero((words[1:] == self.toc) & (words[:-1] >= self.code_va) &
                                        (words[:-1] < self.code_va + 4 * len(self.words)))[0]
                     opd += [int(words[k]) for k in pairs]
-                starts = np.unique(np.concatenate([targets, np.array(opd, dtype=np.int64)]))
+                starts = np.unique(np.concatenate([targets, prologues, np.array(opd, dtype=np.int64)]))
                 self._targets = starts[(starts >= self.code_va) & (starts < self.code_va + 4 * len(self.words))]
                 try:
                     np.savez(cache, starts=self._targets)
