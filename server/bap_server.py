@@ -113,6 +113,20 @@ def character_from_request(schema, character_id, request_payload):
 # 0x808016e0 {i16 item index, u64 instance id, i32, i32}} and +0x1838 the 20 equipped instance
 # ids. Without any of this every slot is empty and no gear loads.
 GEAR_SLOTS = 20
+# The equipment slots follow the 14 equippable buckets of the investment globals (root +0xb0;
+# `scripts/d1_pkg.py items --buckets`): 0 subclass, 1 helmet, 2 gauntlets, 3 chest, 4 legs,
+# 5 class armour, 6-8 primary/special/heavy, 9 ship, 10 vehicle, 11 ghost, 12 emblem, 13 shader.
+# That order matches the appearance builder's use (five armour, three weapons, three more).
+# Starter kits: the "wire armor" a new guardian wakes up in ("Your Ghost built this wire
+# armor from available mass"), its class subclass and the Generalist Shell ghost; item
+# indexes from `d1_pkg.py items` on the BLES01857 disc (each armour piece exists twice, a
+# 118-byte and a 152-byte definition; these are the 152-byte ones). No weapon: the first
+# mission hands out the rifle.
+STARTER_GEAR = {
+    "titan": {0: 776, 1: 200, 2: 194, 3: 196, 4: 202, 5: 198, 11: 892},
+    "hunter": {0: 774, 1: 12, 2: 6, 3: 8, 4: 14, 5: 10, 11: 892},
+    "warlock": {0: 778, 1: 388, 2: 382, 3: 384, 4: 390, 5: 386, 11: 892},
+}
 PROGRESSION_ITEMS = 0x138
 PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
 SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
@@ -120,8 +134,15 @@ SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
 
 def gear_spec(value):
     """Parse --character-gear: "SLOT=ITEM[/DYECH:DYE...],..." (item indexes of the investment
-    globals item list) or @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
+    globals item list), "starter:CLASS[,SLOT=ITEM...]" (a STARTER_GEAR kit, then overrides) or
+    @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
     Returns {slot: {"item", "id", "dyes"}}; instance ids default to 0x100 + slot."""
+    if value.startswith("starter:"):
+        kit, _, rest = value[len("starter:"):].partition(",")
+        if kit not in STARTER_GEAR:
+            raise ValueError(f"unknown starter kit {kit!r} (one of {', '.join(STARTER_GEAR)})")
+        base = {slot: {"item": item, "id": 0x100 + slot, "dyes": []} for slot, item in STARTER_GEAR[kit].items()}
+        return {**base, **(gear_spec(rest) if rest else {})}
     if value.startswith("@"):
         raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))
         entries = {int(k, 0): v if isinstance(v, dict) else {"item": v} for k, v in raw.items()}
@@ -1281,10 +1302,11 @@ def parse_args(argv=None):
     ap.add_argument("--peer-family", action="store_true",
                     help="fill the peer family (0) subscription with the local account and character "
                          "summaries (the player's appearance and blueprint in activities come from it)")
-    ap.add_argument("--character-gear", type=gear_spec, metavar="SLOT=ITEM,...|@FILE",
-                    help="equip the stored character: item indexes of the investment globals item "
-                         "list per equipment slot 0-19 (peer/select summaries and self inventory); "
-                         "without gear the guardian renders as the see-through placeholder")
+    ap.add_argument("--character-gear", type=gear_spec, metavar="starter:CLASS|SLOT=ITEM,...|@FILE",
+                    help="equip the stored character (peer/select summaries and self inventory): "
+                         "starter:titan|hunter|warlock, or item indexes of the investment globals "
+                         "item list per equipment slot 0-19 (scripts/d1_pkg.py items); without gear "
+                         "the guardian renders as the see-through placeholder")
     ap.add_argument("--character-overlay", type=overlay_spec,
                     metavar="JSON|@FILE",
                     help='raw field values merged into the character objects: {"peer"|"select"|"self": '

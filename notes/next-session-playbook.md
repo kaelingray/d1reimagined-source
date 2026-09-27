@@ -122,23 +122,29 @@ a separate candidate for first-mission gating.
 ## 6. TEST370: the see-through guardian (gear)
 
 The guardian renders translucent because the stand-in equips nothing: all 20 equipment slots of
-the character summaries are empty (`feature-gaps.md`, section 1). `--character-gear` fills them.
-The item indexes are not known yet (they come from the investment globals item list, not
-uploaded), so this run only checks that gear changes the look. Screenshot the guardian in the
-character select screen and in the resurrection cinematic / third person:
+the character summaries are empty (`feature-gaps.md`, section 1). The item list is now decoded
+from the disc, and `--character-gear starter:titan` equips the Titan's starter "wire armor",
+subclass and ghost shell. Screenshot the character select screen and the guardian in the
+mission:
 
 ```powershell
-# the five armour slots are the slot table's bytes +7..+0xb; slot numbers 0-19 are guesses
 scripts\Invoke-ObjectExperiment.ps1 -Name TEST370 -Bubble 14 -Seconds 120 `
-  -ExtraBap @('--character-gear','0=0,1=1,2=2,3=3,4=4,5=5,6=6,7=7,8=8,9=9,10=10,11=11,12=12')
+  -ExtraBap @('--character-gear','starter:titan')
 python scripts\rpcs3_tiger_types.py schema local\SIGNON_LOCAL\investment_schema_full.json
 ```
 
 The second command (with the game running) exports every service's request type, which names
-the 66 services (`feature-gaps.md`, section 3). Add the JSON to the data repo. If the guardian
-changes at all (other armour, a crash in the gear code, or a "gear still loading" spawn refusal)
-the slots are live; then upload the investment globals packages so the real item indexes can be
-read offline.
+the 66 services (`feature-gaps.md`, section 3). Add the JSON to the data repo.
+
+Read the result:
+- **Solid armour:** the slot order is confirmed.
+- **Armour but wrong pieces or a crash:** the slot order is off. Repeat with the armour in
+  other slots.
+- **Still translucent:**
+  - try the 118-byte definitions (`starter:titan,1=199,2=193,3=195,4=201,5=197`);
+  - then a weapon (`starter:titan,6=2008`);
+  - check the RPCS3 log for "gear is still loading".
+- **If the created character is not a Titan:** use `starter:hunter` or `starter:warlock`.
 
 ## 7. RPCS3 housekeeping (optional, 20 minutes)
 

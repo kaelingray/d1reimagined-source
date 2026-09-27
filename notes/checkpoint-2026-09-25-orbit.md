@@ -1336,4 +1336,10 @@ rasputin, m7 command, portals, patrols).
   [`feature-gaps.md`](feature-gaps.md).
 - No Lua bytecode in any of the 79,148 decompressed Cosmodrome tags: the mission scripts are not
   on the disc and have to be rewritten for the stand-in host.
+- Update (packages uploaded the same evening): the investment globals root is the named tag
+  `investment_globals` `0x80a58000`; +0xd8 = 3,181-item list (definitions in package 012e),
+  +0xb0 = the 14 equippable buckets (Subclass, Helmet, Gauntlets, Chest, Legs, Class Armor,
+  Primary, Special, Heavy, Ships, Vehicle, Ghost, Emblems, Shaders; Bungie's public D1 API
+  bucket hashes). The starter "wire armor" per class and `--character-gear starter:CLASS`:
+  [`feature-gaps.md`](feature-gaps.md) section 1; next run TEST370.
 

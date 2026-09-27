@@ -47,6 +47,14 @@ class CharacterGear(unittest.TestCase):
         with self.assertRaises(ValueError):
             bap.gear_spec("20=1")
 
+    def test_starter_kit_with_override(self):
+        gear = bap.gear_spec("starter:titan,6=2008")
+        self.assertEqual({slot: g["item"] for slot, g in gear.items()},
+                         {**bap.STARTER_GEAR["titan"], 6: 2008})
+        self.assertEqual(gear[1]["id"], 0x101)
+        with self.assertRaises(ValueError):
+            bap.gear_spec("starter:guardian")
+
     def test_gear_objects_fill_all_three_character_objects(self):
         extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
                                        12: {"item": 200, "id": 0x10c, "dyes": []}})

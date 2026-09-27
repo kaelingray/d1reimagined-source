@@ -65,9 +65,33 @@ placeholder while a guardian's gear (armour and weapon art) has not loaded.
 `@file.json`) equips items on all three objects. `--character-overlay JSON` sets any other
 character field by offset (`{"peer": {"0x30": {"0": 1}}}` sets the progression i32).
 
-**Still needed:** which item index is which item. That needs the investment globals item list,
-which is not in the uploaded packages (see "Data wanted"). Until then a PC run can probe index
-ranges per armour slot, e.g. `--character-gear 7=0,8=1,...`, and see whether armour appears.
+**Item list decoded (2026-09-27, from the uploaded investment packages).** The investment
+globals root is the named tag `investment_globals` (`0x80a58000`, package 012c).
+- **Items.** Its +0xd8 is the item list: 3,181 items, whose definitions are in package 012e.
+  `scripts/d1_pkg.py items <packages> --oodle <dll>` lists each item: index, equipment slot,
+  bucket, type and English name.
+- **Buckets.** Its +0xb0 is the 14 equippable buckets (`items --buckets`): 0 Subclass,
+  1 Helmet, 2 Gauntlets, 3 Chest, 4 Legs, 5 Class Armor, 6 Primary, 7 Special, 8 Heavy,
+  9 Ships, 10 Vehicle, 11 Ghost, 12 Emblems, 13 Shaders. The bucket hashes are the ones
+  Bungie's public Destiny 1 API used (Helmet `0xcd887e07`, Gauntlets `0xd3b5f9fc`, ...).
+- **Slot order (strong hypothesis).** The equipment slots of the character data follow this
+  bucket order. It fits the appearance builder: five armour slots, three weapons, then three
+  more. The runtime table that maps the builder's roles to slots comes from another globals
+  root (`0x1c0708`: +0xfc of the registry's root, resolved by `0x1beef0`; that root is not identified yet), so a run confirms it.
+- **Starter gear.** A new guardian wakes up in "wire armor" ("Your Ghost built this wire armor
+  from available mass"):
+  - Hunter: items 5-14;
+  - Titan: 193-202;
+  - Warlock: 381-390.
+
+  Each piece has a 118-byte and a 152-byte definition. The kit also has the class's first
+  subclass (774 / 776 / 778) and the Generalist Shell ghost (892). A new guardian has no
+  weapon; the first mission hands out the rifle. `bap_server.py --character-gear starter:titan`
+  (or `hunter` / `warlock`) equips the kit; `starter:titan,6=2008` adds a primary weapon
+  (2008 = Cydonia-AR2).
+- **Build age.** Some item text is placeholder: every class item is "Makeshift Scarf", every
+  subclass "Bladedancer". The list also names later content (Trials of Osiris, Queen's
+  Orders). The mission's rifle (Khvostov) is not in the list under that name.
 
 ## 2. Mission logic (activity host scripts)
 
@@ -162,21 +186,10 @@ handle; no character sheet for the player; spawn override points blocked.
 
 ## Data wanted
 
-In priority order. These are all disc packages from `PS3_GAME\USRDIR\packages`, for the private
-data repo. They are only read offline.
+Uploaded on 2026-09-27 and read: the investment globals and assets, the player / weapon / ship
+gear packages, globals 0151/0154/0155/0156 and the client startup globals. Still wanted, from a
+PC run:
 
-1. `ps3_investment_globals_012c_0.pkg`, `_012e_0.pkg`, `_012f_0.pkg`: the item list, slot
-   layout and item definitions. They turn item indexes into names and gear, which fixes the
-   hologram properly.
-2. `ps3_investment_assets_0135/0137/0139/013a_0.pkg`: the item art and gear arrangements that
-   the item definitions point to.
-3. `ps3_gear_player_00fc-0104_0.pkg` (8 packages), `ps3_gear_weapons_011c/011e/011f_0.pkg`,
-   `ps3_gear_ships_0114_0.pkg`: the armour, weapon and ship gear, to confirm which items have art
-   on PS3.
-4. `ps3_globals_0151/0154/0155/0156_0.pkg` and `ps3_client_startup_globals_018d_0.pkg`: the
-   investment globals root may be referenced from here. The string tables for item names may be
-   in 0153_en, which is already uploaded.
-5. From a PC run:
-   - `rpcs3_tiger_types.py schema` output with the request types (above).
-   - A screenshot of the hologram with the guardian in third person, to confirm it is the gear
-     placeholder.
+- the `rpcs3_tiger_types.py schema` output with the request types (section 3);
+- screenshots from TEST370: the guardian with the starter kit in character select and in the
+  mission (third person, if the camera allows).

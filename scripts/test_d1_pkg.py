@@ -96,5 +96,40 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(d1_pkg.parse_int("0x1f"), 0x1f)
 
 
+class InvestmentItems(unittest.TestCase):
+    """investment_items on hand-built tags (no strings: names come out empty)."""
+
+    @staticmethod
+    def array(elements, stride):
+        head = struct.pack(">IIIIIII", 0, len(elements), 8, 0x80800184, len(elements), 0x80801234, 0)
+        return head + bytes(4) + b"".join(e.ljust(stride, b"\0") for e in elements)
+
+    def test_buckets_and_items(self):
+        root, buckets, items = 0x80a58000, 0x80a58015, 0x80a5801a
+        helmet, gauntlets = 0xcd887e07, 0xd3b5f9fc
+        item_a = bytearray(0x60); struct.pack_into(">I", item_a, 0x48, gauntlets)
+        item_b = bytearray(0x60); struct.pack_into(">I", item_b, 0x44, helmet)
+        tags = {root: bytearray(0xe0), buckets: self.array([struct.pack(">I", helmet),
+                                                            struct.pack(">I", gauntlets)], 0x1c),
+                items: self.array([struct.pack(">II", 0, 0x80a5c6d1), struct.pack(">II", 0, 0x80a5c6d2)], 8),
+                0x80a5c6d1: bytes(item_a), 0x80a5c6d2: bytes(item_b)}
+        struct.pack_into(">I", tags[root], 0xb0, buckets)
+        struct.pack_into(">I", tags[root], 0xd8, items)
+
+        class FakeSet:
+            by_id = {0x12c: type("P", (), {"named": [{"name": "investment_globals", "hash": root}],
+                                           "entries": []})()}
+            oodle = None
+
+            def tag(self, value):
+                return bytes(tags[value]) if value in tags else None
+
+        bucket_list, item_list = d1_pkg.investment_items(FakeSet())
+        self.assertEqual([h for h, _ in bucket_list], [helmet, gauntlets])
+        self.assertEqual([(it["index"], it["tag"]) for it in item_list], [(0, 0x80a5c6d1), (1, 0x80a5c6d2)])
+        self.assertEqual([it["slot"] for it in item_list], [1, 0])
+        self.assertEqual([it["bucket"] for it in item_list], ["", ""])  # bucket names need strings
+
+
 if __name__ == "__main__":
     unittest.main()

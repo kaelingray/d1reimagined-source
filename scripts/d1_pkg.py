@@ -489,9 +489,8 @@ def string_table(index, table):
     return dict(zip(hashes, texts))
 
 
-def cmd_strings(a):
-    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
-    needle = a.grep.lower() if a.grep else None
+def all_strings(ps):
+    """{hash: text} from every localized string index in the package set."""
     found = {}
     for p in ps.by_id.values():
         for e in p.entries:
@@ -505,9 +504,76 @@ def cmd_strings(a):
                         found.setdefault(h, text)
             except (ValueError, struct.error, RuntimeError):
                 continue
+    return found
+
+
+def cmd_strings(a):
+    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
+    needle = a.grep.lower() if a.grep else None
+    found = all_strings(ps)
     for h, text in sorted(found.items()):
         if needle is None or needle in text.lower() or needle == f"{h:08x}":
             print(f"{h:#010x} {text!r}")
+
+
+# Investment globals (root tag named "investment_globals", class 0x80803389): +0xb0 the 14
+# equippable buckets (28-byte entries: u32 bucket hash, {i16, u32} name, {i16, u32}
+# description), +0xd8 the item list whose position is the i16 item index of the character data
+# (0x28a304; 8-byte entries, u32 definition tag at +4). An item definition (class 0x80803484)
+# holds {i16, u32 string hash} name / type / description at +0x24 / +0x2c / +0x34 and, for
+# armour, weapons, ships, vehicles and ghosts, its bucket hash at +0x44 or +0x48. The bucket
+# hashes are the ones Bungie's public Destiny 1 API used (Helmet 0xcd887e07, ...).
+INVESTMENT_ROOT_NAME = "investment_globals"
+ITEM_NAME_REFS = (0x28, 0x30, 0x38)
+
+
+def investment_items(ps):
+    """(buckets, items) of the investment globals: buckets = [(hash, name)] in equippable order,
+    items = [{"index", "tag", "slot", "bucket", "type", "name", "description"}] in item index
+    order; "slot" is the item's position in the equippable bucket list (None: not equippable
+    through a bucket hash, e.g. subclasses, class items, emblems, shaders)."""
+    root_hash = next((n["hash"] for p in ps.by_id.values() for n in p.named
+                      if n["name"] == INVESTMENT_ROOT_NAME), None)
+    root = ps.tag(root_hash) if root_hash else None
+    if root is None:
+        raise ValueError("investment_globals root tag not found (ps3_investment_globals_012c)")
+    strings = all_strings(ps)
+    text = lambda data, off: strings.get(struct.unpack_from(">I", data, off)[0], "")
+    bucket_list = ps.tag(struct.unpack_from(">I", root, 0xb0)[0])
+    n, first, _ = dyn_array(bucket_list, 4)
+    buckets = []
+    for i in range(n):
+        entry = first + 0x1c * i
+        buckets.append((struct.unpack_from(">I", bucket_list, entry)[0], text(bucket_list, entry + 8)))
+    bucket_slot = {h: i for i, (h, _) in enumerate(buckets)}
+    item_list = ps.tag(struct.unpack_from(">I", root, 0xd8)[0])
+    n, first, _ = dyn_array(item_list, 4)
+    items = []
+    for i in range(n):
+        tag = struct.unpack_from(">I", item_list, first + 8 * i + 4)[0]
+        d = ps.tag(tag) or b""
+        name, kind, desc = (text(d, o) if len(d) >= o + 4 else "" for o in ITEM_NAME_REFS)
+        slot = next((bucket_slot[v] for o in (0x44, 0x48) if len(d) >= o + 4
+                     for v in [struct.unpack_from(">I", d, o)[0]] if v in bucket_slot), None)
+        items.append({"index": i, "tag": tag, "slot": slot, "bucket": buckets[slot][1] if slot is not None else "",
+                      "type": kind.strip(), "name": name.strip(), "description": desc})
+    return buckets, items
+
+
+def cmd_items(a):
+    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
+    buckets, items = investment_items(ps)
+    if a.buckets:
+        for i, (h, name) in enumerate(buckets):
+            print(f"{i:2}  0x{h:08x}  {name}")
+        return
+    needle = a.grep.lower() if a.grep else None
+    for it in items:
+        slot = "-" if it["slot"] is None else it["slot"]
+        line = (f"{it['index']:5}  0x{it['tag']:08x}  {slot:>2} {it['bucket'] or '-':<16} "
+                f"{it['type'] or '-':<22} {it['name']}")
+        if needle is None or needle in (line + " " + it["description"]).lower():
+            print(line + (f"  | {it['description'][:90]}" if a.descriptions else ""))
 
 
 def cmd_scan(a):
@@ -554,6 +620,10 @@ def main(argv=None):
     s.set_defaults(fn=cmd_groups)
     s = sub.add_parser("strings"); s.add_argument("paths", nargs="*"); s.add_argument("--oodle")
     s.add_argument("--grep", help="text substring or an 8-digit hash"); s.set_defaults(fn=cmd_strings)
+    s = sub.add_parser("items", help="the investment item list: item index, bucket, type, name")
+    s.add_argument("paths", nargs="*"); s.add_argument("--oodle"); s.add_argument("--grep")
+    s.add_argument("--buckets", action="store_true", help="list the equippable buckets instead")
+    s.add_argument("--descriptions", action="store_true"); s.set_defaults(fn=cmd_items)
     s = sub.add_parser("scan"); s.add_argument("paths", nargs="*")
     g = s.add_mutually_exclusive_group(required=True); g.add_argument("--find"); g.add_argument("--hex")
     s.add_argument("--oodle"); s.set_defaults(fn=cmd_scan)

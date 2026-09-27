@@ -18,6 +18,10 @@ tiger-pkg's `d1_legacy`). [lizardpeter/destiny-1](https://github.com/lizardpeter
 documents the v24 package format and the activity -> bubble -> map-container graph from PS4
 Rise of Iron data, and [MontagueM/Charm](https://github.com/MontagueM/Charm) has the D1 activity
 schemas. How they apply to the activity-host work: [`public-research.md`](public-research.md).
+`d1_pkg.py items` lists the investment item list (item index, equipment slot, bucket, type,
+English name) from `ps3_investment_globals_012c/012e` plus the string tables; `items --buckets`
+lists the 14 equippable buckets. The item indexes are what `bap_server.py --character-gear`
+takes.
 
 ## Destiny 2 asset tools: background only for now
 

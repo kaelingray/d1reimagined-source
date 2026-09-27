@@ -164,3 +164,5 @@
 0x28a304	investment_item_definition	item index -> investment globals item list entry {u32, u32 tag} -> definition tag
 0x288278	investment_item_list	investment globals root +0xd8 -> item list (cached at 0x18e9514+0x64)
 0x28a1dc	investment_equipment_slots	investment globals root +0xc8 -> equipment slot byte table (cached at 0x18e9514+0x60)
+0x1c0708	globals_equipment_roles	registry vtable 0x12b63a8 slot 0x9c: globals root (+8 handle, 0x1beef0) +0xfc -> the role -> equipment slot table 0x6706b0 reads (bytes +6..+0x11)
+0x1beef0	globals_root	registry vtable slot 4: resolves the registry's root handle (+8), cached at 0x18ad...-0x2528
