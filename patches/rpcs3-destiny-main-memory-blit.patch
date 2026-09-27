@@ -838,7 +838,7 @@ index 8687a6875..28ffc384e 100644
  			m_descriptor_pool = std::make_unique<descriptor_pool>();
 -			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 16u, 4096u);
 +			// Start small: every program's descriptor table owns a pool, and games with many programs
-+			// (Destiny: ~185k) touch new ones continuously; autoscaling grows busy tables.
++			// (Destiny: ~255k) touch new ones continuously; autoscaling grows busy tables.
 +			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 2u, 4096u);
  		}
  
