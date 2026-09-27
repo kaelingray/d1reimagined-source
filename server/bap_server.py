@@ -1092,7 +1092,9 @@ def handle(conn, peer, args):
         conn.close()
 
 
-def main():
+def parse_args(argv=None):
+    """Command-line arguments, with the schemas loaded and the SignOn test keys set (also used
+    by the end-to-end tests, which call handle() with them)."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bind", default="127.1.1.127")
     ap.add_argument("--port", type=int, default=12850)
@@ -1224,7 +1226,7 @@ def main():
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     args.ah_object_at.sort(key=lambda entry: entry[0])
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     args.activity_schema = (investment.load_schema(args.activity_schema)
@@ -1232,6 +1234,11 @@ def main():
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
     args.key, args.mac_key = signon_proto.TEST_SESSION_KEYS[1], signon_proto.TEST_SESSION_KEYS[2]
+    return args
+
+
+def main():
+    args = parse_args()
     with socket.socket() as server:
         server.bind((args.bind, args.port))
         server.listen(8)
