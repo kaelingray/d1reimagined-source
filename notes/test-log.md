@@ -535,3 +535,15 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   are kinds 2 and 0x28 (pairing by the r4 state-type dump still to do).
 - 352 (second PC): **bubble 8 = LUNAR COMPLEX** (dark interior with a Fallen shrine; no
   bubble-local group; 9 D1FPRELOAD).
+- 366 (second PC): highway start with bubble 3 registered, `--ah-zone-schedule 24@150` (to The
+  Breach), PPU hook on 0x25715c / 0x13f8ec / 0x3204a8 / 0x31f6bc. No reaction to the switch
+  (screen unchanged, no loading, no kick). Trace: `0x3204a8` is the world controller's progress
+  poster (states 2 -> 0x23 in order during join/load, 0x23 at emu 5:21 = in world); the slice-set
+  loader `0x13f8ec` ran for orbit (0, 0x10) and for 112 only - never for 24. The type-11 handler
+  `0x25715c` ran 9 times (the join delta, r5=0x771, then empty heartbeats) and **never again
+  after emu 5:15.955**, although the stand-in kept sending a type-11 heartbeat every second and
+  the client kept receiving host messages (no baboon). In the world, type 11 no longer reaches the
+  world-state handler, so a mid-session world-state delta is dropped at dispatch. Host
+  notifications enter at `0x42a498` (subtype at payload+9, 1..0x2d) and go to the receiver object
+  registered at +4 (virtual call); the host-session type table is `0x258778` (17 entries at
+  0x175cf5c). TEST367 traces both across the switch.
