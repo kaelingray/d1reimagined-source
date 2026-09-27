@@ -384,8 +384,8 @@ def baseline_list(value):
 
 def object_spec(value):
     """Parse --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON into an sim_packet object: JSON maps field
-    offsets (decimal or 0x strings) to values, nested dicts for struct fields, e.g.
-    0x992bb471:0x20:7:0x80802a1b={"0": 1}."""
+    offsets (decimal or 0x strings) to values, nested dicts for struct fields, lists for counted
+    arrays, e.g. 0x992bb471:0x20:7:0x80802a1b={"0": 1}; =@FILE reads the JSON from a file."""
     head, _, body = value.partition("=")
     parts = [int(x, 0) for x in head.split(":")]
     group, kind, index, state_type = parts[:4]
@@ -398,6 +398,8 @@ def object_spec(value):
             return [keys(x) for x in v]
         return v
 
+    if body.startswith("@"):  # JSON in a file: command lines mangle embedded quotes (Start-Process)
+        body = Path(body[1:]).read_text(encoding="utf-8")
     return {0: group, 4: kind, 6: index}, state_type, keys(json.loads(body or "{}")), has_b
 
 

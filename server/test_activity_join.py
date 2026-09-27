@@ -158,6 +158,16 @@ class ObjectSpec(unittest.TestCase):
         self.assertEqual(obj, {0: 0xFC0E45A3, 4: 3, 6: 0})
         self.assertEqual((state_type, state, has_b), (0x808004FA, {0: {0: 2}}, True))
 
+    def test_json_file(self):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            f.write('{"24": {"0": 1, "4": [737827469209282234]}}')
+        try:
+            state = b.object_spec(f"0x992bb471:6:1:0x8080254d=@{f.name}")[2]
+        finally:
+            os.unlink(f.name)
+        self.assertEqual(state, {24: {0: 1, 4: [737827469209282234]}})
+
 
 if __name__ == "__main__":
     unittest.main()
