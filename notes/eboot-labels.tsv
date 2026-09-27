@@ -1,0 +1,134 @@
+# Curated names for BLES01857 01.00 EBOOT addresses (PPU virtual addresses as in the notes).
+# One per line: ADDRESS<TAB>NAME<TAB>SUMMARY. Names are ours, not Bungie's. Keep the summary to
+# what a note or test showed; scripts/d1_addresses.py adds every note mention as context and
+# exports Ghidra labels. g_ = global/data, fn otherwise.
+# --- boot, sign-in, services
+0x106880	ssl_ca_setup	cellSslCertificateLoader(0x1f) for CA01-CA05, then cellHttpsInit(2) with the embedded PEM
+0x10816c	ssl_verify_callback	cellHttpClientSetSslCallback callback: checks subject names, masks verify flags
+0x11b7218	g_embedded_root_pem	"Tiger Root Authority" + GeoTrust Global CA PEM (replaced by game_ca_patch.py)
+0x32d450	manifest_register_packages	registers every manifest field-3 package entry through 0x324efc
+0xe5c2c	package_registration_check	compares manifest field 4 with the package header u64 at +8 (-90) and the id (-91)
+0x11c7677	g_title_config_descriptor	descriptor of the title configuration message (58 submessages)
+0x126fec	title_config_callback	SignOn title configuration callback -> 0x1214e8
+0x1214e8	title_config_apply	applies the title configuration with compiled-in defaults
+0x32cf44	bootflow_investment_signin	investment sign-in bootflow step; starts sign-in via 0x286fdc and polls
+0x286fdc	investment_signin_start	posts event 0x22 via 0x262bc4
+0x294a5c	signin_user_entry_ok	sign-in success check: user entry state 3 with the local player id
+0x327d90	health_leave_check	bootflow health loop / in-world leave check: 30 conditions every frame (table 0x11ea038)
+0x11ea038	g_health_conditions	health-loop condition table (15 BAP state, 17 investment sign-in, 30 activity-host status, ...)
+0x175eafc	g_failure_name_table	failure/error name table, 8-byte entries at (reason - 0x18)
+0x7c3458	bap_reply_match	matches each BAP reply with the oldest pending request (type and id)
+0x41b75c	investment_family_subscribe	family/object manager: accepts a new subscription only with a full snapshot (flags bit 0)
+0x41b9ec	investment_family_manager	family/object manager routine
+0x19068c4	g_investment_manager	investment family manager pointer
+0x28d4c0	signin_reason_codes	sign-in reason codes (2 no subscription, 3 unknown object type, 4 no free object, ...)
+0x34b8e8	urgent_message_list	universe-gated message list (self object +1 check) -> 0x40acc0
+0x40acc0	content_list_walk	walks a content list of 12-byte entries (urgent-message candidates)
+0x401048	ui_state_machine_18d9500	UI state machine on the object at 0x18d9500 (urgent message candidate)
+0x5531bc	ui_open_500	UI call with 500 from 0x286cec (urgent message candidate)
+# --- activity join, travel and loading
+0x3362c0	activity_loader_update	activity loader (state at +0x30): load scenario, wait, commit
+0x30c448	activity_loader_abort_check	activity loader abort test (fireteam travelling / selection +4 == 0)
+0x323ed0	fireteam_travelling_check	group target record pending while group current hash equals the orbit latch
+0x323e6c	latch_group_hash_on_orbit	latches the group current hash on entering orbit (g 0x18ecdb8)
+0x3291a4	copy_fireteam_target	copies the fireteam target into the activity selection (+4 = 1)
+0x30d488	wc_rpc_set_activity_index	world-controller RPC receiver (event 0x36): stores the activity index, loads the scenario
+0xd24e14	wc_rpc_0_decode	RPC 0 decoder -> 0x30d488
+0x1724c60	g_wc_rpc_table	world-controller RPC descriptor table (sender/receiver pairs)
+0x1f4a54	scenario_load_begin	starts loading a scenario by name (rm, "act_cosmo_m0_highway")
+0x1f5300	scenario_commit	commits a loaded scenario and its three parts
+0x302728	engine_world_change	engine request slot 3 handler (world change) -> 0x66be30
+0x66be30	build_game_setup	builds the game setup: machine table mask + own machine id
+0x4105c4	world_transition_dlc_check	"World-transition requires DLC." (unlock expression via 0xb67bc4)
+0xb51698	world_transition_permission_check	leader-only permission check ("requires permissions."), universe flag 215
+0x1c7608	sim_start_activity_checks	sim start: activity checksum and "activity client bubble count mismatch"; registers bubble slice sets
+0x14a8dc	bubble_base_slice_set	8 * bubble
+0x14a8e8	bubble_sub_slice_set	8 * bubble + sub-slot + 1
+0x328610	loading_task_8	loading task 8: current zone record or zone byte 2 bit 0x80
+0x3286a8	loading_task_9	loading task 9: kind-0x10 resource and the local player's object
+0x329660	wc_state_update	world-controller state: base / non-base slice-set branch, 5 s countdown, posts event 0x23
+0x3204a8	wc_post_progress	world-controller progress/reason poster (states 2 .. 0x23 during join and load)
+0x30dbf4	wc_cinematics_manager_ref	references "world controller cinematics manager"
+0x30db9c	wc_constructor	world controller constructor (+0x18 slice-set manager, +0x1c cinematics manager)
+# --- activity host messages
+0x305484	proxy_notification_route	b->c not from the activity-host proxy -> 0x42a498
+0x42a498	host_notification_entry	host notification entry (subtype at payload+9, 1..0x2d); virtual call to the receiver at +4
+0x258778	host_session_dispatch	host-session message dispatch on the subtype (17-entry table 0x175cf5c)
+0x175cf5c	g_host_session_types	host-session message type table (17 entries)
+0x179eba4	g_client_to_host_types	pointer to the client -> host message type table
+0x179eba8	g_host_to_client_types	pointer to the host -> client message type table
+0x25bd0c	host_msg_encode	typed struct encoder for host messages (investment bit format)
+0x25bc88	host_msg_decode	typed struct decoder for host messages
+0x25e25c	typed_deserialize	type-driven deserializer -> 0x25d2dc
+0x25d2dc	typed_deserialize_body	type-driven deserializer body (deltas onto a copy)
+0x259c84	host_join_request_copy	keeps a copy of the host join request (type 3)
+0x256ad8	host_join_response	join response (host type 4) handler; token must match
+0x25715c	host_world_state_handler	host type 11: present bit + world-state 0x808009ed delta; not reached in the world (TEST366)
+0x25b920	host_sim_packet_receive	host type 5 receive -> session -> event 0x13 -> 0x1c85e0
+0x1c85e0	sim_packet_decode	type 5: epoch, roster delta (65 slots), host tick, replicated object stream
+0x1ce4a4	replicated_object_stream	replicated object stream: per object id, length, state A/B
+0x1ce1b8	replication_all_baselined	requires every record of the active bubbles to have had a baseline (+0x15)
+0x1ce818	replication_apply_pass	apply pass (after 0x1ce1b8)
+0x1cfa1c	replication_apply_records	applies received records -> 0x1cf8f4
+0x1cf8f4	replication_apply_record	-> 0x25f6b8
+0x25f6b8	component_apply_state	(binding, state type, state) -> 0x276154
+0x276154	component_apply_dispatch	calls the component's apply handler via member-function pointer (return address 0x276230)
+0x308c48	ah_status_host_crashed	sets activity-host status 36 (host crashed) when host messages stop
+0x25b210	ah_last_receive_age	now - host messaging object's last receive time
+0x1c9ab8	world_state_local_slot	finds the local peer slot in the world-state identity table (+0x502c mask)
+0x31d06c	wc_copy_world_state_group	copies world-state group records to the slice; local slot +0x230
+0x25bc10	host_local_peer_index	local peer index in the host session
+# --- replicated-state handlers per kind (TEST256-257, TEST364)
+0x1f8d20	apply_kind01	kind 0x01 (state 0x8080071e), bubble objects
+0x1f6aa4	apply_kind03_objective_sensor	kind 0x03 objective sensor: 24 u7 objective states -> script state machines
+0x2000e0	apply_kind04_spawn_slot	kind 0x04 spawn slot (0x808007d9) -> 0x200014
+0x200014	spawn_slot_generation	higher u32 than +0x110 destroys the tracked entity (0x1323e0) so it is recreated
+0x1323e0	entity_destroy	destroys an entity (spawn-slot regeneration)
+0xb94414	apply_kind05	kind 0x05 (0x808029a1)
+0x4ed278	apply_kind06_roster	kind 0x06 (0x8080254d), player-id roster ("cinematic_with_roster")
+0x4edd00	apply_kind0c_sim_player	kind 0x0c simulation player (0x808022a5)
+0x4ede14	sim_player_bind	sim-player component -> 0x14a270
+0x14a270	bind_player_to_sim_player	binds the pla with the owner machine id to its simulation player
+0xb2c778	apply_kind0f_activity_table	kind 0x0f per-player activity table (0x808008d0, 0x3470 bytes)
+0xb2c8d4	apply_kind10_game_mode	kind 0x10 game mode (0x808008a3); pushes the variable table
+0xb2d1e0	apply_kind11	kind 0x11 (0x80800725), game-mode code
+0xb2f99c	apply_kind1d	kind 0x1d (0x80800463), mission-script code
+0x3561d8	apply_kind20_spawn_group	kind 0x20 (0x80802a1b), player spawner
+0x200e38	apply_kind21	kind 0x21 (0x80800750), bubble objects
+0xb26bac	apply_kind22	kind 0x22 (0x808004a4), game mode
+0x355dc0	apply_kind27_spawner	kind 0x27 (0x80802aef), player spawner
+0xb2f2e0	apply_kind1c	kind 0x1c: copies {object id, u32} to the component at +0x108
+0x26c414	apply_bubble14_kind_a	first call in bubble 14 only: kind 2 or 0x28 handler
+0x26ff1c	apply_bubble14_kind_b	first call in bubble 14 only: kind 2 or 0x28 handler
+0x1fed60	script_var_get_a	script-variable getter (47 callers)
+0x1fee1c	script_var_get_b	script-variable getter (44 callers)
+0x1fedc4	script_var_get_c	script-variable getter (10 callers)
+0x1fed8c	script_var_get_d	script-variable getter (6 callers)
+0x1fed20	script_var_store	pushes game-mode variables into the global script-variable store
+# --- zone / slice sets
+0x13f8ec	slice_set_load	slice-set (zone set) loader (table, index)
+0x1406f0	slice_set_index_by_hash	zone-set index from a name hash
+0x31f6bc	wc_zone_status	world-controller zone status: status 1 -> 0x13f8ec
+0x31eaf8	wc_zone_machine	zone machine: posts the slot-2 zone-set switch for a present record
+0x31d358	wc_set_target_zone	writes the zone target record (state +0x89, index +0x130, hash +0x134)
+0x4b2d00	world_zone_load_machine	world/zone load state machine (state at +0x100)
+0x140820	scenario_object_lookup	scenario object table lookup (0x200 entries)
+0x13e2a0	scenario_object_table	scenario object table (g 0x18a943c)
+# --- players and sessions
+0x35793c	spawn_ready_check	"can't spawn because no simulation player exists"
+0x35acc8	spawn_event_receiver	spawn event 0x4c receiver
+0x674054	player_bind_local_user	binds local users to existing player records by machine id
+0x674294	player_machine_table_load	loads the player manager's machine table (RPC 16 receiver target)
+0x682fe0	player_bind_user	binds a user to a player record
+0x66dd6c	player_manager_create	player manager: creates player records
+0x82cd90	group_message_dispatch	group message dispatcher (73 kinds by message byte 0)
+0x82b998	wc_rpc16_send	posts world-controller RPC 16 (member mask + machine ids)
+0x8241a8	group_post_player_join	posts event 0xc (player join) per expected player
+0x81eacc	host_to_fireteam_session	maps the activity host to its fireteam group session
+0x18ea68c	g_group_manager	group manager pointer (fireteam_target / posse_target / group_target)
+0x19b7224	g_group_session_manager	group/session manager pointer (RPC 16 source entries)
+0x197f9d4	g_player_pool	player pool ("players", 0x27b0-byte records)
+0x197f9dc	g_player_machine_table	player manager machine table
+0x18eb978	g_in_activity_state	in-activity state object (leave-condition mask at +8)
+0x18ea618	g_zone_object	zone object
+0x18ea604	g_slice_set	slice-set object (0x410 bytes)
