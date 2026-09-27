@@ -1,6 +1,6 @@
 # act_cosmo_m0_highway replicated objects (generated)
 
-Generated with 
+Generated with `python scripts/d1_pkg.py groups ps3_cosmo_activities_activity_025c_0.pkg --oodle <dll> --key K,... --objects`
 from the disc package. A replicated object id is (group key, kind, position in the group); all 118 records
 the live client listed in TEST362 match this table. Kinds 0x2c and up (nav points, trigger volumes, script
 objects, phases, bubble links) are listed in the group but are not replicated records.
