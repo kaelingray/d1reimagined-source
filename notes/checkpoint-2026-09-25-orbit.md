@@ -838,3 +838,33 @@ Full run (about 10 minutes):
 - Open: whether the blit CPU path is still needed with the write tracking (it is harmless);
   PPU writes to unprotected video memory are not tracked; an upstream RPCS3 report/PR needs
   the user's go-ahead.
+
+## Update (TEST230-235, 2026-09-27): the "Urgent message" dialog
+- Text: "Destiny servers will go offline temporarily in the next few minutes. Pardon our dust.
+  For more information, visit help.bungie.net" - a scheduled-maintenance warning, shown on
+  entering the mission world (with the "BETA BUILD" watermark). Its UTF-16 text exists only in a
+  UI string object (0x43a4d7c0 in TEST230); the localized source is not stored as plain text.
+- BAP codecs: `0x41501c(type)` returns the codec from a runtime table at 0x175fba8 (filled at
+  boot); vtable slot 3 decodes. Type 0x14 "shutdown not" = vtable 0x12b9650, decoder 0x416370
+  (9 bytes: u8 + u64). The stand-ins never send it. Type 0x13 (client config rsp) decodes via
+  0x415ec0 into {u64, u32}; field 1 = 0 does not remove the dialog (TEST231).
+- Ruled out: client config values (231), services 701/702 (result-only replies), the
+  heartbeat's empty type-11 host message (233), the account-message list below (not resolved in
+  TEST235, so not the source).
+- Account-message list: `0x34b8e8` (called from 0x2ff874) takes the self (family 4) investment
+  object, checks its +1 byte, and `0x40acc0` walks a content list (singleton via `0x288a70`,
+  cached at *(0x18d9528) + 4; entries 12 bytes {u32 op count, u32 ops offset, u32 hash} from
+  +0x24) collecting the hashes whose unlock expression is true for the account. The cache was 0
+  in TEST235 while the dialog was up, so that list never ran.
+- The flag-table owner (`0xb4d730` returns it; 36 callers) has a byte at +1, tri-state flags
+  from +2 (0x1000), and bitsets at +0x1004/+0x1804.
+- The title configuration (SignOn field 4, descriptor 0x11c7677) has 58 submessages; only
+  field 1 (content manifest) is sent, the rest are compiled defaults. Decoding
+  the small submessages shows timeouts and bools, no named maintenance field yet.
+- **GDB breakpoints do not work** with this RPCS3 setup: `ppu_breakpoint` refuses when the PPU
+  decoder is LLVM (both the global and the per-game config use LLVM); the stub still answers
+  "OK". All trace logs since TEST202 have zero hits for that reason. The interpreter would be far
+  too slow for the game. Next options: add a PPU-side hook to the patched build (e.g. log calls
+  to a given address from the LLVM function-call path), or continue statically.
+- New tooling: `bap_server.py --client-config V1,V2`, `--ah-heartbeat SECONDS:-1` (no empty
+  host message), `Invoke-MissionRun.ps1 -TraceAfter ''`.

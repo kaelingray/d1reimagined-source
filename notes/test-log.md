@@ -324,3 +324,12 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   a surface whose pages changed since its last sync fails its memory check and is reloaded
   from guest memory (3 samples again). Two full movement passes: 14/14 frames clean - no
   blocks, no overexposure, no stripe.
+- 230: urgent-message investigation run (BAP codec table read live, see checkpoint).
+- 231: `--client-config 0,1` (field 1 = 0 instead of 1): urgent message still shown.
+- 232: GDB trace of the unlock evaluator 0xb67984 from the end of login: 0 hits - but see 234/235.
+- 233: heartbeat without the empty type-11 push (`--ah-heartbeat 1:-1`): urgent message still
+  shown (and no baboon: the machines/simulation repeats keep the host alive).
+- 234/235: GDB traces get 0 hits even on functions that run constantly, with the patched and
+  the official build: RPCS3 ignores software breakpoints under the LLVM PPU decoder
+  (`ppu_breakpoint` returns false), so every trace since at least TEST202 was blind. 235
+  (official build) also showed the old rendering fault, as expected.
