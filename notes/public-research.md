@@ -49,7 +49,8 @@ checkpoint notes stay the record of what the client actually does.
    to the break in the Wall (`tv_ab`/`tv_in_wall`) and log every client -> host type. A new type,
    or a type-15 body other than 00/0x41, would be the first sense-state message. Bubble 14 has no
    kind-3 object of its own (TEST342), so the sensor may be the activity-group one; list kind 3
-   across all groups first.
+   across all groups first. `scripts/ah_log_summary.py <NAME>-ahl.log` lists each new client
+   message type/body once, in time order next to the stand-in's pushes.
 2. **Transitions start on the client.** From the highway start (bubble 14) with bubble 3
    registered, walk through the Wall into The Breach instead of sending a zone schedule. Hook the
    slice-set loader `0x13f8ec`, the progress poster `0x3204a8` and the notification entry
