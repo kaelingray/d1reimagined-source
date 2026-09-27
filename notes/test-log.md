@@ -450,3 +450,17 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   Bounds / Brightness / Subtitles on alternate frames. In the F12 archive every Set Screen Bounds
   capture before 2026-09-26 13:59 is clean; the first bad one follows TEST195/196 (Write/Read
   Color + Depth buffers, tiling), before any custom build. Cosmetic, back burner.
+- 263-264: first bubble sweep (`scripts/Invoke-BubbleSweep.ps1`) while the user used the PC: F12
+  screenshots failed - F12 is a Qt window shortcut and only fires while the game window is
+  active. The instrumented build now takes a screenshot when `d1\d1shot.on` (next to rpcs3.exe)
+  appears; `Invoke-RpcsStep.ps1` uses it. The private data moved from `D:\Destiny360` into the
+  repo's ignored `local\` folder the same afternoon.
+- 265-270: bubble sweep from `local\`, with `--ah-baselines-watch` feeding each bubble's records
+  back to the stand-in during the run (TEST267: 150 new baselines picked up, spawn succeeded).
+  Nav-mode names: bubble 1 none (sky and distant mountains, probably a fallback position),
+  2 - (TEST266: RPCS3 livelocked while loading after character select, 8 threads at 100 %, no
+  frames), **3 THE BREACH** (dark; own group 0xfc0e45a3: 30 kind 1, 45 kind 2, 1 kind 3, 20
+  kind 4, plus activity-group kinds 4/0x1d/0x1e in bubble 3), 4 - (TEST268: RSX fatal
+  "Verification failed (object: 0x0)" after decoding a garbage fragment program while the
+  bubble loaded), 5 none (industrial corridor interior), **6 MOTHYARDS** (daytime). Bubble 0 is
+  Skywatch and 13 Dock 13, so the highway start outside the Wall is most likely bubble 2.
