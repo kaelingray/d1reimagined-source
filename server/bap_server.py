@@ -964,12 +964,14 @@ def handle(conn, peer, args):
                     changed = False
                     while (objects_applied < len(args.ah_object_at)
                            and time.time() - joined_ >= args.ah_object_at[objects_applied][0]):
-                        seconds, spec = args.ah_object_at[objects_applied]
+                        # (not `seconds`: that is the heartbeat interval used below - reusing it
+                        # delayed the next heartbeat by the object's time, TEST361 baboon)
+                        due_at, spec = args.ah_object_at[objects_applied]
                         ident = (spec[0][0], spec[0][4], spec[0][6])
                         objects_[:] = [o for o in objects_ if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
                         objects_applied += 1
                         changed = True
-                        log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {spec[2]} (at {seconds:g} s)")
+                        log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {spec[2]} (at {due_at:g} s)")
                     if changed:
                         at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
