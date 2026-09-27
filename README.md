@@ -8,19 +8,21 @@ for investigating Destiny's PS3 mission replication.
 | --- | --- | --- |
 | `eboot/` | `RESEARCH/ps3_decrypt/` | Decrypted `EBOOT.elf` |
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
-| `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–366 activity and RPCS3 logs |
-| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 37 intact disc packages plus parts for three oversized packages, covering Cosmodrome, investment, gear, globals and startup data |
+| `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
+| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
-37 intact packages and all seven package parts are individually below 100 MB.
-The 60 data files total 1,456,577,120 bytes.
+41 intact packages and all twelve package parts are individually below 100 MB.
+The 71 data files total 1,890,726,935 bytes.
 `package_names.txt` lists all 247 package filenames from the disc's
 `PS3_GAME/USRDIR/packages` directory, including packages not copied into this
 repository. It contains names only, one per line.
 
 The Cosmodrome activity package `ps3_cosmo_activities_activity_025c_0.pkg`,
 destination package `ps3_cosmo_destination_0274_0.pkg`, and player gear package
-`ps3_gear_player_0104_0.pkg` exceed GitHub's per-file limit. Their 64 MiB parts
+`ps3_gear_player_0104_0.pkg` exceed GitHub's per-file limit. The Tower packages
+`ps3_city_tower_ambient_act_0247_en_0.pkg` and
+`ps3_city_tower_destination_0250_0.pkg` also exceed it. Their 64 MiB parts
 and original hashes are recorded in
 `split_packages.json`. To check the parts, run
 `python reassemble_packages.py --verify-only`. To rebuild the original `.pkg`
@@ -35,7 +37,10 @@ are present, with `0104` represented by two parts.
 
 Only four requested TEST360–366 log files existed in `SIGNON_LOCAL/logs` when this
 bundle was made: `TEST364-rpcs3.log`, `TEST365-rpcs3.log`, `TEST366-ahl.log`, and
-`TEST366-rpcs3.log`. There were no matching BAP or lobby logs there. The optional
+`TEST366-rpcs3.log`. TEST367 supplied `TEST367-ahl.log` and `TEST367-rpcs3.log`.
+There were no matching BAP or lobby logs there. TEST370 screenshots and schema
+exports were not present when this update was prepared; a character/inventory
+BAP capture remains pending. The optional
 `oo2core_3_win64.dll` was supplied from the user's Downloads folder. It is an
 unsigned 64-bit Windows DLL containing an Oodle decompression export. Its original
 download source and distribution terms have not been verified; it was not executed
