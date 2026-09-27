@@ -700,6 +700,8 @@ def handle(conn, peer, args):
     self_version = 1
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
+    sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
+    game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def push_self(number, reason):
@@ -882,8 +884,12 @@ def handle(conn, peer, args):
                         spawn = args.ah_sim_player[3] if len(args.ah_sim_player) > 3 else None
                         objects.append(sim_player(args.activity_schema, group, index, owner, spawn))
                         log(f"[{tag}] simulation player {group:#x}:{index} owner {owner:016x}")
+                    game_mode_at = None
                     if args.ah_game_mode:
                         group, index, state = args.ah_game_mode
+                        if args.ah_game_mode_schedule:
+                            state = args.ah_game_mode_schedule[0][0]
+                        game_mode_at, game_mode_now = len(objects), state
                         objects.append(game_mode(group, index, state))
                         log(f"[{tag}] game mode {group:#x}:{index} state {state}")
                     for spec in args.ah_object:
@@ -895,6 +901,7 @@ def handle(conn, peer, args):
                             objects.append(default_baseline(key, kind, index, has_b))
                     data = sim_repeat = sim_packet(args.activity_schema, peer, int(slot, 0),
                                                    int(gen or "1", 0), objects=objects)
+                    sim_build = (peer, int(slot, 0), int(gen or "1", 0), objects, game_mode_at, time.time())
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, data, host_id)))
                     log(f"[{tag}] pushed simulation packet (type 5): roster slot {slot} = client")
                 for spec in args.ah_after_join:
@@ -912,6 +919,15 @@ def handle(conn, peer, args):
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
                 if confirm_repeat:
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
+                if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
+                    if due and due[-1] != game_mode_now:
+                        game_mode_now = due[-1]
+                        group, index, _ = args.ah_game_mode
+                        objects_[at_] = game_mode(group, index, game_mode_now)
+                        sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                        log(f"[{tag}] game mode {group:#x}:{index} -> state {game_mode_now}")
                 if sim_repeat:
                     # the roster packet is dropped until the client's host session exists
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, sim_repeat, host_id)))
@@ -1064,6 +1080,10 @@ def main():
                     metavar="GROUP:INDEX:STATE",
                     help="with --ah-roster, replicate the game-mode object (kind 0x10) with this state "
                          "(non-zero ends the loading screen, 3 lets the spawner continue), e.g. 0x4786c0e0:3:3")
+    ap.add_argument("--ah-game-mode-schedule", default=[], metavar="STATE@SECONDS,...",
+                    type=lambda v: [tuple(int(y, 0) for y in x.split("@")) for x in v.split(",")],
+                    help="with --ah-game-mode, step the game-mode state over time: the first state is sent "
+                         "at the join, each later one from SECONDS after it (e.g. 1@0,2@20,3@40)")
     ap.add_argument("--ah-object", action="append", default=[], type=object_spec,
                     metavar="GROUP:KIND:INDEX:TYPE[:B]=JSON",
                     help="with --ah-roster, replicate this object with an explicit state of TYPE (fields "
