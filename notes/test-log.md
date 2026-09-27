@@ -547,3 +547,5 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   notifications enter at `0x42a498` (subtype at payload+9, 1..0x2d) and go to the receiver object
   registered at +4 (virtual call); the host-session type table is `0x258778` (17 entries at
   0x175cf5c). TEST367 traces both across the switch.
+- 353 (second PC): **bubble 9 = TERRESTRIAL COMPLEX** (underground hangar with containers and a
+  truck; no bubble-local group; 4 D1FPRELOAD).
