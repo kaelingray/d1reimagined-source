@@ -67,11 +67,12 @@ The baselines file lists the mission's replicated objects as `KEY/KIND/INDEX[/B]
 One cycle takes 8–10 minutes. Useful companions:
 
 - `scripts/rpcs3_activity_poll.py`: read-only watcher for the activity loader, world controller, zone state and object table.
-- `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register.
+- `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register. **RPCS3 ignores GDB breakpoints under the LLVM PPU decoder**, so traces have been empty since at least TEST202. The instrumented build replaces them with a PPU function-entry hook: watches go in `C:\dev\d1ppu.txt` (`ADDR [MAXHITS] [rN:LEN ...]`, or `coverage` to log every function's first call), and the output is `D1P`/`D1C` lines in `RPCS3.log`. `scripts/rpcs3_text_marker.py` marks when a UI text appears in memory. Details: [orbit checkpoint](notes/checkpoint-2026-09-25-orbit.md).
 - `scripts/rpcs3_tiger_types.py`: dumps the game's runtime type definitions, used to export the typed message schemas.
 - `scripts/rpcs3_replicated_objects.py`: lists the client's replicated objects in the `--ah-baselines` format.
 - `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots; `scripts/Invoke-MovementCheck.ps1` with `scripts/frame_blocks.py` scores in-mission frames.
 - `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
+- `scripts/Invoke-SoakTest.ps1`: long in-mission runs (periodic movement, scored screenshots, RPCS3 memory).
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
 
