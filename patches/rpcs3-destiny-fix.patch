@@ -125,27 +125,6 @@ index 429d94919..7be8fa7ec 100644
  			for (const auto& e : memory_tag_samples)
  			{
  				if (e.second != *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first))
-diff --git a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
-index 6e2e7162b..aa9798ff1 100644
---- a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
-+++ b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
-@@ -589,7 +589,15 @@ namespace rsx
- 				dst.rsx_address, write_length,
- 				src.rsx_address, read_length);
- 
--			if (!g_cfg.video.force_cpu_blit_processing &&
-+			// Copies from video memory into main memory are made so the CPU/SPUs can read the result
-+			// (e.g. Destiny's G-buffer copies consumed by SPU lighting jobs). The GPU path keeps the
-+			// result in the texture cache and only writes it back lazily on access, which loses data
-+			// when several blits target the same address between SPU reads. Do these on the CPU so the
-+			// data is in guest memory immediately.
-+			const bool copy_to_main_memory =
-+				dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER && src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER;
-+
-+			if (!g_cfg.video.force_cpu_blit_processing && !copy_to_main_memory &&
- 				(dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER || src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER) &&
- 				RSX(ctx)->scaled_image_from_memory(src, dst, in_inter == blit_engine::transfer_interpolator::foh))
- 			{
 diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
 index ffe7bc95c..bad0fe7eb 100644
 --- a/rpcs3/Emu/RSX/VK/VKPresent.cpp

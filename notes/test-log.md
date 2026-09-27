@@ -383,3 +383,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   new pipelines (programs 255k -> 288k), ending ~16 GB.
 - 250: TEST249 build with `C:/dev/d1noblitfix.on` (VRAM->main blits back on the GPU path):
   does the write tracking alone keep the frame clean?
+  Result: two full movement passes, 14/14 frames clean. With the local-memory write tracking the
+  CPU path for VRAM->main blits (TEST216) is not needed; it was dropped from
+  `patches/rpcs3-destiny-fix.patch` (the diagnostic build keeps it behind the switch).

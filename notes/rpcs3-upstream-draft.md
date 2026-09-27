@@ -57,8 +57,8 @@ light-pass output. Guest memory under the same rectangle held the SPU's values a
 
 The same patch also makes NV3089 blits from local memory to main memory
 (`dst.dma == HOST_BUFFER && src.dma == FRAME_BUFFER`) take the CPU path. The G-buffer copies the
-SPUs read must be in guest memory immediately. Whether that part is still needed on top of the
-write tracking has not been re-checked.
+SPUs read must be in guest memory immediately. TEST250 showed it is not needed once the write
+tracking is in place (14/14 clean frames without it), so it is no longer part of the fix patch.
 
 ## Open questions for maintainers
 
