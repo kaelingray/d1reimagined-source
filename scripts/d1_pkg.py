@@ -40,6 +40,7 @@ import argparse
 import ctypes
 import hashlib
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -189,21 +190,40 @@ def oodle_codec(raw):
 
 
 class Oodle:
-    """OodleLZ_Decompress from a user-supplied oo2core runtime (Windows DLL, or a Linux shim)."""
+    """OodleLZ_Decompress from a user-supplied oo2core runtime. On Windows the DLL is loaded
+    directly; elsewhere a Windows DLL goes through scripts/oodle_pe_shim.c (built on first use
+    into local/liboodle_shim.so with gcc), a contained loader that stubs every import."""
 
     def __init__(self, path):
+        path = Path(path)
+        if sys.platform != "win32" and path.suffix.lower() == ".dll":
+            shim = Path(__file__).resolve().parents[1] / "local" / "liboodle_shim.so"
+            source = Path(__file__).resolve().parent / "oodle_pe_shim.c"
+            if not shim.exists() or shim.stat().st_mtime < source.stat().st_mtime:
+                shim.parent.mkdir(exist_ok=True)
+                subprocess.run(["gcc", "-O2", "-shared", "-fPIC", "-o", str(shim), str(source)], check=True)
+            self.lib = ctypes.CDLL(str(shim))
+            self.lib.d1_oodle_decompress.restype = ctypes.c_longlong
+            self.lib.d1_oodle_decompress.argtypes = [ctypes.c_char_p, ctypes.c_longlong,
+                                                     ctypes.c_char_p, ctypes.c_longlong]
+            result = self.lib.d1_oodle_load(str(path).encode())
+            if result:
+                raise RuntimeError(f"oodle shim could not load {path} ({result})")
+            self.fn = lambda raw, n, out, size: self.lib.d1_oodle_decompress(raw, n, out, size)
+            return
         self.lib = ctypes.CDLL(str(path))
         f = self.lib.OodleLZ_Decompress
         f.restype = ctypes.c_int64
         f.argtypes = [ctypes.c_char_p, ctypes.c_int64, ctypes.c_char_p, ctypes.c_int64,
                       ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
                       ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
-        self.fn = f
+        # fuzz-safe, no CRC check, no verbosity, all thread phases (as tiger-pkg does)
+        self.fn = lambda raw, n, out, size: f(raw, n, out, size, 1, 0, 0, None, None, None, None,
+                                              None, None, 3)
 
     def decompress(self, raw, size):
         out = ctypes.create_string_buffer(size)
-        # fuzz-safe, no CRC check, minimal verbosity, all thread phases (as tiger-pkg does)
-        n = self.fn(raw, len(raw), out, size, 1, 0, 1, None, None, None, None, None, None, 3)
+        n = self.fn(raw, len(raw), out, size)
         if n != size:
             raise RuntimeError(f"OodleLZ_Decompress returned {n} for a {len(raw)}-byte block "
                                f"(expected {size})")
