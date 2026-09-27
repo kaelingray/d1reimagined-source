@@ -5,6 +5,10 @@ from the disc package. A replicated object id is (group key, kind, position in t
 the live client listed in TEST362 match this table. Kinds 0x2c and up (nav points, trigger volumes, script
 objects, phases, bubble links) are listed in the group but are not replicated records.
 
+Objective titles (kind 0x20 in the activity group, from the English string tables): 3 Enter the
+Wall, 7 Find a Weapon, 11 Grab the Rifle, 14 Fight through the Wall, 17 Fight through the Fallen,
+20 and 23 Find the Ship, 26 Clear out the Fallen.
+
 ## Group 0x992bb471: activity group (FNV-1 of "act_cosmo_m0_highway"): mission script objects (93 objects, tag 0x80cb8165)
 
 ```

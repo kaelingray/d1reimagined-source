@@ -1309,3 +1309,11 @@ rasputin, m7 command, portals, patrols).
   (0x80cb911e) embeds a 0x80802a1b component (the kind-0x20 state type: u3 state @0, target
   object ids, ten 64-byte per-entry records) with a back-reference 992bb471/0x20/3. Its apply
   handler `0x3561d8` copies the state to component +0x110 and special-cases state 3.
+- **Objective text from the disc** (`d1_pkg.py strings`: string index class 0x8080035a +
+  language table 0x808008be, text bytes stored minus 0x1f). Each `_player_objective` definition
+  carries its title and description hashes; the chain, with the activity-group kind-0x20 index:
+  3 "Enter the Wall" / "Take refuge inside the ancient wall." (0x52ff1516 / 0xb1fb2ef7);
+  7 "Find a Weapon"; 11 "Grab the Rifle"; 14 "Fight through the Wall"; 17 "Fight through the
+  Fallen" ("Fight to the other side of the Divide..."); 20 and 23 "Find the Ship"; 26 "Clear out
+  the Fallen" ("Eliminate the Fallen looting the ship."). This is the published objective order of
+  A Guardian Rises, so the objects above are the mission script's objectives in order.

@@ -36,6 +36,7 @@ Usage:
   python scripts/d1_pkg.py scan [DIR] --find TEXT|--hex HEX [--oodle DLL]  (search entry data)
   python scripts/d1_pkg.py bubbles 80cda002 [DIR] --oodle DLL   (a destination's bubbles and names)
   python scripts/d1_pkg.py groups PKG --oodle DLL [--key K] [--objects]  (replicated entity groups)
+  python scripts/d1_pkg.py strings DIR --oodle DLL [--grep TEXT|HASH]   (English localized strings)
 """
 
 import argparse
@@ -466,6 +467,49 @@ def cmd_groups(a):
                     print(f"  {key:#010x}/{kind:#x}/{i} {name}")
 
 
+# Localized strings. An index tag (class 0x8080035a) is {u32 size, u32 count, u32, 12 language
+# table tags from +0xc (English first), array of `count` sorted u32 string hashes}. A language
+# table (class 0x808008be) has an array @0x4 of 0x14-byte parts {u32, u32 offset from the
+# offset field, u32, u16 byte length, u16 char length, u16 shift, u16}, one per hash in order;
+# each text byte is stored minus `shift` (0x1f). Objective definitions refer to their title and
+# description by these hashes ("Enter the Wall" = 0x52ff1516).
+STRING_INDEX_CLASS = 0x8080035A
+
+
+def string_table(index, table):
+    count = struct.unpack_from(">I", index, 4)[0]
+    hashes = struct.unpack_from(f">{count}I", index, index.find(struct.pack(">II", 0x80800184, count)) + 0x14)
+    n, off, _ = dyn_array(table, 0x4)
+    texts = []
+    for i in range(n):
+        base = off + 0x14 * i
+        _, rel, _, blen, _, shift, _ = struct.unpack_from(">IIIHHHH", table, base)
+        raw = table[base + 4 + rel:base + 4 + rel + blen]
+        texts.append(bytes((c + shift) & 0xff for c in raw).decode("utf-8", "replace"))
+    return dict(zip(hashes, texts))
+
+
+def cmd_strings(a):
+    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
+    needle = a.grep.lower() if a.grep else None
+    found = {}
+    for p in ps.by_id.values():
+        for e in p.entries:
+            if e["reference"] != STRING_INDEX_CLASS:
+                continue
+            try:
+                index = p.entry_data(e["index"], ps.oodle)
+                table = ps.tag(struct.unpack_from(">I", index, 0xc)[0])
+                if table:
+                    for h, text in string_table(index, table).items():
+                        found.setdefault(h, text)
+            except (ValueError, struct.error, RuntimeError):
+                continue
+    for h, text in sorted(found.items()):
+        if needle is None or needle in text.lower() or needle == f"{h:08x}":
+            print(f"{h:#010x} {text!r}")
+
+
 def cmd_scan(a):
     needle = bytes.fromhex(a.hex) if a.hex else a.find.encode()
     oodle = Oodle(a.oodle) if a.oodle else None
@@ -508,6 +552,8 @@ def main(argv=None):
     s.add_argument("--key", help="only these group keys (comma-separated)")
     s.add_argument("--objects", action="store_true", help="list each object: key/kind/index name")
     s.set_defaults(fn=cmd_groups)
+    s = sub.add_parser("strings"); s.add_argument("paths", nargs="*"); s.add_argument("--oodle")
+    s.add_argument("--grep", help="text substring or an 8-digit hash"); s.set_defaults(fn=cmd_strings)
     s = sub.add_parser("scan"); s.add_argument("paths", nargs="*")
     g = s.add_mutually_exclusive_group(required=True); g.add_argument("--find"); g.add_argument("--hex")
     s.add_argument("--oodle"); s.set_defaults(fn=cmd_scan)
