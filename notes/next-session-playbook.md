@@ -43,9 +43,9 @@ python scripts\d1_pkg.py info <one package from the output above>   # codec of t
 python scripts\d1_pkg.py blocks <same package> --verify              # confirms the layout (SHA-1)
 ```
 
-Record in the notes: the named tags and class hashes for `act_cosmo_m0_highway`, and the Oodle
-decoder id `info` prints. That id decides whether the blocks can be read with the open-source ooz
-or need a user-supplied `oo2core_3_win64.dll`.
+Record in the notes: the named tags and class hashes for `act_cosmo_m0_highway`, and the block
+header `info` prints. D1 PS4 blocks start with 0xB7 and need `oo2core_3_win64.dll`; if the PS3
+ones do too, extraction (`d1_pkg.py extract ... --oodle <dll>`) needs a user-owned copy.
 
 ## 2. TEST367: what carries a mid-session switch
 
