@@ -13,6 +13,9 @@ for investigating Destiny's PS3 mission replication.
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All ten
 packages are individually below 100 MiB. The 25 data files total 303,954,016 bytes.
+`package_names.txt` lists all 247 package filenames from the disc's
+`PS3_GAME/USRDIR/packages` directory, including packages not copied into this
+repository. It contains names only, one per line.
 
 Only four requested TEST360–366 log files existed in `SIGNON_LOCAL/logs` when this
 bundle was made: `TEST364-rpcs3.log`, `TEST365-rpcs3.log`, `TEST366-ahl.log`, and

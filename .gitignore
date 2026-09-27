@@ -3,6 +3,7 @@
 !/.gitattributes
 !/README.md
 !/SHA256SUMS.txt
+!/package_names.txt
 !/eboot/
 !/logs/
 !/packages/
