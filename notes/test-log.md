@@ -527,3 +527,9 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   **spawn slot with a generation counter**, not a play trigger (28 in the highway start, 20 in
   The Breach, 5 in Dock 13). Next: first-call coverage in 112 (TEST364) vs 113 (TEST365) to see
   how far the cinematic code gets.
+- 364 (second PC): first-call coverage in bubble 14 (zone 112, guardian spawned): 16 first calls
+  with lr=0x276230 (the replicated-state apply site). New against TEST256 (Dock 13):
+  `0x26c414`, `0xb2f2e0`, `0x26ff1c` - the handlers of bubble 14's kinds 2, 0x1c and 0x28.
+  `0xb2f2e0` sits next to kind 0x1d's `0xb2f99c` (mission-script code) and just copies the
+  12-byte state {object id, u32} to the component at +0x108, so it is kind 0x1c; the other two
+  are kinds 2 and 0x28 (pairing by the r4 state-type dump still to do).
