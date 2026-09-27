@@ -48,3 +48,24 @@ class ClientConfigReply(unittest.TestCase):
         self.assertEqual(bap.client_config_reply(), bytes.fromhex("08011001"))
         self.assertEqual(bap.client_config_reply(0, 1), bytes.fromhex("08001001"))
         self.assertEqual(bap.client_config_reply(300, 2), bytes.fromhex("08ac021002"))
+
+
+class ReactiveObjects(unittest.TestCase):
+    def test_rule_parsing(self):
+        on_type, on_body, delay, spec = bap.reactive_object_spec(
+            '15/^41=>2.5@0xecf574b5:3:0:0x808004fa={"0": {"0": 2}}')
+        self.assertEqual((on_type, delay), (15, 2.5))
+        self.assertTrue(on_body.search("4100") and not on_body.search("0041"))
+        self.assertEqual(spec[0], {0: 0xecf574b5, 4: 3, 6: 0})
+        self.assertEqual(spec[1], 0x808004fa)
+        self.assertEqual(spec[2], {0: {0: 2}})
+        self.assertIsNone(bap.reactive_object_spec("0x14=>0@1:2:3:0x80800001")[1])
+        with self.assertRaises(ValueError):
+            bap.reactive_object_spec("15@1:2:3:0x80800001")
+
+    def test_replace_object_keeps_one_state_per_object(self):
+        objects = [bap.default_baseline(1, 3, 0), bap.default_baseline(1, 4, 0)]
+        spec = bap.object_spec('1:3:0:0x808004fa={"0": {"0": 1}}')
+        self.assertEqual(bap.replace_object(objects, spec), (1, 3, 0))
+        self.assertEqual(len(objects), 2)
+        self.assertEqual(objects[-1], spec)

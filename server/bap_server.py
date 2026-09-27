@@ -44,6 +44,7 @@ import hmac
 import ipaddress
 import itertools
 import json
+import re
 import secrets
 import socket
 import struct
@@ -409,6 +410,25 @@ def timed_object_spec(value):
     return float(seconds), object_spec(spec)
 
 
+def reactive_object_spec(value):
+    """Parse --ah-on TYPE[/REGEX]=>SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON: (client message type,
+    compiled regex over the body hex or None, delay in seconds, object_spec)."""
+    trigger, sep, action = value.partition("=>")
+    if not sep:
+        raise ValueError("--ah-on expects TYPE[/REGEX]=>SECONDS@OBJECT")
+    ah_type, _, pattern = trigger.partition("/")
+    seconds, spec = timed_object_spec(action)
+    return int(ah_type, 0), re.compile(pattern) if pattern else None, seconds, spec
+
+
+def replace_object(objects, spec):
+    """Replace (or add) the replicated object that `spec` names in `objects`; returns its
+    (group, kind, index)."""
+    ident = (spec[0][0], spec[0][4], spec[0][6])
+    objects[:] = [o for o in objects if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
+    return ident
+
+
 def default_baseline(key, kind, index, has_b=False):
     """A baseline without fields (reset to the type's defaults) for replicated object key/kind/index."""
     return {0: key, 4: kind, 6: index}, None, None, has_b
@@ -712,6 +732,8 @@ def handle(conn, peer, args):
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
     baselines_stamp = None  # modification time of --ah-baselines-watch when last read
     objects_applied = 0  # --ah-object-at entries already sent (they are sorted by time)
+    reactions_fired = set()  # --ah-on rules already triggered (each fires once)
+    reactions_due = []  # (absolute time, object spec, rule text) scheduled by --ah-on
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
@@ -849,6 +871,14 @@ def handle(conn, peer, args):
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
                 body = payload[21:21 + ah_len]
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+                for rule_index, (on_type, on_body, delay, spec) in enumerate(args.ah_on):
+                    # Script steps driven by what the client reports (sense state), not by time
+                    if (rule_index not in reactions_fired and ah_type == on_type
+                            and (on_body is None or on_body.search(body.hex()))):
+                        reactions_fired.add(rule_index)
+                        reactions_due.append((time.time() + delay, spec, f"type {on_type} rule {rule_index}"))
+                        log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: object "
+                            f"{spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]} in {delay:g} s")
             if (kind == 1 and msg_type == AH_NOT and len(payload) >= 21 and ah_type == AH_JOIN_REQUEST
                     and args.ah_join and args.activity_schema):
                 request = join_request(args.activity_schema, body)
@@ -967,8 +997,7 @@ def handle(conn, peer, args):
                         # (not `seconds`: that is the heartbeat interval used below - reusing it
                         # delayed the next heartbeat by the object's time, TEST361 baboon)
                         due_at, spec = args.ah_object_at[objects_applied]
-                        ident = (spec[0][0], spec[0][4], spec[0][6])
-                        objects_[:] = [o for o in objects_ if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
+                        ident = replace_object(objects_, spec)
                         objects_applied += 1
                         changed = True
                         log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {spec[2]} (at {due_at:g} s)")
@@ -976,6 +1005,15 @@ def handle(conn, peer, args):
                         at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    for entry in [e for e in reactions_due if e[0] <= time.time()]:
+                        reactions_due.remove(entry)
+                        ident = replace_object(objects_, entry[1])
+                        log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {entry[1][2]} ({entry[2]})")
+                    at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
+                    sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
+                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
@@ -1155,6 +1193,12 @@ def main():
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
+    ap.add_argument("--ah-on", action="append", default=[], type=reactive_object_spec,
+                    metavar="TYPE[/REGEX]=>SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON",
+                    help="with --ah-roster and --ah-heartbeat, replicate this object state SECONDS after "
+                         "the client first sends activity-host message TYPE whose body hex matches REGEX "
+                         "(once per rule; repeatable), e.g. step the next objective when a trigger "
+                         "volume reports: 15/^41=>0@G:3:I:0x808004fa={\"0\": {\"0\": 2}}")
     ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "
