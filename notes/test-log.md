@@ -491,3 +491,14 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   (0x992bb471) kind 0x1c and 4x 0x1d in bubble 14 - no kind-3 objective sensor here. 11
   D1FPRELOAD events. Bubble 14 is one of the two bubbles with an extra slice set (113), which
   fits 113 = the intro cinematic.
+- 350 (second PC): boot into slot 113 (bubble 14 state 0), then `--ah-zone-schedule 112@90`. The
+  screen stayed black behind the URGENT MESSAGE dialog for 3 minutes; no cinematic, no spawn.
+  Slot 113 is its own slice set: the client's records were only the global ones plus
+  activity-group **kind 4 index 0 in bubble 14** (0x808007d9 / B 0x80800387) and **kind 6 index 1
+  and 2** (0x8080254d) - bubble 14's gameplay group 0xecf574b5 was not loaded. The second world
+  state (zone 112 at +90 s) was sent but not acted on (no new records, no spawn). Reading: the
+  cinematic slice set loaded, but the host never started it: kind 6 holds up to 16 + 6 player ids
+  (roster; EBOOT string "cinematic_with_roster"), kind 4's handler `0x2000e0` advances the object
+  when the u32 at +0 rises above its value at object +0x110 (`0x200014`), bool +4 gates the
+  follow-up. Both were default zeros. Next: TEST360 with the player id in kind 6's roster and
+  kind 4 stepped 1, 2, 3 at 20/40/60 s (`--ah-object-at`), OK pressed on the urgent message.
