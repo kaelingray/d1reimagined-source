@@ -79,25 +79,25 @@
 0x31d06c	wc_copy_world_state_group	copies world-state group records to the slice; local slot +0x230
 0x25bc10	host_local_peer_index	local peer index in the host session
 # --- replicated-state handlers per kind (TEST256-257, TEST364)
-0x1f8d20	apply_kind01	kind 0x01 (state 0x8080071e), bubble objects
+0x1f8d20	apply_kind01_squad	kind 0x01 squads (sq_*; state 0x8080071e)
 0x1f6aa4	apply_kind03_objective_sensor	kind 0x03 objective sensor: 24 u7 objective states -> script state machines
-0x2000e0	apply_kind04_spawn_slot	kind 0x04 spawn slot (0x808007d9) -> 0x200014
+0x2000e0	apply_kind04_spawned_object	kind 0x04 spawned props/creatures (o_weapon, pigeon_*, o_ghost_*; 0x808007d9) -> 0x200014
 0x200014	spawn_slot_generation	higher u32 than +0x110 destroys the tracked entity (0x1323e0) so it is recreated
 0x1323e0	entity_destroy	destroys an entity (spawn-slot regeneration)
-0xb94414	apply_kind05	kind 0x05 (0x808029a1)
-0x4ed278	apply_kind06_roster	kind 0x06 (0x8080254d), player-id roster ("cinematic_with_roster")
-0x4edd00	apply_kind0c_sim_player	kind 0x0c simulation player (0x808022a5)
+0xb94414	apply_kind05_sequence	kind 0x05 sequences (_incoming_sequence / _completion_sequence; 0x808029a1)
+0x4ed278	apply_kind06_cinematic	kind 0x06 cinematics (pf_*._cinematic; 0x8080254d with a player-id roster)
+0x4edd00	apply_kind0c_player	kind 0x0c players[0..15] (0x808022a5; index 5 = players[0])
 0x4ede14	sim_player_bind	sim-player component -> 0x14a270
 0x14a270	bind_player_to_sim_player	binds the pla with the owner machine id to its simulation player
-0xb2c778	apply_kind0f_activity_table	kind 0x0f per-player activity table (0x808008d0, 0x3470 bytes)
-0xb2c8d4	apply_kind10_game_mode	kind 0x10 game mode (0x808008a3); pushes the variable table
-0xb2d1e0	apply_kind11	kind 0x11 (0x80800725), game-mode code
-0xb2f99c	apply_kind1d	kind 0x1d (0x80800463), mission-script code
-0x3561d8	apply_kind20_spawn_group	kind 0x20 (0x80802a1b), player spawner
+0xb2c778	apply_kind0f_scoreboard	kind 0x0f scoreboard (0x808008d0, 0x3470 bytes)
+0xb2c8d4	apply_kind10_lifetime	kind 0x10 lifetime (the stand-in's "game mode", 0x808008a3); pushes the variable table
+0xb2d1e0	apply_kind11_lifetime_timer	kind 0x11 lifetime_timer (0x80800725)
+0xb2f99c	apply_kind1d_player_trigger	kind 0x1d _player_trigger / pt_* points (0x80800463)
+0x3561d8	apply_kind20_player_objective	kind 0x20 _player_objective (0x80802a1b); copies the state to component +0x110
 0x200e38	apply_kind21	kind 0x21 (0x80800750), bubble objects
-0xb26bac	apply_kind22	kind 0x22 (0x808004a4), game mode
-0x355dc0	apply_kind27_spawner	kind 0x27 (0x80802aef), player spawner
-0xb2f2e0	apply_kind1c	kind 0x1c: copies {object id, u32} to the component at +0x108
+0xb26bac	apply_kind22_hard_wipe_globals	kind 0x22 hard_wipe_globals (0x808004a4)
+0x355dc0	apply_kind27_new_user_experience	kind 0x27 new_user_experience (0x80802aef)
+0xb2f2e0	apply_kind1c	kind 0x1c (pm_in_wall): copies {object id, u32} to the component at +0x108
 0x26c414	apply_bubble14_kind_a	first call in bubble 14 only: kind 2 or 0x28 handler
 0x26ff1c	apply_bubble14_kind_b	first call in bubble 14 only: kind 2 or 0x28 handler
 0x1fed60	script_var_get_a	script-variable getter (47 callers)

@@ -1272,3 +1272,40 @@ compressed blocks of the ten uploaded packages decode to exactly their used size
 - Not in the uploaded packages: the mission's activity data (`act_cosmo_m0_highway` and its group
   keys appear in none of them; the Cosmodrome's 11 activity infos are in
   `ps3_cosmo_activities_activity_025c_0.pkg`) and the destination packages 0x270-0x274.
+
+## act_cosmo_m0_highway from the disc (package 025c, 2026-09-27 night)
+Named tags: `act_cosmo_m0_highway` (0x80cb8001, class 0x808008ba) and
+`act_cosmo_m0_highway:scenario_client` (0x80cb800d, class 0x80800616); the package holds every
+Cosmodrome story activity (m0 highway, m0_5 hangar, m1 dome_a, m2/m4 dome_c, m5 refinery, m6
+rasputin, m7 command, portals, patrols).
+- **scenario_client** = {u32 size, +4 0x992bb471 (activity group key = FNV-1 of the activity
+  name), +8 0x79130968 (the activity checksum the client compares), ..., array @0x30 of 22
+  per-bubble slice-set lists {bubble name hash, array of 0x3c-byte slice-set records}}. Every
+  bubble has one slice set except `hangar` (13) and `highway` (14), which have a second one:
+  **`cosmo_m0_phase04_outro` = 105 and `cosmo_m0_phase00_highway_intro` = 113** (both flagged
+  1/1/1 at +0x10..+0x18). So slice set 8b + n is bubble b's n-th slice set in this list; each
+  record names a slice-set tag (112 -> 0x80cb801d -> 0x80cb8ce3, 113 -> 0x80cb801e -> 0x80cb8d50)
+  whose arrays list the replicated groups loaded with it. The tag ends with the mission's phases
+  in order with a kind (0 cinematic, 2 gameplay): phase00_highway_intro (0), phase00_highway,
+  phase01_breach, phase01b_breach, phase02_graveyard, phase03_hangar, phase04_outro (0).
+- More bubble dev names: 6 `delta_n`, 7 `delta_s`, 11 `dry_sea`, 17 `rasputin`, 18
+  `rasputin_vendor`.
+- **Replicated groups** (class 0x8080076e; `d1_pkg.py groups`): {size, destination hash, group
+  key, u32, array @0x10 of {u8 kind, 3 bytes, u32}, ...} then one dev name per object; **an
+  object's replicated index is its position in the list** - all 118 records of TEST362 match.
+  Full table: [`mission-objects-highway.md`](mission-objects-highway.md). The kinds, named:
+  0x20 `_player_objective` (e.g. 0x992bb471/0x20/3 = obj_m0_phase00_m1, "Enter the Wall"), 0x5
+  `_incoming_sequence` / `_completion_sequence`, 0x6 `_cinematic` (1 pf_104_res intro, 2
+  pf_104_res_fp, 10 pf_104a_pwr, 29 pf_105_cto outro), 0x4 spawned props (skeleton_static_1,
+  o_weapon; in bubble 14 the o_ghost_* lights and pigeon_1-22), 0x1 squads (sq_ghost), 0x1d
+  `_player_trigger` / pt_* points, 0x1c pm_in_wall, 0x1e tg_m0_gating. Kinds 0x2c (nav points),
+  0x37 (bubble links), 0x3a (trigger volumes), 0x3b (script objects), 0x3c (phases), 0x3d are
+  listed but not replicated. The game-mode group 0x4786c0e0 (ambient package 0268): 0xf/0
+  `scoreboard`, 0x22/1 `hard_wipe_globals`, 0x11/2 `lifetime_timer`, 0x10/3 `lifetime` (what
+  `--ah-game-mode` sends), **0x27/4 `new_user_experience`**, 0xc/5-20 `players[0..15]`.
+  Several earlier guesses were wrong (kind 0x20 is not a spawn group, 0xf not a per-player
+  activity table); the handler labels are renamed.
+- Each object has a definition tag (class 0x80800861) with typed components; the objective's
+  (0x80cb911e) embeds a 0x80802a1b component (the kind-0x20 state type: u3 state @0, target
+  object ids, ten 64-byte per-entry records) with a back-reference 992bb471/0x20/3. Its apply
+  handler `0x3561d8` copies the state to component +0x110 and special-cases state 3.

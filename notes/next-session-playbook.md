@@ -86,26 +86,38 @@ table and the follower ignores it. Also look at what the client sends around the
 (`ah_log_summary.py`) and whether the lobby sees a new `createSession` (public bubble
 matchmaking, `public-research.md`).
 
-## 4. Prediction 1: sense state from an armed objective
+## 4. TEST369: show the first objective (names from the disc, `mission-objects-highway.md`)
 
-1. Find the kind-3 objective sensors that are loaded at the highway start: in the latest
-   bubble-14 export (e.g. `local\SIGNON_LOCAL\TEST363-objects.json`), list records with kind 3
-   and their group/index. Bubble 14 has no kind-3 object of its own (TEST342); check the
-   activity group 0x992bb471 too.
-2. Arm objective 0 at 60 s and walk to the Wall as in step 3 (keyboard pad):
-   `Invoke-MissionRun.ps1 -Name TEST369 -ExtraAh @('--ah-object-at','60@<group>:3:<index>:0x808004fa={"0": {"0": 1}}')`
-   (JSON as in the orbit checkpoint; put it in a file and pass `=@file.json` if quoting breaks).
-3. `python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST369-ahl.log`. A new type or
-   body after the step is the first sense-state report. Also look for the objective text on
-   screen.
-4. If a report shows up, close the loop with `--ah-on TYPE/BODYREGEX=>0@<group>:3:<index>:...`
-   stepping objective 0 to 2, and see whether the next objective appears.
+The first objective "Enter the Wall" is `0x992bb471/0x20/3`
+(`cosmo_m0_phase00_highway.obj_m0_phase00_m1._player_objective`, state 0x80802a1b); its
+sequences are `0x992bb471/0x5/4` (incoming) and `/5` (completion), its trigger
+`0x992bb471/0x1d/30` (`._player_trigger`). Step the objective's state byte (field 0, 3 bits)
+1, 2, 3 in the highway start and watch the HUD; the handler (`0x3561d8`) treats 3 specially:
 
-## 5. Kind 4 (spawn slot) as squad placement
+```powershell
+scripts\Invoke-ObjectExperiment.ps1 -Name TEST369 -Bubble 14 -Seconds 240 -ExtraAh @(
+  '--ah-object-at','60@0x992bb471:0x20:3:0x80802a1b={"0": 1}',
+  '--ah-object-at','120@0x992bb471:0x20:3:0x80802a1b={"0": 2}',
+  '--ah-object-at','180@0x992bb471:0x20:3:0x80802a1b={"0": 3}') -Watch @('3561d8 200 r4:16')
+python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST369-ahl.log
+```
 
-`Invoke-ObjectExperiment.ps1 -Name TEST370 -Bubble 14 -ExtraAh @('--ah-object-at','30@0xecf574b5:4:<index>:0x808007d9={"0": 1}')`
-for one bubble-14 kind-4 index, with screenshots. Something should appear at a fixed spot (a
-squad or a prop). If it is a combatant, kill it and check `ah_log_summary.py` for a report.
+Look for the objective text or a waypoint in the screenshots, and for a new client message
+(the trigger `0x1d/30` should report when the guardian walks into `tv_in_wall` /
+`obj_m0_phase00_m1._trigger_volume` once the objective is active). If JSON quoting breaks,
+put the JSON in a file and use `=@file.json`.
+
+## 5. The intro cinematic, now that its objects are known
+
+Slice set 113 (`cosmo_m0_phase00_highway_intro`) loads the cinematic `0x992bb471/0x6/1`
+(`pf_104_res._cinematic`, state 0x8080254d with a player-id roster) and
+`0x992bb471/0x4/0` (`skeleton_static_1`). TEST360-363 stepped 0x4/0 (a prop, not a trigger) and
+put the player in the roster of kind 6 index 1, but the state's other fields stayed at their
+defaults. Next: export the live 0x8080254d schema field list (`--schema-out` of
+`rpcs3_replicated_objects.py` already covers it) and set the cinematic's start/playing fields,
+with the watch `4ed278 200 r4:32`. (Bubble 14's own kind-4 objects are `o_ghost_*` lights and
+`pigeon_1-22`, so stepping them is not useful.) `new_user_experience` (`0x4786c0e0/0x27/4`) is
+a separate candidate for first-mission gating.
 
 ## 6. RPCS3 housekeeping (optional, 20 minutes)
 
