@@ -11,7 +11,8 @@ param(
     [string]$Trace = '0x2bef68',
     [string]$Dumps = 'r3:0',
     [int]$Hits = 2,
-    [int]$Seconds = 60
+    [int]$Seconds = 60,
+    [string]$TraceAfter = 'ahp req'   # '' starts the trace right after the login
 )
 $bap = @('--self-flags', '2', '--universe-flag-values', '215=1', '--peer-family') + $ExtraBap
 $ah = @('--ah-join', '--ah-entities', '8192:12288', '--ah-state', '--ah-map', 'act_cosmo_m0_highway',
@@ -21,4 +22,4 @@ $ah = @('--ah-join', '--ah-entities', '8192:12288', '--ah-state', '--ah-map', 'a
         '--ah-baselines', "@$Baselines", '--ah-heartbeat', '1') + $ExtraAh
 & "$PSScriptRoot\Invoke-JoinCycle.ps1" -Name $Name -LobbyArgs @('--reply-type', '0x01', '--session-result') `
     -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host -ExtraBap $bap -AhArgs $ah `
-    -TraceAfter 'ahp req' -Trace $Trace -Dumps $Dumps -Hits $Hits -Seconds $Seconds
+    -TraceAfter $TraceAfter -Trace $Trace -Dumps $Dumps -Hits $Hits -Seconds $Seconds

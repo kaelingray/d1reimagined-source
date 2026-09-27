@@ -879,7 +879,8 @@ def handle(conn, peer, args):
                 # crashed (status 36, reason 0x67, "baboon") once the time since the host's last
                 # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
                 seconds, subtype = args.ah_heartbeat
-                conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
+                if subtype >= 0:  # -1: only the machines/simulation repeats below
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
                 if confirm_repeat:
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
                 if sim_repeat:
@@ -912,7 +913,7 @@ def handle(conn, peer, args):
                     folder.joinpath(f"{number:03}-server-bcnot.bin").write_bytes(push)
                     log(f"[{tag}] pushed b->c not subtype {subtype} data {data}")
             if kind == 1 and msg_type == CLIENT_CONFIG_REQ and args.ws_signin:
-                reply = encrypted_frame(tx, CLIENT_CONFIG_RSP, msg_id, 200, client_config_reply())
+                reply = encrypted_frame(tx, CLIENT_CONFIG_RSP, msg_id, 200, client_config_reply(*args.client_config))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-13.bin").write_bytes(reply)
                 log(f"[{tag}] sent client config rsp (request {payload.hex()})")
@@ -974,6 +975,8 @@ def main():
     ap.add_argument("--ws-no-reply", type=lambda v: {int(x) for x in v.split(",") if x},
                     default=set(),
                     help="comma-separated ws services to leave unanswered (experiments only)")
+    ap.add_argument("--client-config", type=lambda v: tuple(int(x, 0) for x in v.split(",")), default=(1, 1),
+                    metavar="V1,V2", help="client config rsp fields 1 (uint64) and 2 (uint32); meaning unknown")
     ap.add_argument("--universe-time", choices=sorted(UNIVERSE_TIME_UNITS), default="one",
                     help="value sent in universe +8 (suspected server clock): 1 or now in a unit")
     ap.add_argument("--universe-flags", type=lambda v: [int(x, 0) for x in v.split(",") if x], default=[],
@@ -1037,7 +1040,8 @@ def main():
                          "scripts/rpcs3_replicated_objects.py")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
-                    help="with --ah-join, push an empty host message (default type 11) every SECONDS")
+                    help="with --ah-join, push an empty host message (default type 11; -1 = none) plus the "
+                         "machines/simulation repeats every SECONDS")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-join-fields", default=[],
