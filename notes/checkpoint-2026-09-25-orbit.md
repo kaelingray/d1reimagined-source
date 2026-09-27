@@ -1214,6 +1214,16 @@ logs there and the exported schemas. Nothing here has run yet; the hooks in
   @0x142. TEST366 decoded: join -> state 5; 20:23:22 target 112 (state 4); 20:23:27 current 112,
   target -1, state 0. So the client reports every slice-set change to the host; the BAP stand-in
   now logs these as "client slice set: ..." (`client_slice_state`).
+- **Type 6 = the client's upstream replicated object stream** (the "sense state" direction).
+  `0x1ce098(sim, peer)` runs while the simulation's state (+0x604) is 3: `0x1cdb10` encodes the
+  records the client authors into a 15 KB buffer (a flag bit from sim +0x613, the u8 epoch from
+  +0x608, a 0 bit, then objects), the host session's messaging interface (vtable 0x12b70a0,
+  slot +0x10 = `0x258678`) sends it as type 6, and each sent record's state becomes its new
+  baseline (`0x25ffb8` / `0x25ff48`). In TEST366 all three type-6 messages carry one object,
+  0x4786c0e0 / kind 0xc / index 5 = the local player's simulation player (object id at bit 11).
+  The per-object header after the id does not match the host stream's u32 length, and neither
+  state type decodes cleanly: hook `0x1cdb10` (or dump the buffer at `0x1ce134`) to pin it down.
+  Trigger volumes and squads would report the same way once the client authors such records.
 - Client -> host messages in TEST366 (`scripts/ah_log_summary.py`): 3 (join), 17 (8 bytes), 37
   (1087), 21 (164, 10, 16, 28 bytes: different bodies), 15 (1 byte, ~30/s), 20 (1536), 36 (4), 6
   (41 bytes, three times with a counter 1/2/3 at the end, from emu ~5:27) and 18 (54 bytes). After
