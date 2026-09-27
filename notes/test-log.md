@@ -511,3 +511,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   takes timed screenshots; TEST361 repeats with steps at 90/120/150 s.
 - 351 (second PC): **bubble 7 = THE STEPPES** (daytime scrubland under the colony ship; no
   bubble-local group; 20 D1FPRELOAD).
+- 361 (second PC, Invoke-ObjectExperiment.ps1, slot 113, roster + steps at 90/120/150 s): the
+  live feed supplied the 2 missing baselines, the urgent message was dismissed, the screen stayed
+  black with the Level Up toast; at +132 s "Removed from the game world ... baboon". Cause: a
+  stand-in bug - the --ah-object-at scheduler reused `seconds`, the heartbeat interval variable, so
+  after step 1 the next heartbeat came 90 s later and the client declared the host gone (the
+  client kept sending type-15 notifications, ~30/s, body 00 with an occasional 0x41, throughout).
+  Fixed; the cinematic test repeats as TEST363. The end-of-run export failed because the client
+  had already left the world.
