@@ -1047,3 +1047,23 @@ Fallen -> Find the ship -> Clear out the Fallen.
 - Script variables: the game-mode object's variable table is pushed into a global script-variable
   store (`0xb2c8d4` loop -> `0x1fed20` -> `0xd08b68`); client code reads it through getters
   (`0x1fed60` 47 callers, `0x1fee1c` 44, `0x1fedc4` 10, `0x1fed8c` 6).
+
+## Mission script objects (TEST262)
+Named script objects of act_cosmo_m0_highway, read from guest memory (strings at ~0x828dd400 in
+that run), grouped by phase. Each objective has `_player_objective`, `_incoming_sequence`,
+`_completion_sequence`, and mostly `_nav_point`, `_trigger_volume`, `_player_trigger`.
+- `cosmo_m0_phase00_highway_intro`: `pf_104_res` and `pf_104_res_fp` (`_cinematic`: the Ghost
+  resurrection cutscene, third and first person), `skeleton_static_1`.
+- `cosmo_m0_phase00_highway`: `obj_m0_phase00_m1` (Enter the Wall), `pt_ab`/`pt_ab_1`,
+  `tv_ab`/`tv_ab_1`, `tv_in_wall`, `pm_in_wall`, `breach`.
+- `cosmo_m0_phase01_breach`: `obj_investigate_wall`, `obj_get_weapon`, `o_weapon`,
+  `pf_104a_pwr` (cinematic + `_trigger[0]`), `sv_m0_gating`/`tg_m0_gating`,
+  `tv_obj_investigate_wall`, `graveyard`, `globals`.
+- `cosmo_m0_phase01b_breach`: `obj_goto_graveyard`, `graveyard`, `globals`.
+- `cosmo_m0_phase02_graveyard`: `obj_m0_m04` (`_object`), `pt_obj_backup_adv`/
+  `tv_obj_backup_adv`, `globals`.
+- `cosmo_m0_phase03_hangar`: `obj_m0_goto_hangar`, `obj_m0_m04a`, `obj_m0_m04b`,
+  `ap_obj_m0_m04b`, `tv_obj_m0_m04b`, `hangar`.
+- `cosmo_m0_phase04_outro`: `pf_105_cto` (end cinematic).
+Entity group keys are FNV-1 hashes of names: 0x992bb471 = "act_cosmo_m0_highway" (the other
+groups did not match any string in guest memory).

@@ -420,3 +420,33 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   up by per-frame queries - 0x9270fc16 (caller 0x34e5ec, spawner area), 0xf50d3fbe (0xb26b44, game
   mode), 0xbe4db480 (0x3547e8, spawner), 0xe00081c9 (0x456cc0) - plus a few one-off hashes
   (0x6999ecc1 from 0x403410, 0x8a9c2494, 0x1b6934 x7). Needs a "log each value once" hook mode.
+- 259: bubble 0 instead of bubble 13 (`-ExtraAh --ah-bubble-states -1,0=0 --ah-zone 0:0x811c9dc5
+  --ah-world-state 0:1`, same z104 baselines): the guardian spawns. 99 replication records, all
+  with baselines (private `TEST259-objects.json`): the shared groups 0x992bb471, 0x3c2f5ed5 and
+  0x4786c0e0 only - bubble 0 brings no bubble-local group (Dock 13 has 0x062dd95d).
+- 260: TEST259 configuration plus exploration and "log each value once" (`u`) hooks on the
+  script-variable getters. The Ghost's nav mode names the place **SKYWATCH**: night, aurora,
+  snow, fences and sheds - not the mission start (daytime, cars in front of the Wall, "ENTER THE
+  WALL"). The urgent-message popup and a "Level Up" toast appeared again. Variables queried
+  (hash, caller): 0x1fed60 - 0x9270fc16 (0x34e5ec), 0x7005ebae (0x35a174/0x752e78/0x753288),
+  0x4165bc21, 0x6841ced1, 0x0150f05d, 0x8edb7194, 0x1d7c72c6, 0x87b08641/0x9580f1ab/0x984b3e47/
+  0xcb43928b (0x4e96d8), 0x6d94be13, 0x5363ac88/0xae40c103/0x4b565fd5 (0x64d*-0x64f*),
+  0x0e8fba43; 0x1fee1c - seven from 0x1b6934 (0x9cbb1bca, 0x902f962c, 0x804595e8, 0x6cc5f20a,
+  0x9da2485c, 0xae0f714c, 0xb0491511), 0x648200df/0x4f87f291 (0x2a2e98), 0xd500a5ba,
+  0x6999ecc1/0x6ac978e9/0x1dd4fff4/0xdab1fe13 (0x403410-0x403468), 0x8a9c2494 (0x5e96d0-0x5e98ac),
+  0xf50d3fbe (0xb26b44, game mode), 0xa8f8e198 (0xb49a88); 0x1fedc4 - 0x5055b670 (0x3547e8),
+  0x46e1e45d/0xd2c94ab2 (0x35b014/0x35b02c), 0x8cad54c6; 0x1fed8c - 0xe00081c9 (0x456cc0).
+- 261-262: bubble 0 again with `scripts/rpcs3_bubbles.py`: the object table's 22 bubble zone
+  handles are 0x80cda00f (bubble 0), 0x80cda2df, 0x80cda3ea, 0x80cda725, 0x80cdb034, 0x80cdb536,
+  0x80cdb5aa, 0x80cdba2a, 0x80ce01c8, 0x80ce06c7, 0x80ce0beb, 0x80ce11a9, 0x80ce1c7b, 0x80ce225e
+  (13, Dock 13), 0x80ce2b61, 0x80ce3761, 0x80ce3f75, 0x80ce4154, 0x80ce450d, 0x80ce48d5,
+  0x80ce5324, 0x80ce8511; only the loaded bubble's handle resolves. Nav mode confirms SKYWATCH
+  (west of the Mothyards, not the start). Guest memory holds the mission's script object names
+  (see checkpoint): phases `cosmo_m0_phase00_highway_intro` (cinematics `pf_104_res`,
+  `pf_104_res_fp`), `phase00_highway`, `phase01_breach`, `phase01b_breach`, `phase02_graveyard`,
+  `phase03_hangar`, `phase04_outro`. Entity group 0x992bb471 = FNV-1("act_cosmo_m0_highway").
+  Plain area names ("Skywatch") are not in guest memory as text.
+- Setup-screen flashing (user video): magenta/white blocks over the lower ~40% of Set Screen
+  Bounds / Brightness / Subtitles on alternate frames. In the F12 archive every Set Screen Bounds
+  capture before 2026-09-26 13:59 is clean; the first bad one follows TEST195/196 (Write/Read
+  Color + Depth buffers, tiling), before any custom build. Cosmetic, back burner.

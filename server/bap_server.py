@@ -701,6 +701,7 @@ def handle(conn, peer, args):
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
+    baselines_stamp = None  # modification time of --ah-baselines-watch when last read
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
@@ -919,6 +920,19 @@ def handle(conn, peer, args):
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
                 if confirm_repeat:
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
+                if sim_build and args.ah_baselines_watch and args.ah_baselines_watch.exists():
+                    # objects of a bubble that only loads after the join: pick up the list the
+                    # dump script writes during the run and add baselines for the new ones
+                    stamp = args.ah_baselines_watch.stat().st_mtime
+                    if stamp != baselines_stamp:
+                        baselines_stamp = stamp
+                        peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                        have = {(o[0][0], o[0][4], o[0][6]) for o in objects_}
+                        new = [b for b in baseline_list("@" + str(args.ah_baselines_watch)) if b[:3] not in have]
+                        if new:
+                            objects_.extend(default_baseline(*b) for b in new)
+                            sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                            log(f"[{tag}] {len(new)} new baselines from {args.ah_baselines_watch}")
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
@@ -1092,6 +1106,9 @@ def main():
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "
                          "scripts/rpcs3_replicated_objects.py")
+    ap.add_argument("--ah-baselines-watch", type=Path, metavar="FILE",
+                    help="with --ah-heartbeat, re-read this --ah-baselines list whenever it changes and "
+                         "add default baselines for objects not sent yet (bubbles loaded after the join)")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE]",
                     help="with --ah-join, push an empty host message (default type 11; -1 = none) plus the "
