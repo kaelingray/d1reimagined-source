@@ -381,6 +381,25 @@ def baseline_list(value):
     return [tuple(int(y, 0) for y in (x.strip().split("/") + ["0"])[:4]) for x in value.split(",") if x.strip()]
 
 
+def object_spec(value):
+    """Parse --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON into an sim_packet object: JSON maps field
+    offsets (decimal or 0x strings) to values, nested dicts for struct fields, e.g.
+    0x992bb471:0x20:7:0x80802a1b={"0": 1}."""
+    head, _, body = value.partition("=")
+    parts = [int(x, 0) for x in head.split(":")]
+    group, kind, index, state_type = parts[:4]
+    has_b = bool(parts[4]) if len(parts) > 4 else False
+
+    def keys(v):
+        if isinstance(v, dict):
+            return {int(k, 0): keys(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [keys(x) for x in v]
+        return v
+
+    return {0: group, 4: kind, 6: index}, state_type, keys(json.loads(body or "{}")), has_b
+
+
 def default_baseline(key, kind, index, has_b=False):
     """A baseline without fields (reset to the type's defaults) for replicated object key/kind/index."""
     return {0: key, 4: kind, 6: index}, None, None, has_b
@@ -867,6 +886,9 @@ def handle(conn, peer, args):
                         group, index, state = args.ah_game_mode
                         objects.append(game_mode(group, index, state))
                         log(f"[{tag}] game mode {group:#x}:{index} state {state}")
+                    for spec in args.ah_object:
+                        objects.append(spec)
+                        log(f"[{tag}] object {spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]} type {spec[1]:#x} state {spec[2]}")
                     sent = {(o[0][0], o[0][4], o[0][6]) for o in objects}
                     for key, kind, index, has_b in args.ah_baselines:
                         if (key, kind, index) not in sent:
@@ -1042,6 +1064,10 @@ def main():
                     metavar="GROUP:INDEX:STATE",
                     help="with --ah-roster, replicate the game-mode object (kind 0x10) with this state "
                          "(non-zero ends the loading screen, 3 lets the spawner continue), e.g. 0x4786c0e0:3:3")
+    ap.add_argument("--ah-object", action="append", default=[], type=object_spec,
+                    metavar="GROUP:KIND:INDEX:TYPE[:B]=JSON",
+                    help="with --ah-roster, replicate this object with an explicit state of TYPE (fields "
+                         "by offset, e.g. 0x992bb471:0x20:7:0x80802a1b={\"0\": 1}); repeatable")
     ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "

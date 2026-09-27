@@ -141,5 +141,16 @@ class SimulationPacket(unittest.TestCase):
         self.assertEqual(r.get(1), 0)
 
 
+
+class ObjectSpec(unittest.TestCase):
+    def test_parse(self):
+        obj, state_type, state, has_b = b.object_spec('0x992bb471:0x20:7:0x80802a1b:1={"0": 1, "0x10": {"4": 2}}')
+        self.assertEqual(obj, {0: 0x992BB471, 4: 0x20, 6: 7})
+        self.assertEqual(state_type, 0x80802A1B)
+        self.assertEqual(state, {0: 1, 0x10: {4: 2}})
+        self.assertTrue(has_b)
+        self.assertEqual(b.object_spec("1:2:3:0x80800463")[2], {})
+
+
 if __name__ == "__main__":
     unittest.main()
