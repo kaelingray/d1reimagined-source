@@ -891,3 +891,28 @@ Full run (about 10 minutes):
   from `0x286cec`). None of the 8680 candidates received the text object, so it is written by
   helpers first used earlier. Next time: watch 0x401048/0x40130c/0x5531bc and the UI cluster
   with dumps, or trace writes to 0x43a4d7c0 directly.
+
+## Long-session memory growth in RPCS3 (TEST240-249, 2026-09-27)
+- Symptom: in the mission, private commit grew ~14-15 GB/min and RPCS3 vanished 7-12 minutes
+  in (commit limit 63 GB). Same on the official build (TEST241); the stock build's earlier RSX
+  fatal (`simple_array<VkDescriptorImageInfo>::reserve`) was this too.
+- Tools: `D1MEM` log line every 2 s (VKPresent.cpp: RPCS3's Vulkan pools, texture/surface
+  cache, program and descriptor-set counters); a VirtualQueryEx diff of committed private
+  regions (new 16 MB NT-heap segments, 32 MiB arenas).
+- Cause 1: `vk::descriptor_set::init()` reserved 16448-entry image/buffer info pools
+  (~0.9 MB) on first use of every descriptor set; Destiny has ~255k programs (pipelines) and
+  cycles through them, initializing ~270 new sets per second. Fix: storage pools of 256 + 64
+  entries, flushed at bind once 256 are used (same pointer-stability rule as before).
+  ~14.5 -> ~1.5 GB/min (TEST246).
+- Cause 2: every program's descriptor table keeps its own VkDescriptorPool (driver memory,
+  ~90 KB each incl. storage) forever. Starting pools at 2 sets did not help much (TEST247: RSX
+  stopped 20 min in with system RAM full). Fix: `vk::glsl::release_idle_descriptor_tables()`
+  runs once per presented frame; every 64 frames it releases the set storage and descriptor pool
+  of tables not committed for 256 frames (~8 s, far beyond GPU latency). The next `commit()`
+  allocates a new set and rewrites all descriptors from the template. TEST249: private commit
+  flat (12.9 GB) with ~35k tables released in the first minutes.
+- The first sessions also compiled ~2700 new fragment programs per minute (TEST247) until the
+  pipeline cache (persisted on disk) covered the mission; TEST248 added none. So the program
+  churn was a cold cache, not a hashing problem.
+- Both memory fixes are in `patches/rpcs3-destiny-fix.patch` and in the unfiled upstream draft
+  (notes/rpcs3-upstream-draft.md).

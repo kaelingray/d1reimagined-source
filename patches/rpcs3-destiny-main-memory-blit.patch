@@ -358,7 +358,7 @@ index 2a5079496..7353165ab 100644
  
  			if (const auto result = RSX(ctx)->read_barrier(read_address, read_length, !is_block_transfer);
 diff --git a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
-index 6e2e7162b..70090a3dc 100644
+index 6e2e7162b..dac9523a0 100644
 --- a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
 +++ b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
 @@ -1,4 +1,5 @@
@@ -367,7 +367,7 @@ index 6e2e7162b..70090a3dc 100644
  #include "nv3089.h"
  
  #include "Emu/RSX/RSXThread.h"
-@@ -585,11 +586,29 @@ namespace rsx
+@@ -585,11 +586,31 @@ namespace rsx
  			// Lock here. RSX cannot execute any locking operations from this point, including ZCULL read barriers
  			const u32 read_length = src.pitch * src.height;
  			const u32 write_length = dst.pitch * dst.clip_height;
@@ -391,7 +391,9 @@ index 6e2e7162b..70090a3dc 100644
 +			// result in the texture cache and only writes it back lazily on access, which loses data
 +			// when several blits target the same address between SPU reads. Do these on the CPU so the
 +			// data is in guest memory immediately.
-+			const bool copy_to_main_memory =
++			// Destiny test switch: C:/dev/d1noblitfix.on at boot disables this (checked once).
++			static const bool d1_blit_fix = !fs::is_file("C:/dev/d1noblitfix.on");
++			const bool copy_to_main_memory = d1_blit_fix &&
 +				dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER && src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER;
 +
 +			if (!g_cfg.video.force_cpu_blit_processing && !copy_to_main_memory &&
@@ -470,6 +472,35 @@ index 313daf12c..31dc577ba 100644
 +			if (d1diag::tracing())
 +				rsx_log.warning("D1T %llu backend_release addr=0x%x val=0x%x", get_system_time(), addr, val);
  			util::write_gcm_label<true, true>(ctx, reg, addr, val);
+ 		}
+ 
+diff --git a/rpcs3/Emu/RSX/Program/ProgramStateCache.h b/rpcs3/Emu/RSX/Program/ProgramStateCache.h
+index e1bdc8852..fe983ca95 100644
+--- a/rpcs3/Emu/RSX/Program/ProgramStateCache.h
++++ b/rpcs3/Emu/RSX/Program/ProgramStateCache.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "Emu/RSX/d1diag.h"
+ #include "RSXFragmentProgram.h"
+ #include "RSXVertexProgram.h"
+ 
+@@ -291,6 +292,17 @@ protected:
+ 		if (recompile)
+ 		{
+ 			it->first.clone_data();
++			if (d1diag::fp_logging())
++			{
++				// Destiny diagnostics: why fragment programs keep missing the cache
++				std::string hex;
++				const auto* bytes = static_cast<const u8*>(rsx_fp.get_data());
++				for (u32 i = 0; i < std::min<u32>(rsx_fp.ucode_length, 512); i++) fmt::append(hex, "%02x", bytes[i]);
++				d1_log.warning("D1FP id=%llu len=%u ctrl=0x%x tex_dims=0x%x shadow=0x%x redir=0x%x tcmask=0x%x mrt=%u hash=0x%llx ucode=%s",
++					static_cast<u64>(m_next_id.load()), rsx_fp.ucode_length, rsx_fp.ctrl, rsx_fp.texture_state.texture_dimensions,
++					rsx_fp.texture_state.shadow_textures, rsx_fp.texture_state.redirected_textures, rsx_fp.texcoord_control_mask,
++					rsx_fp.mrt_buffers_count, static_cast<u64>(program_hash_util::fragment_program_storage_hash{}(rsx_fp)), hex);
++			}
+ 			backend_traits::recompile_fragment_program(rsx_fp, *new_shader, m_next_id++);
  		}
  
 diff --git a/rpcs3/Emu/RSX/RSXFIFO.cpp b/rpcs3/Emu/RSX/RSXFIFO.cpp
@@ -651,6 +682,198 @@ index 9e27132fa..dfd81086c 100644
  		m_depth_surface_info.pitch = m_framebuffer_layout.actual_zeta_pitch;
  		ensure(ds->rsx_pitch == m_framebuffer_layout.actual_zeta_pitch);
  
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+index ffe7bc95c..645bbd630 100644
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -1,5 +1,6 @@
+ #include "stdafx.h"
+ #include "VKGSRender.h"
++#include "Emu/RSX/d1diag.h"
+ #include "vkutils/buffer_object.h"
+ #include "vkutils/memory.h"
+ #include "Emu/RSX/Overlays/overlay_manager.h"
+@@ -911,6 +912,27 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+ 
+ 		render_overlays(direct_fbo, areau(aspect_ratio));
+ 
++		vk::glsl::release_idle_descriptor_tables();
++
++		// Destiny diagnostics: memory pools every ~2 s, to find what grows during long sessions.
++		{
++			static u64 d1_last = 0;
++			if (const u64 now = get_system_time(); now - d1_last > 2'000'000)
++			{
++				d1_last = now;
++				const auto& map = m_device->get_memory_mapping();
++				d1_log.warning("D1MEM surface=%lluM texture=%lluM scratch=%lluM system=%lluM swapchain=%lluM device_local=%lluM host_visible=%lluM "
++					"tex_unreleased=%u tex_mem=%lluM tex_tmp=%lluM rtt_active=%lluM rtt_invalidated=%u programs=+%llu/-%llu dsets=%llu released=%llu",
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SURFACE_CACHE) >> 20, vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_TEXTURE_CACHE) >> 20,
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SCRATCH) >> 20, vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SYSTEM) >> 20,
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SWAPCHAIN) >> 20,
++					vk::vmm_get_application_memory_usage(map.device_local) >> 20, vk::vmm_get_application_memory_usage(map.host_visible_coherent) >> 20,
++					m_texture_cache.get_unreleased_textures_count(), m_texture_cache.get_texture_memory_in_use() >> 20, m_texture_cache.get_temporary_memory_in_use() >> 20,
++					m_rtts.m_active_memory_used >> 20, static_cast<u32>(m_rtts.invalidated_resources.size()),
++					d1diag::g_programs_created.load(), d1diag::g_programs_destroyed.load(), d1diag::g_descriptor_set_first_inits.load(), d1diag::g_tables_released.load());
++			}
++		}
++
+ 		if (g_cfg.video.debug_overlay)
+ 		{
+ 			const auto num_dirty_textures = m_texture_cache.get_unreleased_textures_count();
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+index 8687a6875..28ffc384e 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "VKProgramPipeline.h"
+ #include "VKResourceManager.h"
+ #include "vkutils/descriptors.h"
+@@ -155,6 +156,7 @@ namespace vk
+ 		void program::init()
+ 		{
+ 			m_linked = false;
++			d1diag::g_programs_created++;
+ 		}
+ 
+ 		program::program(VkDevice dev, const VkGraphicsPipelineCreateInfo& create_info, const std::vector<program_input> &vertex_inputs, const std::vector<program_input>& fragment_inputs)
+@@ -176,6 +178,7 @@ namespace vk
+ 
+ 		program::~program()
+ 		{
++			d1diag::g_programs_destroyed++;
+ 			vkDestroyPipeline(m_device, m_pipeline, nullptr);
+ 
+ 			if (m_pipeline_layout)
+@@ -418,8 +421,68 @@ namespace vk
+ 			return *this;
+ 		}
+ 
++		namespace
++		{
++			std::mutex g_table_registry_mutex;
++			std::vector<descriptor_table_t*> g_table_registry;
++			atomic_t<u64> g_table_frame = 0;
++		}
++
++		void release_idle_descriptor_tables()
++		{
++			// Idle limit in frames: far beyond GPU latency and pending descriptor pool resets
++			constexpr u64 idle_frames = 256;
++			const u64 frame = ++g_table_frame;
++
++			if (frame % 64)
++			{
++				return;
++			}
++
++			std::lock_guard lock(g_table_registry_mutex);
++			usz kept = 0;
++
++			for (auto* table : g_table_registry)
++			{
++				if (frame - table->m_last_commit_frame > idle_frames)
++				{
++					table->release_resources();
++					table->m_registered = false;
++					d1diag::g_tables_released++;
++					continue;
++				}
++
++				g_table_registry[kept++] = table;
++			}
++
++			g_table_registry.resize(kept);
++		}
++
++		void descriptor_table_t::release_resources()
++		{
++			// Drop the current set (and its storage) and the pool; the next commit() allocates a new
++			// set from a new pool and rewrites every descriptor from the template.
++			m_descriptor_set.~descriptor_set();
++			new (&m_descriptor_set) vk::descriptor_set();
++
++			if (m_descriptor_pool)
++			{
++				m_descriptor_pool->destroy();
++				m_descriptor_pool.reset();
++			}
++
++			m_descriptor_template_cache_id = umax;
++		}
++
+ 		void descriptor_table_t::destroy()
+ 		{
++			if (m_registered)
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				std::erase(g_table_registry, this);
++				m_registered = false;
++			}
++
+ 			if (!m_device)
+ 			{
+ 				return;
+@@ -591,6 +654,15 @@ namespace vk
+ 
+ 		VkDescriptorSet descriptor_table_t::commit()
+ 		{
++			m_last_commit_frame = g_table_frame;
++
++			if (!m_registered) [[unlikely]]
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				g_table_registry.push_back(this);
++				m_registered = true;
++			}
++
+ 			if (!m_descriptor_set)
+ 			{
+ 				m_any_descriptors_dirty = true;
+@@ -698,7 +770,9 @@ namespace vk
+ 		void descriptor_table_t::create_descriptor_pool()
+ 		{
+ 			m_descriptor_pool = std::make_unique<descriptor_pool>();
+-			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 16u, 4096u);
++			// Start small: every program's descriptor table owns a pool, and games with many programs
++			// (Destiny: ~185k) touch new ones continuously; autoscaling grows busy tables.
++			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 2u, 4096u);
+ 		}
+ 
+ 		void descriptor_table_t::validate() const
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+index 4328522f1..c21a66a7f 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+@@ -160,8 +160,14 @@ namespace vk
+ 			std::vector<bool> m_descriptors_dirty;
+ 			bool m_any_descriptors_dirty = false;
+ 
++			// Idle tracking: tables not committed for a while give back their descriptor pool and
++			// set storage (see release_idle_descriptor_tables).
++			u64 m_last_commit_frame = 0;
++			bool m_registered = false;
++
+ 			void init(VkDevice dev);
+ 			void destroy();
++			void release_resources();
+ 
+ 			void validate() const;
+ 
+@@ -182,6 +188,11 @@ namespace vk
+ 			}
+ 		};
+ 
++		// Called once per presented frame. Programs are cached for the whole session and every
++		// descriptor table owns a descriptor pool plus set storage once used; games with very many
++		// programs (Destiny: ~255k) otherwise grow by gigabytes as they cycle through them.
++		void release_idle_descriptor_tables();
++
+ 		enum binding_set_index : u32
+ 		{
+ 			// For separate shader objects
 diff --git a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
 index 4762f5e3b..917b88491 100644
 --- a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
@@ -682,12 +905,70 @@ index 4762f5e3b..917b88491 100644
  
  			if (g_cfg.video.antialiasing_level != msaa_level::none)
  			{
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index 74539e14e..9f3a177e8 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -1,3 +1,4 @@
++#include "Emu/RSX/d1diag.h"
+ #include "Emu/IdManager.h"
+ #include "descriptors.h"
+ #include "garbage_collector.h"
+@@ -138,7 +139,7 @@ namespace vk
+ 
+ 	void descriptor_pool::create(const vk::render_device& dev, const rsx::simple_array<VkDescriptorPoolSize>& pool_sizes, u32 min_sets, u32 max_sets)
+ 	{
+-		m_autoscaling_config.min_pool_size = std::max(min_sets, 16u);
++		m_autoscaling_config.min_pool_size = std::max(min_sets, 2u);
+ 		m_autoscaling_config.max_pool_size = std::max(min_sets, max_sets);
+ 
+ 		ensure(m_autoscaling_config.max_pool_size >= 16u);
+@@ -360,6 +361,7 @@ namespace vk
+ 	{
+ 		if (!m_in_use) [[unlikely]]
+ 		{
++			d1diag::g_descriptor_set_first_inits++;
+ 			m_image_info_pool.reserve(m_pool_size);
+ 			m_buffer_view_pool.reserve(m_pool_size);
+ 			m_buffer_info_pool.reserve(m_pool_size);
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+index e169caaa4..28da869ce 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+@@ -97,7 +97,13 @@ namespace vk
+ 	{
+ 		static constexpr size_t max_cache_size = 16384;
+ 		static constexpr size_t max_overflow_size = 64;
+-		static constexpr size_t m_pool_size = max_cache_size + max_overflow_size;
++		// Image/buffer info storage is referenced by pointer from pending writes, so it must not
++		// reallocate before a flush: reserve max_storage_size + overflow up front and flush at bind
++		// once max_storage_size is reached. Every descriptor set reserves this on first use, so it
++		// is kept small (16384 entries meant ~0.9 MB per set; games touching many programs, e.g.
++		// Destiny, grew by gigabytes per minute).
++		static constexpr size_t max_storage_size = 256;
++		static constexpr size_t m_pool_size = max_storage_size + max_overflow_size;
+ 
+ 		void init(VkDescriptorSet new_set);
+ 
+@@ -191,9 +197,9 @@ namespace vk
+ 		FORCE_INLINE bool storage_cache_pressure() const
+ 		{
+ 			return
+-				m_image_info_pool.size() >= max_cache_size ||
+-				m_buffer_info_pool.size() >= max_cache_size ||
+-				m_buffer_view_pool.size() >= max_cache_size;
++				m_image_info_pool.size() >= max_storage_size ||
++				m_buffer_info_pool.size() >= max_storage_size ||
++				m_buffer_view_pool.size() >= max_storage_size;
+ 		}
+ 
+ 		// Temporary storage accessors
 diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
 new file mode 100644
-index 000000000..d299b7c0e
+index 000000000..c7279e664
 --- /dev/null
 +++ b/rpcs3/Emu/RSX/d1diag.h
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,224 @@
 +#pragma once
 +// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
 +// the SPU lighting reads (0x44000000-0x46000000). Throttled.
@@ -743,6 +1024,28 @@ index 000000000..d299b7c0e
 +	}
 +	// Light buffer 0xCEB60000 (1024x624 RGBA16F, pitch 8192) and the HUD targets aliasing it.
 +	inline bool hdr(u32 addr) { return addr >= 0xceb60000u && addr < 0xcf040000u; }
++	// Object counters for the D1MEM log line (VKPresent.cpp).
++	inline std::atomic<u64> g_programs_created{0}, g_programs_destroyed{0}, g_descriptor_set_first_inits{0}, g_tables_released{0};
++
++	// New fragment program logging (ProgramStateCache.h), while C:/dev/d1fp.on exists, 400 lines
++	// per activation.
++	inline bool fp_logging()
++	{
++		static std::atomic<u64> last_check{0};
++		static std::atomic<bool> on{false};
++		static std::atomic<u32> lines{0};
++		const u64 now = get_system_time();
++		if (now - last_check.load() > 500'000)
++		{
++			last_check = now;
++			const bool was = on.load();
++			const bool is = fs::is_file("C:/dev/d1fp.on");
++			if (is && !was) lines = 0;
++			on = is;
++		}
++		return on.load() && lines.fetch_add(1) < 400;
++	}
++
 +	inline bool hit(u32 addr, u32 len)
 +	{
 +		return addr < 0x46000000u && addr + len > 0x44000000u;

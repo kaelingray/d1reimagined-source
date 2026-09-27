@@ -71,7 +71,7 @@ write tracking has not been re-checked.
 
 # Draft 2: per-descriptor-set storage pools exhaust memory (Destiny, ~14 GB/min)
 
-Status: **draft, not filed**, pending test TEST246.
+Status: **draft, not filed.** Tested in TEST246-249.
 
 ## Symptom
 
@@ -102,3 +102,19 @@ max_overflow_size (64)` entries and let `storage_cache_pressure()` flush at bind
 are used. `max_cache_size` stays 16384 for the pending-write list, which holds no external
 pointers. This relies on the same assumption as before: at most 64 entries are pushed between
 binds.
+
+Result: growth went from about 14.5 GB/min to about 1.5 GB/min (TEST246). The remainder is the
+per-table `VkDescriptorPool`: every program's descriptor table keeps its own pool, about 90 KB
+of driver and storage memory, for the whole session.
+
+## Fix 2 (tested)
+
+`vk::glsl::release_idle_descriptor_tables()` runs once per presented frame. Every 64 frames it
+releases the descriptor set storage and the pool of tables that have not been committed for 256
+frames. The next `commit()` allocates a new set and rewrites all descriptors from the template.
+TEST249: private commit stays flat (12.9 GB) during a 30-minute soak, with tens of thousands of
+tables released.
+
+Open question: a shared pool (with set revalidation) might be the cleaner design. The idle
+release keeps the existing per-table ownership model.
+
