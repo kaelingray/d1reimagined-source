@@ -343,3 +343,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 239: the 8680 functions first called in those 3 s armed for 3 hits with registers: none
   received the dialog's text object; the text is written by generic helpers used earlier.
   Candidates noted in the checkpoint; hunt paused (the dialog only costs one X press).
+- 240: soak test with the fixed build (`scripts/Invoke-SoakTest.ps1`): frames clean (a dark-scene
+  false positive led to an edge test in `frame_blocks.py`), but RPCS3's working set grew
+  ~0.6 GB/min and the process vanished 12:24 into the game (6 min into the soak) with no fatal in
+  its log and no Windows error event; private commit was ~75 GB against a 63 GB commit limit, so
+  most likely an allocation failure. The stock build's RSX fatal ~12 min in (TEST195,
+  `simple_array::reserve` verification) fits the same leak. ~72 texture-cache "does not match
+  stored parameters" warnings per second (0xCF8B7600 32x78 <-> 64x39, 0xCF8C6000, 0xCEA18000).
+  241: same run on the official build to see whether the leak predates the patches.
