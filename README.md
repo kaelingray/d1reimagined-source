@@ -15,7 +15,15 @@ After the latest runs (TEST194-251):
 - **In-mission rendering is fixed with a patched RPCS3 build (TEST229).** Stock RPCS3 showed black/magenta blocks and overexposure after moving. Destiny's SPU lighting jobs write the HDR light buffer directly in video memory, and HUD targets alias that memory. RPCS3's surface cache checks only three memory samples per surface, so it missed the SPU writes and rebuilt the buffer from stale cached pieces. [`patches/rpcs3-destiny-fix.patch`](patches/rpcs3-destiny-fix.patch) tracks SPU DMA writes to video memory per page, so affected surfaces are reloaded from guest memory. The game config needs Write Color Buffers, Read Color Buffers, Read/Write Depth Buffer and Handle RSX Memory Tiling enabled.
 - **Long sessions no longer run out of memory (TEST249: 30-minute soak, every frame clean).** Stock RPCS3 grew by about 14 GB a minute in the mission and died 7-12 minutes in. Every descriptor set reserved about 0.9 MB, and Destiny cycles through about 255k cached pipelines. The same patch shrinks those pools and releases the descriptor pools of pipelines that have been idle for 256 frames.
 
-Next: gameplay beyond the spawn (the replicated state a real host would keep updating), the urgent-message trigger (now traceable with the PPU call hook, since GDB breakpoints do not work under the LLVM decoder), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+**The guardian now spawns at the real mission start (TEST342):** the highway outside the Cosmodrome Wall, in daylight among the rusted cars. Until then runs had used bubble 13, Dock 13, which is the end of the mission. The mission's 22 bubbles are the Cosmodrome's areas (bubble map in the orbit checkpoint): 0 Skywatch, 2 The Blast, 3 The Breach, 6 Mothyards, 7 The Steppes, 13 Dock 13, **14 the highway start**, 21 The Devils' Lair, others still being mapped.
+
+What a real host still has to provide there, from analysis of the executable (details in the orbit checkpoint):
+
+- **The Ghost-revival intro** is a cinematic slice set, zone set 113 (bubble 14's second slot). The spawner refuses to spawn in a cinematic slice set. Slot 113 holds a trigger object (kind 4, a step counter) and a cast list (kind 6, player ids). Experiments to start it are running (TEST350-363).
+- **Objectives** such as "Enter the Wall" are replicated script state machines: per-bubble objective sensors (kind 3, 24 states each) and step objects (kind 4; bubble 14 has 28). The stand-in sends them all at state 0, so no objective starts yet.
+- **Enemies** come from the bubble-local objects (kinds 1, 2, 4), still to be driven.
+
+Also next: the urgent-message trigger, an intermittent emulator freeze in the login cinematic (40 % of boots since the last rebuild; retried automatically), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Tests now run on a second PC (see "Moving to another PC"). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
@@ -46,24 +54,25 @@ Each gate was cleared one at a time. Destiny's error code names are in bold.
 | Loading screen dismissed | Game-mode object replicated in a non-zero state (`--ah-game-mode`): all loading tasks complete. |
 | Spawn allowed | Zone set at a bubble base (`--ah-bubble-states -1,13=0 --ah-zone 104`), game-mode state 3, sim-player spawn grant (`--ah-sim-player ...:1`). |
 | Guardian spawned | Peer family (0) with the account and character summaries (`--peer-family`): appearance and blueprint built, player unit created. |
+| Mission start area | Bubble 14, zone set 112 (`--ah-bubble-states -1,14=0 --ah-zone 112`), with its 138 baselines: the highway outside the Wall. |
 
 ## Reproducing a run
 
-Everything runs on one Windows PC against a private RPCS3 copy (`local\RPCS3_TEST048_SETUP`) and the game working copy in `local\01_WORKING`. The scripts find these through `scripts/Paths.ps1` and `server/local_paths.py` (`D1_LOCAL` overrides the location). `scripts/Start-LocalStack.ps1` starts the loopback services, RPCS3 and a GDB daemon. `scripts/Invoke-TitanLogin.ps1` drives the title screen and character select unattended. `scripts/Invoke-JoinCycle.ps1` does both, adds the activity-host proxy, and can trace functions through the GDB daemon while the client joins the mission:
+Everything runs on one Windows PC against a private RPCS3 copy (`local\RPCS3_TEST048_SETUP`) and the game working copy in `local\01_WORKING`. The scripts find these through `scripts/Paths.ps1` and `server/local_paths.py` (`D1_LOCAL` overrides the location). `scripts/Start-LocalStack.ps1` starts the loopback services, RPCS3 and a GDB daemon. `scripts/Invoke-TitanLogin.ps1` drives the title screen and character select unattended. `scripts/Invoke-JoinCycle.ps1` does both, adds the activity-host proxy, and can trace functions through the GDB daemon while the client joins the mission. `scripts/Invoke-MissionRun.ps1 -Name TESTnnn [-Bubble 14]` wraps it with the full argument set below; `scripts/Invoke-ObjectExperiment.ps1` adds the live baseline feed, timed screenshots and object exports for replicated-state experiments:
 
 ```powershell
 scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','--session-result') `
   -AhpReply 00000000000000007f01018000003233 -AhHost d1local-host `
   -ExtraBap @('--self-flags','2','--universe-flag-values','215=1','--peer-family') `
   -AhArgs @('--ah-join','--ah-entities','8192:12288','--ah-state','--ah-map','act_cosmo_m0_highway',
-            '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22','--ah-bubble-states','-1,13=0',
-            '--ah-zone','104:0x811c9dc5','--ah-world-state','104:1','--ah-roster','0',
+            '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22','--ah-bubble-states','-1,14=0',
+            '--ah-zone','112:0x811c9dc5','--ah-world-state','112:1','--ah-roster','0',
             '--ah-sim-player','0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1','--ah-game-mode','0x4786c0e0:3:3',
-            '--ah-baselines','@local\SIGNON_LOCAL\baselines_highway_z104.txt','--ah-heartbeat','1') `
+            '--ah-baselines','@local\SIGNON_LOCAL\baselines_highway_z112.txt','--ah-heartbeat','1') `
   -TraceAfter 'ahp req' -Trace 0x3204a8 -Dumps 'r5:64'
 ```
 
-The baselines file lists the mission's replicated objects as `KEY/KIND/INDEX[/B]`, comma-separated. It is dumped from a running game with `scripts/rpcs3_replicated_objects.py` once zone set 104 has loaded (121 objects for this mission). The sim-player owner is the local player id (`pla +0x18`), which follows from the stand-in account.
+The baselines file lists the mission's replicated objects as `KEY/KIND/INDEX[/B]`, comma-separated. It is dumped from a running game with `scripts/rpcs3_replicated_objects.py` once the zone set has loaded (138 objects for bubble 14, 121 for Dock 13's `baselines_highway_z104.txt`); `--ah-baselines-watch FILE` lets the stand-in pick up a list written during the run. The sim-player owner is the local player id (`pla +0x18`), which follows from the stand-in account.
 
 One cycle takes 8–10 minutes. Useful companions:
 
