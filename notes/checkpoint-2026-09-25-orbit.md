@@ -1112,3 +1112,8 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
 - World controller layout (constructor at `0x30db9c`-): +0x18 slice-set manager (3 slots of
   0x6350 bytes), +0x1c cinematics manager (0xac bytes, "world controller cinematics manager"),
   +0x24 a 0x90-byte subsystem (`0x4b53b4`).
+- **Bubble map of act_cosmo_m0_highway (TEST260-342)**: 0 Skywatch (night), 1 no name (sky), 2 The
+  Blast, 3 The Breach, 4 crashes RSX on load (fixed build untested there), 5 unnamed corridor, 6
+  Mothyards, 13 Dock 13 (mission end, extra slice set 105), **14 highway start outside the Wall**
+  (extra slice set 113), 21 The Devils' Lair; 7-12 and 15-20 still to map. Mission start = zone
+  set 112 (`--ah-bubble-states -1,14=0 --ah-zone 112:0x811c9dc5 --ah-world-state 112:1`).

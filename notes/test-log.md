@@ -484,3 +484,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 341 (second PC, 18:09 build): **bubble 21 = THE DEVILS' LAIR** (dim industrial interior with
   stairs; no bubble-local group). 12 D1FPRELOAD events: the bound fragment program is rewritten
   in place by SPU DMA during normal play, and the build re-reads it.
+- 342 (second PC): **bubble 14 (zone set 112) = the mission start** - the highway outside the
+  Cosmodrome Wall: daytime, rusted car wrecks along the road, the Wall with its camouflage panels
+  and water tower (nav name "COSMODROME"). This is the opening area of A Guardian Rises. Its
+  objects: bubble-local group 0xecf574b5 (kinds 1, 2, 28x 4, 4x 0x1d, 0x28) plus activity-group
+  (0x992bb471) kind 0x1c and 4x 0x1d in bubble 14 - no kind-3 objective sensor here. 11
+  D1FPRELOAD events. Bubble 14 is one of the two bubbles with an extra slice set (113), which
+  fits 113 = the intro cinematic.
