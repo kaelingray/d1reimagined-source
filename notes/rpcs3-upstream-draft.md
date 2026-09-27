@@ -113,7 +113,8 @@ of driver and storage memory, for the whole session.
 releases the descriptor set storage and the pool of tables that have not been committed for 256
 frames. The next `commit()` allocates a new set and rewrites all descriptors from the template.
 TEST249: private commit stays flat (12.9 GB) during a 30-minute soak, with tens of thousands of
-tables released.
+tables released. TEST252 repeated it with about 356k cached programs preloaded: 15.4 -> 16.0 GB
+over 18 minutes, all frames clean.
 
 Open question: a shared pool (with set revalidation) might be the cleaner design. The idle
 release keeps the existing per-table ownership model.
