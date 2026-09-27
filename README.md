@@ -23,7 +23,7 @@ What a real host still has to provide there, from analysis of the executable (de
 - **Objectives** such as "Enter the Wall" are replicated script state machines: per-bubble objective sensors (kind 3, 24 states each) and step objects (kind 4; bubble 14 has 28). The stand-in sends them all at state 0, so no objective starts yet.
 - **Enemies** come from the bubble-local objects (kinds 1, 2, 4), still to be driven.
 
-Also next: the urgent-message trigger, an intermittent emulator freeze in the login cinematic (40 % of boots since the last rebuild; retried automatically), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Tests now run on a second PC (see "Moving to another PC"). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Also next: the urgent-message trigger, an intermittent emulator freeze in the login cinematic (40 % of boots since the last rebuild; retried automatically), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Tests now run on a second PC (see "Moving to another PC"). The next PC session's ordered experiments and commands: [`notes/next-session-playbook.md`](notes/next-session-playbook.md). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
