@@ -6,7 +6,10 @@
 # A failed boot (e.g. the emulator freezing in the login cinematic) is retried up to -Attempts
 # times, each attempt under the next TEST number.
 #   Invoke-BubbleSweep.ps1 -Bubbles 1,2,3 -FirstTest 263
-param([Parameter(Mandatory)][int[]]$Bubbles, [Parameter(Mandatory)][int]$FirstTest, [int]$Attempts = 3)
+param([Parameter(Mandatory)][string[]]$Bubbles, [Parameter(Mandatory)][int]$FirstTest, [int]$Attempts = 3)
+# accept "21,14" as one string too (pwsh -File passes it unsplit, and [int] would read 2114)
+$Bubbles = @($Bubbles -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
+if ($Bubbles | Where-Object { $_ -lt 0 -or $_ -gt 21 }) { throw "bubbles must be 0-21 (act_cosmo_m0_highway has 22): $($Bubbles -join ',')" }
 . "$PSScriptRoot\Paths.ps1"
 $watch = "$D1Signon\sweep-baselines.txt"
 & "$PSScriptRoot\Set-PadConfig.ps1" -Mode keyboard
