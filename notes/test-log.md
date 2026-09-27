@@ -392,3 +392,10 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 252: second soak (pipeline cache now ~356k programs, preloaded at boot): 19/19 steps ok,
   private 15.4 -> 16.0 GB over 18 minutes. Pad config switched with `Set-PadConfig.ps1` and
   restored to the user's XInput pad afterwards; RPCS3 and the stand-ins stopped.
+- 253: reconnaissance (`scripts/Invoke-Explore.ps1`: look around, Select, walk/turn stretches):
+  the guardian walks around a lit interior; Select opens the Ghost's NAV MODE with location
+  "DOCK 13" and "Leave Game", no waypoint or objective; no enemies anywhere. The client only
+  sends type 15 (1 byte, ~30/s) plus a few setup messages to the host (3, 6, 17, 18, 20, 21, 36,
+  37); its own movement is not sent. The 99 bubble-13 objects (groups 0x062dd95d, 0x3c2f5ed5,
+  0x992bb471; kinds 1/3/4/5/6/0x1d/0x20/0x21) sit at the stand-in's empty default baselines, so
+  whatever they are (spawners, combatants, doors, objectives) nothing drives them.
