@@ -410,3 +410,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   records have baselines (awaiting 0). `rpcs3_world_peer.py` read zone -1, group peer -1,
   local slot 0 at the slice it reads (not zone 104 - the slice pointer or record offset
   needs checking). State types by kind: see checkpoint.
+- 256: first-call coverage from boot: the per-component "apply replicated state" handlers are the
+  first-call entries with LR 0x276230 (after the member-function call in `0x276154`): 14 handlers.
+- 257: hooks on the apply path (`0x25f6b8(binding, state type, ...)`) and the 14 handlers: each
+  handler's second argument points at the state type handle, giving the kind -> handler map
+  (checkpoint).

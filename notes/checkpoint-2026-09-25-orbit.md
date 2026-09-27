@@ -992,3 +992,41 @@ Full run (about 10 minutes):
   consuming component handlers have to be found at run time: hook the record apply path
   (`0x1cfa1c` -> `0x1cf8f4` -> `0x25f6b8`) with the PPU hook and follow the per-kind handler
   calls, as was done for the sim-player binder (`0x4ede14` -> `0x14a270`).
+
+## Replicated-state handlers per kind (TEST256-257)
+The record apply path is `0x1cf8f4` -> `0x25f6b8(binding, state type, state)` -> `0x276154`,
+which calls the component's apply handler through a member-function pointer (return address
+0x276230). The handlers are found as the first-call coverage entries with that LR; each gets a
+pointer to {state type, state data} in r4.
+
+| Kind | State type | Handler | Neighbourhood |
+|------|------------|---------|---------------|
+| 0x01 | 0x8080071e | 0x1f8d20 | bubble objects |
+| 0x03 | 0x808004fa | 0x1f6aa4 | bubble objects |
+| 0x04 | 0x808007d9 | 0x2000e0 | bubble objects |
+| 0x05 | 0x808029a1 | 0xb94414 | 0xb9xxxx |
+| 0x06 | 0x8080254d | 0x4ed278 | player / sim-player code |
+| 0x0c | 0x808022a5 | 0x4edd00 | sim player (binder 0x4ede14 next to it) |
+| 0x0f | 0x808008d0 | 0xb2c778 | game-mode code |
+| 0x10 | 0x808008a3 | 0xb2c8d4 | game mode |
+| 0x11 | 0x80800725 | 0xb2d1e0 | game-mode code |
+| 0x1d | 0x80800463 | 0xb2f99c | game-mode code |
+| 0x20 | 0x80802a1b | 0x3561d8 | player spawner (0x35xxxx) |
+| 0x21 | 0x80800750 | 0x200e38 | bubble objects |
+| 0x22 | 0x808004a4 | 0xb26bac | game-mode code |
+| 0x27 | 0x80802aef | 0x355dc0 | player spawner |
+
+- Kind 0x0f's handler copies the whole state (0x3470 bytes) to entity +0x110 and sets a dirty
+  byte at +0x3584. The state is four bounded lists: 16 x 800-byte entries keyed by a raw 64-bit
+  id (player/machine: kind 0x23 field) - a per-player activity table, not objectives - plus
+  8 x 56, 24 floats and 2 x {u32, raw64 id, u6}.
+- Kind 0x20/0x27 are handled in the player spawner, so they are spawn-related (spawn groups),
+  not enemy squads as first guessed.
+- **Game mode +0x10 (0x8080533d) is a variable table**: u6 count + up to 50 entries of
+  {u32 hash, 32-byte typed value (field kind 34)}. That fits server-driven mission sequencing
+  (the activity host sets named variables; client scripts and UI react). The stand-in sends none.
+  Next: find which variable hashes client code looks up (hook the table lookup) and try setting
+  them via `--ah-object` / the game-mode state.
+- New tooling: `bap_server.py --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON` replicates any object
+  with an explicit state (fields by offset). The private activity schema now includes the 65
+  live types exported in TEST255 (backup `activity_schema.before-test257.json`).
