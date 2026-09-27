@@ -84,9 +84,10 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
 - `scripts/Invoke-SoakTest.ps1`: long in-mission runs (periodic movement, scored screenshots, RPCS3 memory).
 - `scripts/Invoke-BubbleSweep.ps1`: boots each given mission bubble in turn, feeds its replicated objects back to the stand-in (`--ah-baselines-watch`) so the guardian spawns there, and screenshots the Ghost's nav mode (location name).
+- `scripts/d1_pkg.py`: offline reader for the disc's Tiger packages (named tags, entries, blocks, extraction; compressed blocks need an Oodle decoder). Public Destiny networking and package research applied to the stand-in: [`notes/public-research.md`](notes/public-research.md).
 - `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller (the XInput config is active at the moment).
 
-Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
+Unit tests: `python -m unittest discover -s server -p "test_*.py"` and `python -m unittest discover -s scripts -p "test_*.py"`.
 
 ### Moving to another PC
 

@@ -13,6 +13,12 @@ Reviewed: 2026-09-22. These are leads to revisit after the Xbox 360 capture. No 
 | [cohaereo/destinydocs](https://github.com/cohaereo/destinydocs) | Documentation for Destiny 1/2 internals. | Check version and platform relevance for each finding. |
 | [v4nguard/swizzleinator](https://github.com/v4nguard/swizzleinator) | Lists Xbox 360 image detiling support. | Useful for extracted textures, not boot or sign-in. |
 
+Update 2026-09-27 (PS3 route): `scripts/d1_pkg.py` reads the PS3 packages directly (layout from
+tiger-pkg's `d1_legacy`). [lizardpeter/destiny-1](https://github.com/lizardpeter/destiny-1)
+documents the v24 package format and the activity -> bubble -> map-container graph from PS4
+Rise of Iron data, and [MontagueM/Charm](https://github.com/MontagueM/Charm) has the D1 activity
+schemas. How they apply to the activity-host work: [`public-research.md`](public-research.md).
+
 ## Destiny 2 asset tools: background only for now
 
 - [cohaereo/alkahest](https://github.com/cohaereo/alkahest): Destiny 2 asset viewing and renderer research. Its links to Bungie graphics talks may be useful background.
