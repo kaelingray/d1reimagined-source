@@ -375,3 +375,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   minute (ids keep rising; 254k programs total). The fragment program cache keeps missing, so
   something that changes per frame (probably SPU-patched constant data) ends up in the FP hash.
   248: log the ucode of new FPs to compare near-duplicates.
+- 248: warm pipeline cache: no new programs in the mission (the TEST247 churn was a cold cache),
+  but ~15k descriptor tables per minute still committed for the first time (~1.4 GB/min).
+- 249: + idle descriptor-table release (tables unused for 256 frames give back pool and set
+  storage): 30-minute soak, 30/30 steps ok, RPCS3 alive throughout; private 12.9 GB flat for the
+  first 12 minutes (live tables ~2600, ~260k released), then +0.2 GB/min while new areas compile
+  new pipelines (programs 255k -> 288k), ending ~16 GB.
+- 250: TEST249 build with `C:/dev/d1noblitfix.on` (VRAM->main blits back on the GPU path):
+  does the write tracking alone keep the frame clean?
