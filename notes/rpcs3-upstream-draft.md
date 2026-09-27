@@ -66,3 +66,39 @@ write tracking has not been re-checked.
   also cover other writers?
 - The per-page sum costs about 1250 atomic loads per 5 MB surface for each `test()` or
   `sync_tag`. A coarser granularity or a dirty bitmap might be preferable.
+
+---
+
+# Draft 2: per-descriptor-set storage pools exhaust memory (Destiny, ~14 GB/min)
+
+Status: **draft, not filed**, pending test TEST246.
+
+## Symptom
+
+In Destiny's first mission, private commit grows by about 14-15 GB per minute. Working set
+grows only about 0.6 GB per minute. The process dies silently, or with a
+`simple_array<VkDescriptorImageInfo>::reserve` verification failure, about 7-12 minutes into
+gameplay. This happens with official build v0.0.42-20043 on Windows with an RTX 5070. Lowering
+the VRAM allocation limit does not help.
+
+## Analysis
+
+- RPCS3's own Vulkan pools, texture cache and surface cache stay flat at about 500 MB.
+- The growth is new 16 MB segments of one NT heap: about 7 per second, mostly free blocks
+  between live blocks of 0x60600 bytes.
+- 0x60600 bytes is 16448 × 24, the size of `vk::descriptor_set::m_image_info_pool` and
+  `m_buffer_info_pool` as reserved in `descriptor_set::init()` on first use
+  (`m_pool_size = max_cache_size + max_overflow_size`). With `m_buffer_view_pool` that is about
+  0.9 MB per descriptor set.
+- The game has about 185k pipelines/programs (created at boot, none destroyed). During gameplay
+  about 270 descriptor sets per second are initialized for the first time (counted), which gives
+  270 × 0.9 MB ≈ 14 GB per minute.
+
+## Fix (candidate)
+
+The storage pools must not reallocate before a flush, because pending writes point into them.
+Keep that guarantee, but with a small threshold: reserve `max_storage_size (256) +
+max_overflow_size (64)` entries and let `storage_cache_pressure()` flush at bind once 256 entries
+are used. `max_cache_size` stays 16384 for the pending-write list, which holds no external
+pointers. This relies on the same assumption as before: at most 64 entries are pushed between
+binds.
