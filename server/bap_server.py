@@ -58,6 +58,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import investment  # noqa: E402
+from local_paths import SIGNON  # noqa: E402
 import signon_proto  # noqa: E402
 
 # Root object types per family (object pools at mgr+0x2a3c0 in 0x41a0d0's manager):
@@ -196,7 +197,7 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
     return investment.qz_payload([investment.family(family_type, root, objects,
                                                      version=version, flags=flags)])
 
-CAPTURE_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\captures\bap")
+CAPTURE_DIR = SIGNON / "captures" / "bap"
 SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
 QZ_REG_REQ, QZ_REG_RSP = 0x79, 0x7A
 ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
@@ -242,7 +243,7 @@ AH_STATE, AH_ESTABLISH = 1, 11
 STATE_TYPE = 0x80800E76
 JOIN_REQUEST_TYPE, JOIN_RESPONSE_TYPE = 0x80800E98, 0x80800A58
 ENTITY_INDICES_TYPE, ENTITY_WORDS = 0x80800D64, 384
-ACTIVITY_SCHEMA = Path(r"D:\Destiny360\SIGNON_LOCAL\activity_schema.json")
+ACTIVITY_SCHEMA = SIGNON / "activity_schema.json"
 
 
 def char_array(text, size=128):

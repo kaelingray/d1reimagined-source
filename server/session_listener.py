@@ -14,7 +14,9 @@ import sys
 import threading
 from pathlib import Path
 
-CAPTURE_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\captures\session")
+from local_paths import SIGNON  # noqa: E402
+
+CAPTURE_DIR = SIGNON / "captures" / "session"
 _lock = threading.Lock()
 
 

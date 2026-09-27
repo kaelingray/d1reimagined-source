@@ -1,7 +1,7 @@
 """Private test CA for the local sign-on stub.
 
 The CA key and every issued certificate live in a directory outside Git (default
-D:\\Destiny360\\SIGNON_LOCAL\\ca_v4). Nothing here is trusted by Windows; the CA is only
+local\\SIGNON_LOCAL\\ca_v4). Nothing here is trusted by Windows; the CA is only
 ever installed into an isolated RPCS3 copy's dev_flash for local testing.
 
 SHA-1 signatures are the default because every root in the PS3 firmware certificate
@@ -17,7 +17,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-DEFAULT_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\ca_v4")
+from local_paths import SIGNON  # noqa: E402
+
+DEFAULT_DIR = SIGNON / "ca_v4"
 # Same shape as the firmware roots Destiny loads (CA01-CA05): a three-entry subject in
 # C, O, CN order, CA:TRUE without pathlen or key usage, plus subject and authority key
 # identifiers, with every name encoded as PrintableString (REQ_CONFIG). The PS3 loader

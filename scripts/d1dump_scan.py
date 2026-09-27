@@ -1,5 +1,5 @@
 """Scan a one-frame render-target dump written by the instrumented RPCS3 build (marker file
-C:/dev/d1dump.on; files <seq>_<c|z>_<addr>_p<pitch>_<w>x<h>_f<format>.bin, the guest-memory
+d1/d1dump.on next to rpcs3.exe; files <seq>_<c|z>_<addr>_p<pitch>_<w>x<h>_f<format>.bin, the guest-memory
 contents of each target when the RSX switched away from it). Per target: NaN/Inf/zero fractions
 and mean value inside the known block region (left 62.5 %, rows 0-20 % and 50-82 %) versus the
 rest, so the first pass with bad data in the blocks stands out. --png SEQ writes a preview

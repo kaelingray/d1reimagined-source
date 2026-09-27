@@ -44,7 +44,9 @@ import sslv3  # noqa: E402
 from cryptography import x509  # noqa: E402
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 
-CAPTURE_DIR = Path(r"D:\Destiny360\SIGNON_LOCAL\captures")
+from local_paths import SIGNON  # noqa: E402
+
+CAPTURE_DIR = SIGNON / "captures"
 
 CIPHERS = {
     0x0004: "RSA_RC4_128_MD5", 0x0005: "RSA_RC4_128_SHA", 0x000A: "RSA_3DES_EDE_CBC_SHA",

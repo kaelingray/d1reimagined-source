@@ -10,9 +10,10 @@ param(
     [int]$ShotEvery = 15,
     [switch]$NoRestart
 )
+. "$PSScriptRoot\Paths.ps1"
 $ErrorActionPreference = 'Stop'
-$logs = 'D:\Destiny360\SIGNON_LOCAL\logs'
-$shots = "D:\Destiny360\SIGNON_LOCAL\screens\$Name"
+$logs = $D1Logs
+$shots = "$D1Signon\screens\$Name"
 New-Item -ItemType Directory -Force $shots | Out-Null
 if (-not $NoRestart) { & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -BapArgs $BapArgs | Out-Host }
 $bap = "$logs\$Name-bap.log"

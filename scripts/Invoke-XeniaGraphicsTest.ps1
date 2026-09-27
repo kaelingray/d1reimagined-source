@@ -1,11 +1,11 @@
 <#
 Runs one unattended Xenia title-screen graphics test.
 
-Creates D:\Destiny360\XENIA_GFX_<TestId>, copies the patched Xenia executable and base config
+Creates local\XENIA_GFX_<TestId>, copies the patched Xenia executable and base config
 into it, applies the given config overrides, boots the working-copy game with the imported
 content root, presses F12 (Xenia's guest-output screenshot) at each capture time, optionally F4 (one-frame GPU trace,
 written under scratch\gpu) at -TraceAtSeconds, then closes
-Xenia. Screenshots land in <test folder>\screenshots\415608F8 and are copied to D:\Destiny360\LOGS.
+Xenia. Screenshots land in <test folder>\screenshots\415608F8 and are copied to local\LOGS.
 
 Example:
   .\scripts\Invoke-XeniaGraphicsTest.ps1 -TestId T014_rov -Set @{ render_target_path_d3d12 = '"rov"' }
@@ -16,18 +16,23 @@ param(
     [hashtable]$Set = @{},
     [int[]]$CaptureAtSeconds = @(60, 90),
     [int]$TraceAtSeconds = 0,
-    [string]$ExeSource = 'D:\Destiny360\XENIA_TEST009_FULL_CONTENT\xenia_canary.exe',
-    [string]$ConfigSource = 'D:\Destiny360\XENIA_TEST009_FULL_CONTENT\xenia-canary.config.toml',
-    [string]$ContentRoot = 'D:\Destiny360\XENIA_TEST007_STFS_ACTIVE\content',
-    [string]$Game = 'D:\Destiny360\01_WORKING\test001\Content\0000000000000000\415608F8\00004000\ED4E3CCA83E6F64008DDF957088F3E06'
+    [string]$ExeSource,
+    [string]$ConfigSource,
+    [string]$ContentRoot,
+    [string]$Game
 )
+. "$PSScriptRoot\Paths.ps1"
+if (-not $ExeSource) { $ExeSource = "$D1Local\XENIA_TEST009_FULL_CONTENT\xenia_canary.exe" }
+if (-not $ConfigSource) { $ConfigSource = "$D1Local\XENIA_TEST009_FULL_CONTENT\xenia-canary.config.toml" }
+if (-not $ContentRoot) { $ContentRoot = "$D1Local\XENIA_TEST007_STFS_ACTIVE\content" }
+if (-not $Game) { $Game = "$D1Local\01_WORKING\test001\Content\0000000000000000\415608F8\00004000\ED4E3CCA83E6F64008DDF957088F3E06" }
 
 $ErrorActionPreference = 'Stop'
 if (Get-Process xenia_canary -ErrorAction SilentlyContinue) { throw 'Another Xenia instance is running.' }
-if ($Game -like 'D:\Destiny360\00_ORIGINAL_DUMP\*') { throw 'Use a working copy, not the original archive.' }
+if ($Game -like "$D1Local\00_ORIGINAL_DUMP\*") { throw 'Use a working copy, not the original archive.' }
 
-$dir = "D:\Destiny360\XENIA_GFX_$TestId"
-$logs = 'D:\Destiny360\LOGS'
+$dir = "$D1Local\XENIA_GFX_$TestId"
+$logs = "$D1Local\LOGS"
 if (Test-Path -LiteralPath $dir) { throw "Test folder already exists: $dir" }
 New-Item -ItemType Directory -Path $dir | Out-Null
 Copy-Item -LiteralPath $ExeSource -Destination $dir

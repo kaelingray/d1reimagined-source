@@ -12,3 +12,6 @@ __pycache__/
 /Destiny (Europe) (EnFrDeEsItPt) PS3/
 /Destiny (World) (En,Fr,De,Es,It) XBOX/
 /Destiny (Europe) (EnFrDeEsItPt) PS3 TTK/
+# Private runtime and data (game dump, RPCS3 build and config, saves, stand-in data, logs,
+# captures). Never commit anything from here.
+/local/

@@ -4,8 +4,9 @@
 # then the character-select cursor onto the first character tile and Cross.
 # Prints an F12 screenshot path after each stage.
 param([Parameter(Mandatory)] [string]$Name, [int]$TitleTimeoutMinutes = 15)
+. "$PSScriptRoot\Paths.ps1"
 $ErrorActionPreference = 'Stop'
-$bap = "D:\Destiny360\SIGNON_LOCAL\logs\$Name-bap.log"
+$bap = "$D1Logs\$Name-bap.log"
 function Seen([string]$Pattern) { (Test-Path $bap) -and (Select-String -Path $bap -Pattern $Pattern -Quiet) }
 function Keys([string[]]$K, [int]$Hold = 150) { & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys $K -HoldMs $Hold | Out-Null }
 

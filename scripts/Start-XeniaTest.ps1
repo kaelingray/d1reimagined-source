@@ -6,9 +6,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$GamePath
 )
+. "$PSScriptRoot\Paths.ps1"
 
 $ErrorActionPreference = 'Stop'
-$base = 'D:\Destiny360'
+$base = $D1Local
 $xeniaDirectory = Join-Path $base 'XENIA'
 $exe = Join-Path $xeniaDirectory 'xenia_canary.exe'
 $config = Join-Path $xeniaDirectory 'xenia-canary.config.toml'

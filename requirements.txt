@@ -1,0 +1,4 @@
+# Python 3.14 packages for the loopback stand-ins (server/) and analysis scripts (scripts/).
+cryptography>=46
+numpy>=2
+pillow>=11

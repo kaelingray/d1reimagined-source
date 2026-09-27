@@ -1,20 +1,23 @@
 """Wait until a UTF-16BE text appears in RPCS3 guest memory (read-only), then append a marker
-line to the instrumented build's watch file (C:/dev/d1ppu.txt), so its next reload logs a
-timestamp ("D1P watch list reloaded at ..."). Used to line up first-call coverage (D1C lines)
-with the moment a UI text is created.
+line to the instrumented build's watch file (d1/d1ppu.txt next to rpcs3.exe in
+local/RPCS3_TEST048_SETUP), so its next reload logs a timestamp ("D1P watch list reloaded
+at ..."). Used to line up first-call coverage (D1C lines) with the moment a UI text is created.
 
 Usage: python scripts/rpcs3_text_marker.py "TEXT" [START END] [TIMEOUT_S]
 """
 
+import os
 import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, __file__.rsplit("\\", 1)[0].rsplit("/", 1)[0])
 _argv, sys.argv = sys.argv, sys.argv[:1]
 import rpcs3_guest_read as guest  # noqa: E402
 
 sys.argv = _argv
-WATCH = "C:/dev/d1ppu.txt"
+LOCAL = Path(os.environ.get("D1_LOCAL") or Path(__file__).resolve().parents[1] / "local")
+WATCH = LOCAL / "RPCS3_TEST048_SETUP" / "d1" / "d1ppu.txt"
 
 
 def main():

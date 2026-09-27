@@ -22,7 +22,7 @@ class ClientConfigAnd104(unittest.TestCase):
         from pathlib import Path
         if not investment.DEFAULT_SCHEMA.exists():
             self.skipTest("private schema not available")
-        schema = investment.load_schema(Path(r"D:\Destiny360\SIGNON_LOCAL\investment_schema_character.json"))
+        schema = investment.load_schema(b.SIGNON / "investment_schema_character.json")
         body = b.default_ws_response(schema, 104, b.WS_REPLY_VALUES[104])
         values = investment.decode(schema, int(schema["services"]["104"][1], 16), body[2:])
         self.assertEqual(values[8][0], 0x7FFFFFFFFFFFFFFF)

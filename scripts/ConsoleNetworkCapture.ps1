@@ -3,11 +3,12 @@ param(
     [ValidateSet('Start', 'Stop')]
     [string] $Mode
 )
+. "$PSScriptRoot\Paths.ps1"
 
 $ErrorActionPreference = 'Stop'
 $upstreamName = 'Ethernet 2'
 $consoleName = 'Ethernet'
-$captureDir = 'D:\Destiny360\LOGS\console-network-capture'
+$captureDir = "$D1Local\LOGS\console-network-capture"
 $statePath = Join-Path $captureDir 'state.json'
 $statusPath = Join-Path $captureDir 'status.txt'
 $etlPath = Join-Path $captureDir 'console-network.etl'

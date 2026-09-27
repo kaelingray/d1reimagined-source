@@ -30,7 +30,9 @@ import json
 import struct
 from pathlib import Path
 
-DEFAULT_SCHEMA = Path(r"D:\Destiny360\SIGNON_LOCAL\investment_schema.json")
+from local_paths import SIGNON  # noqa: E402
+
+DEFAULT_SCHEMA = SIGNON / "investment_schema.json"
 MACHINE_ID_KIND = 0x23
 
 

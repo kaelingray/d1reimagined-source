@@ -8,11 +8,12 @@ param(
     [string[]]$LobbyArgs = @(),
     [switch]$NoGame
 )
+. "$PSScriptRoot\Paths.ps1"
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-$root = 'D:\Destiny360'
+$root = $D1Local
 $logs = "$root\SIGNON_LOCAL\logs"
-$py = 'C:\Python314\python.exe'
+$py = $D1Python
 $rpcs3 = "$root\RPCS3_TEST048_SETUP"
 $usrdir = "$root\01_WORKING\ps3_destiny\PS3_GAME\USRDIR"
 

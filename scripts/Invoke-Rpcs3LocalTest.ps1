@@ -8,9 +8,10 @@ param(
     [string[]]$BapArgs = @(),
     [int]$WaitSeconds = 60
 )
+. "$PSScriptRoot\Paths.ps1"
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-$root = 'D:\Destiny360'
+$root = $D1Local
 $logs = "$root\SIGNON_LOCAL\logs"
 $dest = "$root\RPCS3_$Name"
 Set-Location $repo

@@ -5,7 +5,7 @@
 #   Invoke-MissionRun.ps1 -Name TEST197 -Trace 0x358210 -Dumps 'r3:0' -Hits 20 -Seconds 120
 param(
     [Parameter(Mandatory)][string]$Name,
-    [string]$Baselines = 'D:\Destiny360\SIGNON_LOCAL\baselines_highway_z104.txt',
+    [string]$Baselines,   # default: SIGNON_LOCAL\baselines_highway_z104.txt
     [string[]]$ExtraAh = @(),
     [string[]]$ExtraBap = @(),
     [string]$Trace = '0x2bef68',
@@ -14,6 +14,8 @@ param(
     [int]$Seconds = 60,
     [string]$TraceAfter = 'ahp req'   # '' starts the trace right after the login
 )
+. "$PSScriptRoot\Paths.ps1"
+if (-not $Baselines) { $Baselines = "$D1Signon\baselines_highway_z104.txt" }
 $bap = @('--self-flags', '2', '--universe-flag-values', '215=1', '--peer-family') + $ExtraBap
 $ah = @('--ah-join', '--ah-entities', '8192:12288', '--ah-state', '--ah-map', 'act_cosmo_m0_highway',
         '--ah-world', '126', '--ah-checksum', '0x79130968', '--ah-bubbles', '22', '--ah-bubble-states', '-1,13=0',

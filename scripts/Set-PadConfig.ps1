@@ -4,7 +4,8 @@
 #   Set-PadConfig.ps1 -Mode keyboard   (before unattended runs)
 #   Set-PadConfig.ps1 -Mode xinput     (afterwards, for the user)
 param([Parameter(Mandatory)][ValidateSet('keyboard', 'xinput')][string]$Mode)
-$dir = 'D:\Destiny360\RPCS3_TEST048_SETUP\config\input_configs\global'
+. "$PSScriptRoot\Paths.ps1"
+$dir = "$D1Rpcs3\config\input_configs\global"
 if (Get-Process rpcs3 -ErrorAction SilentlyContinue) { throw 'Close RPCS3 first.' }
 $source = if ($Mode -eq 'keyboard') { "$dir\Default.keyboard.automation.yml" } else { "$dir\Default.xinput.user.yml.bak" }
 if (-not (Test-Path $source)) { throw "Missing $source" }

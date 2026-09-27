@@ -40,7 +40,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bdbuffer  # noqa: E402
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # noqa: E402
 
-ROOT = Path(r"D:\Destiny360\SIGNON_LOCAL\captures")
+from local_paths import SIGNON  # noqa: E402
+
+ROOT = SIGNON / "captures"
 MAX_FRAME = 1 << 20
 
 

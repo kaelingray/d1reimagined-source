@@ -1,6 +1,6 @@
 # Destiny 1 preservation research (PS3 / RPCS3, Xbox 360 / Xenia)
 
-This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active route is now the PS3 build (BLES01857 01.00) in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay outside Git under `D:\Destiny360` (see [Data policy](#data-policy)).
+This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active route is now the PS3 build (BLES01857 01.00) in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay out of Git in the ignored `local\` folder (see [Data policy](#data-policy)).
 
 ## Current status (2026-09-27)
 
@@ -49,7 +49,7 @@ Each gate was cleared one at a time. Destiny's error code names are in bold.
 
 ## Reproducing a run
 
-Everything runs on one Windows PC against a private RPCS3 copy (`RPCS3_TEST048_SETUP`) and the game working copy under `D:\Destiny360`. `scripts/Start-LocalStack.ps1` starts the loopback services, RPCS3 and a GDB daemon. `scripts/Invoke-TitanLogin.ps1` drives the title screen and character select unattended. `scripts/Invoke-JoinCycle.ps1` does both, adds the activity-host proxy, and can trace functions through the GDB daemon while the client joins the mission:
+Everything runs on one Windows PC against a private RPCS3 copy (`local\RPCS3_TEST048_SETUP`) and the game working copy in `local\01_WORKING`. The scripts find these through `scripts/Paths.ps1` and `server/local_paths.py` (`D1_LOCAL` overrides the location). `scripts/Start-LocalStack.ps1` starts the loopback services, RPCS3 and a GDB daemon. `scripts/Invoke-TitanLogin.ps1` drives the title screen and character select unattended. `scripts/Invoke-JoinCycle.ps1` does both, adds the activity-host proxy, and can trace functions through the GDB daemon while the client joins the mission:
 
 ```powershell
 scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','--session-result') `
@@ -59,7 +59,7 @@ scripts\Invoke-JoinCycle.ps1 -Name TESTnnn -LobbyArgs @('--reply-type','0x01','-
             '--ah-world','126','--ah-checksum','0x79130968','--ah-bubbles','22','--ah-bubble-states','-1,13=0',
             '--ah-zone','104:0x811c9dc5','--ah-world-state','104:1','--ah-roster','0',
             '--ah-sim-player','0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1','--ah-game-mode','0x4786c0e0:3:3',
-            '--ah-baselines','@D:\Destiny360\SIGNON_LOCAL\baselines_highway_z104.txt','--ah-heartbeat','1') `
+            '--ah-baselines','@local\SIGNON_LOCAL\baselines_highway_z104.txt','--ah-heartbeat','1') `
   -TraceAfter 'ahp req' -Trace 0x3204a8 -Dumps 'r5:64'
 ```
 
@@ -68,15 +68,20 @@ The baselines file lists the mission's replicated objects as `KEY/KIND/INDEX[/B]
 One cycle takes 8–10 minutes. Useful companions:
 
 - `scripts/rpcs3_activity_poll.py`: read-only watcher for the activity loader, world controller, zone state and object table.
-- `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register. **RPCS3 ignores GDB breakpoints under the LLVM PPU decoder**, so traces have been empty since at least TEST202. The instrumented build replaces them with a PPU function-entry hook: watches go in `C:\dev\d1ppu.txt` (`ADDR [MAXHITS] [rN:LEN ...]`, or `coverage` to log every function's first call), and the output is `D1P`/`D1C` lines in `RPCS3.log`. `scripts/rpcs3_text_marker.py` marks when a UI text appears in memory. Details: [orbit checkpoint](notes/checkpoint-2026-09-25-orbit.md).
+- `scripts/rpcs3_gdb_daemon.py`: breakpoint traces with register and memory dumps; `rN:0` prints a register. **RPCS3 ignores GDB breakpoints under the LLVM PPU decoder**, so traces have been empty since at least TEST202. The instrumented build replaces them with a PPU function-entry hook: watches go in `d1\d1ppu.txt` next to `rpcs3.exe` (`ADDR [MAXHITS] [rN:LEN ...]`, or `coverage` to log every function's first call), and the output is `D1P`/`D1C` lines in `RPCS3.log`. `scripts/rpcs3_text_marker.py` marks when a UI text appears in memory. Details: [orbit checkpoint](notes/checkpoint-2026-09-25-orbit.md).
 - `scripts/rpcs3_tiger_types.py`: dumps the game's runtime type definitions, used to export the typed message schemas.
 - `scripts/rpcs3_replicated_objects.py`: lists the client's replicated objects in the `--ah-baselines` format.
-- `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots; `scripts/Invoke-MovementCheck.ps1` with `scripts/frame_blocks.py` scores in-mission frames.
+- `scripts/Invoke-RpcsStep.ps1`: key presses and in-emulator screenshots (the instrumented build takes one when `d1\d1shot.on` appears, so the game window can stay in the background); `scripts/Invoke-MovementCheck.ps1` with `scripts/frame_blocks.py` scores in-mission frames.
 - `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
 - `scripts/Invoke-SoakTest.ps1`: long in-mission runs (periodic movement, scored screenshots, RPCS3 memory).
+- `scripts/Invoke-BubbleSweep.ps1`: boots each given mission bubble in turn, feeds its replicated objects back to the stand-in (`--ah-baselines-watch`) so the guardian spawns there, and screenshots the Ghost's nav mode (location name).
 - `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller (the XInput config is active at the moment).
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
+
+### Moving to another PC
+
+Copy the whole repository folder, including `local\` (about 80 GB), to the other PC. There, install Python 3.14 with `pip install -r requirements.txt` and the GPU's Vulkan driver. Then fix the one absolute path in `local\RPCS3_TEST048_SETUP\config\games.yml` to the new `local\01_WORKING\ps3_destiny\` location. The RPCS3 build in `local\` runs as is. The source tree and toolchain (`C:\dev\rpcs3`, Qt, Vulkan SDK; see the orbit checkpoint) are only needed to rebuild it.
 
 ## Repository layout
 
@@ -91,4 +96,4 @@ The Xbox 360 installation, content packs and title update were captured and veri
 
 ## Data policy
 
-Never commit game images, firmware, emulator builds, save data, keys, certificates, raw captures, logs, exported schemas or screenshots. They live under `D:\Destiny360` (`SIGNON_LOCAL`, `RPCS3_*`, `00_ORIGINAL_DUMP`). All listeners bind to loopback addresses only, and the DNS sinkhole never forwards upstream.
+Never commit game images, firmware, emulator builds, save data, keys, certificates, raw captures, logs, exported schemas or screenshots. They live in the git-ignored `local\` folder (`SIGNON_LOCAL`, `RPCS3_*`, `00_ORIGINAL_DUMP`; moved there from `D:\Destiny360` on 2026-09-27, so older notes still use that path). All listeners bind to loopback addresses only, and the DNS sinkhole never forwards upstream.

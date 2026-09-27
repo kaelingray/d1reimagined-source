@@ -21,6 +21,8 @@ public static class RpcsKeys {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
 }
 "@
 $named = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28; Return = 0x0D; Enter = 0x0D; Space = 0x20;
@@ -44,6 +46,9 @@ $script:game = @()
 if (-not $script:game) { throw "Destiny game window not found" }
 
 foreach ($h in $script:game) {
+    # a minimized game window presents no frames (F12 then saves nothing): restore it without
+    # taking focus, so the user can keep using the desktop
+    if ([RpcsKeys]::IsIconic($h)) { [void][RpcsKeys]::ShowWindow($h, 4); Start-Sleep -Milliseconds 500 }
     for ($i = 0; $i -lt $Count; $i++) {
         foreach ($v in $vks) {
             $scan = [RpcsKeys]::MapVirtualKey([uint32]$v, 0)

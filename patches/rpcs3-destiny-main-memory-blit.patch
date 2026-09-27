@@ -1,5 +1,5 @@
 diff --git a/rpcs3/Emu/Cell/PPUThread.cpp b/rpcs3/Emu/Cell/PPUThread.cpp
-index 595e34a51..fd84e1979 100644
+index 595e34a51..8c1c2dd3b 100644
 --- a/rpcs3/Emu/Cell/PPUThread.cpp
 +++ b/rpcs3/Emu/Cell/PPUThread.cpp
 @@ -16,6 +16,7 @@
@@ -10,7 +10,7 @@ index 595e34a51..fd84e1979 100644
  #include "PPUInterpreter.h"
  #include "PPUAnalyser.h"
  #include "PPUModule.h"
-@@ -3386,6 +3387,91 @@ static void ppu_trace(u64 addr)
+@@ -3386,6 +3387,112 @@ static void ppu_trace(u64 addr)
  	ppu_log.notice("Trace: 0x%llx", addr);
  }
  
@@ -48,6 +48,27 @@ index 595e34a51..fd84e1979 100644
 +		if (w.addr != addr)
 +		{
 +			continue;
++		}
++
++		if (w.unique)
++		{
++			// Key: FNV-1a over the dumped bytes (and LR); repeats are skipped without using the budget
++			u64 key = 0xcbf29ce484222325ull ^ ppu.lr;
++			for (const auto& [reg, len] : w.dumps)
++			{
++				const u32 ptr = static_cast<u32>(ppu.gpr[reg]);
++				if (len && vm::check_addr(ptr, vm::page_readable, len))
++				{
++					for (u32 i = 0; i < len; i++) key = (key ^ vm::read8(ptr + i)) * 0x100000001b3ull;
++				}
++			}
++
++			if (std::find(w.seen.begin(), w.seen.end(), key) != w.seen.end())
++			{
++				return;
++			}
++
++			w.seen.push_back(key);
 +		}
 +
 +		if (!w.left || --w.left == 0)
@@ -102,7 +123,7 @@ index 595e34a51..fd84e1979 100644
  template <typename T>
  static T ppu_load_acquire_reservation(ppu_thread& ppu, u32 addr)
  {
-@@ -4918,6 +5004,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+@@ -4918,6 +5025,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
  			{ "__error", reinterpret_cast<u64>(&ppu_error) },
  			{ "__check", reinterpret_cast<u64>(&ppu_check) },
  			{ "__trace", reinterpret_cast<u64>(&ppu_trace) },
@@ -110,7 +131,7 @@ index 595e34a51..fd84e1979 100644
  			{ "__syscall", reinterpret_cast<u64>(ppu_execute_syscall) },
  			{ "__get_tb", reinterpret_cast<u64>(get_timebased_time) },
  			{ "__lwarx", reinterpret_cast<u64>(ppu_lwarx) },
-@@ -5550,7 +5637,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+@@ -5550,7 +5658,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
  				settings += ppu_settings::daz_and_ftz;
  
  			// Write version, hash, CPU, settings
@@ -358,7 +379,7 @@ index 2a5079496..7353165ab 100644
  
  			if (const auto result = RSX(ctx)->read_barrier(read_address, read_length, !is_block_transfer);
 diff --git a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
-index 6e2e7162b..dac9523a0 100644
+index 6e2e7162b..a2a0e3548 100644
 --- a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
 +++ b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
 @@ -1,4 +1,5 @@
@@ -391,8 +412,8 @@ index 6e2e7162b..dac9523a0 100644
 +			// result in the texture cache and only writes it back lazily on access, which loses data
 +			// when several blits target the same address between SPU reads. Do these on the CPU so the
 +			// data is in guest memory immediately.
-+			// Destiny test switch: C:/dev/d1noblitfix.on at boot disables this (checked once).
-+			static const bool d1_blit_fix = !fs::is_file("C:/dev/d1noblitfix.on");
++			// Destiny test switch: d1/d1noblitfix.on at boot disables this (checked once).
++			static const bool d1_blit_fix = !fs::is_file(d1diag::ctl_dir() + "d1noblitfix.on");
 +			const bool copy_to_main_memory = d1_blit_fix &&
 +				dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER && src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER;
 +
@@ -401,7 +422,7 @@ index 6e2e7162b..dac9523a0 100644
  				RSX(ctx)->scaled_image_from_memory(src, dst, in_inter == blit_engine::transfer_interpolator::foh))
  			{
 diff --git a/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp b/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
-index fd8ec80c7..95d8bbb51 100644
+index fd8ec80c7..2068f44a4 100644
 --- a/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
 +++ b/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
 @@ -1,4 +1,5 @@
@@ -410,10 +431,12 @@ index fd8ec80c7..95d8bbb51 100644
  #include "nv406e.h"
  #include "nv47_sync.hpp"
  
-@@ -31,9 +32,18 @@ namespace rsx
+@@ -30,10 +31,19 @@ namespace rsx
+ 			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_program_needs_rehash;
  
  			const auto& sema = vm::_ref<RsxSemaphore>(addr);
- 			const auto& atomic_sema = vm::_ref<atomic_t<RsxSemaphore>>(addr);
+-			const auto& atomic_sema = vm::_ref<atomic_t<RsxSemaphore>>(addr);
++			const auto& atomic_sema = vm::_ref<atomic_t<RsxSemaphore>>(addr);
 +			d1diag::note_acquire(addr);
 +			const u64 d1_start = get_system_time();
 +			const u32 d1_initial = sema;
@@ -429,8 +452,32 @@ index fd8ec80c7..95d8bbb51 100644
  				// Flip semaphore doesnt need wake-up delay
  				if (addr != RSX(ctx)->label_addr + 0x10)
  				{
-@@ -94,6 +104,7 @@ namespace rsx
- 				utils::spin_on_cacheline_once(atomic_sema, sema, 100);
+@@ -81,19 +91,20 @@ namespace rsx
+ 					}
+ 				}
+ 
+-				if (RSX(ctx)->external_interrupt_lock ||
+-					(RSX(ctx)->state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) == cpu_flag::dbg_global_pause)
+-				{
+-					RSX(ctx)->cpu_wait({});
+-					continue;
+-				}
+-
+-				RSX(ctx)->on_semaphore_acquire_wait();
+-
+-				// Wait until the value changes or until 100us pass.
+-				utils::spin_on_cacheline_once(atomic_sema, sema, 100);
++				if (RSX(ctx)->external_interrupt_lock ||
++					(RSX(ctx)->state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) == cpu_flag::dbg_global_pause)
++				{
++					RSX(ctx)->cpu_wait({});
++					continue;
++				}
++
++				RSX(ctx)->on_semaphore_acquire_wait();
++
++				// Wait until the value changes or until 100us pass.
++				utils::spin_on_cacheline_once(atomic_sema, sema, 100);
  			}
  
 +			d1_log();
@@ -683,7 +730,7 @@ index 9e27132fa..dfd81086c 100644
  		ensure(ds->rsx_pitch == m_framebuffer_layout.actual_zeta_pitch);
  
 diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
-index ffe7bc95c..645bbd630 100644
+index ffe7bc95c..de20af3ff 100644
 --- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
 +++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
 @@ -1,5 +1,6 @@
@@ -693,7 +740,23 @@ index ffe7bc95c..645bbd630 100644
  #include "vkutils/buffer_object.h"
  #include "vkutils/memory.h"
  #include "Emu/RSX/Overlays/overlay_manager.h"
-@@ -911,6 +912,27 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+@@ -658,6 +659,15 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+ 	rsx::simple_array<vk::viewable_image*> calibration_src;
+ 
+ 	const bool has_overlay = (m_overlay_manager && m_overlay_manager->has_visible());
++	// D1 diagnostics: d1/d1shot.on (next to rpcs3.exe) requests a screenshot like F12, which as a window shortcut
++	// only fires while the game window is active (unattended runs post keys to a background window)
++	static u32 d1_shot_poll = 0;
++	if (++d1_shot_poll % 10 == 0 && fs::is_file(d1diag::ctl_dir() + "d1shot.on"))
++	{
++		fs::remove_file(d1diag::ctl_dir() + "d1shot.on");
++		g_user_asked_for_screenshot = true;
++	}
++
+ 	const bool user_asked_for_screenshot = g_user_asked_for_screenshot.exchange(false);
+ 	const bool user_is_recording = (g_recording_mode != recording_mode::stopped && m_frame->can_consume_frame());
+ 	const bool need_media_capture = user_asked_for_screenshot || user_is_recording;
+@@ -911,6 +921,27 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
  
  		render_overlays(direct_fbo, areau(aspect_ratio));
  
@@ -722,7 +785,7 @@ index ffe7bc95c..645bbd630 100644
  		{
  			const auto num_dirty_textures = m_texture_cache.get_unreleased_textures_count();
 diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
-index 8687a6875..28ffc384e 100644
+index 8687a6875..5134bb961 100644
 --- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
 +++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
 @@ -1,4 +1,5 @@
@@ -965,10 +1028,10 @@ index e169caaa4..28da869ce 100644
  		// Temporary storage accessors
 diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
 new file mode 100644
-index 000000000..c7279e664
+index 000000000..1d84c10e4
 --- /dev/null
 +++ b/rpcs3/Emu/RSX/d1diag.h
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,238 @@
 +#pragma once
 +// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
 +// the SPU lighting reads (0x44000000-0x46000000). Throttled.
@@ -985,7 +1048,15 @@ index 000000000..c7279e664
 +LOG_CHANNEL(d1_log, "D1");
 +namespace d1diag
 +{
-+	// Timeline tracing, active while the marker file C:/dev/d1trace.on exists (checked every
++	// Marker files, the PPU watch list and dumps live in "d1/" next to rpcs3.exe, so the whole
++	// test setup can be moved or copied as one folder.
++	inline const std::string& ctl_dir()
++	{
++		static const std::string dir = fs::get_executable_dir() + "d1/";
++		return dir;
++	}
++
++	// Timeline tracing, active while the marker file d1/d1trace.on exists (checked every
 +	// 200 ms), limited to 400000 lines per activation.
 +	inline bool tracing()
 +	{
@@ -997,7 +1068,7 @@ index 000000000..c7279e664
 +		{
 +			last_check = now;
 +			const bool was = on.load();
-+			const bool is = fs::is_file("C:/dev/d1trace.on");
++			const bool is = fs::is_file(ctl_dir() + "d1trace.on");
 +			if (is && !was) lines = 0;
 +			on = is;
 +		}
@@ -1027,7 +1098,7 @@ index 000000000..c7279e664
 +	// Object counters for the D1MEM log line (VKPresent.cpp).
 +	inline std::atomic<u64> g_programs_created{0}, g_programs_destroyed{0}, g_descriptor_set_first_inits{0}, g_tables_released{0};
 +
-+	// New fragment program logging (ProgramStateCache.h), while C:/dev/d1fp.on exists, 400 lines
++	// New fragment program logging (ProgramStateCache.h), while d1/d1fp.on exists, 400 lines
 +	// per activation.
 +	inline bool fp_logging()
 +	{
@@ -1039,7 +1110,7 @@ index 000000000..c7279e664
 +		{
 +			last_check = now;
 +			const bool was = on.load();
-+			const bool is = fs::is_file("C:/dev/d1fp.on");
++			const bool is = fs::is_file(ctl_dir() + "d1fp.on");
 +			if (is && !was) lines = 0;
 +			on = is;
 +		}
@@ -1066,8 +1137,8 @@ index 000000000..c7279e664
 +		return n.fetch_add(1) < 40000;
 +	}
 +
-+	// One-frame surface dump: creating C:/dev/d1dump.on arms it at the next flip (the marker is
-+	// consumed); every render/depth target is written to D:/Destiny360/d1dump/<id>/ when the RSX
++	// One-frame surface dump: creating d1/d1dump.on arms it at the next flip (the marker is
++	// consumed); every render/depth target is written to d1/dump/<id>/ when the RSX
 +	// switches away from it, until the first target switch after the following flip. RSX thread only.
 +	struct dump_state
 +	{
@@ -1084,13 +1155,13 @@ index 000000000..c7279e664
 +			g_dump.stop_next = true;
 +			return;
 +		}
-+		if (fs::is_file("C:/dev/d1dump.on"))
++		if (fs::is_file(ctl_dir() + "d1dump.on"))
 +		{
-+			fs::remove_file("C:/dev/d1dump.on");
++			fs::remove_file(ctl_dir() + "d1dump.on");
 +			g_dump.active = true;
 +			g_dump.stop_next = false;
 +			g_dump.seq = 0;
-+			g_dump.dir = fmt::format("D:/Destiny360/d1dump/%llu/", get_system_time());
++			g_dump.dir = fmt::format("%sdump/%llu/", ctl_dir(), get_system_time());
 +			fs::create_path(g_dump.dir);
 +		}
 +	}
@@ -1107,7 +1178,7 @@ index 000000000..c7279e664
 +
 +	// PPU call tracing (LLVM decoder, where GDB breakpoints are ignored). Every compiled function
 +	// below 0x2000000 checks g_ppu_mask[addr >> 2] on entry and calls ppu_d1hit when set. The
-+	// watch list comes from C:/dev/d1ppu.txt, one watch per line: "ADDR [MAXHITS] [rN:LEN ...]"
++	// watch list comes from d1/d1ppu.txt, one watch per line: "ADDR [MAXHITS] [rN:LEN ...]"
 +	// (hex address, default 50 hits, memory dumps at registers); re-read when it changes.
 +	// Fixed host address (reserved and committed in PPUThread.cpp before any PPU code runs), so the
 +	// compiled PPU code can embed it as a 64-bit constant and cached objects stay valid across runs.
@@ -1118,6 +1189,8 @@ index 000000000..c7279e664
 +		u32 addr;
 +		u32 left;
 +		std::vector<std::pair<u32, u32>> dumps;
++		bool unique = false; // "u": log each distinct dump content once
++		std::vector<u64> seen;
 +	};
 +	inline std::mutex g_ppu_mutex;
 +	inline std::vector<ppu_watch> g_ppu_watches;
@@ -1129,7 +1202,7 @@ index 000000000..c7279e664
 +		if (now - last_check < 1'000'000) return;
 +		last_check = now;
 +		std::string text;
-+		if (fs::file f{"C:/dev/d1ppu.txt"}) text = f.to_string();
++		if (fs::file f{ctl_dir() + "d1ppu.txt"}) text = f.to_string();
 +		if (text == last_text) return;
 +		last_text = text;
 +		std::lock_guard lock(g_ppu_mutex);
@@ -1174,6 +1247,10 @@ index 000000000..c7279e664
 +				{
 +					w.addr = static_cast<u32>(std::stoul(tok, nullptr, 16));
 +					first = false;
++				}
++				else if (tok == "u")
++				{
++					w.unique = true;
 +				}
 +				else if (tok[0] == 'r' && tok.find(':') != umax)
 +				{

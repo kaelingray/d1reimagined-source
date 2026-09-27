@@ -1,5 +1,5 @@
 """Summarise the D1T timeline written by the instrumented RPCS3 build (patches/
-rpcs3-destiny-main-memory-blit.patch, active while C:/dev/d1trace.on exists) from an RPCS3.log:
+rpcs3-destiny-main-memory-blit.patch, active while d1/d1trace.on next to rpcs3.exe exists) from an RPCS3.log:
 per frame (split at flips), the ordered RSX blits/copies, semaphore acquires (with wait time)
 and releases, texture uploads from the SPU-shared region and SPU DMA runs (consecutive gets or
 puts by the same SPU collapsed into an address range).
