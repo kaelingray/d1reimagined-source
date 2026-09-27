@@ -1030,3 +1030,20 @@ pointer to {state type, state data} in r4.
 - New tooling: `bap_server.py --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON` replicates any object
   with an explicit state (fields by offset). The private activity schema now includes the 65
   live types exported in TEST255 (backup `activity_schema.before-test257.json`).
+
+## Expected mission flow (A Guardian Rises) and where we spawn
+Source: Destinypedia's "A Guardian Rises" walkthrough and transcript. Objectives in order:
+Enter The Wall -> Find a weapon -> Grab the Rifle -> Fight through The Wall -> Fight through the
+Fallen -> Find the ship -> Clear out the Fallen.
+- Start: two cutscenes, then the Guardian wakes among cars outside the Wall; the first nav point
+  marks a break in the wall. Inside, the Ghost lights a dark chasm, Shanks chase it, and a gate
+  opens to the Khvostov 7G-02. Next come ambushes by Dregs and Vandals, a loot cache, a trip-mine
+  corridor and a hall with 4 Vandals and 5 Dregs, then the Divide, where Fallen dropships arrive.
+- **Dock 13 is the final area**: the hangar with the Arcadia jumpship and Rahn, Devil Captain
+  (with Dregs, Vandals and Shanks). Clearing it triggers the end cutscene.
+- The stand-in has been spawning the Guardian in bubble 13 (zone set 104) - the end of the
+  mission - because that was the first bubble configuration that worked. TEST259 tries bubble 0
+  (zone set 0) to reach the mission start.
+- Script variables: the game-mode object's variable table is pushed into a global script-variable
+  store (`0xb2c8d4` loop -> `0x1fed20` -> `0xd08b68`); client code reads it through getters
+  (`0x1fed60` 47 callers, `0x1fee1c` 44, `0x1fedc4` 10, `0x1fed8c` 6).

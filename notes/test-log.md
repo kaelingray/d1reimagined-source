@@ -415,3 +415,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 257: hooks on the apply path (`0x25f6b8(binding, state type, ...)`) and the 14 handlers: each
   handler's second argument points at the state type handle, giving the kind -> handler map
   (checkpoint).
+- 258: hooks on the script-variable getters (`0x1fed60`, `0x1fee1c`, `0x1fedc4`, `0x1fed8c`; the
+  variable API at 0xd07fd0-0xd08dec is only reached through these wrappers): the budgets were used
+  up by per-frame queries - 0x9270fc16 (caller 0x34e5ec, spawner area), 0xf50d3fbe (0xb26b44, game
+  mode), 0xbe4db480 (0x3547e8, spawner), 0xe00081c9 (0x456cc0) - plus a few one-off hashes
+  (0x6999ecc1 from 0x403410, 0x8a9c2494, 0x1b6934 x7). Needs a "log each value once" hook mode.
