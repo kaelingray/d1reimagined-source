@@ -313,9 +313,9 @@ AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
 AH_CLIENT_STATE, CLIENT_STATE_TYPE = 21, 0x80800C56
 
 
-def client_slice_state(schema, body):
-    """Summary of the slice-set part of a type-21 client state delta, or None when the delta
-    does not carry it (or the schema lacks the type)."""
+def client_slice_record(schema, body):
+    """The slice-set part of a type-21 client state delta: {"current"/"target": (index, hash),
+    "state": n} with the keys the delta carries, or None (no slice-set part, or no schema)."""
     if not schema or f"{CLIENT_STATE_TYPE:#x}" not in schema or not body:
         return None
     reader = investment.BitReader(body)
@@ -324,14 +324,23 @@ def client_slice_state(schema, body):
     zone = investment.decode_from(reader, schema, CLIENT_STATE_TYPE).get(0xB8)
     if not zone:
         return None
-    parts = []
-    for name, off in (("current", 0), ("target", 0xA0)):
-        if off in zone:
-            rec = zone[off]
-            parts.append(f"{name} {rec.get(0)}:{rec.get(4, 0):#010x}")
+    record = {name: (zone[off].get(0), zone[off].get(4, 0))
+              for name, off in (("current", 0), ("target", 0xA0)) if off in zone}
     if 0x142 in zone:
-        parts.append(f"state {zone[0x142]}")
-    return ", ".join(parts) or None
+        record["state"] = zone[0x142]
+    return record or None
+
+
+def client_slice_state(schema, body):
+    """One-line summary of client_slice_record, or None."""
+    record = client_slice_record(schema, body)
+    if not record:
+        return None
+    parts = [f"{name} {record[name][0]}:{record[name][1]:#010x}" for name in ("current", "target")
+             if name in record]
+    if "state" in record:
+        parts.append(f"state {record['state']}")
+    return ", ".join(parts)
 
 
 def machine_list(schema, machine_ids):
@@ -901,11 +910,24 @@ def handle(conn, peer, args):
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
                 if ah_type == AH_CLIENT_STATE:
                     try:
-                        summary = client_slice_state(args.activity_schema, body)
+                        record = client_slice_record(args.activity_schema, body)
                     except ValueError:
-                        summary = None
-                    if summary:
-                        log(f"[{tag}] client slice set: {summary}")
+                        record = None
+                    if record:
+                        log(f"[{tag}] client slice set: {client_slice_state(args.activity_schema, body)}")
+                        # Mirror the client's switch in the world state's group record, as the
+                        # host that tracks the fireteam's slice set would (opt-in experiment)
+                        wanted = record.get("target", (-1, 0))[0]
+                        if wanted is None or wanted < 0:
+                            wanted = record.get("current", (-1, 0))[0]
+                        if (args.ah_follow_client_zone and world_params and wanted is not None
+                                and wanted >= 0 and wanted != zone_now):
+                            zone_now = wanted
+                            data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                     *world_params[1:])
+                            conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                              bc_notification(AH_ESTABLISH, data, host_id)))
+                            log(f"[{tag}] world state: zone set -> {zone_now} (following the client)")
                 for rule_index, (on_type, on_body, delay, spec) in enumerate(args.ah_on):
                     # Script steps driven by what the client reports (sense state), not by time
                     if (rule_index not in reactions_fired and ah_type == on_type
@@ -1230,6 +1252,9 @@ def parse_args(argv=None):
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
+    ap.add_argument("--ah-follow-client-zone", action="store_true",
+                    help="with --ah-world-state, send a new world-state delta naming the zone set the "
+                         "client reports in its type-21 state (target, else current) whenever it changes")
     ap.add_argument("--ah-on", action="append", default=[], type=reactive_object_spec,
                     metavar="TYPE[/REGEX]=>SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON",
                     help="with --ah-roster and --ah-heartbeat, replicate this object state SECONDS after "

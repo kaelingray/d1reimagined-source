@@ -72,6 +72,13 @@ Select-String 'D1P' local\SIGNON_LOCAL\logs\TEST368-rpcs3.log | Select-Object -L
 Select-String 'createSession' local\SIGNON_LOCAL\logs\TEST368-lobby.log
 ```
 
+The stand-in log now shows the client's own slice-set reports (`client slice set: current
+112:..., target 24:..., state N`, from client type 21), so the switch is visible in
+`TEST368-ahl.log` even without hooks. If the client switches and is then removed from the world
+(lobster or a similar error), repeat as TEST368b with `--ah-follow-client-zone` added to
+`-ExtraAh`: the stand-in then updates its world-state group record to the zone set the client
+reports, as a host tracking the fireteam would.
+
 Expected from the static analysis: at the bubble edge `0x31d358` with r4 = 3 and r5 = 24 (The
 Breach's base slice set), then `0x11f91c` with r4 = 2, and the Breach loading, all without any
 host action. Bubble 3 must be registered (`3=0`), or its slice set is not in the scenario object
