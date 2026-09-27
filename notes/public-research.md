@@ -98,7 +98,9 @@ SD9128080 0x808012d9: "sq_machine"-style scripted groups: +0x20 typed member lis
 
 Leads for the stand-in:
 
-- **Slice sets = a bubble's map containers.** A bubble lists one or more map containers. The
+- **Slice sets = a bubble's map containers.** (Refuted by the PS3 packages: bubbles hold 6-182
+  map containers each, which are map chunks; see the orbit checkpoint, "Cosmodrome map from the
+  packages".) A bubble lists one or more map containers. The
   runs number zone (slice) sets 8 x bubble + n, and bubbles 13 and 14 each have one extra set
   (105 for the Dock 13 outro, 113 for the intro). That fits "map container n of bubble b" =
   slice set 8b + n. Check: read the activity's Bubbles[] and the container count per bubble.

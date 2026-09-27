@@ -1247,3 +1247,28 @@ pc_x64 41345.14.06.30.2046.live`, build time 2014-06-30/07-01.
   136 bubble definitions (manifest class 0x80800580, as in the PS4 study); 8 bubble definitions
   sit in the Cosmodrome destination package 0x026d. Mapping the other package ids to names needs
   the disc's package file list.
+
+## Cosmodrome map from the packages (Oodle available, 2026-09-27 night)
+With the user-supplied `oo2core_3_win64.dll` (loaded on Linux by `scripts/oodle_pe_shim.c`), all 585
+compressed blocks of the ten uploaded packages decode to exactly their used size.
+`python scripts/d1_pkg.py bubbles 80cda002 <packages> --oodle <dll>` prints the result below.
+- `map:cosmo:root` (0x80cda002, SActivity 0x8080052e) = {u32 size, u32 names tag 0x80cda003, u32
+  tag 0x80cda004, array @0xc of **22** bubble definition tags}: the 22 bubbles the client checks
+  for act_cosmo_m0_highway. Arrays on PS3: {u32 count, u32 offset from the count field} -> a
+  0x14-byte header {0x80800184, count, element class, 0, 0} then the elements.
+- The names tag (0x80800636) is an array of 82 location rows {u32, u32, u32 name hash, u8 kind +
+  u16 row, i32 bubble index or -1, u32 flags}: 22 bubbles (kind 0), 26 kind-1 and 34 kind-2
+  locations. **Names are FNV-1 hashes of short dev names**: bubble 0 `array` (Skywatch), 2
+  `blast`, 3 `breach`, 8 `dome_a`, 9 `dome_c` (the Lunar / Terrestrial Complexes), 10
+  `dome_hive`, 12 `graveyard`, 13 `hangar` (Dock 13), **14 `highway`** (confirms TEST342), 15
+  `hive_shore`, 19 `refinery`, 20 `rocketyard`, 21 `ship`; a kind-2 row is `breach_sky`. Bubbles 6
+  and 7 (Mothyards, Steppes) hash to names that differ only in the last character.
+- Bubble definitions: 8 in package 0x26d (bubbles 0-7), the rest in 0x270 (8-12), 0x271 (13-16),
+  0x272 (17-20), 0x274 (21). Each is {u32 size, array @4 of map-container tags}: bubble 0 has
+  154, bubble 1 (sky) 6, 2 38, 3 9, 4 42, 5 8, 6 182, 7 172. So map containers are map chunks,
+  **not** slice sets; the idea that slice set 8b + n is bubble b's container n
+  (`public-research.md`) is wrong. The extra slice sets (105, 113) must come from elsewhere,
+  probably the mission's activity data.
+- Not in the uploaded packages: the mission's activity data (`act_cosmo_m0_highway` and its group
+  keys appear in none of them; the Cosmodrome's 11 activity infos are in
+  `ps3_cosmo_activities_activity_025c_0.pkg`) and the destination packages 0x270-0x274.

@@ -34,6 +34,7 @@ Usage:
   python scripts/d1_pkg.py locate TAGHASH [DIR]                (which package holds a tag)
   python scripts/d1_pkg.py extract PKG INDEX|TAGHASH OUT [--oodle DLL]
   python scripts/d1_pkg.py scan [DIR] --find TEXT|--hex HEX [--oodle DLL]  (search entry data)
+  python scripts/d1_pkg.py bubbles 80cda002 [DIR] --oodle DLL   (a destination's bubbles and names)
 """
 
 import argparse
@@ -160,14 +161,20 @@ class Package:
             return raw
         if oodle is None:
             raise RuntimeError(f"block {index} is compressed ({oodle_codec(raw)}); pass --oodle")
+        cache = self.__dict__.setdefault("_decoded", {})
+        if index in cache:
+            return cache[index]
         size = self.raw_size(index)
         try:
             data = oodle.decompress(raw, size)
         except RuntimeError:
             if size == BLOCK_SIZE:
                 raise
-            data = oodle.decompress(raw, BLOCK_SIZE)  # in case the sizing rule differs on PS3
-        return data + bytes(BLOCK_SIZE - len(data))
+            data = oodle.decompress(raw, BLOCK_SIZE)  # in case the sizing rule differs
+        if len(cache) >= 32:  # entries span consecutive blocks; keep the recent ones
+            cache.pop(next(iter(cache)))
+        cache[index] = data + bytes(BLOCK_SIZE - len(data))
+        return cache[index]
 
     def entry_data(self, index, oodle=None):
         e = self.entries[index]
@@ -340,6 +347,84 @@ def cmd_extract(a):
     print(f"wrote {len(data)} bytes to {a.out}")
 
 
+# --- tag layouts (PS3, big-endian, 32-bit fields) ---------------------------------------------
+# A DynamicArray field is {u32 count, u32 offset from the count field} pointing at a 0x14-byte
+# header {0x80800184, count, element class, 0, 0} followed by the elements. The Cosmodrome
+# destination root (map:cosmo:root, class 0x8080052e) is {u32 size, u32 names tag, u32 tag,
+# array @0xc of u32 bubble definition tags}; its names tag (0x80800636) holds an array @0xc of
+# 0x18-byte location rows {u32, u32, u32 name hash, u8 kind + u16 row index, i32 bubble index
+# (-1 = not a bubble), u32 flags}. Names are FNV-1 hashes of short dev names (bubble 14 =
+# "highway"); kind 0 = bubble, 1 and 2 = other named locations.
+KNOWN_NAMES = """array blast breach graveyard hangar highway refinery rocketyard ship dome_a dome_b dome_c
+dome_d dome_hive hive_shore breach_sky sky_dome_hive""".split()
+
+
+def fnv1(data, h=0x811c9dc5):
+    for c in data:
+        h = ((h * 0x01000193) & 0xffffffff) ^ c
+    return h
+
+
+def dyn_array(data, field):
+    count, rel = struct.unpack_from(">II", data, field)
+    head = field + rel
+    marker, count2, elem_class = struct.unpack_from(">III", data, head)
+    if marker != 0x80800184 or count2 != count:
+        raise ValueError(f"no array header at +{field:#x}")
+    return count, head + 0x14, elem_class
+
+
+class PackageSet:
+    """Packages of one folder by id, so tags can be read wherever they live."""
+
+    def __init__(self, paths, oodle=None):
+        self.oodle, self.by_id = oodle, {}
+        for path in packages(paths):
+            try:
+                p = Package(path)
+            except (ValueError, struct.error):
+                continue
+            if p.language == 0 or p.pkg_id not in self.by_id:
+                self.by_id[p.pkg_id] = p
+
+    def tag(self, value):
+        where = split_tag_hash(value)
+        p = self.by_id.get(where[0]) if where else None
+        if not p or where[1] >= len(p.entries):
+            return None
+        return p.entry_data(where[1], self.oodle)
+
+
+def cmd_bubbles(a):
+    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
+    root = ps.tag(parse_int(a.root))
+    if root is None:
+        sys.exit(f"{a.root}: package not found")
+    count, off, _ = dyn_array(root, 0xc)
+    bubbles = struct.unpack_from(f">{count}I", root, off)
+    names = {fnv1(n.encode()): n for n in KNOWN_NAMES + (a.names.split(",") if a.names else [])}
+    table = ps.tag(struct.unpack_from(">I", root, 4)[0])
+    rows = []
+    if table is not None:
+        n, off, _ = dyn_array(table, 0xc)
+        rows = [struct.unpack_from(">IIIIiI", table, off + 0x18 * i) for i in range(n)]
+    by_bubble = {r[4]: r for r in rows if r[4] >= 0}
+    for i, tag in enumerate(bubbles):
+        row = by_bubble.get(i)
+        name = names.get(row[2], f"{row[2]:#010x}") if row else "?"
+        where = split_tag_hash(tag)
+        pkg = ps.by_id.get(where[0])
+        detail = f"package {where[0]:#06x} not here"
+        if pkg:
+            d = ps.tag(tag)
+            detail = f"{dyn_array(d, 4)[0]} map containers"
+        print(f"bubble {i:2d} {tag:#010x} {name:14} {detail}")
+    others = [r for r in rows if r[4] < 0]
+    if others:
+        print(f"{len(others)} other named locations: " + ", ".join(
+            names.get(r[2], f"{r[2]:#010x}") + f" (kind {r[3] >> 24})" for r in others[:12]) + " ...")
+
+
 def cmd_scan(a):
     needle = bytes.fromhex(a.hex) if a.hex else a.find.encode()
     oodle = Oodle(a.oodle) if a.oodle else None
@@ -375,6 +460,9 @@ def main(argv=None):
     s.set_defaults(fn=cmd_locate)
     s = sub.add_parser("extract"); s.add_argument("pkg"); s.add_argument("entry"); s.add_argument("out")
     s.add_argument("--oodle"); s.set_defaults(fn=cmd_extract)
+    s = sub.add_parser("bubbles"); s.add_argument("root", help="destination root tag, e.g. 80cda002")
+    s.add_argument("paths", nargs="*"); s.add_argument("--oodle"); s.add_argument("--names")
+    s.set_defaults(fn=cmd_bubbles)
     s = sub.add_parser("scan"); s.add_argument("paths", nargs="*")
     g = s.add_mutually_exclusive_group(required=True); g.add_argument("--find"); g.add_argument("--hex")
     s.add_argument("--oodle"); s.set_defaults(fn=cmd_scan)
