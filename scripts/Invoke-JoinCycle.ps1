@@ -22,7 +22,14 @@ Start-Process -FilePath $D1Python -ArgumentList @('-u','server/session_listener.
 .\scripts\Invoke-TitanLogin.ps1 -Name $Name
 if ($TraceAfter) {
     $deadline = (Get-Date).AddMinutes(10)
-    while (-not (Select-String -Path "$D1Logs\$Name-bap.log" -Pattern $TraceAfter -Quiet) -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+    while (-not (Select-String -Path "$D1Logs\$Name-bap.log" -Pattern $TraceAfter -Quiet) -and (Get-Date) -lt $deadline) {
+        # The client echoes to the BAP stand-in every 5 s; a silent log means the emulator froze
+        # (seen in the login cinematic, TEST266/271)
+        if (((Get-Date) - (Get-Item "$D1Logs\$Name-bap.log").LastWriteTime).TotalSeconds -gt 60) {
+            throw 'the game stopped talking to the BAP stand-in for 60 s (emulator frozen)'
+        }
+        Start-Sleep 1
+    }
 }
 "=== trace"
 & $D1Python scripts/rpcs3_gdb_daemon.py send hits $Hits $Seconds $Trace $Dumps |

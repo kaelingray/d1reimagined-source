@@ -464,3 +464,15 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   "Verification failed (object: 0x0)" after decoding a garbage fragment program while the
   bubble loaded), 5 none (industrial corridor interior), **6 MOTHYARDS** (daytime). Bubble 0 is
   Skywatch and 13 Dock 13, so the highway start outside the Wall is most likely bubble 2.
+- 271-276: retries. **Bubble 2 = THE BLAST** (TEST273; daytime industrial sheds, no bubble-local
+  group). Bubble 4 crashes RPCS3 every time it loads (TEST268/274/276): the RSX thread decodes a
+  garbage fragment program ("Invalid Src type", "Unknown/illegal instruction") and about a
+  second later dies with "Verification failed (object: 0x0)". Separately, 5 of 12 boots since
+  the 15:01 rebuild and the move to local\ froze in the login cinematic (TEST266/271/272/275,
+  plus TEST263-era runs not counted): the loader opens ps3_ui_menus_0018_0.pkg and never reaches
+  ps3_ui_orbit_0026_0.pkg (good runs open it immediately), 8 emulator threads spin at 100 % and
+  frames stop 40-180 s later. The 6 boots that morning (older build, game files on D:) never
+  froze. `Invoke-JoinCycle.ps1` now aborts when the BAP log is silent for 60 s (the client
+  echoes every 5 s) and `Invoke-BubbleSweep.ps1` retries up to 3 times. Bubbles 7-12 and 14-21
+  went to the second PC (MATILDASPC: Ryzen 7 5700X, 32 GB, RTX 2060 SUPER; project copy in
+  F:\d1\d1xenia), TEST300 onwards.
