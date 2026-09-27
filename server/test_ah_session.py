@@ -1,6 +1,7 @@
 """End-to-end tests of the activity-host stand-in: a fake client performs the shello handshake,
 joins the activity host over the GCM-encrypted stream and checks the host messages that come
-back (join response, simulation packets, heartbeat timing, --ah-object-at and --ah-on steps).
+back (join response, simulation packets, heartbeat timing, --ah-object-at and --ah-on steps, an
+--ah-mission script with --ah-sim-clock).
 Uses a cut-down schema, so it runs without the private exported one."""
 
 import json
@@ -95,6 +96,14 @@ def objects_in(s, data):
     return found
 
 
+def host_tick(s, data):
+    """The u32 host tick of a simulation packet."""
+    r = investment.BitReader(data)
+    r.get(8 + 1 + 65 + 1)
+    investment.decode_from(r, s, b.ROSTER_TYPE)
+    return r.get(32)
+
+
 class ActivityHostSession(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -166,6 +175,33 @@ class ActivityHostSession(unittest.TestCase):
         self.assertTrue(before and all(state is None for state in before))
         self.assertTrue(after and all(state == {0: 2} for state in after))
         self.assertEqual(sum("--ah-on rule 0 matched" in line for line in self.logs), 1)
+
+
+    def test_mission_script_with_clock_and_trigger(self):
+        mission = {"objects": {"timed": "0x10:3:0:0x80809002", "next": "0x10:3:1:0x80809002",
+                               "trig": "0x10:3:2:0x80809002"},
+                   "steps": [{"at": 0.3, "set": {"timed": {"0": "$now"}}},
+                             {"on": {"type": "any", "object": "trig"}, "set": {"next": {"0": 9}}}]}
+        path = Path(self.tmp.name) / "mission.json"
+        path.write_text(json.dumps(mission), encoding="utf-8")
+        c = self.start("--ah-heartbeat", "0.1:-1", "--ah-baselines", "0x10/3/0,0x10/3/1,0x10/3/2",
+                       "--ah-sim-clock", "100", "--ah-mission", str(path))
+        # the client reports the trigger's id (at an odd bit offset) in a type-17 message at 0.7 s
+        w = investment.BitWriter()
+        w.put(1, 3)
+        investment.encode_into(w, self.schema, b.OBJECT_ID_TYPE, {0: 0x10, 4: 3, 6: 2})
+        start, pushes = self.run_client(c, 1.3)  # type 15 only: must not fire the rule
+        c.notify(17, w.data())
+        more = [p for p in self.run_client(c, 0.5)[1] if p[1] == b.AH_SIMULATION]  # the loop runs on traffic
+        sims = [(t - start, objects_in(self.schema, d), host_tick(self.schema, d))
+                for t, st, d in pushes if st == b.AH_SIMULATION]
+        ticks = [tick for _, _, tick in sims]
+        self.assertEqual(ticks, sorted(ticks))
+        self.assertGreater(ticks[-1], 60)  # about 100 ticks a second since the first packet
+        stamped = [o[(0x10, 3, 0)] for t, o, _ in sims if t > 0.5]
+        self.assertTrue(stamped and 15 <= stamped[-1][0] <= 60)  # "$now" at the 0.3 s step
+        self.assertTrue(all(o[(0x10, 3, 1)] is None for _, o, _ in sims))
+        self.assertTrue(more and objects_in(self.schema, more[-1][2])[(0x10, 3, 1)] == {0: 9})
 
 
 if __name__ == "__main__":
