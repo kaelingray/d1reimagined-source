@@ -1101,3 +1101,14 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
   default baselines leave all 24 at 0 - no objective ever starts, hence no "ENTER THE WALL". Test:
   `--ah-object <bubble group>:3:<index>:0x808004fa={"0": {"0": N}}` for N = 1..4 in the start
   bubble once it is confirmed.
+- Kind-3 apply detail (`0x1f6b64`-`0x1f6ca8`): per definition entry i (count +0x4c, 0x1c-byte
+  entries at +0x50, each with a sub-count at +0x70) the received u7 is stored at object
+  +0x124 + i*0x1a (a 26-byte record: state byte + per-entry flags), then `0xf3544` resolves the
+  entry's definition and `0x89b37c(object + [+0x118] + i*0x31 + 0x128, 0, ...)` moves that
+  entry's **script state machine** to the new state; definition flags at +0x38 (bits 0x78, 0x40)
+  decide whether `0x10977c` activates it. So the 24 values are state-machine indices of
+  data-defined sequences (objective incoming / player objective / completion), not fixed
+  enums: the start bubble's objective 0 has to be stepped 1, 2, 3 empirically.
+- World controller layout (constructor at `0x30db9c`-): +0x18 slice-set manager (3 slots of
+  0x6350 bytes), +0x1c cinematics manager (0xac bytes, "world controller cinematics manager"),
+  +0x24 a 0x90-byte subsystem (`0x4b53b4`).
