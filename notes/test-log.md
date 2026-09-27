@@ -389,3 +389,6 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
 - 251: PPU hook on 0x401048/0x40130c (object 0x18d9500: state 6, hash 0x6f7125cb), 0x5531bc,
   0x553154, 0x5524f0: all run every frame from `0x286cec`/`0x286da4` (a per-frame UI/loading
   manager), not the urgent-message trigger. Hunt paused.
+- 252: second soak (pipeline cache now ~356k programs, preloaded at boot): 19/19 steps ok,
+  private 15.4 -> 16.0 GB over 18 minutes. Pad config switched with `Set-PadConfig.ps1` and
+  restored to the user's XInput pad afterwards; RPCS3 and the stand-ins stopped.
