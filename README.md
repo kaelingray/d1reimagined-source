@@ -6,16 +6,16 @@ This repository tracks an attempt to run a personally owned copy of Destiny 1 wi
 
 **The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`), loads it, and spawns the guardian in the mission world.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
 
-After the latest runs (TEST194):
+After the latest runs (TEST194-251):
 
 - All 11 arrival loading tasks complete and the loading screen is dismissed. Zone set 104 (bubble 13's base) is loaded and active.
 - The stand-in activity host replicates all 121 of the mission's objects (type-5 object stream): the local player's **simulation player** (with the spawn grant) and the game-mode object in its "playing" state.
 - The peer family carries the character summary, so the client builds the player's appearance and blueprint. The spawner picks a spawn point and **creates the player's unit**.
-- The screen shows the world with the HUD radar. On top are an "Urgent message" dialog (dismissed with X) and a "Level Up" toast.
+- The screen shows the world with the HUD radar. On top are an "Urgent message" dialog ("Destiny servers will go offline temporarily…", dismissed with X) and a "Level Up" toast. The dialog's trigger is still unknown; ruled out so far: the client config reply, services 701/702, the BAP shutdown notification, the heartbeat host message and the universe-gated message list (TEST230-251).
 - **In-mission rendering is fixed with a patched RPCS3 build (TEST229).** Stock RPCS3 showed black/magenta blocks and overexposure after moving. Destiny's SPU lighting jobs write the HDR light buffer directly in video memory, and HUD targets alias that memory. RPCS3's surface cache checks only three memory samples per surface, so it missed the SPU writes and rebuilt the buffer from stale cached pieces. [`patches/rpcs3-destiny-fix.patch`](patches/rpcs3-destiny-fix.patch) tracks SPU DMA writes to video memory per page, so affected surfaces are reloaded from guest memory. The game config needs Write Color Buffers, Read Color Buffers, Read/Write Depth Buffer and Handle RSX Memory Tiling enabled.
-- **Long sessions no longer run out of memory (TEST249).** Stock RPCS3 grew by about 14 GB a minute in the mission and died 7-12 minutes in. Every descriptor set reserved about 0.9 MB, and Destiny cycles through about 255k cached pipelines. The same patch shrinks those pools and releases the descriptor pools of pipelines that have been idle for 256 frames.
+- **Long sessions no longer run out of memory (TEST249: 30-minute soak, every frame clean).** Stock RPCS3 grew by about 14 GB a minute in the mission and died 7-12 minutes in. Every descriptor set reserved about 0.9 MB, and Destiny cycles through about 255k cached pipelines. The same patch shrinks those pools and releases the descriptor pools of pipelines that have been idle for 256 frames.
 
-Next: stability in the world (host heartbeats, the replicated state that a real host would keep updating), the urgent-message flag, and controller input. Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+Next: gameplay beyond the spawn (the replicated state a real host would keep updating), the urgent-message trigger (now traceable with the PPU call hook, since GDB breakpoints do not work under the LLVM decoder), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
