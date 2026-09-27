@@ -1,0 +1,44 @@
+{
+  "chunk_size_bytes": 67108864,
+  "packages": [
+    {
+      "filename": "ps3_cosmo_activities_activity_025c_0.pkg",
+      "size": 124229632,
+      "sha256": "9845e58d48c197dbf63ccbab79cba956af7a46459d0b5a0f8d7169595a871ae4",
+      "parts": [
+        {
+          "path": "packages/ps3_cosmo_activities_activity_025c_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "aedddd5a10e31b5970cbeb702d088d7fd7436ca84332959e2fd52294c27f5a28"
+        },
+        {
+          "path": "packages/ps3_cosmo_activities_activity_025c_0.pkg.part001",
+          "size": 57120768,
+          "sha256": "ccdfc38d77b979c42a86782f7e5abb2d22fd8f281d41fc459b62aef1f43f6b77"
+        }
+      ]
+    },
+    {
+      "filename": "ps3_cosmo_destination_0274_0.pkg",
+      "size": 154312704,
+      "sha256": "4fcc4fe321809057f702c68e328aaf96ed4d6d95aa5e8132692be190dadc13dc",
+      "parts": [
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "606b1f69eccfde2bf1d5632c36b413970e87d312a9bfd1984dd1930454647e89"
+        },
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part001",
+          "size": 67108864,
+          "sha256": "3a8b2d708f2c84553c6c3ed6e07ecdb5423f6148c243f933c6e29fcef89b7442"
+        },
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part002",
+          "size": 20094976,
+          "sha256": "3438887685cdf90702ea18c3876d21931f21d0b0bea8d823661ded04d5c37219"
+        }
+      ]
+    }
+  ]
+}

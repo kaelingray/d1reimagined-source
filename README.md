@@ -9,13 +9,24 @@ for investigating Destiny's PS3 mission replication.
 | `eboot/` | `RESEARCH/ps3_decrypt/` | Decrypted `EBOOT.elf` |
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–366 activity and RPCS3 logs |
-| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | Ten small disc packages: bootstrap, manifests, Earth shared data, Cosmodrome activity and destination data |
+| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | Fourteen intact disc packages plus parts for two oversized Cosmodrome packages |
 
-`SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All ten
-packages are individually below 100 MiB. The 26 data files total 304,833,120 bytes.
+`SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
+fourteen intact packages and all five package parts are individually below 100 MB.
+The 35 data files total 760,586,848 bytes.
 `package_names.txt` lists all 247 package filenames from the disc's
 `PS3_GAME/USRDIR/packages` directory, including packages not copied into this
 repository. It contains names only, one per line.
+
+The Cosmodrome activity package `ps3_cosmo_activities_activity_025c_0.pkg` and
+destination package `ps3_cosmo_destination_0274_0.pkg` exceed GitHub's per-file
+limit. Their 64 MiB parts and original hashes are recorded in
+`split_packages.json`. To check the parts, run
+`python reassemble_packages.py --verify-only`. To rebuild the original `.pkg`
+files, run `python reassemble_packages.py --output-dir <destination-directory>`.
+The script verifies each part and the rebuilt package against SHA-256 before
+reporting success. Destination packages `0270`, `0271`, and `0272`, and English
+globals `0153`, are included intact.
 
 Only four requested TEST360–366 log files existed in `SIGNON_LOCAL/logs` when this
 bundle was made: `TEST364-rpcs3.log`, `TEST365-rpcs3.log`, `TEST366-ahl.log`, and

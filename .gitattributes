@@ -5,6 +5,8 @@
 /oo2core_3_win64.dll -text -diff
 /SHA256SUMS.txt text eol=lf
 /package_names.txt text eol=lf
+/split_packages.json text eol=lf
+/reassemble_packages.py text eol=lf
 /README.md text eol=lf
 /.gitignore text eol=lf
 /.gitattributes text eol=lf

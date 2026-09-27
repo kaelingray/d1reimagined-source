@@ -5,6 +5,8 @@
 !/SHA256SUMS.txt
 !/package_names.txt
 !/oo2core_3_win64.dll
+!/split_packages.json
+!/reassemble_packages.py
 !/eboot/
 !/logs/
 !/packages/
@@ -28,6 +30,15 @@
 !/packages/ps3_cosmo_ambient_activityonl_0265_0.pkg
 !/packages/ps3_cosmo_ambient_activityonl_0268_0.pkg
 !/packages/ps3_cosmo_destination_026d_0.pkg
+!/packages/ps3_cosmo_destination_0270_0.pkg
+!/packages/ps3_cosmo_destination_0271_0.pkg
+!/packages/ps3_cosmo_destination_0272_0.pkg
+!/packages/ps3_cosmo_activities_activity_025c_0.pkg.part000
+!/packages/ps3_cosmo_activities_activity_025c_0.pkg.part001
+!/packages/ps3_cosmo_destination_0274_0.pkg.part000
+!/packages/ps3_cosmo_destination_0274_0.pkg.part001
+!/packages/ps3_cosmo_destination_0274_0.pkg.part002
+!/packages/ps3_globals_0153_en_0.pkg
 !/packages/ps3_shared_manifest_0430_0.pkg
 !/packages/ps3_shared_manifest_0431_0.pkg
 
