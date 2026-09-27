@@ -521,6 +521,26 @@ index 313daf12c..31dc577ba 100644
  			util::write_gcm_label<true, true>(ctx, reg, addr, val);
  		}
  
+diff --git a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+index f98afcd0d..9f219e5b2 100644
+--- a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
++++ b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+@@ -1529,7 +1529,14 @@ std::string FragmentProgramDecompiler::Decompile()
+ 		}
+ 	}
+ 
+-	ensure(m_code_level == 1);
++	if (m_code_level != 1)
++	{
++		// Unbalanced flow control means the ucode is not a real program (e.g. Destiny binds program
++		// memory whose contents are not valid yet). The hardware would run it without harm, so treat
++		// it like other broken ucode (discarding stub, see BuildCode) instead of aborting emulation.
++		rsx_log.error("Fragment program with unbalanced flow control (scope level %d), replaced by a discarding shader", m_code_level);
++		m_is_valid_ucode = false;
++	}
+ 
+ 	// flush m_code_level
+ 	m_code_level = 1;
 diff --git a/rpcs3/Emu/RSX/Program/ProgramStateCache.h b/rpcs3/Emu/RSX/Program/ProgramStateCache.h
 index e1bdc8852..fe983ca95 100644
 --- a/rpcs3/Emu/RSX/Program/ProgramStateCache.h
@@ -588,17 +608,65 @@ index 8dfc43539..a12cd2c50 100644
  				fifo_ctrl->set_get(offs);
  				last_known_code_start = offs;
 diff --git a/rpcs3/Emu/RSX/RSXThread.cpp b/rpcs3/Emu/RSX/RSXThread.cpp
-index cfa735fe8..39b89ccab 100644
+index cfa735fe8..22a344858 100644
 --- a/rpcs3/Emu/RSX/RSXThread.cpp
 +++ b/rpcs3/Emu/RSX/RSXThread.cpp
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  #include "stdafx.h"
  #include "RSXThread.h"
 +#include "Emu/RSX/d1diag.h"
++#include "Emu/RSX/Common/local_mem_writes.h"
  
  #include "Capture/rsx_capture.h"
  #include "Common/surface_store.h"
-@@ -2693,6 +2694,10 @@ namespace rsx
+@@ -2150,6 +2152,11 @@ namespace rsx
+ 		return expected_ctrl;
+ 	}
+ 
++	// D1: SPU writes to RSX local memory since the bound fragment program was last read (see
++	// analyse_current_rsx_pipeline). A static rather than a member keeps the patch out of RSXThread.h.
++	static u64 s_d1_fp_write_gen = 0;
++	static u64 s_d1_fp_reloads = 0;
++
+ 	void thread::prefetch_fragment_program()
+ 	{
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
+@@ -2174,6 +2181,8 @@ namespace rsx
+ 		current_fragment_program.total_length = current_fp_metadata.program_ucode_length + current_fp_metadata.program_start_offset;
+ 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
+ 		current_fragment_program.valid = true;
++		s_d1_fp_write_gen = program_location == CELL_GCM_LOCATION_LOCAL ?
++			rsx::local_mem_write_gen(rsx::get_address(program_offset, program_location), current_fragment_program.total_length) : 0;
+ 
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_state_dirty))
+ 		{
+@@ -2242,6 +2251,25 @@ namespace rsx
+ 
+ 	void thread::analyse_current_rsx_pipeline()
+ 	{
++		// The RSX reads fragment program ucode from memory at draw time. RPCS3 reads it once when the
++		// program address is set (or an RSX transfer overwrites it), so a program that an SPU DMA
++		// rewrites in place in local memory would keep its stale length and layout (Destiny: garbage
++		// ucode, unbalanced flow control). Re-read it when its pages were written since.
++		if (current_fragment_program.total_length && !m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
++		{
++			const auto [program_offset, program_location] = method_registers.shader_program_address();
++			if (program_location == CELL_GCM_LOCATION_LOCAL &&
++				rsx::local_mem_write_gen(rsx::get_address(program_offset, program_location), current_fragment_program.total_length) != s_d1_fp_write_gen)
++			{
++				m_graphics_state |= rsx::pipeline_state::fragment_program_ucode_dirty;
++				if (s_d1_fp_reloads++ < 20 || s_d1_fp_reloads % 1000 == 0)
++				{
++					d1_log.warning("D1FPRELOAD #%llu program at 0x%x rewritten by SPU DMA since it was read (len 0x%x)",
++						s_d1_fp_reloads, rsx::get_address(program_offset, program_location), current_fragment_program.total_length);
++				}
++			}
++		}
++
+ 		m_program_cache_hint.invalidate(m_graphics_state.load());
+ 
+ 		if (u32 export_ctrl = get_fragment_program_export_config();
+@@ -2693,6 +2721,10 @@ namespace rsx
  
  	void thread::flip(const display_flip_info_t& info)
  	{

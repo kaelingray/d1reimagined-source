@@ -26,6 +26,8 @@ if ($TraceAfter) {
         # The client echoes to the BAP stand-in every 5 s; a silent log means the emulator froze
         # (seen in the login cinematic, TEST266/271)
         if (((Get-Date) - (Get-Item "$D1Logs\$Name-bap.log").LastWriteTime).TotalSeconds -gt 60) {
+            # record which emulator threads spin before the caller kills RPCS3
+            & "$PSScriptRoot\Get-RpcsHotThreads.ps1" *> "$D1Logs\$Name-hotthreads.txt"
             throw 'the game stopped talking to the BAP stand-in for 60 s (emulator frozen)'
         }
         Start-Sleep 1
