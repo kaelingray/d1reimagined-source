@@ -1,6 +1,6 @@
 # Local Destiny service stand-ins (PS3 / RPCS3)
 
-Loopback-only tools for replacing, one gate at a time, the online services Destiny's PS3 client contacts before gameplay. Every listener refuses non-loopback addresses, and the DNS sinkhole never forwards upstream, so a test run cannot reach live Bungie, Demonware or Sony hosts by name. Runtime data (CA keys, captured requests, logs) lives under `D:\Destiny360\SIGNON_LOCAL`, outside Git.
+Loopback-only tools for replacing, one gate at a time, the online services Destiny's PS3 client contacts before gameplay. Every listener refuses non-loopback addresses, and the DNS sinkhole never forwards upstream, so a test run cannot reach live Bungie, Demonware or Sony hosts by name. Runtime data (CA keys, captured requests, logs) lives under `local\SIGNON_LOCAL` (git-ignored; `D1_LOCAL` overrides the `local` folder, see `local_paths.py`).
 
 | File | Role |
 | --- | --- |
@@ -21,14 +21,14 @@ Loopback-only tools for replacing, one gate at a time, the online services Desti
 ## Typical run
 
 ```bash
-python server/prepare_rpcs3_copy.py D:/Destiny360/RPCS3_TEST003_LOCAL_RPCN D:/Destiny360/RPCS3_TESTnnn_NAME --log sys_net=Trace --log DnsHook=Trace --game-ca D:/Destiny360/SIGNON_LOCAL/ca_v4/ca.cert.pem
-python -u server/dns_sinkhole.py --destiny-hosts --log D:/Destiny360/SIGNON_LOCAL/logs/testnnn-dns.log
+python server/prepare_rpcs3_copy.py local/RPCS3_TEST003_LOCAL_RPCN local/RPCS3_TESTnnn_NAME --log sys_net=Trace --log DnsHook=Trace --game-ca local/SIGNON_LOCAL/ca_v4/ca.cert.pem
+python -u server/dns_sinkhole.py --destiny-hosts --log local/SIGNON_LOCAL/logs/testnnn-dns.log
 python -u server/stun_stub.py
 python -u server/signon_probe.py --mode signon --destiny-hosts
 python -u server/session_listener.py
 ```
 
-The local RPCN server (`D:\Destiny360\RPCN_LOCAL\rpcn.exe`) must also be running for PSN sign-in. Then boot `PS3_GAME\USRDIR\EBOOT.BIN` from the new RPCS3 folder and press X/A at the title screen.
+The local RPCN server (`local\RPCN_LOCAL\rpcn.exe`, started by `scripts/Start-LocalStack.ps1`) must also be running for PSN sign-in. Then boot `PS3_GAME\USRDIR\EBOOT.BIN` from the new RPCS3 folder and press X/A at the title screen.
 
 ## Current gate (2026-09-25)
 
