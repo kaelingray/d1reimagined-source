@@ -362,3 +362,8 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   descriptor sets per second get their first `init()`, each reserving 16448-entry image/buffer
   info pools (~0.9 MB) -> ~14 GB/min. Fix in 246: pools of 256 + 64 entries, flushed at bind
   once 256 are used (~18 KB per set).
+- 246: descriptor storage pools 256 + 64: growth down from ~14.5 to ~1.5 GB/min (10.2 GB at the
+  mission start instead of ~24 GB); movement frames ok (the last ones very dark: facing a wall
+  after eight W presses). Remaining growth: ~24 new 32 MiB regions per minute (arena-like records
+  with heap pointers, most likely the driver's per-table descriptor pools, 16 sets minimum each)
+  plus a few heap segments. 247: per-table pools start at 2 sets (autoscaling unchanged) - soak.
