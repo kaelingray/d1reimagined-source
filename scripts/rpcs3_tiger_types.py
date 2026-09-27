@@ -117,10 +117,11 @@ if __name__ == "__main__":
     elif cmd == "type":
         dump(int(sys.argv[2], 16))
     elif cmd == "schema":
-        # Types for the given handles plus every web-service response type; "services"
-        # maps wire id -> [request handle, response handle].
+        # Types for the given handles plus every web-service request and response type
+        # (requests name what each service does); "services" maps wire id -> [request
+        # handle, response handle].
         import json
         svc = {wire: [req, rsp] for _, wire, req, rsp in services()}
-        out = schema([int(h, 16) for h in sys.argv[3:]] + [rsp for _, rsp in svc.values()])
+        out = schema([int(h, 16) for h in sys.argv[3:]] + [h for pair in svc.values() for h in pair])
         out["services"] = {str(w): [f"{a:#x}", f"{b:#x}"] for w, (a, b) in svc.items()}
         Path(sys.argv[2]).write_text(json.dumps(out, indent=0))

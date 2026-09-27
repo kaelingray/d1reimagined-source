@@ -14,6 +14,7 @@ param(
     [Parameter(Mandatory)][int]$Bubble,
     [int]$Zone = -1,              # default: the bubble's base zone set (8 * Bubble)
     [string[]]$ExtraAh = @(),
+    [string[]]$ExtraBap = @(),    # extra BAP stand-in arguments, e.g. --character-gear
     [int]$Seconds = 180,
     [int]$Every = 5,
     [string[]]$Watch = @()
@@ -37,7 +38,7 @@ try {
             Start-Sleep 15
         }
     } -ArgumentList $D1Python, "$PSScriptRoot\rpcs3_replicated_objects.py", $watch, "$D1Signon\$Name-objects.txt"
-    & "$PSScriptRoot\Invoke-MissionRun.ps1" -Name $Name -Seconds 30 -ExtraAh (@(
+    & "$PSScriptRoot\Invoke-MissionRun.ps1" -Name $Name -Seconds 30 -ExtraBap $ExtraBap -ExtraAh (@(
         '--ah-bubble-states', "-1,$Bubble=0", '--ah-zone', "${Zone}:0x811c9dc5", '--ah-world-state', "${Zone}:1",
         '--ah-baselines-watch', $watch) + $ExtraAh) 2>&1 | Out-Null
     "joined; dismissing the urgent message"

@@ -156,3 +156,11 @@
 0x1c5f08	host_sims_update	walks the host sessions' simulations -> 0x1c922c
 0x2572e4	host_type11_thunk	type-11 dispatch entry -> 0x25715c
 0x1f6e70	objective_sensor_string_user	references "objective sensor client update state" (from 0x35b844)
+# --- character appearance and gear (static analysis, feature-gaps.md)
+0x670e40	player_appearance_update	per player record: builds the appearance from +0x8b0 via 0x6706b0 when the character data is ready
+0x6706b0	character_appearance_build	class/race/gender, then the 20 equipment slots of progression 0x80801855 (char data +0x540 = +0x138 items): item art, armour dyes, weapon perks
+0x670080	armor_dyes_apply	five armour slots (slot table bytes +7..+0xb) -> 0x66fc64 with each item's dyes (+0xe)
+0x41436c	item_index_to_hash	i16 item index (-1 = none -> 0x811c9dc5) -> item definition u32 via 0x28a304
+0x28a304	investment_item_definition	item index -> investment globals item list entry {u32, u32 tag} -> definition tag
+0x288278	investment_item_list	investment globals root +0xd8 -> item list (cached at 0x18e9514+0x64)
+0x28a1dc	investment_equipment_slots	investment globals root +0xc8 -> equipment slot byte table (cached at 0x18e9514+0x60)

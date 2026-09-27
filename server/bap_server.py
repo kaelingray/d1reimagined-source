@@ -101,6 +101,94 @@ def character_from_request(schema, character_id, request_payload):
     return profile
 
 
+# Equipment. The guardian's look (0x6706b0, called from 0x670e40 for player record +0x8b0) is
+# built from the 20 equipment slots of the character's progression struct 0x80801855 (peer
+# summary +0x30, select-character summary +0x68): +0x138 = 20 x 0x8080183c {u64 item instance
+# id, i16 item index, i8, i16, +0xe six dyes 0x80801704 {i8 channel, i16 dye}}. The item index
+# is a position in the investment globals item list (0x28a304: root tag +0xd8 -> 8-byte
+# entries {u32, u32 item definition tag}); -1 is no item. Which slot holds which bucket comes
+# from the investment globals too (root tag +0xc8 -> byte table read by 0x28a1dc: +6 one
+# item, +7..+0xb the five armor slots, +0xc..+0xe weapons, +0xf..+0x11 three more).
+# The self character (0x80801714) keeps the owned items: +0x30 inventory {i32, 256 x
+# 0x808016e0 {i16 item index, u64 instance id, i32, i32}} and +0x1838 the 20 equipped instance
+# ids. Without any of this every slot is empty and no gear loads.
+GEAR_SLOTS = 20
+PROGRESSION_ITEMS = 0x138
+PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
+SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
+
+
+def gear_spec(value):
+    """Parse --character-gear: "SLOT=ITEM[/DYECH:DYE...],..." (item indexes of the investment
+    globals item list) or @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
+    Returns {slot: {"item", "id", "dyes"}}; instance ids default to 0x100 + slot."""
+    if value.startswith("@"):
+        raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))
+        entries = {int(k, 0): v if isinstance(v, dict) else {"item": v} for k, v in raw.items()}
+    else:
+        entries = {}
+        for part in filter(None, (x.strip() for x in value.split(","))):
+            slot, _, rest = part.partition("=")
+            item, *dyes = rest.split("/")
+            entries[int(slot, 0)] = {"item": int(item, 0),
+                                     "dyes": [[int(y, 0) for y in d.split(":")] for d in dyes]}
+    gear = {}
+    for slot, entry in sorted(entries.items()):
+        if not 0 <= slot < GEAR_SLOTS:
+            raise ValueError(f"gear slot {slot} outside 0-{GEAR_SLOTS - 1}")
+        dyes = [tuple(int(x) for x in d) for d in entry.get("dyes", [])]
+        if len(dyes) > 6:
+            raise ValueError(f"gear slot {slot}: at most 6 dyes")
+        gear[slot] = {"item": int(entry["item"]), "id": int(entry.get("id", 0x100 + slot)),
+                      "dyes": dyes}
+    return gear
+
+
+def gear_objects(gear):
+    """Field values that equip `gear` ({slot: {"item", "id", "dyes"}}) on the three character
+    objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values."""
+    slots = {}
+    for slot, g in gear.items():
+        item = {0: g["id"], 8: g["item"]}
+        if g["dyes"]:
+            item[0xe] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
+        slots[slot * 0x28] = item
+    progression = {PROGRESSION_ITEMS: slots}
+    inventory = {i * 0x18: {0: g["item"], 8: g["id"], 0x10: 1} for i, g in enumerate(gear.values())}
+    return {"peer": {PEER_PROGRESSION: progression},
+            "select": {SELECT_PROGRESSION: progression},
+            "self": {SELF_INVENTORY: {0: len(gear), 8: inventory},
+                     SELF_EQUIPPED: {slot * 8: g["id"] for slot, g in gear.items()}}}
+
+
+def deep_merge(base, extra):
+    """Copy of dict `base` with `extra` merged in (nested dicts merged, other values replaced)."""
+    out = dict(base)
+    for key, value in (extra or {}).items():
+        out[key] = (deep_merge(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict)
+                    else value)
+    return out
+
+
+def overlay_spec(value):
+    """Parse --character-overlay JSON (or @FILE): {"peer"|"select"|"self": {offset: value}}."""
+    raw = json.loads(Path(value[1:]).read_text(encoding="utf-8") if value.startswith("@") else value)
+    unknown = set(raw) - {"peer", "select", "self"}
+    if unknown:
+        raise ValueError(f"unknown character objects {sorted(unknown)}")
+    return {name: offset_keys(values) for name, values in raw.items()}
+
+
+def character_extras(gear=None, overlay=None):
+    """Extra field values for the peer, select and self character objects: equipment from
+    --character-gear, then a raw --character-overlay JSON {"peer"|"select"|"self": {offset: ...}}."""
+    extras = {"peer": {}, "select": {}, "self": {}}
+    for part in (gear_objects(gear) if gear else {}, overlay or {}):
+        for name in extras:
+            extras[name] = deep_merge(extras[name], part.get(name))
+    return extras
+
+
 def load_store(path):
     try:
         return json.loads(path.read_text(encoding="utf-8")) if path else {}
@@ -154,12 +242,13 @@ def account_flags(schema, spec):
 
 
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
-                version=1, flags=1, active_id=None, self_flags=None, peer=False):
+                version=1, flags=1, active_id=None, self_flags=None, peer=False, extras=None):
     """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
     (0x32f748 via 0x325350) proceeds only when it is set."""
     objects = []
+    extras = extras or {}
     if schema and family_type in ROOT_OBJECTS:
         type_hash, handle, values = ROOT_OBJECTS[family_type]
         fields = values(root)
@@ -176,11 +265,11 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
-            objects.append(investment.obj(type_hash, character_id,
-                                          investment.encode(schema, handle, character_profile)))
+            objects.append(investment.obj(type_hash, character_id, investment.encode(
+                schema, handle, deep_merge(character_profile, extras.get("select")))))
         if family_type == 4 and character_id is not None and character_profile is not None:
             type_hash, handle = SELF_CHARACTER_OBJECT
-            profile = dict(character_profile)
+            profile = deep_merge(character_profile, extras.get("self"))
             if self_flags is not None:
                 chosen = account_flag_values(self_flags)["C"]
                 profile[0x3bc0] = {f["off"]: chosen[i] for i, f in
@@ -191,7 +280,8 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
         type_hash, handle = PEER_ACCOUNT_OBJECT
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, {0: root, 8: character_id})))
         type_hash, handle = PEER_CHARACTER_OBJECT
-        summary = {off: character_profile[off] for off in (0, 8, 12) if off in character_profile}
+        summary = deep_merge({off: character_profile[off] for off in (0, 8, 12) if off in character_profile},
+                             extras.get("peer"))
         objects.append(investment.obj(type_hash, character_id, investment.encode(schema, handle, summary)))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
     # Updates to an existing subscription use a delta and the next family version.
@@ -420,6 +510,15 @@ def baseline_list(value):
     return [tuple(int(y, 0) for y in (x.strip().split("/") + ["0"])[:4]) for x in value.split(",") if x.strip()]
 
 
+def offset_keys(v):
+    """JSON object keys (decimal or 0x strings) -> int field offsets, recursively."""
+    if isinstance(v, dict):
+        return {int(k, 0): offset_keys(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [offset_keys(x) for x in v]
+    return v
+
+
 def object_spec(value):
     """Parse --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON into an sim_packet object: JSON maps field
     offsets (decimal or 0x strings) to values, nested dicts for struct fields, lists for counted
@@ -429,16 +528,9 @@ def object_spec(value):
     group, kind, index, state_type = parts[:4]
     has_b = bool(parts[4]) if len(parts) > 4 else False
 
-    def keys(v):
-        if isinstance(v, dict):
-            return {int(k, 0): keys(x) for k, x in v.items()}
-        if isinstance(v, list):
-            return [keys(x) for x in v]
-        return v
-
     if body.startswith("@"):  # JSON in a file: command lines mangle embedded quotes (Start-Process)
         body = Path(body[1:]).read_text(encoding="utf-8")
-    return {0: group, 4: kind, 6: index}, state_type, keys(json.loads(body or "{}")), has_b
+    return {0: group, 4: kind, 6: index}, state_type, offset_keys(json.loads(body or "{}")), has_b
 
 
 def timed_object_spec(value):
@@ -784,7 +876,8 @@ def handle(conn, peer, args):
         self_version += 1
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
-            version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags))
+            version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags,
+            extras=args.character_extras))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
@@ -857,7 +950,7 @@ def handle(conn, peer, args):
                 family_type, root = family_fetch_request(payload)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
                     family_type, root, blob=family_blob(args.schema, family_type, root, character_id,
-                                                       character_profile)))
+                                                       character_profile, extras=args.character_extras)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
                 log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, "
@@ -1126,7 +1219,8 @@ def handle(conn, peer, args):
                     push = encrypted_frame_kind(tx, QZ_UPDATE, 0,
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
-                                                            self_flags=args.self_flags, peer=args.peer_family))
+                                                            self_flags=args.self_flags, peer=args.peer_family,
+                                                            extras=args.character_extras))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
@@ -1187,6 +1281,14 @@ def parse_args(argv=None):
     ap.add_argument("--peer-family", action="store_true",
                     help="fill the peer family (0) subscription with the local account and character "
                          "summaries (the player's appearance and blueprint in activities come from it)")
+    ap.add_argument("--character-gear", type=gear_spec, metavar="SLOT=ITEM,...|@FILE",
+                    help="equip the stored character: item indexes of the investment globals item "
+                         "list per equipment slot 0-19 (peer/select summaries and self inventory); "
+                         "without gear the guardian renders as the see-through placeholder")
+    ap.add_argument("--character-overlay", type=overlay_spec,
+                    metavar="JSON|@FILE",
+                    help='raw field values merged into the character objects: {"peer"|"select"|"self": '
+                         '{offset: value}} (peer = 0x808017fd, select = 0x80801954, self = 0x80801714)')
     ap.add_argument("--self-flags",
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')
@@ -1288,6 +1390,7 @@ def parse_args(argv=None):
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args(argv)
     args.ah_object_at.sort(key=lambda entry: entry[0])
+    args.character_extras = character_extras(args.character_gear, args.character_overlay)
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)

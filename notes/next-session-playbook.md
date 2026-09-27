@@ -119,7 +119,28 @@ with the watch `4ed278 200 r4:32`. (Bubble 14's own kind-4 objects are `o_ghost_
 `pigeon_1-22`, so stepping them is not useful.) `new_user_experience` (`0x4786c0e0/0x27/4`) is
 a separate candidate for first-mission gating.
 
-## 6. RPCS3 housekeeping (optional, 20 minutes)
+## 6. TEST370: the see-through guardian (gear)
+
+The guardian renders translucent because the stand-in equips nothing: all 20 equipment slots of
+the character summaries are empty (`feature-gaps.md`, section 1). `--character-gear` fills them.
+The item indexes are not known yet (they come from the investment globals item list, not
+uploaded), so this run only checks that gear changes the look. Screenshot the guardian in the
+character select screen and in the resurrection cinematic / third person:
+
+```powershell
+# the five armour slots are the slot table's bytes +7..+0xb; slot numbers 0-19 are guesses
+scripts\Invoke-ObjectExperiment.ps1 -Name TEST370 -Bubble 14 -Seconds 120 `
+  -ExtraBap @('--character-gear','0=0,1=1,2=2,3=3,4=4,5=5,6=6,7=7,8=8,9=9,10=10,11=11,12=12')
+python scripts\rpcs3_tiger_types.py schema local\SIGNON_LOCAL\investment_schema_full.json
+```
+
+The second command (with the game running) exports every service's request type, which names
+the 66 services (`feature-gaps.md`, section 3). Add the JSON to the data repo. If the guardian
+changes at all (other armour, a crash in the gear code, or a "gear still loading" spawn refusal)
+the slots are live; then upload the investment globals packages so the real item indexes can be
+read offline.
+
+## 7. RPCS3 housekeeping (optional, 20 minutes)
 
 The patches apply cleanly to upstream master `3fa07db78` (`rpcs3-upstream-draft.md`). A rebuild
 on master picks up the PPU thread-start fixes and the boot shader-compilation change. The

@@ -39,6 +39,33 @@ class ShelloReply(unittest.TestCase):
         self.assertEqual(frame[:6], bytes.fromhex("010100000018"))
 
 
+class CharacterGear(unittest.TestCase):
+    def test_gear_spec(self):
+        gear = bap.gear_spec("7=0x64/2:5/3:6, 12=200")
+        self.assertEqual(gear, {7: {"item": 100, "id": 0x107, "dyes": [(2, 5), (3, 6)]},
+                                12: {"item": 200, "id": 0x10c, "dyes": []}})
+        with self.assertRaises(ValueError):
+            bap.gear_spec("20=1")
+
+    def test_gear_objects_fill_all_three_character_objects(self):
+        extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
+                                       12: {"item": 200, "id": 0x10c, "dyes": []}})
+        slot7 = {0: 0x107, 8: 100, 0xe: {0: {0: 2, 2: 5}}}
+        self.assertEqual(extras["peer"][0x30][0x138][7 * 0x28], slot7)
+        self.assertEqual(extras["select"][0x68][0x138][12 * 0x28], {0: 0x10c, 8: 200})
+        self.assertEqual(extras["self"][0x30], {0: 2, 8: {0: {0: 100, 8: 0x107, 0x10: 1},
+                                                          0x18: {0: 200, 8: 0x10c, 0x10: 1}}})
+        self.assertEqual(extras["self"][0x1838], {7 * 8: 0x107, 12 * 8: 0x10c})
+
+    def test_overlay_merges_over_gear(self):
+        overlay = bap.overlay_spec('{"peer": {"0x30": {"0": 1, "0x138": {"0": {"8": 5}}}}}')
+        extras = bap.character_extras({0: {"item": 9, "id": 0x100, "dyes": []}}, overlay)
+        self.assertEqual(extras["peer"][0x30], {0: 1, 0x138: {0: {0: 0x100, 8: 5}}})
+        self.assertEqual(extras["select"][0x68][0x138][0], {0: 0x100, 8: 9})
+        with self.assertRaises(ValueError):
+            bap.overlay_spec('{"player": {}}')
+
+
 if __name__ == "__main__":
     unittest.main()
 

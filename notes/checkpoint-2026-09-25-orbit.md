@@ -1317,3 +1317,23 @@ rasputin, m7 command, portals, patrols).
   Fallen" ("Fight to the other side of the Divide..."); 20 and 23 "Find the Ship"; 26 "Clear out
   the Fallen" ("Eliminate the Fallen looting the ship."). This is the published objective order of
   A Guardian Rises, so the objects above are the mission script's objectives in order.
+
+## Character gear: why the guardian renders see-through (static analysis, 2026-09-27)
+
+- `0x670e40` -> `0x6706b0` build a player's appearance from its character data (player record
+  +0x8b0, copied from the peer-family summary). Besides class/race/gender and the customization
+  struct, `0x6706b0` reads the 20 equipment slots of progression struct `0x80801855` (+0x138:
+  20 x `0x8080183c` {u64 instance id, i16 item index, i8, i16, six dyes}). The char data places
+  that struct at +0x408, so the slots are at +0x540 (stride 0x28), the weapon perks at
+  +0x914/0x934/0x954 and the weapon stats at +0x9f4/0xa74/0xaf4.
+- Item index -> definition: `0x41436c` (-1 = none) -> `0x28a304` -> investment globals root
+  +0xd8 item list (`0x288278`), 8-byte entries {u32, u32 definition tag}. The slot table (root
+  +0xc8, `0x28a1dc`) gives the slot of each bucket: +7..+0xb armour, +0xc..+0xe weapons.
+- The stand-in's summaries leave every slot empty, so no gear loads and the guardian stays the
+  translucent gear placeholder. `bap_server.py --character-gear` / `--character-overlay` fill
+  the slots (peer +0x30, select +0x68, self inventory +0x30 and equipped +0x1838). The item
+  indexes need the investment globals packages. Details, the full gap list and the data wanted:
+  [`feature-gaps.md`](feature-gaps.md).
+- No Lua bytecode in any of the 79,148 decompressed Cosmodrome tags: the mission scripts are not
+  on the disc and have to be rewritten for the stand-in host.
+
