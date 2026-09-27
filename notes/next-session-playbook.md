@@ -61,11 +61,15 @@ Add a watch line for the "Change slice-set" function from step 1 if it was found
 
 ## 3. Prediction 2: walk into The Breach instead of scheduling a switch
 
-Same setup without `--ah-zone-schedule`, with the XInput pad (the default) so a person can walk.
-Start with `scripts\Invoke-MissionRun.ps1 -Name TEST368 -ExtraAh @('--ah-bubble-states','-1,14=0,3=0')`,
-dismiss the urgent message, and walk through the break in the Wall towards The Breach. Keep the
-same watches as TEST367 in `local\RPCS3_TEST048_SETUP\d1\d1ppu.txt` (write it before the boot).
-Then:
+Same setup without `--ah-zone-schedule`. The login automation needs the keyboard pad, so walk
+with the keyboard too: `scripts\Set-PadConfig.ps1 -Mode keyboard`, write the TEST367 watches to
+`local\RPCS3_TEST048_SETUP\d1\d1ppu.txt`, then
+`scripts\Invoke-MissionRun.ps1 -Name TEST368 -ExtraAh @('--ah-bubble-states','-1,14=0,3=0')`.
+Dismiss the urgent message (`scripts\Invoke-RpcsStep.ps1 -Keys X`) and walk through the break in
+the Wall towards The Breach, in the game window with the keyboard mapping (W forward, J/L turn,
+Space = the Ghost's nav mode, as in `Invoke-Explore.ps1`), or step by step with
+`Invoke-RpcsStep.ps1 -Keys W -HoldMs 3000` and a screenshot after each step. Afterwards close
+RPCS3 and run `Set-PadConfig.ps1 -Mode xinput`. Then:
 
 ```powershell
 python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST368-ahl.log
@@ -82,7 +86,7 @@ needed or a lobby request.
    bubble-14 export (e.g. `local\SIGNON_LOCAL\TEST363-objects.json`), list records with kind 3
    and their group/index. Bubble 14 has no kind-3 object of its own (TEST342); check the
    activity group 0x992bb471 too.
-2. Arm objective 0 at 60 s and play to the Wall:
+2. Arm objective 0 at 60 s and walk to the Wall as in step 3 (keyboard pad):
    `Invoke-MissionRun.ps1 -Name TEST369 -ExtraAh @('--ah-object-at','60@<group>:3:<index>:0x808004fa={"0": {"0": 1}}')`
    (JSON as in the orbit checkpoint; put it in a file and pass `=@file.json` if quoting breaks).
 3. `python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST369-ahl.log`. A new type or
