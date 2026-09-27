@@ -367,3 +367,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   after eight W presses). Remaining growth: ~24 new 32 MiB regions per minute (arena-like records
   with heap pointers, most likely the driver's per-table descriptor pools, 16 sets minimum each)
   plus a few heap segments. 247: per-table pools start at 2 sets (autoscaling unchanged) - soak.
+- 247: + per-table descriptor pools starting at 2 sets: 30-minute soak - 13 steps, all frames ok,
+  private +1.2 GB/min, then the RSX thread stopped presenting 20:16 into the game (system RAM
+  full at 30.7/31.2 GB, right after compiling another program); the process stayed alive (PPU
+  running) for 2 h but F12 no longer saved. Root of the remaining growth: during gameplay ~6000
+  programs/min are added - only 4 distinct vertex programs but ~2700 new fragment programs per
+  minute (ids keep rising; 254k programs total). The fragment program cache keeps missing, so
+  something that changes per frame (probably SPU-patched constant data) ends up in the FP hash.
+  248: log the ucode of new FPs to compare near-duplicates.
