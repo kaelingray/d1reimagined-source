@@ -1,6 +1,6 @@
 """Score in-mission F12 screenshots (1280x720) for the known RPCS3 rendering fault: fixed blocks
 in the left 800 px (rows 0-145 and 360-592) that turn black or magenta, and the right side
-overexposing after movement. Per image: fraction of near-black and magenta pixels in each block,
+overexposing after movement. A black block must show its hard edge (x = 800 / y = 145). Per image: fraction of near-black and magenta pixels in each block,
 mean brightness left/right of x=800 over rows 145-360 (a row band that is never covered by the
 blocks), and a verdict.
 
@@ -30,10 +30,16 @@ def score(path):
     img = Image.open(path).convert("RGB").resize((1280, 720))
     out = {name: stats(img, box) for name, box in BLOCKS.items()}
     left, right = mean(img, (0, 145, 800, 360)), mean(img, (800, 145, 1280, 360))
+    # The blocks have hard straight edges (x = 800 for the bottom block, y = 145 for the top one);
+    # dark scenery does not, so a black block only counts with a step in black fraction there.
+    edge_bottom = stats(img, (760, 380, 800, 580))[0] - stats(img, (800, 380, 840, 580))[0]
+    edge_top = stats(img, (100, 125, 700, 145))[0] - stats(img, (100, 145, 700, 165))[0]
+    black_block = (out["bottom"][0] > 0.35 and edge_bottom > 0.5) or (out["top"][0] > 0.35 and edge_top > 0.5)
     # The dark interior renders at a mean of ~10-20; blown-out regions are > 90.
-    bad = any(b > 0.35 or m > 0.3 for b, m in out.values()) or left > 90 or right > 90
+    bad = black_block or any(m > 0.3 for _, m in out.values()) or left > 90 or right > 90
     parts = " ".join(f"{n} black {b:.2f} magenta {m:.2f}" for n, (b, m) in out.items())
-    return f"{'BAD ' if bad else 'ok  '}{parts} left {left:.0f} right {right:.0f}"
+    return (f"{'BAD ' if bad else 'ok  '}{parts} edges {edge_top:.2f}/{edge_bottom:.2f} "
+            f"left {left:.0f} right {right:.0f}")
 
 
 if __name__ == "__main__":
