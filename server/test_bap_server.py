@@ -113,9 +113,12 @@ class MissionScript(unittest.TestCase):
         bap.investment.encode_into(w, self.SCHEMA, bap.OBJECT_ID_TYPE, {0: 0x992bb471, 4: 0x1d, 6: 31})
         self.assertFalse(matcher.search(w.data().hex()))
 
-    def test_shipped_mission_expands(self):
-        mission = json.loads((Path(__file__).resolve().parents[1] / "missions" / "a_guardian_rises.json")
-                             .read_text(encoding="utf-8"))
+    def test_shipped_scripts_expand(self):
+        folder = Path(__file__).resolve().parents[1] / "missions"
+        timed, _ = bap.expand_mission(json.loads((folder / "tower_npcs.json").read_text(encoding="utf-8")),
+                                      self.SCHEMA)
+        self.assertEqual({spec[0][4] for _, spec in timed}, {1})
+        mission = json.loads((folder / "a_guardian_rises.json").read_text(encoding="utf-8"))
         timed, reactive = bap.expand_mission(mission, self.SCHEMA)
         self.assertTrue(timed and reactive)
         self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher)) for _, m, _, _ in reactive))

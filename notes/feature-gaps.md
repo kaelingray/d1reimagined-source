@@ -166,7 +166,8 @@ Missing:
 
 ## 4. Other activities and multiplayer
 
-- **Tower / social space:** a public activity host. The client has "sstm_public_current/target
+- **Tower / social space** (decoded from the disc: [`tower.md`](tower.md); every vendor and NPC is a
+  host-placed squad, `missions/tower_npcs.json` places them): a public activity host. The client has "sstm_public_current/target
   activity host" join paths and their errors. It needs the same host join as the mission, with
   a social activity.
 - **Patrol, strikes, public events:** public activity hosts plus Demonware matchmaking

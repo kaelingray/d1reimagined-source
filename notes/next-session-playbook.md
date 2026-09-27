@@ -179,7 +179,13 @@ What to look for:
 - **In The Breach,** Fallen appear 20 s after the client reports slice set 24 (`0x1f8d20` hits).
 - The HUD/screen timeline from the screenshots, against the reference video.
 
-## 8. RPCS3 housekeeping (optional, 20 minutes)
+## 8. TEST372: the Tower (after TEST371 shows whether squads spawn)
+
+Pick the Tower in orbit and join with the Tower's values; the vendors and NPCs are placed by
+`missions/tower_npcs.json`. The arguments and the bubble to try are in [`tower.md`](tower.md).
+The world id comes from the client's service 105 in that run.
+
+## 9. RPCS3 housekeeping (optional, 20 minutes)
 
 The patches apply cleanly to upstream master `3fa07db78` (`rpcs3-upstream-draft.md`). A rebuild
 on master picks up the PPU thread-start fixes and the boot shader-compilation change. The
