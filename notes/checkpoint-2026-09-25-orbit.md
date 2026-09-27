@@ -868,3 +868,26 @@ Full run (about 10 minutes):
   to a given address from the LLVM function-call path), or continue statically.
 - New tooling: `bap_server.py --client-config V1,V2`, `--ah-heartbeat SECONDS:-1` (no empty
   host message), `Invoke-MissionRun.ps1 -TraceAfter ''`.
+
+## PPU call tracing without GDB (TEST236-239, 2026-09-27)
+- The instrumented build now traces PPU function entries under the LLVM decoder. Each compiled
+  function below 0x2000000 checks a byte table at the fixed host address 0x6d0000000000
+  (`d1diag::g_ppu_mask`, one byte per 4-byte PPU address) and calls `ppu_d1hit` when it is set.
+  The watch list is `C:/dev/d1ppu.txt`, re-read about once a second from the RSX flip. One watch
+  per line: `ADDR [MAXHITS] [rN:LEN ...]` (hex address, default 50 hits, memory dumps at
+  registers). Each hit logs `D1P <us> pc lr r1 r3-r10 chain <saved return addresses> mN=<hex>`.
+  A line `coverage` arms every function for a single logged first call (`D1C <us> pc lr`), and
+  every reload logs `D1: D1P watch list reloaded at <us>`. The PPU object cache key is
+  `v8-kusa-d1p2`, so the first boot after a translator change recompiles everything
+  (several minutes). RPCS3 creates "functions" at many block boundaries, so first-call pcs are
+  often block entries.
+- `scripts/rpcs3_text_marker.py TEXT` polls guest memory for a UTF-16 text and appends a marker
+  line to the watch file, which lines coverage up with the moment a UI text appears.
+- Urgent-message findings: the universe-gated message list (`0x34b8e8` -> `0x40acc0`, content
+  entries at 0x800dc540, hashes 0x5b06d63a ... 0x2207b0a3, flags 1858-1870) collects nothing.
+  The dialog's text object sits at 0x43a4d7c0 in two runs (deterministic). The functions first
+  called just before it appears cluster at 0x400708-0x401140 (state machine `0x401048` on the
+  object at 0x18d9500, called from `0x286da4`) and at 0x551fac-0x553280 (UI; `0x5531bc(500)`
+  from `0x286cec`). None of the 8680 candidates received the text object, so it is written by
+  helpers first used earlier. Next time: watch 0x401048/0x40130c/0x5531bc and the UI cluster
+  with dumps, or trace writes to 0x43a4d7c0 directly.

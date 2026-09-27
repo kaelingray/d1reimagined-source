@@ -333,3 +333,13 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   the official build: RPCS3 ignores software breakpoints under the LLVM PPU decoder
   (`ppu_breakpoint` returns false), so every trace since at least TEST202 was blind. 235
   (official build) also showed the old rendering fault, as expected.
+- 236: first build with the PPU call hook: RPCS3 exited during boot (the hook table was a global
+  in the executable, referenced from JIT code). 237: table moved to a fixed reserved address -
+  hook works (`D1P` lines with registers, LR and return chain).
+- 237: the universe-gated message list (0x40acc0) runs once at login: 17 entries, all testing
+  universe flags 1858-1870 (== 2), all 0 - nothing collected; not the dialog's source.
+- 238: first-call coverage (`coverage` in the watch file) plus `scripts/rpcs3_text_marker.py`:
+  ~202k functions; 17.8k first called in the 5 s before the dialog text appeared (world load).
+- 239: the 8680 functions first called in those 3 s armed for 3 hits with registers: none
+  received the dialog's text object; the text is written by generic helpers used earlier.
+  Candidates noted in the checkpoint; hunt paused (the dialog only costs one X press).

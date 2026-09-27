@@ -1,3 +1,158 @@
+diff --git a/rpcs3/Emu/Cell/PPUThread.cpp b/rpcs3/Emu/Cell/PPUThread.cpp
+index 595e34a51..fd84e1979 100644
+--- a/rpcs3/Emu/Cell/PPUThread.cpp
++++ b/rpcs3/Emu/Cell/PPUThread.cpp
+@@ -16,6 +16,7 @@
+ #include "Emu/system_utils.hpp"
+ #include "Emu/System.h"
+ #include "PPUThread.h"
++#include "Emu/RSX/d1diag.h"
+ #include "PPUInterpreter.h"
+ #include "PPUAnalyser.h"
+ #include "PPUModule.h"
+@@ -3386,6 +3387,91 @@ static void ppu_trace(u64 addr)
+ 	ppu_log.notice("Trace: 0x%llx", addr);
+ }
+ 
++// Destiny diagnostics: the hook table lives at a fixed address (d1diag::ppu_mask_addr).
++static const bool s_d1_mask_ready = []()
++{
++	void* const want = reinterpret_cast<void*>(d1diag::ppu_mask_addr);
++	void* const got = utils::memory_reserve(0x800000, want);
++
++	if (got != want)
++	{
++		fmt::throw_exception("D1P: cannot reserve the hook table at 0x%x (got %p)", d1diag::ppu_mask_addr, got);
++	}
++
++	utils::memory_commit(got, 0x800000);
++	return true;
++}();
++
++// Destiny diagnostics: armed function entry reached (see d1diag::ppu_poll). Logs the argument
++// registers, LR, the saved return addresses up the stack and the configured memory dumps.
++static void ppu_d1hit(ppu_thread& ppu, u64 addr, u64 r1)
++{
++	if (d1diag::g_ppu_mask[addr >> 2] == 2)
++	{
++		// Coverage mode: log the first call of each function, then disarm it
++		d1diag::g_ppu_mask[addr >> 2] = 0;
++		ppu_log.warning("D1C %llu pc=0x%x lr=0x%llx", get_system_time(), addr, ppu.lr);
++		return;
++	}
++
++	std::lock_guard lock(d1diag::g_ppu_mutex);
++
++	for (auto& w : d1diag::g_ppu_watches)
++	{
++		if (w.addr != addr)
++		{
++			continue;
++		}
++
++		if (!w.left || --w.left == 0)
++		{
++			d1diag::g_ppu_mask[addr >> 2] = 0;
++		}
++
++		std::string text = fmt::format("D1P %llu pc=0x%x lr=0x%llx r1=0x%llx", get_system_time(), addr, ppu.lr, r1);
++
++		for (u32 i = 3; i <= 10; i++)
++		{
++			fmt::append(text, " r%u=0x%llx", i, ppu.gpr[i]);
++		}
++
++		text += " chain";
++
++		for (u32 sp = static_cast<u32>(r1), depth = 0; depth < 8 && sp && vm::check_addr(sp, vm::page_readable, 8); depth++)
++		{
++			const u32 back = static_cast<u32>(vm::read64(sp));
++
++			if (!back || back <= sp || !vm::check_addr(back + 16, vm::page_readable, 8))
++			{
++				break;
++			}
++
++			fmt::append(text, " 0x%x", static_cast<u32>(vm::read64(back + 16)));
++			sp = back;
++		}
++
++		for (const auto& [reg, len] : w.dumps)
++		{
++			const u32 ptr = static_cast<u32>(ppu.gpr[reg]);
++
++			if (len && vm::check_addr(ptr, vm::page_readable, len))
++			{
++				fmt::append(text, " m%u=", reg);
++
++				for (u32 i = 0; i < len; i++)
++				{
++					fmt::append(text, "%02x", vm::read8(ptr + i));
++				}
++			}
++		}
++
++		ppu_log.warning("%s thread=%s", text, ppu.get_name());
++		return;
++	}
++
++	d1diag::g_ppu_mask[addr >> 2] = 0;
++}
++
+ template <typename T>
+ static T ppu_load_acquire_reservation(ppu_thread& ppu, u32 addr)
+ {
+@@ -4918,6 +5004,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+ 			{ "__error", reinterpret_cast<u64>(&ppu_error) },
+ 			{ "__check", reinterpret_cast<u64>(&ppu_check) },
+ 			{ "__trace", reinterpret_cast<u64>(&ppu_trace) },
++			{ "__d1hit", reinterpret_cast<u64>(&ppu_d1hit) },
+ 			{ "__syscall", reinterpret_cast<u64>(ppu_execute_syscall) },
+ 			{ "__get_tb", reinterpret_cast<u64>(get_timebased_time) },
+ 			{ "__lwarx", reinterpret_cast<u64>(ppu_lwarx) },
+@@ -5550,7 +5637,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+ 				settings += ppu_settings::daz_and_ftz;
+ 
+ 			// Write version, hash, CPU, settings
+-			fmt::append(obj_name, "v8-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
++			fmt::append(obj_name, "v8-kusa-d1p2-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
+ 		}
+ 
+ 		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
+diff --git a/rpcs3/Emu/Cell/PPUTranslator.cpp b/rpcs3/Emu/Cell/PPUTranslator.cpp
+index 864eb63d6..cd472d85a 100644
+--- a/rpcs3/Emu/Cell/PPUTranslator.cpp
++++ b/rpcs3/Emu/Cell/PPUTranslator.cpp
+@@ -3,6 +3,7 @@
+ #include "Emu/system_config.h"
+ #include "Emu/Cell/Common.h"
+ #include "Emu/Cell/lv2/sys_sync.h"
++#include "Emu/RSX/d1diag.h"
+ #include "PPUTranslator.h"
+ #include "PPUThread.h"
+ #include "SPUThread.h"
+@@ -238,6 +239,21 @@ Function* PPUTranslator::Translate(const ppu_function& info)
+ 	m_gpr[1] = m_function->getArg(5);
+ 	m_gpr[2] = m_function->getArg(6);
+ 
++	// Destiny diagnostics: call hook at function entry, armed per address at run time through the
++	// byte table d1diag::g_ppu_mask (one entry per 4-byte PPU address below 0x2000000, see d1diag.h).
++	if (!m_reloc && info.addr < 0x2000000)
++	{
++		const auto slot = m_ir->CreateIntToPtr(m_ir->getInt64(d1diag::ppu_mask_addr + (info.addr >> 2)), m_ir->getPtrTy());
++		const auto armed = m_ir->CreateLoad(m_ir->getInt8Ty(), slot, true);
++		const auto hook = BasicBlock::Create(m_context, "__d1hook", m_function);
++		const auto cont = BasicBlock::Create(m_context, "__d1cont", m_function);
++		m_ir->CreateCondBr(m_ir->CreateIsNull(armed), cont, hook, m_md_likely);
++		m_ir->SetInsertPoint(hook);
++		Call(GetType<void>(), "__d1hit", m_thread, m_ir->getInt64(info.addr), m_gpr[1]);
++		m_ir->CreateBr(cont);
++		m_ir->SetInsertPoint(cont);
++	}
++
+ 	const auto body = BasicBlock::Create(m_context, "__body", m_function);
+ 
+ 	//Call(GetType<void>(), "__trace", GetAddr());
 diff --git a/rpcs3/Emu/Cell/SPUThread.cpp b/rpcs3/Emu/Cell/SPUThread.cpp
 index fb9483d88..a23cd93f3 100644
 --- a/rpcs3/Emu/Cell/SPUThread.cpp
@@ -355,7 +510,7 @@ index 8dfc43539..a12cd2c50 100644
  				fifo_ctrl->set_get(offs);
  				last_known_code_start = offs;
 diff --git a/rpcs3/Emu/RSX/RSXThread.cpp b/rpcs3/Emu/RSX/RSXThread.cpp
-index cfa735fe8..46d46f5ff 100644
+index cfa735fe8..39b89ccab 100644
 --- a/rpcs3/Emu/RSX/RSXThread.cpp
 +++ b/rpcs3/Emu/RSX/RSXThread.cpp
 @@ -1,5 +1,6 @@
@@ -365,13 +520,14 @@ index cfa735fe8..46d46f5ff 100644
  
  #include "Capture/rsx_capture.h"
  #include "Common/surface_store.h"
-@@ -2693,6 +2694,9 @@ namespace rsx
+@@ -2693,6 +2694,10 @@ namespace rsx
  
  	void thread::flip(const display_flip_info_t& info)
  	{
 +		if (d1diag::tracing())
 +			rsx_log.warning("D1T %llu flip", get_system_time());
 +		d1diag::dump_on_flip();
++		d1diag::ppu_poll();
  		m_eng_interrupt_mask.clear(rsx::display_interrupt);
  
  		if (async_flip_requested & flip_request::any)
@@ -528,18 +684,24 @@ index 4762f5e3b..917b88491 100644
  			{
 diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
 new file mode 100644
-index 000000000..170dd613c
+index 000000000..d299b7c0e
 --- /dev/null
 +++ b/rpcs3/Emu/RSX/d1diag.h
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,202 @@
 +#pragma once
 +// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
 +// the SPU lighting reads (0x44000000-0x46000000). Throttled.
 +#include "util/types.hpp"
 +#include <atomic>
++#include <mutex>
++#include <vector>
++#include <string>
 +#include "Utilities/StrFmt.h"
 +#include "Utilities/File.h"
 +#include "Emu/Cell/timers.hpp"
++#include "util/logs.hpp"
++
++LOG_CHANNEL(d1_log, "D1");
 +namespace d1diag
 +{
 +	// Timeline tracing, active while the marker file C:/dev/d1trace.on exists (checked every
@@ -638,5 +800,93 @@ index 000000000..170dd613c
 +	inline void dump_done()
 +	{
 +		if (g_dump.stop_next) g_dump.active = false;
++	}
++
++	// PPU call tracing (LLVM decoder, where GDB breakpoints are ignored). Every compiled function
++	// below 0x2000000 checks g_ppu_mask[addr >> 2] on entry and calls ppu_d1hit when set. The
++	// watch list comes from C:/dev/d1ppu.txt, one watch per line: "ADDR [MAXHITS] [rN:LEN ...]"
++	// (hex address, default 50 hits, memory dumps at registers); re-read when it changes.
++	// Fixed host address (reserved and committed in PPUThread.cpp before any PPU code runs), so the
++	// compiled PPU code can embed it as a 64-bit constant and cached objects stay valid across runs.
++	constexpr u64 ppu_mask_addr = 0x6d0000000000;
++	inline u8* const g_ppu_mask = reinterpret_cast<u8*>(ppu_mask_addr);
++	struct ppu_watch
++	{
++		u32 addr;
++		u32 left;
++		std::vector<std::pair<u32, u32>> dumps;
++	};
++	inline std::mutex g_ppu_mutex;
++	inline std::vector<ppu_watch> g_ppu_watches;
++	inline void ppu_poll()
++	{
++		static u64 last_check = 0;
++		static std::string last_text;
++		const u64 now = get_system_time();
++		if (now - last_check < 1'000'000) return;
++		last_check = now;
++		std::string text;
++		if (fs::file f{"C:/dev/d1ppu.txt"}) text = f.to_string();
++		if (text == last_text) return;
++		last_text = text;
++		std::lock_guard lock(g_ppu_mutex);
++		for (const auto& w : g_ppu_watches) g_ppu_mask[w.addr >> 2] = 0;
++		g_ppu_watches.clear();
++		// A line "coverage" arms every function for one logged first call (D1C lines); it is
++		// armed once per appearance of the line. Every reload is marked in the log.
++		static bool coverage = false;
++		const bool want_coverage = text.find("coverage") != umax;
++		if (want_coverage && !coverage)
++		{
++			for (u32 i = 0; i < 0x800000; i++) if (!g_ppu_mask[i]) g_ppu_mask[i] = 2;
++		}
++		else if (!want_coverage && coverage)
++		{
++			for (u32 i = 0; i < 0x800000; i++) if (g_ppu_mask[i] == 2) g_ppu_mask[i] = 0;
++		}
++		coverage = want_coverage;
++		d1_log.warning("D1P watch list reloaded at %llu (coverage %d)", now, coverage);
++		usz pos = 0;
++		while (pos < text.size())
++		{
++			usz end = text.find('\n', pos);
++			if (end == umax) end = text.size();
++			const std::string line = text.substr(pos, end - pos);
++			pos = end + 1;
++			ppu_watch w{};
++			w.left = 50;
++			bool first = true;
++			try {
++			usz i = 0;
++			while (i < line.size())
++			{
++				while (i < line.size() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r')) i++;
++				usz j = i;
++				while (j < line.size() && line[j] != ' ' && line[j] != '\t' && line[j] != '\r') j++;
++				if (j == i) break;
++				const std::string tok = line.substr(i, j - i);
++				i = j;
++				if (tok[0] == '#') break;
++				if (first)
++				{
++					w.addr = static_cast<u32>(std::stoul(tok, nullptr, 16));
++					first = false;
++				}
++				else if (tok[0] == 'r' && tok.find(':') != umax)
++				{
++					w.dumps.emplace_back(static_cast<u32>(std::stoul(tok.substr(1))), static_cast<u32>(std::stoul(tok.substr(tok.find(':') + 1), nullptr, 0)));
++				}
++				else
++				{
++					w.left = static_cast<u32>(std::stoul(tok, nullptr, 0));
++				}
++			}
++			} catch (...) { continue; }
++			if (!first && w.addr < 0x2000000 && !(w.addr & 3))
++			{
++				g_ppu_watches.push_back(w);
++				g_ppu_mask[w.addr >> 2] = 1;
++			}
++		}
 +	}
 +}
