@@ -97,13 +97,15 @@ The first objective "Enter the Wall" is `0x992bb471/0x20/3`
 (`cosmo_m0_phase00_highway.obj_m0_phase00_m1._player_objective`, state 0x80802a1b); its
 sequences are `0x992bb471/0x5/4` (incoming) and `/5` (completion), its trigger
 `0x992bb471/0x1d/30` (`._player_trigger`). Step the objective's state byte (field 0, 3 bits)
-1, 2, 3 in the highway start and watch the HUD; the handler (`0x3561d8`) treats 3 specially:
+1, 2, 3 in the highway start and watch the HUD. The handler (`0x3561d8`) treats 3 specially, and
+shows an objective only to players in its +0x2c0 mask (`mission-director.md`), so every step
+sets that mask to -1 (all players):
 
 ```powershell
 scripts\Invoke-ObjectExperiment.ps1 -Name TEST369 -Bubble 14 -Seconds 240 -ExtraAh @(
-  '--ah-object-at','60@0x992bb471:0x20:3:0x80802a1b={"0": 1}',
-  '--ah-object-at','120@0x992bb471:0x20:3:0x80802a1b={"0": 2}',
-  '--ah-object-at','180@0x992bb471:0x20:3:0x80802a1b={"0": 3}') -Watch @('3561d8 200 r4:16')
+  '--ah-object-at','60@0x992bb471:0x20:3:0x80802a1b={"0": 1, "0x2c0": -1}',
+  '--ah-object-at','120@0x992bb471:0x20:3:0x80802a1b={"0": 2, "0x2c0": -1}',
+  '--ah-object-at','180@0x992bb471:0x20:3:0x80802a1b={"0": 3, "0x2c0": -1}') -Watch @('3561d8 200 r4:16')
 python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST369-ahl.log
 ```
 
@@ -112,17 +114,13 @@ Look for the objective text or a waypoint in the screenshots, and for a new clie
 `obj_m0_phase00_m1._trigger_volume` once the objective is active). If JSON quoting breaks,
 put the JSON in a file and use `=@file.json`.
 
-## 5. The intro cinematic, now that its objects are known
+## 5. The intro cinematic: decoded, now part of TEST371
 
-Slice set 113 (`cosmo_m0_phase00_highway_intro`) loads the cinematic `0x992bb471/0x6/1`
-(`pf_104_res._cinematic`, state 0x8080254d with a player-id roster) and
-`0x992bb471/0x4/0` (`skeleton_static_1`). TEST360-363 stepped 0x4/0 (a prop, not a trigger) and
-put the player in the roster of kind 6 index 1, but the state's other fields stayed at their
-defaults. Next: export the live 0x8080254d schema field list (`--schema-out` of
-`rpcs3_replicated_objects.py` already covers it) and set the cinematic's start/playing fields,
-with the watch `4ed278 200 r4:32`. (Bubble 14's own kind-4 objects are `o_ghost_*` lights and
-`pigeon_1-22`, so stepping them is not useful.) `new_user_experience` (`0x4786c0e0/0x27/4`) is
-a separate candidate for first-mission gating.
+The cinematic handler needs a changed play counter (+0x4), playing = true (+0x8), −1 at +0x14,
+and the player's machine id in the cast list (+0x9c) (`mission-director.md`). TEST360-363 set
+none of these. The first step of TEST371's mission script starts `pf_104_res` that way.
+`new_user_experience` (`0x4786c0e0/0x27/4`) remains a separate candidate for first-mission
+gating.
 
 ## 6. TEST370: the see-through guardian (gear)
 
@@ -151,7 +149,37 @@ Read the result:
   - check the RPCS3 log for "gear is still loading".
 - **If the created character is not a Titan:** use `starter:hunter` or `starter:warlock`.
 
-## 7. RPCS3 housekeeping (optional, 20 minutes)
+## 7. TEST371: the mission script (cinematic, objectives, dialogue, squads)
+
+`missions/a_guardian_rises.json` plays the start of the first mission from the stand-in: the
+revival cinematic, "Enter the Wall" with its dialogue, then the next objectives as the client
+reports each trigger, and three Fallen squads once the client is in The Breach. Background and
+field meanings: [`mission-director.md`](mission-director.md). Play along: after the objective
+shows, walk to the Wall and on into The Breach (TEST368's walk).
+
+```powershell
+scripts\Invoke-ObjectExperiment.ps1 -Name TEST371 -Bubble 14 -Seconds 600 `
+  -ExtraBap @('--character-gear','starter:titan') `
+  -ExtraAh @('--ah-bubble-states','-1,14=0,3=0','--ah-sim-clock','30',
+             '--ah-mission',(Resolve-Path missions\a_guardian_rises.json).Path) `
+  -Watch @('4ed278 50 r4:48','4ecd08 20','b94414 100 r4:16','3561d8 100 r4:16','1f8d20 100 r4:16')
+python scripts\ah_log_summary.py local\SIGNON_LOCAL\logs\TEST371-ahl.log
+Select-String 'D1P|mission|--ah-on' local\SIGNON_LOCAL\logs\TEST371-rpcs3.log, local\SIGNON_LOCAL\logs\TEST371-ahl.log |
+  Select-Object -Last 80
+```
+
+What to look for:
+- **At +20 s, the revival cinematic.** `0x4ecd08` is hit when it starts. If the handler runs
+  but `0x4ecd08` is never hit, one of its checks refused.
+- **At +140 s, "Enter the Wall"** on the HUD with the Ghost's line (`0xb94414` hits). If the
+  handler runs but nothing shows, repeat with objective state 2 or 3 in place of 1.
+- **At the Wall,** the stand-in log shows "--ah-on rule ... matched type 6" and the next
+  objective. If no rule matches, save the type-6 bodies from the log: they show how the client
+  reports a trigger.
+- **In The Breach,** Fallen appear 20 s after the client reports slice set 24 (`0x1f8d20` hits).
+- The HUD/screen timeline from the screenshots, against the reference video.
+
+## 8. RPCS3 housekeeping (optional, 20 minutes)
 
 The patches apply cleanly to upstream master `3fa07db78` (`rpcs3-upstream-draft.md`). A rebuild
 on master picks up the PPU thread-start fixes and the boot shader-compilation change. The

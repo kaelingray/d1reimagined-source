@@ -95,6 +95,13 @@ globals root is the named tag `investment_globals` (`0x80a58000`, package 012c).
 
 ## 2. Mission logic (activity host scripts)
 
+**Progress (2026-09-28).** The states of objectives, cinematics, sequences, triggers and squads
+are decoded, and `bap_server.py --ah-mission missions/a_guardian_rises.json` scripts the
+mission start. Details: [`mission-director.md`](mission-director.md); the first run is TEST371.
+Two fixes came out of this:
+- objectives need the player mask at +0x2c0;
+- the host tick must advance (`--ah-sim-clock`).
+
 Retail activity scripts ran only on Bungie's activity hosts (Truman talk, `public-research.md`).
 None of the 79,148 decompressed Cosmodrome tags contains Lua bytecode (`\x1bLua`), so the disc
 does not carry them either. **The stand-in has to reimplement each mission's script** from its

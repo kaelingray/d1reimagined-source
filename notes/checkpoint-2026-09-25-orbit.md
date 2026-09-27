@@ -1343,3 +1343,17 @@ rasputin, m7 command, portals, patrols).
   bucket hashes). The starter "wire armor" per class and `--character-gear starter:CLASS`:
   [`feature-gaps.md`](feature-gaps.md) section 1; next run TEST370.
 
+## Mission object states decoded (static analysis, 2026-09-28)
+
+The field-level meanings of the objective (`0x3561d8`), cinematic (`0x4ed278` / `0x4ece68` /
+`0x4ecd08`), sequence (`0xb94414` / `0xb942a0`) and squad (`0x1f8d20`) states are in
+[`mission-director.md`](mission-director.md). The main findings:
+- An objective shows only for players in its +0x2c0 mask.
+- A cinematic starts on a changed +0x4 counter with +0x8 set and the player in the cast list.
+- A sequence plays only if its start time (+0x0) plus its duration is still ahead of the
+  simulation clock. That clock (`0x1c94e0`) is the host tick of the type-5 packets, which the
+  stand-in had always sent as 0; `--ah-sim-clock` fixes it.
+- The client's type-6 upstream messages carry its own player object `0x4786c0e0/0xc/5`, with the
+  object id at bit 11.
+- TEST367: the host-pushed zone set 24 was ignored; the client stayed in 112 (test log).
+

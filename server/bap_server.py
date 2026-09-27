@@ -579,6 +579,87 @@ def replace_object(objects, spec):
     return ident
 
 
+class ObjectIdMatcher:
+    """Matches a client message body (hex, as `--ah-on` regexes see it) whose bits contain the
+    encoded id of one replicated object (type 0x808004b1: u32 group key, 6-bit kind, 16-bit
+    index) at any bit offset. The upstream object stream (client type 6) carries the ids of the
+    objects the client reports (TEST366/367: its own player 0x4786c0e0/0xc/5 at bit 11), so a
+    trigger the guardian walks into should show up the same way."""
+
+    def __init__(self, schema, group, kind, index):
+        w = investment.BitWriter()
+        investment.encode_into(w, schema, OBJECT_ID_TYPE, {0: group, 4: kind, 6: index})
+        self.bits, self.ident = "".join(map(str, w.bits)), (group, kind, index)
+
+    def search(self, body_hex):
+        return self.bits in "".join(f"{b:08b}" for b in bytes.fromhex(body_hex))
+
+
+class SliceSetMatcher:
+    """Matches a client type-21 state delta (body hex) whose slice-set record reports slice set
+    `index` as current - e.g. the client has switched into The Breach (24) by walking there."""
+
+    def __init__(self, schema, index):
+        self.schema, self.index = schema, index
+
+    def search(self, body_hex):
+        record = client_slice_record(self.schema, bytes.fromhex(body_hex))
+        return bool(record) and record.get("current", (None,))[0] == self.index
+
+
+def resolve_values(value, context):
+    """Fill mission placeholders at the moment a state is sent: "$player" (the local player's
+    machine id, the --ah-sim-player owner) and "$now" (the host simulation tick, see
+    --ah-sim-clock; 0 without it)."""
+    if isinstance(value, dict):
+        return {k: resolve_values(v, context) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_values(v, context) for v in value]
+    if isinstance(value, str) and value.startswith("$"):
+        if value[1:] not in context:
+            raise ValueError(f"unknown mission placeholder {value}")
+        return context[value[1:]]
+    return value
+
+
+def resolve_spec(spec, context):
+    ident, state_type, values, has_b = spec
+    return ident, state_type, resolve_values(values, context), has_b
+
+
+def expand_mission(mission, schema):
+    """A mission script (--ah-mission JSON) as --ah-object-at and --ah-on entries.
+    {"objects": {NAME: "GROUP:KIND:INDEX:TYPE[:B]"}, "steps": [{"at": SECONDS} or
+    {"on": {"type": N, "object": NAME} | {"type": 21, "slice_set": INDEX} | {"type": N, "regex": R},
+    "delay": SECONDS},
+    plus "set": {NAME: {offset: value}}]}. Each "set" entry becomes one timed or reactive object
+    change; reactive steps fire once, on the first matching client message."""
+    heads = {name: object_spec(f"{head}=") for name, head in mission.get("objects", {}).items()}
+    timed, reactive = [], []
+    for number, step in enumerate(mission.get("steps", [])):
+        changes = []
+        for name, values in step.get("set", {}).items():
+            if name not in heads:
+                raise ValueError(f"mission step {number}: unknown object {name!r}")
+            ident, state_type, _, has_b = heads[name]
+            changes.append((ident, state_type, offset_keys(values), has_b))
+        if "at" in step:
+            timed += [(float(step["at"]), change) for change in changes]
+            continue
+        on = step.get("on")
+        if not on or "type" not in on:
+            raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
+        if "object" in on:
+            ident = heads[on["object"]][0]
+            matcher = ObjectIdMatcher(schema, ident[0], ident[4], ident[6])
+        elif "slice_set" in on:
+            matcher = SliceSetMatcher(schema, int(on["slice_set"]))
+        else:
+            matcher = re.compile(on["regex"]) if on.get("regex") else None
+        reactive += [(int(on["type"]), matcher, float(step.get("delay", 0)), change) for change in changes]
+    return timed, reactive
+
+
 def default_baseline(key, kind, index, has_b=False):
     """A baseline without fields (reset to the type's defaults) for replicated object key/kind/index."""
     return {0: key, 4: kind, 6: index}, None, None, has_b
@@ -889,6 +970,13 @@ def handle(conn, peer, args):
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
+    def host_tick():
+        # --ah-sim-clock: host simulation ticks since the first simulation packet (0 without it)
+        return int((time.time() - sim_build[5]) * args.ah_sim_clock) if sim_build and args.ah_sim_clock else 0
+
+    def mission_context():
+        return {"player": args.ah_sim_player[2] if args.ah_sim_player else 0, "now": host_tick()}
+
     def push_self(number, reason):
         # Delta for the live self subscription: versions must advance by one (0x41b75c).
         nonlocal self_version
@@ -1168,6 +1256,7 @@ def handle(conn, peer, args):
                         # (not `seconds`: that is the heartbeat interval used below - reusing it
                         # delayed the next heartbeat by the object's time, TEST361 baboon)
                         due_at, spec = args.ah_object_at[objects_applied]
+                        spec = resolve_spec(spec, mission_context())
                         ident = replace_object(objects_, spec)
                         objects_applied += 1
                         changed = True
@@ -1180,6 +1269,7 @@ def handle(conn, peer, args):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     for entry in [e for e in reactions_due if e[0] <= time.time()]:
                         reactions_due.remove(entry)
+                        entry = (entry[0], resolve_spec(entry[1], mission_context()), entry[2])
                         ident = replace_object(objects_, entry[1])
                         log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {entry[1][2]} ({entry[2]})")
                     at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
@@ -1194,6 +1284,12 @@ def handle(conn, peer, args):
                         objects_[at_] = game_mode(group, index, game_mode_now)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                         log(f"[{tag}] game mode {group:#x}:{index} -> state {game_mode_now}")
+                if sim_repeat and sim_build and args.ah_sim_clock:
+                    # an advancing host tick: the client's simulation time (0x1c94e0) is the last
+                    # host tick plus the time since, so with a constant tick it never advances
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_,
+                                            tick=host_tick(), objects=objects_)
                 if sim_repeat:
                     # the roster packet is dropped until the client's host session exists
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, sim_repeat, host_id)))
@@ -1385,6 +1481,15 @@ def parse_args(argv=None):
                          "the client first sends activity-host message TYPE whose body hex matches REGEX "
                          "(once per rule; repeatable), e.g. step the next objective when a trigger "
                          "volume reports: 15/^41=>0@G:3:I:0x808004fa={\"0\": {\"0\": 2}}")
+    ap.add_argument("--ah-mission", type=Path, metavar="FILE",
+                    help="mission script (JSON, e.g. missions/a_guardian_rises.json): named objects "
+                         "and steps that set their states at a time or when the client first reports "
+                         "an object (expanded into --ah-object-at / --ah-on); \"$player\" and \"$now\" "
+                         "in states are the local player's machine id and the host tick")
+    ap.add_argument("--ah-sim-clock", type=float, default=0, metavar="HZ",
+                    help="send an advancing host tick (HZ ticks a second since the first simulation "
+                         "packet; the client's sequences and timers run on it; 30 matches the "
+                         "client's default rate) instead of a constant 0")
     ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "
@@ -1411,11 +1516,18 @@ def parse_args(argv=None):
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args(argv)
-    args.ah_object_at.sort(key=lambda entry: entry[0])
     args.character_extras = character_extras(args.character_gear, args.character_overlay)
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
+    if args.ah_mission:
+        if not args.activity_schema:
+            ap.error("--ah-mission needs the activity schema (--activity-schema)")
+        timed, reactive = expand_mission(json.loads(args.ah_mission.read_text(encoding="utf-8")),
+                                         args.activity_schema)
+        args.ah_object_at += timed
+        args.ah_on += reactive
+    args.ah_object_at.sort(key=lambda entry: entry[0])
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
     args.key, args.mac_key = signon_proto.TEST_SESSION_KEYS[1], signon_proto.TEST_SESSION_KEYS[2]

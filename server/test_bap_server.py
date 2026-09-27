@@ -1,5 +1,7 @@
+import json
 import struct
 import unittest
+from pathlib import Path
 
 import bap_server as bap
 
@@ -72,6 +74,52 @@ class CharacterGear(unittest.TestCase):
         self.assertEqual(extras["select"][0x68][0x138][0], {0: 0x100, 8: 9})
         with self.assertRaises(ValueError):
             bap.overlay_spec('{"player": {}}')
+
+
+class MissionScript(unittest.TestCase):
+    F = lambda off, kind, width, opt=0, minimum=0: {"off": off, "kind": kind, "opt": opt, "nested": -1,
+                                                    "arr": 0, "min": minimum, "width": width, "extra": 0}
+    SCHEMA = {"0x808004b1": {"size": 8, "fields": [F(0, 9, 32), F(4, 3, 6, 0, 1), F(6, 4, 16, 0, 0x8000)]},
+              "0x80800463": {"size": 8, "fields": [F(0, 2, 0), F(4, 5, 32, 0, 0x80000000)]}}
+    MISSION = {"objects": {"trig": "0x992bb471:0x1d:30:0x80800463", "other": "0x992bb471:0x1d:31:0x80800463"},
+               "steps": [{"at": 5, "set": {"trig": {"0": True, "4": "$now"}}},
+                         {"on": {"type": 6, "object": "trig"}, "delay": 1, "set": {"other": {"4": "$player"}}},
+                         {"on": {"type": 21, "regex": "^b8"}, "set": {"other": {"0": True}}}]}
+
+    def test_expand_and_resolve(self):
+        timed, reactive = bap.expand_mission(self.MISSION, self.SCHEMA)
+        self.assertEqual(len(timed), 1)
+        at, spec = timed[0]
+        self.assertEqual((at, spec[0], spec[1]), (5.0, {0: 0x992bb471, 4: 0x1d, 6: 30}, 0x80800463))
+        self.assertEqual(bap.resolve_spec(spec, {"now": 90, "player": 7})[2], {0: True, 4: 90})
+        (t1, m1, d1, s1), (t2, m2, d2, s2) = reactive
+        self.assertEqual((t1, d1, s1[0][6]), (6, 1.0, 31))
+        self.assertEqual(bap.resolve_spec(s1, {"now": 0, "player": 7})[2], {4: 7})
+        self.assertTrue(m2.search("b80000") and not m2.search("00b8"))
+        with self.assertRaises(ValueError):
+            bap.resolve_values("$later", {"now": 0})
+        with self.assertRaises(ValueError):
+            bap.expand_mission({"objects": {}, "steps": [{"at": 1, "set": {"nope": {}}}]}, self.SCHEMA)
+
+    def test_object_matcher_finds_the_id_at_any_bit(self):
+        matcher = bap.ObjectIdMatcher(self.SCHEMA, 0x992bb471, 0x1d, 30)
+        for lead in (0, 3, 11):
+            w = bap.investment.BitWriter()
+            w.put(1, lead + 1)
+            bap.investment.encode_into(w, self.SCHEMA, bap.OBJECT_ID_TYPE, {0: 0x992bb471, 4: 0x1d, 6: 30})
+            w.put(0, 9)
+            self.assertTrue(matcher.search(w.data().hex()))
+        w = bap.investment.BitWriter()
+        bap.investment.encode_into(w, self.SCHEMA, bap.OBJECT_ID_TYPE, {0: 0x992bb471, 4: 0x1d, 6: 31})
+        self.assertFalse(matcher.search(w.data().hex()))
+
+    def test_shipped_mission_expands(self):
+        mission = json.loads((Path(__file__).resolve().parents[1] / "missions" / "a_guardian_rises.json")
+                             .read_text(encoding="utf-8"))
+        timed, reactive = bap.expand_mission(mission, self.SCHEMA)
+        self.assertTrue(timed and reactive)
+        self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher)) for _, m, _, _ in reactive))
+        self.assertTrue(any(isinstance(m, bap.SliceSetMatcher) and m.index == 24 for _, m, _, _ in reactive))
 
 
 if __name__ == "__main__":
