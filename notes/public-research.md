@@ -120,12 +120,14 @@ python scripts\d1_pkg.py info local\01_WORKING\ps3_destiny\PS3_GAME\USRDIR\packa
 python scripts\d1_pkg.py blocks <pkg> --verify     # confirms the layout (block SHA-1s)
 ```
 
-Compressed blocks (flag 0x100) need an Oodle 2 decoder. `info` prints the decoder id from the
-first compressed block's header. If it is one the open-source
-[ooz](https://github.com/powzix/ooz) implements (LZNA, Kraken, Mermaid/Selkie, BitKnit,
-Leviathan), no proprietary DLL is needed; otherwise `--oodle` takes a user-owned
-`oo2core_3_win64.dll` (tiger-pkg's requirement for D1). Never download an unverified copy or
-commit one.
+Compressed blocks (flag 0x100) need an Oodle decoder. The PS4 D1 study found compressed
+blocks starting with 0xB7, an older Oodle framing that no open-source decoder (such as
+[ooz](https://github.com/powzix/ooz)) is known to read. It decodes them with a user-owned
+`oo2core_3_win64.dll`, as tiger-pkg does for D1 on every platform. `info` prints the first
+compressed block's header. If the PS3 blocks also start with 0xB7, plan on that DLL
+(`--oodle`); never download an unverified copy or commit one. Blocks must be decoded to their
+exact used size (the furthest entry end in the block rounded up to 0x4000; asking for the full
+0x40000 fails), which `d1_pkg.py` does.
 
 ## Other references checked
 

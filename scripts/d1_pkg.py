@@ -1,8 +1,9 @@
 """Offline reader for Destiny 1 Tiger packages (.pkg, format version 24) as shipped on the PS3
 disc (big-endian, platform 4). Reads package headers, file entries, block tables and the named
 tag table without the game running; extracts entries when their blocks are stored uncompressed
-or when a user-supplied Oodle 2 runtime is given (--oodle, `oo2core_3_win64.dll`; never commit or
-download one).
+or when a user-supplied Oodle runtime is given (--oodle, `oo2core_3_win64.dll`; never commit or
+download one). A compressed block decodes to exactly its used size (the furthest entry end in it,
+rounded up to 0x4000), which is what the decoder is asked for.
 
 Layout (tiger-pkg `d1_legacy`, cross-checked against a PS4 v24 package study in
 github.com/lizardpeter/destiny-1 spec/D1_TIGER_PACKAGE_v24.md; PS3 byte order and the flag bit
@@ -47,8 +48,11 @@ PLATFORMS = ["tool32", "win32", "win64", "x360", "ps3", "tool64", "win64v1", "ps
 LANGUAGES = ["none", "en", "fr", "it", "de", "es", "ja", "pt", "ru", "pl", "zh-hans", "zh-hant",
              "es-mx", "ko"]
 FLAG_COMPRESSED = 0x100  # tiger-pkg d1_legacy (big-endian builds)
-# Oodle LZ block header byte 1 (low 7 bits) -> codec, as decoded by the open-source ooz
-# (github.com/powzix/ooz); ids outside this table are older codecs ooz cannot read.
+RAW_QUANTUM = 0x4000  # compressed blocks decode to exactly align_up(last entry end, 0x4000)
+# Oodle LZ block header byte 1 (low 7 bits) -> codec, for the newer header (low nibble 0xC) that
+# the open-source ooz (github.com/powzix/ooz) reads. D1 PS4 packages instead start with 0xB7
+# (lizardpeter/destiny-1 findings/LOG.md), an older framing no open-source decoder is known to
+# handle: those need a user-supplied oo2core_3 runtime.
 OODLE_DECODERS = {5: "LZNA", 6: "Kraken", 10: "Mermaid/Selkie", 11: "BitKnit", 12: "Leviathan"}
 
 
@@ -133,6 +137,21 @@ class Package:
             f.seek(block["offset"])
             return f.read(block["size"])
 
+    def raw_size(self, index):
+        """Decompressed size of block `index`: the furthest end of any entry data in it, rounded
+        up to 0x4000 and capped at 0x40000. OodleLZ_Decompress needs the exact size; the full
+        0x40000 fails for a partly used block (lizardpeter/destiny-1, Oodle block sizing note)."""
+        if not hasattr(self, "_raw_sizes"):
+            ends = {}
+            for e in self.entries:
+                start = e["block"] * BLOCK_SIZE + e["offset"]
+                end = start + e["size"]
+                for b in range(e["block"], (end - 1) // BLOCK_SIZE + 1 if e["size"] else e["block"]):
+                    ends[b] = max(ends.get(b, 0), min(BLOCK_SIZE, end - b * BLOCK_SIZE))
+            self._raw_sizes = {b: min(BLOCK_SIZE, -(-end // RAW_QUANTUM) * RAW_QUANTUM)
+                               for b, end in ends.items()}
+        return self._raw_sizes.get(index, BLOCK_SIZE)
+
     def block_data(self, index, oodle=None):
         block = self.blocks[index]
         raw = self.stored_block(block)
@@ -140,7 +159,14 @@ class Package:
             return raw
         if oodle is None:
             raise RuntimeError(f"block {index} is compressed ({oodle_codec(raw)}); pass --oodle")
-        return oodle.decompress(raw, BLOCK_SIZE)
+        size = self.raw_size(index)
+        try:
+            data = oodle.decompress(raw, size)
+        except RuntimeError:
+            if size == BLOCK_SIZE:
+                raise
+            data = oodle.decompress(raw, BLOCK_SIZE)  # in case the sizing rule differs on PS3
+        return data + bytes(BLOCK_SIZE - len(data))
 
     def entry_data(self, index, oodle=None):
         e = self.entries[index]
@@ -154,8 +180,10 @@ class Package:
 
 
 def oodle_codec(raw):
+    if raw[:1] == b"\xb7":
+        return "legacy Oodle framing 0xB7 as in D1 PS4 packages (needs oo2core_3)"
     if len(raw) < 2 or raw[0] & 0x0f != 0x0c:
-        return f"no Oodle LZ header ({raw[:2].hex()})"
+        return f"unknown block header {raw[:4].hex()}"
     kind = raw[1] & 0x7f
     return f"Oodle decoder {kind} ({OODLE_DECODERS.get(kind, 'not in ooz')})"
 
@@ -176,8 +204,9 @@ class Oodle:
         out = ctypes.create_string_buffer(size)
         # fuzz-safe, no CRC check, minimal verbosity, all thread phases (as tiger-pkg does)
         n = self.fn(raw, len(raw), out, size, 1, 0, 1, None, None, None, None, None, None, 3)
-        if n <= 0:
-            raise RuntimeError(f"OodleLZ_Decompress failed ({n}) on a {len(raw)}-byte block")
+        if n != size:
+            raise RuntimeError(f"OodleLZ_Decompress returned {n} for a {len(raw)}-byte block "
+                               f"(expected {size})")
         return out.raw[:n]
 
 

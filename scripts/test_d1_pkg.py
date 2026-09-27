@@ -66,6 +66,24 @@ class PackageTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Kraken"):
             p.entry_data(2)
 
+    def test_compressed_blocks_decode_to_their_used_size(self):
+        p = d1_pkg.Package(self.path)
+        self.assertEqual(p.raw_size(0), d1_pkg.BLOCK_SIZE)  # entry 1 runs to the block's end
+        self.assertEqual(p.raw_size(1), 0x4000)  # 17 bytes of entry 1
+        self.assertEqual(p.raw_size(2), 0x4000)  # entry 2: 50 bytes
+
+        class FakeOodle:
+            sizes = []
+
+            def decompress(self, raw, size):
+                self.sizes.append(size)
+                return b"z" * size
+
+        oodle = FakeOodle()
+        self.assertEqual(p.entry_data(2, oodle), b"z" * 50)
+        self.assertEqual(oodle.sizes, [0x4000])
+        self.assertIn("0xB7", d1_pkg.oodle_codec(b"\xb7\x43\xe2\x90"))
+
     def test_tag_hash_round_trip(self):
         self.assertEqual(d1_pkg.tag_hash(0x5b, 0), 0x808b6000)  # PS4 study sample
         for pkg_id, index in ((0x10, 5), (0x3ff, 0x1fff), (0x400, 1), (0xbff, 42)):
