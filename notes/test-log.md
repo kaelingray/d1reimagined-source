@@ -476,3 +476,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   echoes every 5 s) and `Invoke-BubbleSweep.ps1` retries up to 3 times. Bubbles 7-12 and 14-21
   went to the second PC (MATILDASPC: Ryzen 7 5700X, 32 GB, RTX 2060 SUPER; project copy in
   F:\d1\d1xenia), TEST300 onwards.
+- 300-340 (second PC): void - 300-319 Windows PowerShell 5.1 (no [Convert]::ToHexString; now
+  pwsh 7), 320 froze the desktop while RPCS3 rebuilt the copied 445k-pipeline cache for the RTX
+  2060 (cache set aside, 4 shader threads), 330 lost the character-select input on the slower
+  PC (login now waits for the BETA BUILD watermark), 340 read "21,14" as bubble 2114 (lobster,
+  back to the intro video; list parsing fixed).
+- 341 (second PC, 18:09 build): **bubble 21 = THE DEVILS' LAIR** (dim industrial interior with
+  stairs; no bubble-local group). 12 D1FPRELOAD events: the bound fragment program is rewritten
+  in place by SPU DMA during normal play, and the build re-reads it.
