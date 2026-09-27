@@ -2,3 +2,4 @@
 cryptography>=46
 numpy>=2
 pillow>=11
+capstone>=5  # scripts/d1_eboot.py disasm only
