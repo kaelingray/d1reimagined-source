@@ -920,8 +920,8 @@ Full run (about 10 minutes):
 ## Session end (2026-09-27 ~09:05)
 - The user's XInput pad config is restored in the private RPCS3 copy
   (`config/input_configs/global/Default.yml` = `Default.xinput.user.yml.bak`). The unattended
-  scripts need the keyboard pad: copy `Default.keyboard.automation.yml` over `Default.yml`
-  before a run (and restore the XInput file afterwards).
+  scripts need the keyboard pad: `scripts/Set-PadConfig.ps1 -Mode keyboard` before a run,
+  `-Mode xinput` afterwards.
 - Deployed `rpcs3.exe` = the diagnostic build (rendering fix, memory fixes, D1T/D1DIAG/D1MEM
   logging, PPU call hook, `C:/dev/d1noblitfix.on` switch); `rpcs3.orig.exe` = official.
   `C:/dev/d1ppu.txt` holds no watches. RPCS3 and the loopback stand-ins are stopped.

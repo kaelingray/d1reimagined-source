@@ -74,6 +74,7 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/Invoke-RpcsStep.ps1`: key presses and F12 screenshots; `scripts/Invoke-MovementCheck.ps1` with `scripts/frame_blocks.py` scores in-mission frames.
 - `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
 - `scripts/Invoke-SoakTest.ps1`: long in-mission runs (periodic movement, scored screenshots, RPCS3 memory).
+- `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller (the XInput config is active at the moment).
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
 
