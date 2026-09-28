@@ -92,3 +92,11 @@ universe object after 01.00 (01.13 is result-only; 01.24 has a bool at +0x8).
 Service 503 still carries it, but its optional fields and flag override list
 expanded. The code branch now encodes its populated sign-in reply from the
 selected schema; populated replies roundtrip on 01.00, 01.13 and 01.24.
+
+The metadata-only `package_inventory_01.24.json` was generated from Sony's
+BLES01857 update file tables using `ps3_update.py inventory`. It records 1,408
+package filenames across updates 01.13–01.23, of which 374 are superseded by
+the patch-number reset at 01.20. The 1,034 remaining files total 10,305,603,584
+bytes. Update 01.24 contains the executable but no package files. This inventory
+is a file-presence and size check for an installed copy, not a validation of
+package contents or of the game's choice of package patch at runtime.

@@ -10,7 +10,7 @@ for investigating Destiny's PS3 mission replication.
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
 | `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
-| `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | 01.13 and 01.24 decrypted EBOOTs, type exports, the derived 01.24 service map, handle maps, comparison reports and update lists |
+| `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | 01.13 and 01.24 decrypted EBOOTs, type exports, the derived 01.24 service map and package inventory, handle maps, comparison reports and update lists |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
 41 intact packages and all twelve package parts are individually below 100 MB.
@@ -24,6 +24,9 @@ and decrypted by RPCS3; the encrypted EBOOTs and update PKGs are not included.
 The default export did not fetch the full update package set, so no `final_*.txt`
 lists were generated. A later targeted fetch of four 012f update packages
 provided the 01.24 service table; only its small derived map is included here.
+The metadata-only `package_inventory_01.24.json` lists the package files needed
+from earlier updates so a local installation can be checked without including
+or downloading those package contents.
 The type exports, handle maps and comparison reports were regenerated with the
 corrected update-build scanner. See
 `ps3_updates/EXPORT_VALIDATION.md` for the counts and validation limits.
