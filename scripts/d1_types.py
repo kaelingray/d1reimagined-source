@@ -8,7 +8,10 @@ at +0x14 and, at def+0x54+[def+0x54], its field list: u32 count, u32 own type ha
 offset, +8 presence-bit index, +0x10 kind, +0x11 optional, +0x14 nested type handle, +0x18 array
 mode byte / biased minimum, +0x1c bit width, +0x20 extra. The field list names its own handle, so
 a scan of the file finds every definition (4,387 in 01.00; all 816 types of the schemas exported
-at run time match field for field). Types without fields (raw blobs such as scenario_client) are
+at run time match field for field). The title updates (01.13 on) drop 0x20 bytes from the
+definition, linking the list from def+0x34, and each field entry leads with a repeat count (the
+rest of the entry follows, 4 bytes later): a fixed array such as u8[128] is one entry {128, offset
+= stride, ...} where 01.00 lists every element. The scan expands such arrays back into elements. Types without fields (raw blobs such as scenario_client) are
 not in the list.
 
 The web services are a tag of the investment globals (class 0x80803389 package, e.g.
@@ -32,18 +35,27 @@ import d1_pkg  # noqa: E402
 DEFAULT_ELF = Path(__file__).resolve().parents[1] / "local" / "RESEARCH" / "ps3_decrypt" / "EBOOT.elf"
 TYPE_LO, TYPE_HI = 0x80800000, 0x80810000
 SERVICE_RECORD_CLASS = 0x80801820
+# (where a definition holds its field-list link, whether field entries lead with a repeat count):
+# 01.00, the title updates
+LAYOUTS = ((0x54, False), (0x34, True))
 KIND_NAMES = {1: "struct", 2: "bool", 3: "u8", 4: "i16", 5: "i32", 6: "u64", 7: "u8", 8: "u16", 9: "u32",
               10: "u64", 11: "f32", 13: "k13", 0x23: "machine_id"}
 
 
 def scan_types(data):
-    """{"0x8080....": {"size", "fields"}} for every type definition in the EBOOT bytes."""
+    """{"0x8080....": {"size", "fields"}} for every type definition in the EBOOT bytes: the build's
+    definitions all link their field lists from one offset, whichever finds the most types."""
+    return max((scan_layout(data, *layout) for layout in LAYOUTS), key=len)
+
+
+def scan_layout(data, link, counted):
     types, end = {}, len(data)
+    shift = 4 if counted else 0
     for p in range(0, end - 0x58, 4):
-        rel = struct.unpack_from(">I", data, p + 0x54)[0]
+        rel = struct.unpack_from(">I", data, p + link)[0]
         if rel == 0 or rel > 0x100000 or rel % 4:
             continue
-        q = p + 0x54 + rel
+        q = p + link + rel
         if q + 0x14 > end:
             continue
         count, handle, size = struct.unpack_from(">III", data, q)
@@ -54,11 +66,16 @@ def scan_types(data):
         fields = []
         for i in range(count):
             e = q + 0x14 + i * 0x28
-            off, _, bit = struct.unpack_from(">III", data, e)
-            nested, minimum, width, extra = struct.unpack_from(">IIII", data, e + 0x14)
-            fields.append({"off": off, "bit": bit, "kind": data[e + 0x10], "opt": data[e + 0x11],
-                           "nested": nested, "arr": data[e + 0x18], "min": minimum, "width": width,
-                           "extra": extra})
+            repeat = struct.unpack_from(">I", data, e)[0] if counted else 0
+            off, _, bit = struct.unpack_from(">III", data, e + shift)
+            nested, minimum, width, extra = struct.unpack_from(">IIII", data, e + shift + 0x14)
+            field = {"off": off, "bit": bit, "kind": data[e + shift + 0x10], "opt": data[e + shift + 0x11],
+                     "nested": nested, "arr": data[e + shift + 0x18], "min": minimum, "width": width,
+                     "extra": extra}
+            if repeat and count == 1 and repeat * off == size:  # a fixed array, the type's only field:
+                fields += [dict(field, off=off * n, bit=bit * n) for n in range(repeat)]  # offset = stride
+            else:
+                fields.append(field)
         types[f"{handle:#x}"] = {"size": size, "fields": fields}
     return types
 

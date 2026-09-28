@@ -35,6 +35,26 @@ DESCRIPTION = "d1xenia: local sign-on CA replaces embedded roots"
 MANIFEST_FLAG_ADDR = 0x0179D5F4
 MANIFEST_DESCRIPTION = "d1xenia: accept unsigned content manifest"
 
+# The same two patch sites in the title updates, found statically (notes/final-build.md). 01.24
+# embeds the identical 2,390-byte PEM at 0x12d3740 (used at 0x113894) and reads its manifest
+# flag (initially 1) only at 0xc65d14. Its PPU hash is whatever RPCS3 logs as "PPU executable
+# hash" on the first boot of that EBOOT; until it is recorded here, pass it with --ppu-hash.
+BUILDS = {
+    "01.00": {"ppu_hash": PPU_HASH, "ca_addr": EMBEDDED_CA_ADDR, "ca_len": EMBEDDED_CA_LEN,
+              "manifest_flag": MANIFEST_FLAG_ADDR},
+    "01.24": {"ppu_hash": None, "ca_addr": 0x012D3740, "ca_len": 2390, "manifest_flag": 0x018DCA64},
+}
+
+
+def build_sites(build="01.00", ppu_hash=None):
+    """The patch sites of `build`, with `ppu_hash` (RPCS3's "PPU-...") filled in or replaced."""
+    if build not in BUILDS:
+        raise ValueError(f"unknown build {build!r} (one of {', '.join(BUILDS)})")
+    sites = dict(BUILDS[build], ppu_hash=ppu_hash or BUILDS[build]["ppu_hash"])
+    if not sites["ppu_hash"]:
+        raise ValueError(f"build {build} needs --ppu-hash: the \"PPU executable hash\" RPCS3 logs when it boots")
+    return sites
+
 
 def yaml_quote(text):
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
@@ -54,24 +74,26 @@ def patch_entry(description, notes, lines):
     )
 
 
-def patch_yaml(pem_text, unsigned_manifest=False):
+def patch_yaml(pem_text, unsigned_manifest=False, sites=None):
+    sites = sites or build_sites()
     pem_text = pem_text.replace("\r\n", "\n")
-    if len(pem_text.encode("ascii")) > EMBEDDED_CA_LEN:
-        raise ValueError(f"CA PEM is {len(pem_text)} bytes; the embedded slot holds {EMBEDDED_CA_LEN}")
-    end = EMBEDDED_CA_ADDR + len(pem_text)
-    text = "Version: 1.2\n\n" + f"{PPU_HASH}:\n" + patch_entry(
+    if len(pem_text.encode("ascii")) > sites["ca_len"]:
+        raise ValueError(f"CA PEM is {len(pem_text)} bytes; the embedded slot holds {sites['ca_len']}")
+    end = sites["ca_addr"] + len(pem_text)
+    text = "Version: 1.2\n\n" + f"{sites['ppu_hash']}:\n" + patch_entry(
         DESCRIPTION, "Loopback testing only. Trusts the private d1xenia CA instead of the game's own roots.",
-        [f"[ utf8, 0x{EMBEDDED_CA_ADDR:08x}, {yaml_quote(pem_text)} ]", f"[ byte, 0x{end:08x}, 0x00 ]"])
+        [f"[ utf8, 0x{sites['ca_addr']:08x}, {yaml_quote(pem_text)} ]", f"[ byte, 0x{end:08x}, 0x00 ]"])
     if unsigned_manifest:
         text += patch_entry(
             MANIFEST_DESCRIPTION, "Loopback testing only. Skips the content manifest signature check.",
-            [f"[ byte, 0x{MANIFEST_FLAG_ADDR:08x}, 0x00 ]"])
+            [f"[ byte, 0x{sites['manifest_flag']:08x}, 0x00 ]"])
     return text
 
 
-def config_yaml(unsigned_manifest=False):
+def config_yaml(unsigned_manifest=False, sites=None):
+    sites = sites or build_sites()
     names = [DESCRIPTION] + ([MANIFEST_DESCRIPTION] if unsigned_manifest else [])
-    return f"{PPU_HASH}:\n" + "".join(
+    return f"{sites['ppu_hash']}:\n" + "".join(
         f"  {yaml_quote(name)}:\n"
         f"    {yaml_quote(TITLE)}:\n"
         f"      {SERIAL}:\n"
@@ -79,11 +101,12 @@ def config_yaml(unsigned_manifest=False):
         "          Enabled: true\n" for name in names)
 
 
-def install(rpcs3_dir: Path, ca_pem: Path, unsigned_manifest=False, replace=False):
+def install(rpcs3_dir: Path, ca_pem: Path, unsigned_manifest=False, replace=False, build="01.00", ppu_hash=None):
     """Write the patch and enable it in an RPCS3 folder.
 
     Existing files are replaced only with replace=True, and only if this module wrote them.
     """
+    sites = build_sites(build, ppu_hash)
     patch_file = rpcs3_dir / "patches" / "imported_patch.yml"
     config_file = rpcs3_dir / "config" / "patch_config.yml"
     for f in (patch_file, config_file):
@@ -93,6 +116,6 @@ def install(rpcs3_dir: Path, ca_pem: Path, unsigned_manifest=False, replace=Fals
     if pem.count("BEGIN CERTIFICATE") != 1:
         raise ValueError("--game-ca must hold exactly one PEM certificate")
     patch_file.parent.mkdir(parents=True, exist_ok=True)
-    patch_file.write_text(patch_yaml(pem, unsigned_manifest), encoding="utf-8", newline="\n")
-    config_file.write_text(config_yaml(unsigned_manifest), encoding="utf-8", newline="\n")
+    patch_file.write_text(patch_yaml(pem, unsigned_manifest, sites), encoding="utf-8", newline="\n")
+    config_file.write_text(config_yaml(unsigned_manifest, sites), encoding="utf-8", newline="\n")
     return patch_file, config_file

@@ -51,7 +51,10 @@ def sentence(text, start, end):
     return s
 
 
-SKIP = {"eboot-addresses.md", "d1_addresses.py", "d1_pkg.py", "test_d1_pkg.py"}
+SKIP = {"eboot-addresses.md", "d1_addresses.py", "d1_pkg.py", "test_d1_pkg.py",
+        "final-build.md", "test_game_ca_patch.py"}  # the last two hold title-update addresses
+# a sentence naming a title update (01.13-01.24) gives that build's addresses, not 01.00's
+OTHER_BUILD = re.compile(r"\b01\.(?:1[3-9]|2[0-4])\b")
 
 
 def collect():
@@ -67,6 +70,8 @@ def collect():
             if LO <= value < HI and value % 0x10000:
                 line = text.count("\n", 0, m.start()) + 1
                 ctx = sentence(text, m.start(), m.end())
+                if OTHER_BUILD.search(ctx):
+                    continue
                 if not any(c["context"] == ctx for c in mentions[value]):
                     mentions[value].append({"file": path.relative_to(REPO).as_posix(), "line": line,
                                             "context": ctx})

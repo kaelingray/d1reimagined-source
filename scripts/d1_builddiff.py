@@ -58,6 +58,21 @@ def layout(entry):
     return [(f["off"], f["kind"], f["opt"], f["width"]) for f in entry["fields"]]
 
 
+def kinds(entry):
+    return [(f["kind"], f["opt"], f["width"]) for f in entry["fields"]]
+
+
+def similarity(a, b, floor=0.0):
+    """How alike two field lists are, by kind (offsets all move when a field is inserted)."""
+    ka, kb = kinds(a), kinds(b)
+    if ka == kb:
+        return 1.0
+    matcher = difflib.SequenceMatcher(None, ka, kb, autojunk=False)
+    if matcher.real_quick_ratio() < floor or matcher.quick_ratio() < floor:
+        return 0.0
+    return matcher.ratio()
+
+
 def match_types(old, new):
     """(mapping old->new, how {old: 'same'|'changed'}, removed old handles, added new handles)."""
     fo, fn = fingerprints(old), fingerprints(new)
@@ -71,6 +86,11 @@ def match_types(old, new):
             mapping[h] = h if h in candidates else candidates[0]
             how[h] = "same"
     taken = set(mapping.values())
+    # most handles survive a build: the same handle with a similar top-level layout is the same type
+    for h in [h for h in old if h not in mapping]:
+        if h in new and h not in taken and similarity(old[h], new[h], 0.5) >= 0.5:
+            mapping[h], how[h] = h, "changed"
+            taken.add(h)
     left_new = [h for h in new if h not in taken]
     by_size = {}
     for h in left_new:
@@ -80,7 +100,7 @@ def match_types(old, new):
                [c for c in left_new if c not in taken and abs(new[c]["size"] - old[h]["size"]) <= 16]
         best, score = None, 0.0
         for c in pool[:400]:
-            ratio = difflib.SequenceMatcher(None, layout(old[h]), layout(new[c])).ratio()
+            ratio = similarity(old[h], new[c], max(score, 0.6))
             if ratio > score:
                 best, score = c, ratio
         if best and score >= 0.6:
@@ -117,6 +137,38 @@ def services_of(packages, oodle):
     return {str(w): [f"{rq:#x}", f"{rs:#x}"] for w, _, rq, rs in table} if table else None
 
 
+def field_line(types, f):
+    nested = f"{f['nested'] & NONE:#x}" if f["kind"] == 1 else ""
+    kind = d1_types.KIND_NAMES.get(f["kind"], f"k{f['kind']}")
+    return f"+{f['off']:#06x} {kind}{'?' if f['opt'] else ''}:{f['width']} {nested}".rstrip()
+
+
+def side_by_side(old, h, new, n):
+    a = [field_line(old, f) for f in old[h]["fields"]]
+    b = [field_line(new, f) for f in new[n]["fields"]] if n else []
+    rows = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, [x.split(" ", 1)[1] for x in a],
+                                                       [x.split(" ", 1)[1] for x in b], autojunk=False).get_opcodes():
+        left, right = a[i1:i2], b[j1:j2]
+        mark = " " if tag == "equal" else "*"
+        for k in range(max(len(left), len(right))):
+            rows.append(f"{mark} {left[k] if k < len(left) else '':<36}| {right[k] if k < len(right) else ''}")
+    return rows
+
+
+def change_note(old, h, new, n):
+    """What changed at the top level, or which nested types changed when the fields did not."""
+    if layout(old[h]) == layout(new[n]):
+        nested = sorted({f"{f['nested']:#x}" for f in old[h]["fields"] if f["kind"] == 1})
+        if nested:
+            return "same fields; nested types changed: " + ", ".join(f"`{x}`" for x in nested[:8])
+        return "same fields; value ranges or array settings changed"
+    if kinds(old[h]) == kinds(new[n]):
+        return "same fields at new offsets"
+    sa, sb = d1_types.signature(old, int(h, 16), max_depth=0), d1_types.signature(new, int(n, 16), max_depth=0)
+    return f"`{sa[:150]}` -> `{sb[:150]}`"
+
+
 def report(old, new, mapping, how, removed, added, services=(None, None), strings=(None, None), names=("old", "new")):
     a, b = names
     same = sum(1 for v in how.values() if v == "same")
@@ -131,13 +183,20 @@ def report(old, new, mapping, how, removed, added, services=(None, None), string
     for h, where in sorted(used.items()):
         if h in old:
             out.append(f"| `{h}` | `{mapping.get(h, '-')}` | {how.get(h, 'removed')} | {where} |")
+    moved = [h for h in sorted(used) if h in old and how.get(h) != "same"]
+    if moved:
+        out += ["", "### Their field layouts", "",
+                "Offset, kind and nested type of each field, old | new (a stand-in built for the old "
+                "layout writes the wrong offsets on the new one).", ""]
+        for h in moved:
+            n = mapping.get(h)
+            out.append(f"`{h}` (size {old[h]['size']:#x}) -> " +
+                       (f"`{n}` (size {new[n]['size']:#x})" if n else "no match") + ":")
+            out += ["", "```"] + side_by_side(old, h, new, n) + ["```", ""]
     out += ["", "## Changed types", ""]
-    for h in changed[:200]:
+    for h in changed[:300]:
         n = mapping[h]
-        diff = list(difflib.unified_diff([str(x) for x in layout(old[h])], [str(x) for x in layout(new[n])],
-                                         lineterm="", n=0))[2:]
-        out.append(f"- `{h}` -> `{n}` (size {old[h]['size']:#x} -> {new[n]['size']:#x}): " +
-                   "; ".join(diff[:6]) + (" ..." if len(diff) > 6 else ""))
+        out.append(f"- `{h}` -> `{n}` (size {old[h]['size']:#x} -> {new[n]['size']:#x}): " + change_note(old, h, new, n))
     out += ["", f"## Removed types ({len(removed)})", "", ", ".join(f"`{h}`" for h in removed[:400]), "",
             f"## Added types ({len(added)})", "", ", ".join(f"`{h}`" for h in added[:400]), ""]
     so, sn = services

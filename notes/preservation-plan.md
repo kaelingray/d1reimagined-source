@@ -174,34 +174,42 @@ the unknowns). Both regions carry the same chain, so either disc works.
 
 ## 7. 01.00 → final: known differences (so far)
 
+The static diff of the decrypted 01.13 and 01.24 EBOOTs is done; details and the tables are in
+[final-build.md](final-build.md).
+
 | Area | Finding | Status |
 | --- | --- | --- |
 | Packages | 244 disc ids → about 516 ids; patches layer `_N` files over the disc's `_0` (e.g. the final investment globals 012c read 108 of 159 blocks from the disc) | CONFIRMED |
-| Patch-file selection | 01.19 left `_5` files, then 01.20 restarted at `_2`, so the client does not simply pick the highest patch number | CONFIRMED oddity, mechanism UNKNOWN |
-| Tag classes (runtime types) | investment globals use 4,679 (01.00) vs 5,125 (final) classes, 3,322 shared: **type handles were added and renumbered** | CONFIRMED |
-| Investment globals root | 50 → 56 child tags; the 01.00 service-table slot now holds an empty tag | CONFIRMED |
-| Web-service table | not found in the final 012c/0130/0131 by record class or name hash | UNKNOWN (moved or changed format) |
-| EBOOT | a full EBOOT in every patch (01.13: 25.9 MB, 01.24: 26.2 MB) | CONFIRMED; contents need decryption on the PC |
+| Patch folder | `/dev_hdd0/game/<title>/USRDIR/a0000001/` (format `%s/game/%s/USRDIR/%08x/`, constant 0xa0000001, 01.24 0xc951c); patchable/unpatchable package registration | CONFIRMED |
+| Patch-file selection | 01.19 left `_5` files, then 01.20 restarted at `_2`, so the client does not simply pick the highest patch number | CONFIRMED oddity, mechanism UNKNOWN (the manifest is the lead) |
+| Type definitions in the EBOOT | new compiled layout (definition link at +0x34, counted field entries); `d1_types.py` reads both | CONFIRMED |
+| Runtime types | 4,387 → 5,041; 4,318 matched (3,771 identical, 547 changed), 69 removed, 759 added; only 183 renumbered | CONFIRMED |
+| Character objects | same handles, grown: gear slot 0x28 → 0x30, gear at progression +0x1e8, equipped ids at self +0x2900, bigger inventory, flag tables 2x-2.5x | CONFIRMED |
+| Object ids | kind field 6 → 7 bits | CONFIRMED |
+| Web-service table | moved to tag 0x80a5e21a in package 012f; same record format; 66 → 94 services; every old wire id and type handle kept; 19 payloads changed | CONFIRMED |
+| Sign-on | success message unchanged; new optional request fields 20/21 and response fields 13/14 | CONFIRMED |
+| Demonware lobby/auth3 | host names and the 01.00 lobby client strings are gone in 01.24 (present in 01.13) | LIKELY removed |
+| Error ids | the `error.*` string table is gone (248 → 1) | CONFIRMED |
+| RPCS3 patch sites | 01.24: embedded CA 0x12d3740 (same PEM), manifest signature flag 0x18dca64 | CONFIRMED (PPU hash still needed) |
 | Build ids | tool strings `live` → `evil` → `v230`; changelist 41345 → 51273 | CONFIRMED |
-| Network protocol, BAP framing, Demonware, auth, sign-on build parameter | not analysed yet | UNKNOWN until the 01.24 ELF is decrypted |
 
 ## 8. Expected server compatibility
 
-These are predictions, to be checked by the static diff (task 1 below) and a first boot.
+Updated from the static diff; still to be proven by a first boot.
 
 | System | Expectation | Why |
 | --- | --- | --- |
-| DNS sinkhole, STUN, RPCN, SSLv3 sign-on transport | UNCHANGED (LIKELY) | platform-level; the CA patch needs the same EBOOT patch at a new address |
-| Sign-on / auth3 message contents | SLIGHTLY CHANGED (LIKELY) | the build/version parameter in the SignOn URL; possible new fields |
-| Demonware lobby/matchmaking | UNCHANGED to SLIGHTLY (LIKELY) | the same Demonware SDK generation on PS3 |
-| BAP transport (shello, GCM, qz/ws frames) | UNCHANGED (LIKELY) | the framework predates 01.00 and was stable |
-| Service wire ids | UNKNOWN; LIKELY mostly the same with additions | the table moved |
-| Service and investment object schemas | SIGNIFICANTLY CHANGED (LIKELY) | the handle renumbering; TTK light/infusion, quests, record books. **Mitigation: regenerate with `d1_types.py`** |
-| Investment data (items, buckets) | SIGNIFICANTLY CHANGED (CONFIRMED) | new packages; read with `d1_pkg.py items` |
-| Activity-host protocol (types 3/5/6/11/21...) | SLIGHTLY CHANGED (LIKELY) | the same engine; schemas regenerated |
+| DNS sinkhole, STUN, RPCN, SSLv3 sign-on transport | UNCHANGED (LIKELY) | the sinkhole answers every name; the CA patch has its 01.24 address (`game_ca_patch.py --build 01.24`) |
+| Sign-on reply | UNCHANGED (CONFIRMED format) | the success message is identical; the new fields are optional |
+| Demonware lobby/matchmaking | PROBABLY NOT NEEDED (LIKELY) | the lobby client and its hosts are gone; find out on the first boot what, if anything, replaces it |
+| BAP transport (shello, GCM, qz/ws frames) | UNCHANGED (LIKELY) | the same message names; NAT punch added |
+| Service wire ids | UNCHANGED plus 28 new (CONFIRMED) | the final table |
+| Service and investment object schemas | CHANGED but same handles (CONFIRMED) | regenerate with `d1_types.py`; the stand-in's schema-driven encoders follow |
+| Investment data (items, buckets) | SIGNIFICANTLY CHANGED (CONFIRMED) | new packages; read with `d1_pkg.py items` over the final chains |
+| Activity-host protocol (types 3/5/6/11/21...) | SLIGHTLY CHANGED (LIKELY) | the same engine; object ids widened; schemas regenerated |
 | Mission scripts | UNCHANGED for the Cosmodrome story, rewritten per activity anyway | the objects are data |
 | RPCS3 fixes | UNCHANGED (LIKELY) | engine-level SPU/RSX behaviour |
-| The stand-in's hardcoded addresses and handles | BREAKS (CONFIRMED) | every constant is an 01.00 value |
+| The stand-in's hardcoded offsets | gear offsets now derived from the schema (`character_layout`); the account-flag tables and the 01.00 hook addresses remain | CONFIRMED |
 
 ## 9. Migration strategy
 
@@ -345,7 +353,8 @@ and the store (not "the one client"), and never assume a single roster slot.
 3. Death/revive/checkpoint flow and the host's role in it.
 4. Mission completion, rewards and XP granting (host vs investment services).
 5. The urgent-message trigger and the login-cinematic freeze (existing).
-6. The final build's web-service table and changes in the BAP/investment protocol.
+6. Changes in the BAP/investment protocol in the final build (the service table is found; 19
+   payloads changed) and what replaces the Demonware lobby step.
 7. How the PS3 client checks DLC/expansion entitlements.
 8. How the client picks package patch files after the 01.20 renumbering.
 9. Physics-host election and Reconcile for more than one player.
@@ -368,7 +377,7 @@ in parallel.
 | M3 | First objective shows | TEST369/371 | mask found |
 | M4 | Trigger-driven objective progress | trigger report | the "any message" matcher is in place |
 | M5 | Walk into The Breach with baselines | TEST368 | client-driven switch |
-| S1 | Final-build static diff (types, strings, packages) | the 01.24 ELF decrypted on the PC | can start now |
+| S1 | Final-build static diff (types, strings, packages) | the 01.24 ELF decrypted on the PC | DONE (`final-build.md`) |
 | M6 | Enemies spawn and fight (client AI) | squad spawn trigger | |
 | M7 | Rifle pickup → inventory → equip | loot message, services 12xx | persistence store |
 | M8 | Death/revive, checkpoints | UNKNOWN 3 | |
@@ -423,13 +432,29 @@ M13 and build every later milestone on it.
   - the Taken King packages can be listed without an offer. What is left to check is the local
     entitlement enumeration (unknown 7).
 
-  01.00 has no string for the patch folder `a0000001`, so the path form for patch files comes
-  from the final EBOOT: look for it in the 01.00 -> 01.24 strings diff.
+  01.00 has no string for the patch folder `a0000001`. The final EBOOT builds it as
+  `%s/game/%s/USRDIR/%08x/` with 0xa0000001 (see below).
   - Experiment: boot 01.24 with a manifest listing the disc `_0` files plus every patch file
     (bare names, then `a0000001/packages/...` paths), and read the registration result (-90 /
     -91 codes as in comparison 021).
   - `ps3_update.py fetch --packages` now writes `final/packages.json` (file → the update that
     supplied it) for building that manifest.
+
+- **The final build, statically (2026-09-28; [final-build.md](final-build.md)).** From the
+  user's export of the 01.13/01.24 EBOOTs and the final 012c/012f chains:
+  - the scanner now reads the updates' type layout (5,041 types in 01.24);
+  - type handles are stable;
+  - the web services are the same 66 plus 28 new;
+  - the sign-on reply is unchanged;
+  - the Demonware lobby client is likely gone;
+  - the RPCS3 patch sites for 01.24 are known;
+  - the stand-in derives its gear offsets from the loaded schema.
+
+  First-boot checklist for 01.24:
+  1. Read the PPU hash from the RPCS3 log.
+  2. Rebuild the copy with `--game-ca ... --unsigned-manifest --build 01.24 --ppu-hash PPU-...`.
+  3. Export the runtime schema (or use `d1_types.py schema`).
+  4. Watch DNS and connections after sign-on to see whether anything replaces the lobby.
 
 ## NEXT 10 ENGINEERING TASKS
 
@@ -442,14 +467,14 @@ M13 and build every later milestone on it.
    - EXPERIMENT: as written, then walk to the Wall.
    - EXPECTED: the cinematic at +20 s, "Enter the Wall" at +140 s, and hook hits on
      `0x4ecd08`, `0x3561d8`, `0xb94414`.
-2. **Decrypt and diff the 01.24 EBOOT**
+2. **Decrypt and diff the 01.24 EBOOT (DONE 2026-09-28: `final-build.md`)**
    - WHY: the key question of how much of the server carries over.
    - WHAT: `rpcs3 --decrypt`, then `d1_types.py schema`. Add `d1_types.py diff` with shape
      fingerprints and `d1_eboot.py strings` diffs.
    - FILES: `scripts/d1_types.py`, `scripts/d1_eboot.py`.
    - EXPERIMENT: offline.
    - EXPECTED: a handle map 01.00 → 01.24 and a list of changed service/host types.
-3. **Locate the final service table**
+3. **Locate the final service table (DONE 2026-09-28: tag 0x80a5e21a in package 012f)**
    - WHY: needed for every BAP reply in 01.24.
    - WHAT: search the final investment globals chains and globals 0151-0156 for 36-byte records
      with wire ids, and the final EBOOT's registry root +0x20c equivalent.
@@ -491,7 +516,8 @@ M13 and build every later milestone on it.
    - EXPERIMENT: TEST371's Breach step plus timed variants; hooks on `0x1f8d20`, `0x1f7e74`,
      `0x230c70`.
    - EXPECTED: the field combination that creates Fallen.
-9. **Build profiles**
+9. **Build profiles (STARTED: `character_layout(schema)` derives the gear offsets; the CA patch
+   has per-build sites)**
    - WHY: stop hardcoding 01.00 constants.
    - WHAT: move type handles, message numbers and object ids into a generated
      `profiles/01.00.json`; load them by `--build`.
@@ -519,7 +545,8 @@ M13 and build every later milestone on it.
    the spawner and the `hard_wipe_globals` / `lifetime_timer` handlers; log the client messages.
 6. **Rewards and XP.** Complete an objective, then log BAP requests (services 12xx) and host
    messages; check whether the client asks for anything.
-7. **Final service table.** Offline: decrypt 01.24 and scan (task 3).
+7. **Final service table.** DONE: 012f tag 0x80a5e21a; 94 services, the old 66 unchanged in
+   wire id and handles.
 8. **DLC entitlement check.** Offline static search, then boot 01.24 with no licences and read
    the error code.
 9. **Patch-file selection after 01.20.** Install 01.19 then 01.24 in RPCS3 and log which

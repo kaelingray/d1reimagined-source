@@ -3,11 +3,12 @@ ELF64 big-endian PPU): strings, code and data references to an address or a stri
 function, the function around an address, and disassembly.
 
 The SNC compiler forms addresses as `lis rX, hi` followed by `addic`/`addi`/`ori` or a D-form
-load/store with base rX, or loads them from the TOC (`lwz/ld rX, off(r2)`; TOC base 0x175a5e8,
-orbit checkpoint "Slice sets and cinematics"). Function starts are taken from `bl` targets and
-frame-setup prologues after an unconditional branch (`mflr r0` for SNC's out-of-line register
-save helpers, or `stdu r1`) and the .opd descriptors; a leaf function without a frame that is
-only reached through a pointer can still merge with the one before it.
+load/store with base rX, or loads them from the TOC (`lwz/ld rX, off(r2)`; TOC base 0x175a5e8 in
+01.00, 0x1891798 in 01.24: the entry point's function descriptor gives it). Function starts are
+taken from `bl` targets and frame-setup prologues after an unconditional branch (`mflr r0` for
+SNC's out-of-line register save helpers, or `stdu r1`) and the .opd descriptors; a leaf function
+without a frame that is only reached through a pointer can still merge with the one before it.
+The curated labels (notes/eboot-labels.tsv) are 01.00 addresses and apply to that build only.
 
   python scripts/d1_eboot.py strings [--grep TEXT] [--min 6]
   python scripts/d1_eboot.py xref 0x11b7218 | "Change slice-set"    (code, TOC and data refs)
@@ -49,7 +50,7 @@ def labels():
 
 
 class Eboot:
-    def __init__(self, path, toc=TOC_BASE):
+    def __init__(self, path, toc=None):
         self.path = Path(path)
         self.data = self.path.read_bytes()
         d = self.data
@@ -65,9 +66,12 @@ class Eboot:
         code = [s for s in self.segments if s[3] & 1] or self.segments[:1]
         self.code_va, off, size, _ = code[0]
         self.words = np.frombuffer(d, dtype=">u4", count=size // 4, offset=off).astype(np.uint32)
-        self.toc = toc
+        # the TOC base is the second word of the entry point's function descriptor
+        entry, = struct.unpack_from(">Q", d, 0x18)
+        self.toc = toc or self.u32(entry + 4)
         self._targets = None
-        self.names = labels()
+        # the curated labels are addresses of 01.00; other builds (the title updates) get none
+        self.names = labels() if self.toc == TOC_BASE else {}
 
     # --- memory
     def read(self, va, size):
@@ -252,7 +256,7 @@ def describe(eb, pc):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--elf", help="decrypted EBOOT (default local/RESEARCH/ps3_decrypt/EBOOT.elf)")
-    ap.add_argument("--toc", type=lambda v: int(v, 0), default=TOC_BASE)
+    ap.add_argument("--toc", type=lambda v: int(v, 0), help="TOC base (default: from the entry descriptor)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("strings"); s.add_argument("--grep"); s.add_argument("--min", type=int, default=6)
     s = sub.add_parser("xref"); s.add_argument("target")

@@ -130,6 +130,48 @@ STARTER_GEAR = {
 PROGRESSION_ITEMS = 0x138
 PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
 SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
+# These offsets are those of 01.00. The title updates keep the type handles but grow the types
+# (01.24: slot 0x28 -> 0x30 bytes with dyes at +0x18, progression items at +0x1e8, equipped ids
+# at +0x2900; notes/final-build.md), so character_layout() finds each field in the schema by the
+# handle of its nested type and keeps the 01.00 value for anything the schema lacks.
+LAYOUT_0100 = {"progression_items": PROGRESSION_ITEMS, "peer_progression": PEER_PROGRESSION,
+               "select_progression": SELECT_PROGRESSION, "self_inventory": SELF_INVENTORY,
+               "self_equipped": SELF_EQUIPPED, "slot_size": 0x28, "slot_dyes": 0xe,
+               "inventory_items": 8, "inventory_entry": 0x18}
+
+
+def field_offset(schema, owner, nested=None, after=None):
+    """Offset of the field of type `owner` whose nested type is `nested` (or of the field that
+    follows the one nesting `after`); None if the schema does not have it."""
+    fields = ((schema or {}).get(owner) or {}).get("fields", [])
+    for i, f in enumerate(fields):
+        if nested is not None and f.get("nested") == int(nested, 16):
+            return f["off"]
+        if after is not None and f.get("nested") == int(after, 16) and i + 1 < len(fields):
+            return fields[i + 1]["off"]
+    return None
+
+
+def character_layout(schema=None):
+    """The character-object offsets gear_objects() writes, for the build `schema` describes."""
+    def size(handle):
+        return ((schema or {}).get(handle) or {}).get("size")
+
+    # the inventory {i32 count, items} follows the appearance; its type handle differs by build
+    self_fields = ((schema or {}).get("0x80801714") or {}).get("fields", [])
+    self_inventory = field_offset(schema, "0x80801714", after="0x8080181a")
+    inventory = next(((schema or {}).get(f"{f['nested']:#x}") for f in self_fields if f["off"] == self_inventory), None)
+    inventory_fields = (inventory or {}).get("fields", [])
+    found = {"progression_items": field_offset(schema, "0x80801855", "0x808045d9"),
+             "peer_progression": field_offset(schema, "0x808017fd", "0x80801855"),
+             "select_progression": field_offset(schema, "0x80801954", "0x80801855"),
+             "self_inventory": self_inventory,
+             "self_equipped": field_offset(schema, "0x80801714", "0x808045da"),
+             "slot_size": size("0x8080183c"),
+             "slot_dyes": field_offset(schema, "0x8080183c", "0x808046bc"),
+             "inventory_items": inventory_fields[1]["off"] if len(inventory_fields) > 1 else None,
+             "inventory_entry": size("0x808016e0")}
+    return {key: LAYOUT_0100[key] if value is None else value for key, value in found.items()}
 
 
 def gear_spec(value):
@@ -165,21 +207,23 @@ def gear_spec(value):
     return gear
 
 
-def gear_objects(gear):
+def gear_objects(gear, layout=None):
     """Field values that equip `gear` ({slot: {"item", "id", "dyes"}}) on the three character
-    objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values."""
+    objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values.
+    `layout` is character_layout() of the target build (default 01.00)."""
+    L = layout or LAYOUT_0100
     slots = {}
     for slot, g in gear.items():
         item = {0: g["id"], 8: g["item"]}
         if g["dyes"]:
-            item[0xe] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
-        slots[slot * 0x28] = item
-    progression = {PROGRESSION_ITEMS: slots}
-    inventory = {i * 0x18: {0: g["item"], 8: g["id"], 0x10: 1} for i, g in enumerate(gear.values())}
-    return {"peer": {PEER_PROGRESSION: progression},
-            "select": {SELECT_PROGRESSION: progression},
-            "self": {SELF_INVENTORY: {0: len(gear), 8: inventory},
-                     SELF_EQUIPPED: {slot * 8: g["id"] for slot, g in gear.items()}}}
+            item[L["slot_dyes"]] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
+        slots[slot * L["slot_size"]] = item
+    progression = {L["progression_items"]: slots}
+    inventory = {i * L["inventory_entry"]: {0: g["item"], 8: g["id"], 0x10: 1} for i, g in enumerate(gear.values())}
+    return {"peer": {L["peer_progression"]: progression},
+            "select": {L["select_progression"]: progression},
+            "self": {L["self_inventory"]: {0: len(gear), L["inventory_items"]: inventory},
+                     L["self_equipped"]: {slot * 8: g["id"] for slot, g in gear.items()}}}
 
 
 def deep_merge(base, extra):
@@ -200,11 +244,11 @@ def overlay_spec(value):
     return {name: offset_keys(values) for name, values in raw.items()}
 
 
-def character_extras(gear=None, overlay=None):
+def character_extras(gear=None, overlay=None, layout=None):
     """Extra field values for the peer, select and self character objects: equipment from
     --character-gear, then a raw --character-overlay JSON {"peer"|"select"|"self": {offset: ...}}."""
     extras = {"peer": {}, "select": {}, "self": {}}
-    for part in (gear_objects(gear) if gear else {}, overlay or {}):
+    for part in (gear_objects(gear, layout) if gear else {}, overlay or {}):
         for name in extras:
             extras[name] = deep_merge(extras[name], part.get(name))
     return extras
@@ -1521,8 +1565,9 @@ def parse_args(argv=None):
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
     args = ap.parse_args(argv)
-    args.character_extras = character_extras(args.character_gear, args.character_overlay)
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
+    args.character_extras = character_extras(args.character_gear, args.character_overlay,
+                                             character_layout(args.schema))
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
     if args.ah_mission:

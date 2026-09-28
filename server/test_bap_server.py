@@ -67,6 +67,29 @@ class CharacterGear(unittest.TestCase):
                                                           0x18: {0: 200, 8: 0x10c, 0x10: 1}}})
         self.assertEqual(extras["self"][0x1838], {7 * 8: 0x107, 12 * 8: 0x10c})
 
+    def test_layout_follows_the_schema(self):
+        # a 01.24-shaped schema: same handles, grown types (slot 0x30 with dyes at +0x18, items at
+        # +0x1e8, equipped ids at +0x2900, inventory entries of 0x20 bytes)
+        def struct(off, nested):
+            return {"off": off, "kind": 1, "opt": 1, "nested": int(nested, 16)}
+        schema = {"0x80801855": {"size": 0x8c8, "fields": [struct(0x10, "0x80805513"), struct(0x1e8, "0x808045d9")]},
+                  "0x808017fd": {"size": 0x908, "fields": [struct(0x30, "0x80801855")]},
+                  "0x80801954": {"size": 0x940, "fields": [struct(0x68, "0x80801855")]},
+                  "0x80801714": {"size": 0x6db8, "fields": [struct(0xc, "0x8080181a"), struct(0x30, "0x80804a18"),
+                                                            struct(0x2900, "0x808045da")]},
+                  "0x80804a18": {"size": 0x2808, "fields": [{"off": 0, "kind": 5}, struct(8, "0x8080547d")]},
+                  "0x8080183c": {"size": 0x30, "fields": [struct(0x18, "0x808046bc")]},
+                  "0x808016e0": {"size": 0x20, "fields": []}}
+        layout = bap.character_layout(schema)
+        self.assertEqual(bap.character_layout(None), bap.LAYOUT_0100)
+        self.assertEqual((layout["progression_items"], layout["self_equipped"], layout["slot_size"],
+                          layout["slot_dyes"], layout["inventory_entry"]), (0x1e8, 0x2900, 0x30, 0x18, 0x20))
+        extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
+                                       12: {"item": 200, "id": 0x10c, "dyes": []}}, layout=layout)
+        self.assertEqual(extras["peer"][0x30][0x1e8][7 * 0x30], {0: 0x107, 8: 100, 0x18: {0: {0: 2, 2: 5}}})
+        self.assertEqual(extras["self"][0x30][8][0x20], {0: 200, 8: 0x10c, 0x10: 1})
+        self.assertEqual(extras["self"][0x2900], {7 * 8: 0x107, 12 * 8: 0x10c})
+
     def test_overlay_merges_over_gear(self):
         overlay = bap.overlay_spec('{"peer": {"0x30": {"0": 1, "0x138": {"0": {"8": 5}}}}}')
         extras = bap.character_extras({0: {"item": 9, "id": 0x100, "dyes": []}}, overlay)

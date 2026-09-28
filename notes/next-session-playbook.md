@@ -30,6 +30,19 @@ package steps `local\oo2core_3_win64.dll` (or `-Oodle <path>`). Push these files
 
 The ELFs and packages stay private.
 
+Done once (2026-09-28): the findings are in [`final-build.md`](final-build.md). The first
+`diff_*.md` in the data repo came from the old scanner, which missed the updates' type layout.
+Rerunning the script gives the corrected reports. It also needs the final 012f chain (the
+command at the end of `final-build.md`) for the 01.24 service table.
+
+For the first 01.24 boot, build the RPCS3 copy with the 01.24 patch sites. Get the hash from
+`RPCS3.log`, line "PPU executable hash", after one plain boot:
+
+```powershell
+& $D1Python server\prepare_rpcs3_copy.py <source> <dest> --game-ca <ca.pem> --unsigned-manifest `
+    --build 01.24 --ppu-hash PPU-<hash from the log>
+```
+
 ## Baselines without the live dump
 
 The disc now gives the full object list for a zone (`preservation-plan.md`, "Done since"). For
