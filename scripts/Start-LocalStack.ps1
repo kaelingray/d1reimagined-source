@@ -6,6 +6,7 @@ param(
     [string]$Name = ("STACK_" + (Get-Date -Format 'yyyyMMdd_HHmmss')),
     [string[]]$BapArgs = @('--universe-time', 's', '--self-flags', '1;2@B0,C0-1023'),
     [string[]]$LobbyArgs = @(),
+    [string[]]$SignonArgs = @(),
     [switch]$NoGame
 )
 . "$PSScriptRoot\Paths.ps1"
@@ -33,8 +34,8 @@ if (-not (Get-Process rpcn -ErrorAction SilentlyContinue)) {
 }
 Start-Service dns @('server/dns_sinkhole.py', '--destiny-hosts', '--log', "$logs\$Name-dns-queries.log")
 Start-Service stun @('server/stun_stub.py')
-Start-Service signon @('server/signon_probe.py', '--mode', 'auth3', '--destiny-hosts',
-    '--manifest-url', 'http://content.local.test/manifest', '--manifest-packages', "$usrdir\packages")
+Start-Service signon (@('server/signon_probe.py', '--mode', 'auth3', '--destiny-hosts',
+    '--manifest-url', 'http://content.local.test/manifest', '--manifest-packages', "$usrdir\packages") + $SignonArgs)
 Start-Service lobby (@('server/lobby_probe.py', '--timeout', '60') + $LobbyArgs)
 Start-Service bap (@('server/bap_server.py', '--ws-signin',
     '--schema', "$root\SIGNON_LOCAL\investment_schema_character.json",

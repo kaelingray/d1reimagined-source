@@ -3,8 +3,9 @@
 Sources are the EBOOTs of updates 01.13 and 01.24, decrypted on the PC by
 `scripts/Invoke-FinalBuildExport.ps1` (SHA-256 in the data repo's `ps3_updates/EXPORT_VALIDATION.md`). The final
 investment globals chains 012c and 012f were read over HTTP ranges with `ps3_update.py fetch`.
-Everything here is static. Nothing has been checked in a running 01.24 yet. CONFIRMED means read
-directly from the executable or the packages.
+This page records static findings; CONFIRMED means read directly from the executable or
+packages. The first live 01.24 runs and their remaining loading problem are recorded in
+[`checkpoint-2026-09-28-final124-run.md`](checkpoint-2026-09-28-final124-run.md).
 
 ## Reading the update executables
 

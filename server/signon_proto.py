@@ -93,6 +93,20 @@ def title_config(manifest_url, manifest_guid):
     return field(1, BYTES, field(2, BYTES, manifest_url) + field(3, BYTES, manifest_guid))
 
 
+def title_config_0124(manifest_url, manifest_guid):
+    """01.24 binary overrides: magic, (id, varint length, bytes)*, zero id.
+
+    The 01.24 client dispatches override 0x65 to the 37-byte manifest GUID
+    buffer and 0x66 to the manifest URL buffer (EBOOT 0xe196e8/0xe1973c).
+    """
+    if not 0 < len(manifest_url) < 128 or not 0 < len(manifest_guid) < 37:
+        raise ValueError("01.24 manifest URL must be 1-127 bytes, GUID 1-36 bytes")
+    return (struct.pack("<I", 0x123456)
+            + struct.pack("<I", 0x65) + varint(len(manifest_guid)) + manifest_guid
+            + struct.pack("<I", 0x66) + varint(len(manifest_url)) + manifest_url
+            + struct.pack("<I", 0))
+
+
 def success_response(token, key1, key2, key3, expires_at, ip, port, expires_in=None,
                      config=None, config_ids=(1, 1), public_ip=None):
     for k in (key1, key2, key3):

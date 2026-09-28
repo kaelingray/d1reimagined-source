@@ -24,6 +24,17 @@ class TitleConfigAndManifest(unittest.TestCase):
         fields = sp.decode(sp.success_response(*args, public_ip="127.0.0.1"))
         self.assertEqual(fields[-1], (14, 0, 0x7F000001))
 
+    def test_0124_binary_title_config_override_records(self):
+        url = b"http://content.local.test/manifest"
+        guid = b"00000000-0000-0000-0000-000000000001"
+        config = sp.title_config_0124(url, guid)
+        expected = (struct.pack("<II", 0x123456, 0x65) + sp.varint(len(guid)) + guid
+                    + struct.pack("<I", 0x66) + sp.varint(len(url)) + url
+                    + struct.pack("<I", 0))
+        self.assertEqual(config, expected)
+        with self.assertRaises(ValueError):
+            sp.title_config_0124(b"x" * 128, guid)
+
     def test_manifest_lists_disc_packages(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

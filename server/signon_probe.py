@@ -24,6 +24,7 @@ defaults to a private folder outside Git.
 
 import argparse
 import datetime
+import hashlib
 import ipaddress
 import json
 import socket
@@ -263,12 +264,16 @@ def handle(raw, peer, port, args, certs, bound_host):
             return
         if (args.manifest_url and request_line.split()[:2]
                 == ["GET", urllib.parse.urlsplit(args.manifest_url).path]):
-            packages = signon_proto.disc_packages(args.manifest_packages) if args.manifest_packages else []
-            reply = signon_proto.content_manifest(args.manifest_guid.encode(), packages)
+            if args.manifest_file:
+                reply = args.manifest_file.read_bytes()
+                packages = None
+            else:
+                packages = signon_proto.disc_packages(args.manifest_packages) if args.manifest_packages else []
+                reply = signon_proto.content_manifest(args.manifest_guid.encode(), packages)
             conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
                          + f"Content-Length: {len(reply)}\r\nConnection: close\r\n\r\n".encode() + reply)
-            log(conn_id, f"replied 200 content manifest ({len(reply)} bytes, unsigned, "
-                         f"{len(packages)} packages)")
+            log(conn_id, f"replied 200 content manifest ({len(reply)} bytes, sha256={hashlib.sha256(reply).hexdigest()}, unsigned, "
+                         f"{'from ' + str(args.manifest_file) if packages is None else str(len(packages)) + ' packages'})")
             return
         reason = {200: "OK", 404: "Not Found", 503: "Service Unavailable"}.get(args.status, "Status")
         conn.sendall(f"HTTP/1.1 {args.status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode())
@@ -284,14 +289,20 @@ def handle(raw, peer, port, args, certs, bound_host):
 
 def signon_response(args):
     now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    config = None
+    if args.config_hex is not None:
+        config = bytes.fromhex(args.config_hex)
+    elif args.manifest_url and not args.omit_title_config:
+        encoder = (signon_proto.title_config_0124 if args.title_config_format == "01.24"
+                   else signon_proto.title_config)
+        config = encoder(args.manifest_url.encode(), args.manifest_guid.encode())
     return signon_proto.success_response(
         token=b"d1xenia-local-signon-token-" + b"0" * 37,
         key1=signon_proto.TEST_SESSION_KEYS[0], key2=signon_proto.TEST_SESSION_KEYS[1],
         key3=signon_proto.TEST_SESSION_KEYS[2],
         expires_at=now + 86400, expires_in=86400,
         ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port,
-        config=signon_proto.title_config(args.manifest_url.encode(), args.manifest_guid.encode())
-        if args.manifest_url else None, public_ip=args.public_ip)
+        config=config, public_ip=args.public_ip)
 
 
 def serve(addr, port, args, certs, bound_host=None):
@@ -327,13 +338,22 @@ def main():
                     help="port returned in the SignOn reply (default 12850 = 0x3232)")
     ap.add_argument("--manifest-url", default="",
                     help="content manifest URL placed in the SignOn title configuration (field 4)")
+    ap.add_argument("--omit-title-config", action="store_true",
+                    help="diagnostic: omit SignOn field 4 while keeping the manifest server")
+    ap.add_argument("--title-config-format", choices=["01.00", "01.24"], default="01.00",
+                    help="format for SignOn field 4.3 (01.24 uses binary overrides)")
+    ap.add_argument("--config-hex", help="diagnostic: raw hex for SignOn field 4.3 title config")
     ap.add_argument("--manifest-guid", default="00000000-0000-0000-0000-000000000001")
     ap.add_argument("--manifest-packages", type=Path,
                     help="PS3_GAME/USRDIR/packages folder whose file names are listed in the manifest")
+    ap.add_argument("--manifest-file", type=Path,
+                    help="diagnostic: serve a prebuilt local manifest instead of generating one")
     ap.add_argument("--public-ip", help="01.24: report this client address in SignOn field 14 "
                     "(LIKELY its public IPv4; notes/final-build.md)")
     ap.add_argument("--timeout", type=float, default=15.0)
     args = ap.parse_args()
+    if args.manifest_file and not args.manifest_file.is_file():
+        ap.error(f"manifest file does not exist: {args.manifest_file}")
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")
     if not ipaddress.ip_address(args.session_ip).is_loopback:

@@ -48,6 +48,8 @@ def main():
     ap.add_argument("--build", default="01.00", choices=sorted(game_ca_patch.BUILDS),
                     help="game version the --game-ca patch targets (its addresses differ)")
     ap.add_argument("--ppu-hash", help='RPCS3\'s "PPU executable hash" for --build, if not known yet')
+    ap.add_argument("--exclude-runtime-cache", action="store_true",
+                    help="omit source shader caches, captures and screenshots from a fresh copy")
     args = ap.parse_args()
     if args.unsigned_manifest and not args.game_ca:
         ap.error("--unsigned-manifest needs --game-ca")
@@ -64,7 +66,12 @@ def main():
     if not (args.source / "rpcs3.exe").exists():
         sys.exit(f"{args.source} does not look like an RPCS3 folder")
 
-    shutil.copytree(args.source, args.dest)
+    def ignore_runtime(path, names):
+        if args.exclude_runtime_cache and Path(path).resolve() == args.source.resolve():
+            return {name for name in names if name in {"cache", "captures", "screenshots"}}
+        return set()
+
+    shutil.copytree(args.source, args.dest, ignore=ignore_runtime)
     cfg = args.dest / "config" / "config.yml"
     text = cfg.read_text(encoding="utf-8")
     text = set_yaml_value(text, "DNS address", args.dns)

@@ -7,6 +7,14 @@ capture (www6.signon.gravityshavings.net); www1-www9 are reserved on each domain
 """
 
 STUN_HOST, STUN_IP = "dev-stun.demonware.net", "127.0.0.2"
+STUN_HOSTS = {STUN_HOST: STUN_IP}
+# 01.24 probes these regional and sign-on STUN names during startup. They must
+# reach the stub on .2; resolving to .1 sends them back to RPCS3's own UDP port.
+for region in ("us", "eu", "jp", "au"):
+    STUN_HOSTS[f"destiny-stun.{region}.demonware.net"] = STUN_IP
+for domain in ("deadorbit.net", "gravityshavings.net"):
+    for n in range(1, 9):
+        STUN_HOSTS[f"stun{n}.signon.{domain}"] = STUN_IP
 
 SIGNON_HOSTS = {}
 for n in range(1, 10):
@@ -20,4 +28,4 @@ for i, (env, svc) in enumerate((e, s) for e in ("prod", "cert", "dev") for s in 
     DEMONWARE_HOSTS[f"panther-ps3-{svc}.{env}.demonware.net"] = f"127.0.3.{i + 1}"
 
 HTTPS_HOSTS = {**SIGNON_HOSTS, **DEMONWARE_HOSTS}
-ALL_OVERRIDES = {STUN_HOST: STUN_IP, **HTTPS_HOSTS}
+ALL_OVERRIDES = {**STUN_HOSTS, **HTTPS_HOSTS}

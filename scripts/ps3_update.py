@@ -25,6 +25,7 @@ import json
 import re
 import struct
 import sys
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -37,12 +38,18 @@ CHUNK = 1 << 24
 
 
 def http_range(url, start, length):
-    request = urllib.request.Request(url, headers={"Range": f"bytes={start}-{start + length - 1}"})
-    with urllib.request.urlopen(request, timeout=120) as response:
-        data = response.read()
-    if len(data) != length:
-        raise IOError(f"short read from {url}: {len(data)} of {length} bytes")
-    return data
+    for attempt in range(5):
+        try:
+            request = urllib.request.Request(url, headers={"Range": f"bytes={start}-{start + length - 1}"})
+            with urllib.request.urlopen(request, timeout=120) as response:
+                data = response.read()
+            if len(data) != length:
+                raise IOError(f"short read from {url}: {len(data)} of {length} bytes")
+            return data
+        except (OSError, urllib.error.URLError):
+            if attempt == 4:
+                raise
+            time.sleep(2 ** attempt)
 
 
 def updates(title):
@@ -82,9 +89,14 @@ class RemotePkg:
 
     def extract(self, offset, size, target):
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "wb") as f:
-            for pos in range(0, size, CHUNK):
-                f.write(self.decrypt(offset + pos, min(CHUNK, size - pos)))
+        temporary = target.with_name(target.name + ".part")
+        try:
+            with open(temporary, "wb") as f:
+                for pos in range(0, size, CHUNK):
+                    f.write(self.decrypt(offset + pos, min(CHUNK, size - pos)))
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def param_sfo(data):
@@ -128,6 +140,8 @@ def main(argv=None):
     s.add_argument("--versions", help="comma-separated (default: all)")
     s.add_argument("--match", default="EBOOT.BIN,PARAM.SFO", help="comma-separated file names to extract")
     s.add_argument("--packages", action="store_true", help="also every game package (large: ~12 GB)")
+    s.add_argument("--inventory-file", type=Path,
+                   help="with --packages, fetch only non-stale files in this final inventory")
     a = ap.parse_args(argv)
     chain = updates(a.title)
     if a.cmd == "list":
@@ -158,6 +172,13 @@ def main(argv=None):
         return
     wanted = set(a.versions.split(",")) if a.versions else None
     match = {m for m in a.match.split(",") if m}
+    if a.inventory_file and not a.packages:
+        ap.error("--inventory-file needs --packages")
+    inventory = json.loads(a.inventory_file.read_text(encoding="utf-8")) if a.inventory_file else None
+    if inventory and inventory.get("title") != a.title:
+        ap.error("inventory title does not match the requested title")
+    required = ({name: meta for name, meta in inventory["packages"].items()
+                 if name not in inventory["stale"]} if inventory else None)
     summary, final = {}, {}
     for version, url, size, sha1 in chain:
         if wanted and version not in wanted and not a.packages:
@@ -175,8 +196,15 @@ def main(argv=None):
                     info["param_sfo"] = param_sfo(target.read_bytes())
                 print(f"{version}: {name} ({fsize} bytes)")
             if a.packages and base.endswith(".pkg"):
+                if required is not None:
+                    meta = required.get(base)
+                    if meta is None or meta["update"] != version:
+                        continue
+                    if meta["path"] != name or meta["size"] != fsize:
+                        raise ValueError(f"inventory mismatch for {base} in update {version}")
                 target = a.out / "final" / "packages" / base
-                pkg.extract(off, fsize, target)
+                if not target.is_file() or target.stat().st_size != fsize:
+                    pkg.extract(off, fsize, target)
                 final[base] = version
                 print(f"{version}: {base} ({fsize} bytes)")
         summary[version] = info
@@ -184,7 +212,7 @@ def main(argv=None):
     (a.out / "updates.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     if final:
         # an id whose files were renumbered: an older update's _N above the newest update's _M
-        stale = stale_packages(final)
+        stale = inventory["stale"] if inventory else stale_packages(final)
         (a.out / "final" / "stale.txt").write_text("\n".join(sorted(stale)) + "\n", encoding="utf-8")
         # which update supplied each final file: the input for a final-build content manifest
         (a.out / "final" / "packages.json").write_text(json.dumps(final, indent=0, sort_keys=True), encoding="utf-8")
