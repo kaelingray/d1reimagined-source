@@ -10,13 +10,21 @@ for investigating Destiny's PS3 mission replication.
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
 | `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
+| `ps3_updates/` | `RESEARCH/ps3_updates/` | 01.13 and 01.24 decrypted EBOOTs, type exports, handle maps, comparison reports and update lists |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
 41 intact packages and all twelve package parts are individually below 100 MB.
-The 71 data files total 1,890,726,935 bytes.
+The 84 data files total 1,945,301,276 bytes.
 `package_names.txt` lists all 247 package filenames from the disc's
 `PS3_GAME/USRDIR/packages` directory, including packages not copied into this
 repository. It contains names only, one per line.
+
+The 01.13 and 01.24 update EBOOTs were extracted from their Sony update PKGs
+and decrypted by RPCS3; the encrypted EBOOTs and update PKGs are not included.
+The default export did not fetch the full update package set, so no `final_*.txt`
+lists were generated. See `ps3_updates/EXPORT_VALIDATION.md` before interpreting
+the comparison reports: the static scanner recognized far fewer types in the
+update EBOOTs than in 01.00, and the large "removed types" counts are provisional.
 
 The Cosmodrome activity package `ps3_cosmo_activities_activity_025c_0.pkg`,
 destination package `ps3_cosmo_destination_0274_0.pkg`, and player gear package

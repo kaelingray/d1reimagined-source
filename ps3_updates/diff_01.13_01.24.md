@@ -1,0 +1,360 @@
+# Build difference: 01.13 -> 01.24
+
+- Types: 352 in 01.13, 351 in 01.24; 323 structurally identical, 15 changed, 14 removed, 14 added.
+- Handles renumbered: 16 of 338 matched types.
+
+## Handles the stand-in uses
+
+| 01.13 | 01.24 | match | first use |
+| --- | --- | --- | --- |
+
+## Changed types
+
+- `0x80802141` -> `0x80802185` (size 0x4 -> 0x4): 
+- `0x80802e9f` -> `0x808028bb` (size 0xc -> 0xc): 
+- `0x8080cff2` -> `0x8080cff2` (size 0x0 -> 0x0): @@ -5 +5 @@; -(4294967295, 0, 0, 1532712); +(4294967295, 0, 0, 1563132); @@ -10 +10 @@; -(910440, 128, 181, 352); +(929972, 128, 181, 352) ...
+- `0x80804b3b` -> `0x80805bf7` (size 0x4 -> 0x4): 
+- `0x80805d1e` -> `0x8080542e` (size 0x4 -> 0x4): 
+- `0x80802b10` -> `0x80802141` (size 0x8 -> 0x8): 
+- `0x80800012` -> `0x8080004d` (size 0x4 -> 0x4): 
+- `0x80804105` -> `0x80800127` (size 0x1 -> 0x1): 
+- `0x80805b73` -> `0x80800f9e` (size 0x1 -> 0x1): 
+- `0x808019d2` -> `0x80801ea5` (size 0x1 -> 0x1): 
+- `0x80805e61` -> `0x80804b92` (size 0x1 -> 0x1): 
+- `0x80804fb7` -> `0x80804278` (size 0x1 -> 0x1): 
+- `0x80805b7b` -> `0x80804233` (size 0x1 -> 0x1): 
+- `0x808043ca` -> `0x80805fc0` (size 0x1 -> 0x1): 
+- `0x80804e4a` -> `0x80800f9b` (size 0x1 -> 0x1): 
+
+## Removed types (14)
+
+`0x80801b33`, `0x80800480`, `0x80800074`, `0x8080299f`, `0x80800050`, `0x8080231c`, `0x80800073`, `0x80804810`, `0x808000e0`, `0x80804b7b`, `0x8080511b`, `0x80804bf8`, `0x80804dbe`, `0x80802b20`
+
+## Added types (14)
+
+`0x8080039b`, `0x80800050`, `0x80800074`, `0x80802a8a`, `0x8080012e`, `0x8080046e`, `0x80800073`, `0x8080476f`, `0x808000a5`, `0x80801eab`, `0x808015a4`, `0x80805c61`, `0x808015fc`, `0x80802b20`
+
+## Strings: 2943 removed, 1759 added
+
+Added (selected):
+
+- `->investment)`
+- `08sys_event_queue_create(&jqPrintServiceEventQueue, &attr, SYS_EVENT_QUEUE_LOCAL, 8) failed: 0x%08x
+`
+- `_activity>`
+- `activity host`
+- `activity_option_channel_component_system_globals`
+- `bootflow:confirm_account_transfer`
+- `c:\bungie\external_libraries\DemonWare\44\bdLobby\bdAuthService-ps3.cpp`
+- `c:\bungie\external_libraries\DemonWare\44\bdLobby\bdAuthService.cpp`
+- `c:\bungie\external_libraries\DemonWare\44\bdNet\bdGetHostByName\bdGetHostByName-ps3.cpp`
+- `c:\bungie\external_libraries\DemonWare\44\bdNet\bdGetHostByName\bdGetHostByName.cpp`
+- `c:\bungie\external_libraries\DemonWare\44\bdNet\bdGetHostByName\bdGetHostByNameConfig.cpp`
+- `c:\bungie\external_libraries\DemonWare\44\bdPlatform\bdPlatformError\bdPlatformError.cpp`
+- `investment_roster`
+- `investment_social_presence_manager`
+- `network_bap_nat_punch_queue`
+- `ui_bootflow_unp2_0`
+
+Removed (selected):
+
+- `13bdAuthService`
+- `14bdLobbyService`
+- `Activity`
+- `Activity Start`
+- `BD_AUTH_PS3_SERVICE_ID_MISMATCH`
+- `BD_COMMERCE_MMP_SERVICE_ERROR`
+- `BD_ENTITLEMENTS_CONFIG_ERROR`
+- `BD_ENTITLEMENTS_ERROR`
+- `BD_ENTITLEMENTS_INVALID_GET_MODE_FOR_TITLE`
+- `BD_ENTITLEMENTS_INVALID_LEADERBOARDID`
+- `BD_ENTITLEMENTS_INVALID_TITLEID`
+- `BD_ENTITLEMENTS_NAMED_KEY_ERROR`
+- `BD_ENTITLEMENTS_NAMED_PARENT_ERROR`
+- `BD_ENTITLEMENTS_URL_CONNECTION_ERROR`
+- `BD_EXTERNAL_STORAGE_SERVICE_ERROR`
+- `BD_MARKETPLACE_MISSING_REQUIRED_ENTITLEMENT`
+- `BD_MARKETPLACE_MMP_SERVICE_ERROR`
+- `BD_SERVICE_NOT_AVAILABLE`
+- `BD_TWITCH_SERVICE_ERROR`
+- `BD_UCD_SERVICE_DISABLED`
+- `BD_UCD_SERVICE_ERROR`
+- `BD_YOUTUBE_SERVICE_COMMUNICATION_ERROR`
+- `BD_YOUTUBE_SERVICE_ERROR`
+- `Connected to MatchMaking Service.`
+- `Disconnected from MatchMaking Service.`
+- `Not connected to LSG. The Content Streaming service is therefore inaccessible.`
+- `Not connected to LSG. The Pooled Storage service is therefore inaccessible.`
+- `Received message of type: BD_LOBBY_SERVICE_PUSH_MESSAGE`
+- `Received message of type: BD_LOBBY_SERVICE_TASK_REPLY`
+- `Received message of type: BD_LSG_SERVICE_TASK_REPLY`
+- `activity_failed_to_load_missing_dlc`
+- `activity_failed_to_load_missing_permissions`
+- `activity_join_in_progress`
+- `activity_recycling`
+- `activity_recycling_keep_only_fireteam`
+- `activity_recycling_previous_match_was_blowout`
+- `activity_rejoin_in_progress`
+- `bdRelayService`
+- `bdTeams::setRichPresence is deprecated, use bdRichPresenceService::setInfo instead`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdAuthService-ps3.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdAuthService.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdLobbyService.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdPresence\bdPresenceService.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdRelayService\bdRelayService.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdLobby\bdRichPresence\bdRichPresenceService.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdNet\bdGetHostByName\bdGetHostByName-ps3.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdNet\bdGetHostByName\bdGetHostByName.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdNet\bdGetHostByName\bdGetHostByNameConfig.cpp`
+- `c:\bungie\external_libraries\DemonWare\43\bdPlatform\bdPlatformError\bdPlatformError.cpp`
+- `c_cui_investment_character_state_component`
+- `deletePlayersEntitlements`
+- `demonware-session-activity-search`
+- `error.account_signed_out`
+- `error.activity_not_ready_to_spawn`
+- `error.activity_world_not_loaded`
+- `error.application_inactive`
+- `error.application_not_up_to_date`
+- `error.booted_from_private_activity_host_ambassador_revocation_ack_timeout`
+- `error.booted_from_private_activity_host_connectivity_failure`
+- `error.booted_from_private_activity_host_debug`
+- `error.booted_from_private_activity_host_disconnect`
+- `error.booted_from_private_activity_host_failed_world_server_connectivity`
+- `error.booted_from_private_activity_host_failed_world_server_validation`
+- `error.booted_from_private_activity_host_inactivity_timeout`
+- `error.booted_from_private_activity_host_reservation_failure`
+- `error.booted_from_private_activity_host_session_lock_timeout`
+- `error.booted_from_private_activity_host_session_split`
+- `error.booted_from_private_activity_host_unknown`
+- `error.bungie_server_connection`
+- `error.cdn_content_error`
+- `error.content_manifest_guid_mismatch`
+- `error.content_manifest_invalid`
+- `error.content_manifest_not_provided`
+- `error.content_manifest_signature_failure`
+- `error.content_manifest_url_invalid`
+- `error.content_ownership_changed`
+- `error.demonware_auth_device_id_error`
+- `error.demonware_auth_dns_resolution_error`
+- `error.demonware_auth_environment_error`
+- `error.demonware_auth_generic_error`
+- `error.demonware_auth_platform_token_decryption_error`
+- `error.demonware_auth_platform_token_expired`
+- `error.demonware_auth_platform_token_retrieval_error`
+- `error.demonware_auth_platform_token_signature_error`
+- `error.demonware_auth_server_unavailable_error`
+- `error.demonware_connection_failed_to_initiate`
+- `error.demonware_connection_multiple_sign_on`
+- `error.demonware_connection_not_connected`
+- `error.demonware_connection_timeout`
+- `error.demonware_invalid_user_id`
+- `error.demonware_service_not_available`
+- `error.deployment_drain_terminal`
+- `error.deployment_is_draining`
+- `error.dirty_disc`
+- `error.disposing_managed_session`
+- `error.durango_fireteam_party_not_failed`
+- `error.entitlement_enumeration_failed`
+- `error.eula_rejected`
+- `error.fireteam_double_migration`
+- `error.fireteam_local_peer_joined_new_party`
+- `error.fireteam_party`
+- `error.fireteam_rescue`
+- `error.fireteam_rescue_failed`
+- `error.fireteam_rescue_timed_out`
+- `error.fireteam_size_requirment_failed`
+- `error.forced_ktl`
+- `error.forced_kto`
+- `error.group_double_migration`
+- `error.illegal_dlc_media`
+- `error.inactive_player_accepted_invite`
+- `error.inactivity_timed_out`
+- `error.inactivity_timed_out_leading_to_ktl`
+- `error.insufficient_content_install_space`
+- `error.invalid_launch_media`
+- `error.investment_account_version`
+- `error.investment_peer_manager`
+- `error.investment_server_object_family_record_not_found`
+- `error.investment_server_object_instance_not_found`
+- `error.investment_server_object_instance_type_from_checksum_not_found`
+- `error.investment_server_object_queuez_id_mismatch_in_header_and_rsat_payload`
+- `error.investment_server_object_queuez_version_out_of_order`
+- `error.ip_address_not_resolved`
+- `error.loading_activity_resources`
+- `error.loading_orbit_resources`
+- `error.lost_bap_connection`
+- `error.lost_fireteam`
+- `error.lost_private_activity_session`
+- `error.lost_worst_change_reason_ft_rescue`
+- `error.marketplace_content_fail`
+- `error.mtu_out_of_range`
+- `error.networking_not_ok`
+- `error.no_bap_connection`
+- `error.no_cdn_connection`
+- `error.no_demonware_connection`
+- `error.no_ethernet_link`
+- `error.no_investment_connection`
+- `error.party_no_longer_exists`
+- `error.party_too_many_local_members`
+- `error.platform_invalid_privileges`
+- `error.platform_no_gold_account`
+- `error.platform_not_required_age`
+- `error.platform_online_services_unavailable`
+- `error.platform_online_services_unreachable`
+- `error.platform_session_not_failed`
+- `error.platform_signed_out`
+- `error.platform_using_guest_account`
+- `error.posse_double_migration`
+- `error.private_activity_host_error_booted`
+- `error.private_activity_host_error_client_became_unestablished`
+- `error.private_activity_host_error_connecting_to_bap`
+- `error.private_activity_host_error_error_initializing_ipahp`
+- `error.private_activity_host_error_rejected_host_join`
+- `error.private_activity_host_error_sending_host_join_request`
+- `error.private_activity_host_error_sending_host_startup_request`
+- `error.private_activity_host_error_session_host_migration`
+- `error.private_activity_host_error_setting_parameters`
+- `error.private_activity_host_error_unknown`
+- `error.private_activity_host_failed_to_initialize_messaging_interface`
+- `error.private_activity_host_failed_to_resolve_ah_transport_address_creating_client`
+- `error.private_activity_host_failed_to_resolve_ahp_transport_address_creating_client`
+- `error.private_activity_host_host_crashed`
+- `error.private_activity_host_lost_connection_to_bap`
+- `error.private_activity_host_lost_session`
+- `error.private_activity_host_ok_unknown`
+- `error.private_activity_host_rejected_host_join_should_retry`
+- `error.private_activity_host_session_parameter_mismatch`
+- `error.private_activity_host_timed_out_connecting_to_bap`
+- `error.private_activity_host_timed_out_creating_client`
+- `error.private_activity_host_timed_out_initializing_ipahp`
+- `error.private_activity_host_timed_out_waiting_for_all_session_peers_to_establish`
+- `error.private_activity_host_timed_out_waiting_for_entity_indices`
+- `error.private_activity_host_timed_out_waiting_for_host_identifier`
+- `error.private_activity_host_timed_out_waiting_for_host_startup_response`
+- `error.private_activity_host_timed_out_waiting_for_join_response`
+- `error.private_activity_host_timed_out_waiting_for_session_stabilization`
+- `error.private_activity_host_timed_out_waiting_to_establish_client`
+- `error.private_activity_host_timed_out_waiting_to_send_host_join_request`
+- `error.private_activity_instance_timed_out_during_hard_wipe`
+- `error.private_activity_instance_timed_out_during_teleportation`
+- `error.recycling_activity`
+- `error.signon_commercialization_error`
+- `error.signon_configuration_error`
+- `error.signon_denied`
+- `error.signon_error`
+- `error.signon_internal_server_error`
+- `error.signon_platform_error`
+- `error.signon_version_error`
+- `error.simulation_aborted`
+- `error.sos_prelaunch`
+- `error.sstm_activity_host_session_parameter_mismatch`
+- `error.sstm_booted_from_public_current_activity_host_ambassador_revocation_ack_timeout`
+- `error.sstm_booted_from_public_current_activity_host_connectivity_failure`
+- `error.sstm_booted_from_public_current_activity_host_debug_command`
+- `error.sstm_booted_from_public_current_activity_host_disconnect`
+- `error.sstm_booted_from_public_current_activity_host_failed_world_server_validation`
+- `error.sstm_booted_from_public_current_activity_host_inactivity_timeout`
+- `error.sstm_booted_from_public_current_activity_host_reservation_failure`
+- `error.sstm_booted_from_public_current_activity_host_session_lock_timeout`
+- `error.sstm_booted_from_public_current_activity_host_session_split`
+- `error.sstm_booted_from_public_current_activity_host_unknown`
+- `error.sstm_booted_from_public_target_activity_host_ambassador_revocation_ack_timeout`
+- `error.sstm_booted_from_public_target_activity_host_connectivity_failure`
+- `error.sstm_booted_from_public_target_activity_host_debug_command`
+- `error.sstm_booted_from_public_target_activity_host_disconnect`
+- `error.sstm_booted_from_public_target_activity_host_failed_world_server_validation`
+- `error.sstm_booted_from_public_target_activity_host_inactivity_timeout`
+- `error.sstm_booted_from_public_target_activity_host_reservation_failure`
+- `error.sstm_booted_from_public_target_activity_host_session_lock_timeout`
+- `error.sstm_booted_from_public_target_activity_host_session_split`
+- `error.sstm_booted_from_public_target_activity_host_unknown`
+- `error.sstm_citizen_join_failed`
+- `error.sstm_could_not_start_public_current_activity_instance`
+- `error.sstm_could_not_start_public_target_activity_instance`
+- `error.sstm_failed_to_load`
+- `error.sstm_not_ok_unknown`
+- `error.sstm_precaching_failed`
+- `error.sstm_public_activity_instance_doesnt_match_ambassador`
+- `error.sstm_public_current_activity_host_error_booted`
+- `error.sstm_public_current_activity_host_error_client_became_unestablished`
+- `error.sstm_public_current_activity_host_error_connecting_to_bap`
+- `error.sstm_public_current_activity_host_error_initializing_ipahp`
+- `error.sstm_public_current_activity_host_error_rejected_host_join`
+- `error.sstm_public_current_activity_host_error_sending_host_join_request`
+- `error.sstm_public_current_activity_host_error_sending_host_startup_request`
+- `error.sstm_public_current_activity_host_error_session_host_migration`
+- `error.sstm_public_current_activity_host_error_setting_parameters`
+- `error.sstm_public_current_activity_host_error_unknown`
+- `error.sstm_public_current_activity_host_failed_to_initialize_messaging_interface`
+- `error.sstm_public_current_activity_host_failed_to_resolve_ah_transport_address_creating_client`
+- `error.sstm_public_current_activity_host_failed_to_resolve_ahp_transport_address_creating_client`
+- `error.sstm_public_current_activity_host_host_crashed`
+- `error.sstm_public_current_activity_host_lost_connection_to_bap`
+- `error.sstm_public_current_activity_host_lost_session`
+- `error.sstm_public_current_activity_host_rejected_host_join_should_retry`
+- `error.sstm_public_current_activity_host_timed_out_connecting_to_bap`
+- `error.sstm_public_current_activity_host_timed_out_creating_client`
+- `error.sstm_public_current_activity_host_timed_out_initializing_ipahp`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_all_session_peers_to_establish`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_entity_indices`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_host_identifier`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_host_startup_response`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_join_response`
+- `error.sstm_public_current_activity_host_timed_out_waiting_for_session_stabilization`
+- `error.sstm_public_current_activity_host_timed_out_waiting_to_establish_client`
+- `error.sstm_public_current_activity_host_timed_out_waiting_to_send_host_join_request`
+- `error.sstm_public_current_activity_instance_ok`
+- `error.sstm_public_matchmaking_failed`
+- `error.sstm_public_target_activity_host_error_booted`
+- `error.sstm_public_target_activity_host_error_client_became_unestablished`
+- `error.sstm_public_target_activity_host_error_connecting_to_bap`
+- `error.sstm_public_target_activity_host_error_initializing_ipahp`
+- `error.sstm_public_target_activity_host_error_rejected_host_join`
+- `error.sstm_public_target_activity_host_error_sending_host_join_request`
+- `error.sstm_public_target_activity_host_error_sending_host_startup_request`
+- `error.sstm_public_target_activity_host_error_session_host_migration`
+- `error.sstm_public_target_activity_host_error_setting_parameters`
+- `error.sstm_public_target_activity_host_error_unknown`
+- `error.sstm_public_target_activity_host_failed_to_initialize_messaging_interface`
+- `error.sstm_public_target_activity_host_failed_to_resolve_ah_transport_address_creating_client`
+- `error.sstm_public_target_activity_host_failed_to_resolve_ahp_transport_address_creating_client`
+- `error.sstm_public_target_activity_host_host_crashed`
+- `error.sstm_public_target_activity_host_lost_connection_to_bap`
+- `error.sstm_public_target_activity_host_lost_session`
+- `error.sstm_public_target_activity_host_rejected_host_join_should_retry`
+- `error.sstm_public_target_activity_host_timed_out_connecting_to_bap`
+- `error.sstm_public_target_activity_host_timed_out_creating_client`
+- `error.sstm_public_target_activity_host_timed_out_initializing_ipahp`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_all_session_peers_to_establish`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_entity_indices`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_host_identifier`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_host_startup_response`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_join_response`
+- `error.sstm_public_target_activity_host_timed_out_waiting_for_session_stabilization`
+- `error.sstm_public_target_activity_host_timed_out_waiting_to_establish_client`
+- `error.sstm_public_target_activity_host_timed_out_waiting_to_send_host_join_request`
+- `error.sstm_public_target_activity_instance_ok`
+- `error.sstm_slice_failed_to_instantiate`
+- `error.sstm_slice_not_found`
+- `error.starting_private_activity_instance`
+- `error.starting_private_activity_instance_error_booted`
+- `error.starting_private_activity_instance_error_client_became_unestablished`
+- `error.starting_private_activity_instance_error_connecting_to_bap`
+- `error.starting_private_activity_instance_error_error_initializing_ipahp`
+- `error.starting_private_activity_instance_error_rejected_host_join`
+- `error.starting_private_activity_instance_error_sending_host_join_request`
+- `error.starting_private_activity_instance_error_sending_host_startup_request`
+- `error.starting_private_activity_instance_error_session_host_migration`
+- `error.starting_private_activity_instance_error_setting_parameters`
+- `error.starting_private_activity_instance_error_unknown`
+- `error.starting_private_activity_instance_failed_to_initialize_messaging_interface`
+- `error.starting_private_activity_instance_failed_to_resolve_ah_transport_address_creating_client`
+- `error.starting_private_activity_instance_failed_to_resolve_ahp_transport_address_creating_client`
+- `error.starting_private_activity_instance_host_crashed`
+- `error.starting_private_activity_instance_jip`
+- `error.starting_private_activity_instance_lost_connection_to_bap`
+- `error.starting_private_activity_instance_lost_session`
+- `error.starting_private_activity_instance_rejected_host_join_should_retry`
+- `error.starting_private_activity_instance_timed_out_connecting_to_bap`
+- `error.starting_private_activity_instance_timed_out_creating_client`
+- `error.starting_private_activity_instance_timed_out_initializing_ipahp`

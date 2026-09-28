@@ -1,0 +1,31 @@
+{
+ "01.13": {
+  "content_id": "EP0002-BLES01857_00-DESTINYPATCH0013",
+  "files": 491,
+  "param_sfo": {
+   "APP_VER": "01.13",
+   "CATEGORY": "GD",
+   "NP_COMMUNICATION_ID": "NPWR04936_00",
+   "PARENTAL_LEVEL": 7,
+   "PS3_SYSTEM_VER": "04.5000",
+   "TITLE": "Destiny",
+   "TITLE_ID": "BLES01857",
+   "VERSION": "01.00"
+  }
+ },
+ "01.24": {
+  "content_id": "EP0002-BLES01857_00-DESTINYPATCH0024",
+  "files": 10,
+  "param_sfo": {
+   "APP_VER": "01.24",
+   "CATEGORY": "GD",
+   "NP_COMMUNICATION_ID": "NPWR04936_00",
+   "PARENTAL_LEVEL": 7,
+   "PS3_SYSTEM_VER": "04.5000",
+   "TARGET_APP_VER": "01.23",
+   "TITLE": "Destiny",
+   "TITLE_ID": "BLES01857",
+   "VERSION": "01.00"
+  }
+ }
+}
