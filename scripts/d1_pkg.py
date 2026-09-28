@@ -386,7 +386,10 @@ class PackageSet:
                 p = Package(path)
             except (ValueError, struct.error):
                 continue
-            if p.language == 0 or p.pkg_id not in self.by_id:
+            have = self.by_id.get(p.pkg_id)
+            # one package per id: language-neutral first, and the newest patch of a patch chain
+            # (a patch _N file reads its unchanged blocks from the _0.._N-1 files beside it)
+            if have is None or (p.language == 0, p.patch_id) > (have.language == 0, have.patch_id):
                 self.by_id[p.pkg_id] = p
 
     def tag(self, value):
