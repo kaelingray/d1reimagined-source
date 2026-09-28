@@ -32,10 +32,9 @@ changed handles remain heuristic: equal or similar structure alone cannot
 prove two types have the same runtime purpose.
 
 These are **static export comparisons**. They have not been checked against
-type exports from a running 01.13 or 01.24 client. They also contain no
-update-build package service table: the default export did not fetch the full
-update package set. The separately documented 01.24 service-table analysis is
-in `d1xenia/notes/final-build.md`.
+type exports from a running 01.13 or 01.24 client. The type JSON files contain
+no package service table; the separate `services_01.24.json` supplies that map.
+The service-table analysis is in `d1xenia/notes/final-build.md`.
 
 Validation on the current code branch: 59 server tests ran successfully (one skipped),
 and 21 script tests passed. The tests use synthetic fixtures and do not prove
@@ -62,7 +61,28 @@ world/map, simulation player, game mode, world-state zone and peer masks,
 starter gear, all three unlock-flag tables, and the 80 mission state changes.
 For 01.24, the account/character flag capacities are 2,560/256/2,048;
 the shifted activity fields and flags roundtrip without omission. All 66
-saved 01.00 service request/response handles exist in the 01.24 export, so
-their ID table can be supplied separately. The EBOOT-only export contains no
-service ID table for the 28 added services. These checks verify serialization
-against static type definitions, not runtime client behavior.
+saved 01.00 service request/response handles exist in the 01.24 export.
+These checks verify serialization against static type definitions, not runtime
+client behavior.
+
+The 01.24 service map was exported on 2026-09-28 from tag `0x80a5e21a`, entry
+538 of `ps3_investment_globals_012f_4.pkg`, using `d1_types.py service-map`
+and the existing user-supplied Oodle DLL. The 3,432-byte tag contains 94 records
+of 36 bytes with element class `0x80801820`. It yields 94 unique wire IDs:
+all 66 saved 01.00 IDs and both handles match exactly, plus 28 new IDs. Every
+request and response handle exists in the corrected 01.24 EBOOT type export.
+The map also records each service name hash for later research. The four update
+package files used for the extraction are retained outside this repository;
+their SHA-256 values, in patch order `_1` to `_4`, are:
+
+| Patch | Update | SHA-256 |
+| --- | --- | --- |
+| `_1` | 01.13 | `170185156f3a588702de7f7598121071190f3aed81067e8a9214f386950a0e69` |
+| `_2` | 01.20 | `ec433d93c41d1a164d218554031142d7366a4398b0d81d6b07debf5cf04f87ca` |
+| `_3` | 01.22 | `48ddde0d42a548812bb4a21e6df0c3b4f790a94009a9af379f335002d50928cb` |
+| `_4` | 01.23 | `e308c378c0ee0d4b63c7638c46250fb02902a738e598e4759d4b9beb4519a339` |
+
+The 94-service map passes `d1_build_preflight.py` with the corrected 01.24
+type export and both mission scripts. All 94 default replies encode and decode
+with their mapped response type; the same check passes for all 66 saved 01.00
+services. Service payload behavior on the 01.24 client remains untested.
