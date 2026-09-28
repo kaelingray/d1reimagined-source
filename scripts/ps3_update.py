@@ -163,6 +163,8 @@ def main(argv=None):
             newest = max(v for _, v, _ in group)
             stale += [b for n, v, b in group if v < newest and n > max(n2 for n2, v2, _ in group if v2 == newest)]
         (a.out / "final" / "stale.txt").write_text("\n".join(sorted(stale)) + "\n", encoding="utf-8")
+        # which update supplied each final file: the input for a final-build content manifest
+        (a.out / "final" / "packages.json").write_text(json.dumps(final, indent=0, sort_keys=True), encoding="utf-8")
         print(f"{len(final)} packages in {a.out / 'final' / 'packages'}; {len(stale)} stale (see stale.txt)")
 
 

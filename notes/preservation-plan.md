@@ -409,6 +409,28 @@ M13 and build every later milestone on it.
   - exports the types;
   - writes `d1_builddiff.py` reports 01.00 -> 01.13 -> 01.24.
 
+- **Package selection and DLC gating lead to the content manifest (LIKELY).** The content
+  manifest that our sign-on stand-in serves (`signon_proto.content_manifest`, `ps3-route.md`)
+  registers every package the game may open: field 3 entries {offer ref, path, package id,
+  registration value = the u64 at package header +8}. Field 1 holds the offers, which tie
+  packages to purchases. The 01.00 client also has "DLC Entitlement / CDN / Marketplace
+  Containers", `bootflow:enumerate_content_rights`,
+  `waiting_for_local_entitlement_enumeration`, `activity_failed_to_load_missing_dlc`, and the
+  unlock-expression check for world transitions (`0x4105c4`, driven by account flags we already
+  serve). So on the final build:
+  - which `_N` patch file is used for each package id is most likely whatever the manifest
+    lists, not the highest number on disk (unknown 8);
+  - the Taken King packages can be listed without an offer. What is left to check is the local
+    entitlement enumeration (unknown 7).
+
+  01.00 has no string for the patch folder `a0000001`, so the path form for patch files comes
+  from the final EBOOT: look for it in the 01.00 -> 01.24 strings diff.
+  - Experiment: boot 01.24 with a manifest listing the disc `_0` files plus every patch file
+    (bare names, then `a0000001/packages/...` paths), and read the registration result (-90 /
+    -91 codes as in comparison 021).
+  - `ps3_update.py fetch --packages` now writes `final/packages.json` (file → the update that
+    supplied it) for building that manifest.
+
 ## NEXT 10 ENGINEERING TASKS
 
 1. **Run TEST371, the mission script**
