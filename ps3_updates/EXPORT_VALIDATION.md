@@ -37,6 +37,19 @@ update-build package service table: the default export did not fetch the full
 update package set. The separately documented 01.24 service-table analysis is
 in `d1xenia/notes/final-build.md`.
 
-Validation on the current code branch: 51 server tests passed (one skipped),
+Validation on the current code branch: 53 server tests passed (one skipped),
 and 21 script tests passed. The tests use synthetic fixtures and do not prove
 complete runtime type coverage.
+
+Mission-state preflight on 2026-09-28 with `d1xenia` commit
+`3b9c18ca4f347444b3958ad82461216a9efda808`:
+`scripts/d1_mission_preflight.py`
+encoded and decoded all 80 scripted state changes in `a_guardian_rises.json`
+and `tower_npcs.json` against both the saved 01.00 activity schema and this
+directory's corrected `types_01.24.json`; both passed. The 01.24 squad state
+`0x8080071e` grew from 0x60 to 0x7c bytes. Its 2-bit, bias-1
+existing-member field moved from +0x5c to +0x74. The former scripts named
++0x5c in 56 squad changes, which the 01.24 encoder silently omitted. The
+code branch now resolves `squad_existing_members` to the offset for the
+selected schema and rejects dropped fields before a run. Client behavior on
+01.24 remains untested.
