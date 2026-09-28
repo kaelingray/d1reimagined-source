@@ -22,13 +22,17 @@ directly from the executable or the packages.
 - **The TOC base moved:** 0x175a5e8 (01.00), 0x184fc00 (01.13), 0x1891798 (01.24).
   - `d1_eboot.py` now reads it from the entry point's function descriptor.
   - The curated labels are 01.00 addresses. They are applied to that build only.
-- **Type handles are stable (CONFIRMED).** 01.00 → 01.24:
-  - 4,318 of 4,387 types match (3,771 structurally identical, 547 changed);
-  - 69 were removed and 759 added;
-  - only 183 matched types were renumbered.
+- **Most type handles are stable (static match).** 01.00 → 01.24 with the
+  one-to-one matcher:
+  - 4,308 of 4,387 types match (3,744 structurally identical, 564 changed);
+  - 79 are unmatched in 01.24 and 733 are new;
+  - 156 matched types were renumbered.
 
-  Almost every handle the stand-in writes keeps its number. `d1_builddiff.py` now tries the
-  same handle first. It compares field kinds (offsets shift whenever a field is inserted) and
+  These counts depend on heuristic matching where a handle did change; the
+  reports are not proof of type identity for every pair. Almost every handle
+  the stand-in writes keeps its number. `d1_builddiff.py` now reserves
+  unchanged handles first and never assigns one new type to two old types.
+  It compares field kinds (offsets shift whenever a field is inserted) and
   prints side-by-side layouts of the stand-in's types.
 
 ## What changed for the stand-in
@@ -58,8 +62,19 @@ directly from the executable or the packages.
   encodes ids from the schema, so a 01.24 schema handles this.
 - The objective `0x80802a1b` grew (0x2d0 → 0x2f0), but its player mask stays at **+0x2c0**. A
   machine id and a second object id were added at +0x2cc/+0x2d4.
-- The cinematic, sequence, trigger and squad types are still to be compared (see the diff
-  report).
+- The mission-script state handles remain present in 01.24. A direct comparison of the
+  corrected static exports gives the following migration check (runtime behavior is untested):
+
+  | State | 01.00 -> 01.24 | Consequence for the stand-in |
+  | --- | --- | --- |
+  | Cinematic `0x8080254d` | 0xd4 bytes and all 9 fields identical | The play counter, playing flag and cast-list offsets remain valid. |
+  | Player trigger `0x80800463` | 8 bytes and both fields identical | The armed flag and arming time remain at their old offsets. |
+  | Sequence `0x808029a1` | 0x2c -> 0x20 bytes; nested state at +0x8 changes from `0x80805b11` to `0x80805cf5`; final object reference moves +0x24 -> +0x18 | Rebuild the sequence state with the 01.24 schema; copying the 01.00 payload would misplace the reference. |
+  | Squad `0x8080071e` | 0x60 -> 0x7c bytes; 13 -> 18 fields | Revisit generation, member-handling and AI fields before sending a squad state. |
+  | Objective `0x80802a1b` | 0x2d0 -> 0x2f0 bytes; 13 -> 16 fields | The player mask remains at +0x2c0, but serialize the full new layout. |
+
+  The data repo's initial update-build reports used the old type scanner.
+  Corrected exports and one-to-one handle maps are in `d1xenia-data/ps3_updates/`.
 
 **Web services (CONFIRMED):**
 
@@ -162,8 +177,8 @@ carried over.
 
 ## Reports
 
-Regenerate with the current scripts (the data repo's first `diff_*.md` were made with the old
-scanner and undercount 01.13/01.24 by about 4,600 types):
+The data repo's `diff_*.md` and `types_*.json` were regenerated with the
+current scanner and one-to-one matcher. To repeat that export:
 
 ```
 python scripts/d1_types.py --elf <01.24 EBOOT.elf> schema types_01.24.json

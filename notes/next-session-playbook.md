@@ -30,10 +30,11 @@ package steps `local\oo2core_3_win64.dll` (or `-Oodle <path>`). Push these files
 
 The ELFs and packages stay private.
 
-Done once (2026-09-28): the findings are in [`final-build.md`](final-build.md). The first
-`diff_*.md` in the data repo came from the old scanner, which missed the updates' type layout.
-Rerunning the script gives the corrected reports. It also needs the final 012f chain (the
-command at the end of `final-build.md`) for the 01.24 service table.
+Done once (2026-09-28): the findings are in [`final-build.md`](final-build.md).
+The data repo's `types_*.json`, `diff_*.md` and handle maps have been regenerated
+with the corrected type scanner and one-to-one matcher. The full export still
+needs the final 012f chain (the command at the end of `final-build.md`) for
+the 01.24 service table.
 
 For the first 01.24 boot, build the RPCS3 copy with the 01.24 patch sites. Get the hash from
 `RPCS3.log`, line "PPU executable hash", after one plain boot:

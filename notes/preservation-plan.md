@@ -183,7 +183,7 @@ The static diff of the decrypted 01.13 and 01.24 EBOOTs is done; details and the
 | Patch folder | `/dev_hdd0/game/<title>/USRDIR/a0000001/` (format `%s/game/%s/USRDIR/%08x/`, constant 0xa0000001, 01.24 0xc951c); patchable/unpatchable package registration | CONFIRMED |
 | Patch-file selection | 01.19 left `_5` files, then 01.20 restarted at `_2`, so the client does not simply pick the highest patch number | CONFIRMED oddity, mechanism UNKNOWN (the manifest is the lead) |
 | Type definitions in the EBOOT | new compiled layout (definition link at +0x34, counted field entries); `d1_types.py` reads both | CONFIRMED |
-| Runtime types | 4,387 → 5,041; 4,318 matched (3,771 identical, 547 changed), 69 removed, 759 added; only 183 renumbered | CONFIRMED |
+| Runtime types | 4,387 → 5,041 statically exported; one-to-one heuristic matches 4,308 (3,744 identical, 564 changed), with 79 unmatched old, 733 unmatched new and 156 renumbered | LIKELY |
 | Character objects | same handles, grown: gear slot 0x28 → 0x30, gear at progression +0x1e8, equipped ids at self +0x2900, bigger inventory, flag tables 2x-2.5x | CONFIRMED |
 | Object ids | kind field 6 → 7 bits | CONFIRMED |
 | Web-service table | moved to tag 0x80a5e21a in package 012f; same record format; 66 → 94 services; every old wire id and type handle kept; 19 payloads changed | CONFIRMED |

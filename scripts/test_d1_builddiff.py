@@ -12,6 +12,16 @@ def field(off, kind, nested=0xFFFFFFFF, width=32, opt=0):
 
 
 class MatchTypes(unittest.TestCase):
+    def test_identical_old_types_cannot_claim_one_new_type(self):
+        same = {"size": 4, "fields": [field(0, 9)]}
+        old = {"0x80801000": same, "0x80801001": same}
+        new = {"0x80801001": same}
+        mapping, how, removed, added = d1_builddiff.match_types(old, new)
+        self.assertEqual(mapping, {"0x80801001": "0x80801001"})
+        self.assertEqual(how, {"0x80801001": "same"})
+        self.assertEqual(removed, ["0x80801000"])
+        self.assertEqual(added, [])
+
     def test_renumbered_and_changed_types(self):
         old = {"0x80801000": {"size": 8, "fields": [field(0, 9), field(4, 9)]},
                "0x80801001": {"size": 16, "fields": [field(0, 1, 0x80801000), field(8, 6, width=64)]},

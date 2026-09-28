@@ -80,12 +80,23 @@ def match_types(old, new):
     for h, digest in fn.items():
         by_fp.setdefault(digest, []).append(h)
     mapping, how = {}, {}
+    taken = set()
+    # Reserve unchanged handles first. Otherwise two old types with the same
+    # fingerprint can both claim the sole new candidate, or a renumbered type
+    # can claim a handle that belongs to a surviving type.
     for h, digest in fo.items():
-        candidates = by_fp.get(digest, [])
-        if len(candidates) == 1 or h in candidates:
-            mapping[h] = h if h in candidates else candidates[0]
+        if h in new and fn[h] == digest:
+            mapping[h] = h
             how[h] = "same"
-    taken = set(mapping.values())
+            taken.add(h)
+    for h, digest in fo.items():
+        if h in mapping:
+            continue
+        candidates = [c for c in by_fp.get(digest, []) if c not in taken]
+        if len(candidates) == 1:
+            mapping[h] = candidates[0]
+            how[h] = "same"
+            taken.add(candidates[0])
     # most handles survive a build: the same handle with a similar top-level layout is the same type
     for h in [h for h in old if h not in mapping]:
         if h in new and h not in taken and similarity(old[h], new[h], 0.5) >= 0.5:
