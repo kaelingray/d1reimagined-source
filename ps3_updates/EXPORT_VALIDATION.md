@@ -86,3 +86,9 @@ The 94-service map passes `d1_build_preflight.py` with the corrected 01.24
 type export and both mission scripts. All 94 default replies encode and decode
 with their mapped response type; the same check passes for all 66 saved 01.00
 services. Service payload behavior on the 01.24 client remains untested.
+
+The follow-up preflight also found that service 104's response drops the
+universe object after 01.00 (01.13 is result-only; 01.24 has a bool at +0x8).
+Service 503 still carries it, but its optional fields and flag override list
+expanded. The code branch now encodes its populated sign-in reply from the
+selected schema; populated replies roundtrip on 01.00, 01.13 and 01.24.
