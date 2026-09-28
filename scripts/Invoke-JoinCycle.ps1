@@ -10,7 +10,7 @@
 # -TraceAfter REGEX delays the trace until the BAP log matches (e.g. 'ahp req'), so polled functions do not use up -Hits before the join.
 param([string]$Name, [string[]]$LobbyArgs, [string]$Trace = '0x3204a8', [string]$Dumps = 'r5:64', [int]$Seconds = 420, [int]$Hits = 60, [string]$AhpReply = '000102030405060708090a0b0c0d0e0f', [string[]]$ExtraBap = @(), [string[]]$AhArgs = @(), [string]$AhHost, [string]$TraceAfter)
 . "$PSScriptRoot\Paths.ps1"
-Set-Location C:\Users\lukem\source\repos\WIP\d1xenia
+Set-Location $D1Repo
 if ($AhHost) {
     $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes($AhHost) + (,0 * (128 - $AhHost.Length)))
     $AhArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower()) + $AhArgs

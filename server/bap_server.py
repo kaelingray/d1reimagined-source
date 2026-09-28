@@ -44,6 +44,8 @@ import hmac
 import ipaddress
 import itertools
 import json
+import math
+import re
 import secrets
 import socket
 import struct
@@ -89,6 +91,20 @@ def default_ws_response(schema, wire, values=None):
     return w.data()
 
 
+def with_service_map(schema, source):
+    """Add service IDs from a package-derived map to an EBOOT-only type export."""
+    if schema is None or schema.get("services"):
+        return schema
+    services = (source or {}).get("services")
+    if not services:
+        raise ValueError("schema has no service IDs; provide a saved service schema")
+    missing = [(wire, handle) for wire, pair in services.items() for handle in pair
+               if handle not in schema]
+    if missing:
+        raise ValueError(f"service mapping references absent type {missing[0][1]} (wire {missing[0][0]})")
+    return {**schema, "services": services}
+
+
 def character_from_request(schema, character_id, request_payload):
     """Profile of a created character: its id plus the class and appearance structs of the
     service-501 request (request offsets 0 and 4 -> character offsets 8 and 0xc)."""
@@ -98,6 +114,159 @@ def character_from_request(schema, character_id, request_payload):
         request = investment.decode(schema, request_handle, request_payload)
         profile.update({8: request[0], 12: request[4]})
     return profile
+
+
+# Equipment. The guardian's look (0x6706b0, called from 0x670e40 for player record +0x8b0) is
+# built from the 20 equipment slots of the character's progression struct 0x80801855 (peer
+# summary +0x30, select-character summary +0x68): +0x138 = 20 x 0x8080183c {u64 item instance
+# id, i16 item index, i8, i16, +0xe six dyes 0x80801704 {i8 channel, i16 dye}}. The item index
+# is a position in the investment globals item list (0x28a304: root tag +0xd8 -> 8-byte
+# entries {u32, u32 item definition tag}); -1 is no item. Which slot holds which bucket comes
+# from the investment globals too (root tag +0xc8 -> byte table read by 0x28a1dc: +6 one
+# item, +7..+0xb the five armor slots, +0xc..+0xe weapons, +0xf..+0x11 three more).
+# The self character (0x80801714) keeps the owned items: +0x30 inventory {i32, 256 x
+# 0x808016e0 {i16 item index, u64 instance id, i32, i32}} and +0x1838 the 20 equipped instance
+# ids. Without any of this every slot is empty and no gear loads.
+GEAR_SLOTS = 20
+# The equipment slots follow the 14 equippable buckets of the investment globals (root +0xb0;
+# `scripts/d1_pkg.py items --buckets`): 0 subclass, 1 helmet, 2 gauntlets, 3 chest, 4 legs,
+# 5 class armour, 6-8 primary/special/heavy, 9 ship, 10 vehicle, 11 ghost, 12 emblem, 13 shader.
+# That order matches the appearance builder's use (five armour, three weapons, three more).
+# Starter kits: the "wire armor" a new guardian wakes up in ("Your Ghost built this wire
+# armor from available mass"), its class subclass and the Generalist Shell ghost; item
+# indexes from `d1_pkg.py items` on the BLES01857 disc (each armour piece exists twice, a
+# 118-byte and a 152-byte definition; these are the 152-byte ones). No weapon: the first
+# mission hands out the rifle.
+STARTER_GEAR = {
+    "titan": {0: 776, 1: 200, 2: 194, 3: 196, 4: 202, 5: 198, 11: 892},
+    "hunter": {0: 774, 1: 12, 2: 6, 3: 8, 4: 14, 5: 10, 11: 892},
+    "warlock": {0: 778, 1: 388, 2: 382, 3: 384, 4: 390, 5: 386, 11: 892},
+}
+PROGRESSION_ITEMS = 0x138
+PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
+SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
+# These offsets are those of 01.00. The title updates keep the type handles but grow the types
+# (01.24: slot 0x28 -> 0x30 bytes with dyes at +0x18, progression items at +0x1e8, equipped ids
+# at +0x2900; notes/final-build.md), so character_layout() finds each field in the schema by the
+# handle of its nested type and keeps the 01.00 value for anything the schema lacks.
+LAYOUT_0100 = {"progression_items": PROGRESSION_ITEMS, "peer_progression": PEER_PROGRESSION,
+               "select_progression": SELECT_PROGRESSION, "self_inventory": SELF_INVENTORY,
+               "self_equipped": SELF_EQUIPPED, "slot_size": 0x28, "slot_dyes": 0xe,
+               "inventory_items": 8, "inventory_entry": 0x18}
+
+
+def field_offset(schema, owner, nested=None, after=None):
+    """Offset of the field of type `owner` whose nested type is `nested` (or of the field that
+    follows the one nesting `after`); None if the schema does not have it."""
+    fields = ((schema or {}).get(owner) or {}).get("fields", [])
+    for i, f in enumerate(fields):
+        if nested is not None and f.get("nested") == int(nested, 16):
+            return f["off"]
+        if after is not None and f.get("nested") == int(after, 16) and i + 1 < len(fields):
+            return fields[i + 1]["off"]
+    return None
+
+
+def character_layout(schema=None):
+    """The character-object offsets gear_objects() writes, for the build `schema` describes."""
+    def size(handle):
+        return ((schema or {}).get(handle) or {}).get("size")
+
+    # the inventory {i32 count, items} follows the appearance; its type handle differs by build
+    self_fields = ((schema or {}).get("0x80801714") or {}).get("fields", [])
+    self_inventory = field_offset(schema, "0x80801714", after="0x8080181a")
+    inventory = next(((schema or {}).get(f"{f['nested']:#x}") for f in self_fields if f["off"] == self_inventory), None)
+    inventory_fields = (inventory or {}).get("fields", [])
+    found = {"progression_items": field_offset(schema, "0x80801855", "0x808045d9"),
+             "peer_progression": field_offset(schema, "0x808017fd", "0x80801855"),
+             "select_progression": field_offset(schema, "0x80801954", "0x80801855"),
+             "self_inventory": self_inventory,
+             "self_equipped": field_offset(schema, "0x80801714", "0x808045da"),
+             "slot_size": size("0x8080183c"),
+             "slot_dyes": field_offset(schema, "0x8080183c", "0x808046bc"),
+             "inventory_items": inventory_fields[1]["off"] if len(inventory_fields) > 1 else None,
+             "inventory_entry": size("0x808016e0")}
+    return {key: LAYOUT_0100[key] if value is None else value for key, value in found.items()}
+
+
+def gear_spec(value):
+    """Parse --character-gear: "SLOT=ITEM[/DYECH:DYE...],..." (item indexes of the investment
+    globals item list), "starter:CLASS[,SLOT=ITEM...]" (a STARTER_GEAR kit, then overrides) or
+    @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
+    Returns {slot: {"item", "id", "dyes"}}; instance ids default to 0x100 + slot."""
+    if value.startswith("starter:"):
+        kit, _, rest = value[len("starter:"):].partition(",")
+        if kit not in STARTER_GEAR:
+            raise ValueError(f"unknown starter kit {kit!r} (one of {', '.join(STARTER_GEAR)})")
+        base = {slot: {"item": item, "id": 0x100 + slot, "dyes": []} for slot, item in STARTER_GEAR[kit].items()}
+        return {**base, **(gear_spec(rest) if rest else {})}
+    if value.startswith("@"):
+        raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))
+        entries = {int(k, 0): v if isinstance(v, dict) else {"item": v} for k, v in raw.items()}
+    else:
+        entries = {}
+        for part in filter(None, (x.strip() for x in value.split(","))):
+            slot, _, rest = part.partition("=")
+            item, *dyes = rest.split("/")
+            entries[int(slot, 0)] = {"item": int(item, 0),
+                                     "dyes": [[int(y, 0) for y in d.split(":")] for d in dyes]}
+    gear = {}
+    for slot, entry in sorted(entries.items()):
+        if not 0 <= slot < GEAR_SLOTS:
+            raise ValueError(f"gear slot {slot} outside 0-{GEAR_SLOTS - 1}")
+        dyes = [tuple(int(x) for x in d) for d in entry.get("dyes", [])]
+        if len(dyes) > 6:
+            raise ValueError(f"gear slot {slot}: at most 6 dyes")
+        gear[slot] = {"item": int(entry["item"]), "id": int(entry.get("id", 0x100 + slot)),
+                      "dyes": dyes}
+    return gear
+
+
+def gear_objects(gear, layout=None):
+    """Field values that equip `gear` ({slot: {"item", "id", "dyes"}}) on the three character
+    objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values.
+    `layout` is character_layout() of the target build (default 01.00)."""
+    L = layout or LAYOUT_0100
+    slots = {}
+    for slot, g in gear.items():
+        item = {0: g["id"], 8: g["item"]}
+        if g["dyes"]:
+            item[L["slot_dyes"]] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
+        slots[slot * L["slot_size"]] = item
+    progression = {L["progression_items"]: slots}
+    inventory = {i * L["inventory_entry"]: {0: g["item"], 8: g["id"], 0x10: 1} for i, g in enumerate(gear.values())}
+    return {"peer": {L["peer_progression"]: progression},
+            "select": {L["select_progression"]: progression},
+            "self": {L["self_inventory"]: {0: len(gear), L["inventory_items"]: inventory},
+                     L["self_equipped"]: {slot * 8: g["id"] for slot, g in gear.items()}}}
+
+
+def deep_merge(base, extra):
+    """Copy of dict `base` with `extra` merged in (nested dicts merged, other values replaced)."""
+    out = dict(base)
+    for key, value in (extra or {}).items():
+        out[key] = (deep_merge(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict)
+                    else value)
+    return out
+
+
+def overlay_spec(value):
+    """Parse --character-overlay JSON (or @FILE): {"peer"|"select"|"self": {offset: value}}."""
+    raw = json.loads(Path(value[1:]).read_text(encoding="utf-8") if value.startswith("@") else value)
+    unknown = set(raw) - {"peer", "select", "self"}
+    if unknown:
+        raise ValueError(f"unknown character objects {sorted(unknown)}")
+    return {name: offset_keys(values) for name, values in raw.items()}
+
+
+def character_extras(gear=None, overlay=None, layout=None):
+    """Extra field values for the peer, select and self character objects: equipment from
+    --character-gear, then a raw --character-overlay JSON {"peer"|"select"|"self": {offset: ...}}."""
+    extras = {"peer": {}, "select": {}, "self": {}}
+    for part in (gear_objects(gear, layout) if gear else {}, overlay or {}):
+        for name in extras:
+            extras[name] = deep_merge(extras[name], part.get(name))
+    return extras
 
 
 def load_store(path):
@@ -114,51 +283,90 @@ def save_character(path, account_id, character_id, request_payload):
     path.write_text(json.dumps(store, indent=1), encoding="utf-8")
 
 
-def parse_flag_spec(spec):
+def parse_flag_spec(spec, counts=None):
     """"2" (every flag) or "2@A0-511,B0-15" - value, then index ranges in account table A
-    (+0x12a8, 1024 flags), account table B (+0x16a8+1, 256 flags) and character table C
-    (self character object +0x3bc0, 1024 flags)."""
+    and B and character table C. Unqualified "2" fills each table's build-specific length."""
+    counts = counts or {"A": 1024, "B": 256, "C": 1024}
     value, _, ranges = str(spec).partition("@")
     out = {"A": set(), "B": set(), "C": set()}
     if not ranges:
-        out = {"A": set(range(1024)), "B": set(range(256)), "C": set(range(1024))}
+        out = {table: set(range(counts[table])) for table in out}
     for part in filter(None, ranges.split(",")):
         table, span = part[0].upper(), part[1:]
+        if table not in counts:
+            raise ValueError(f"unknown unlock flag table {table!r}")
         lo, _, hi = span.partition("-")
-        out[table].update(range(int(lo), int(hi or lo) + 1))
+        first, last = int(lo), int(hi or lo)
+        if not 0 <= first <= last < counts[table]:
+            raise ValueError(f"unlock flag {table}{first}-{last} outside 0-{counts[table] - 1}")
+        out[table].update(range(first, last + 1))
     return int(value), out
 
 
-def account_flag_values(spec):
+def account_flag_values(spec, counts=None):
     """Layered specs separated by ";" - later ones win, e.g. "1;2@B0" = every flag false
     (1) except B0 true (2). Returns {"A": {index: value}, "B": {...}}."""
     values = {"A": {}, "B": {}, "C": {}}
     for part in filter(None, str(spec).split(";")):
-        value, chosen = parse_flag_spec(part)
+        value, chosen = parse_flag_spec(part, counts)
         for table, indexes in chosen.items():
             values[table].update(dict.fromkeys(indexes, value))
     return values
 
 
-def account_flags(schema, spec):
+def flag_layout(schema):
+    """Find the A/B/C unlock tables from the selected build's nested type layout."""
+    def is_table(entry, minimum):
+        fields = (entry or {}).get("fields", [])
+        return (len(fields) >= minimum and entry.get("size") == len(fields)
+                and all(fields[i]["off"] == i and fields[i]["kind"] == 3
+                        and fields[i]["width"] == 2 and fields[i]["min"] == 1
+                        for i in (0, 1, len(fields) - 1)))
+
+    def table(owner, minimum):
+        fields = schema.get(owner, {}).get("fields", [])
+        matches = [(field["off"], field["nested"],
+                    schema.get(f"{field['nested']:#x}", {}).get("fields", []))
+                   for field in fields if field["kind"] == 1
+                   and is_table(schema.get(f"{field['nested']:#x}"), minimum)]
+        if len(matches) != 1:
+            raise ValueError(f"expected one unlock flag table in {owner}, found {len(matches)}")
+        offset, handle, entries = matches[0]
+        return {"offset": offset, "handle": handle, "fields": entries, "count": len(entries)}
+
+    account = schema.get("0x808018c7", {}).get("fields", [])
+    wrappers = [field for field in account if field["kind"] == 1 and field["nested"] == 0x80801807]
+    if len(wrappers) != 1:
+        raise ValueError("expected one account B flag wrapper")
+    return {"A": table("0x808018c7", 1024),
+            "B": {**table("0x80801807", 256), "wrapper_offset": wrappers[0]["off"]},
+            "C": table("0x80801714", 1024)}
+
+
+def account_flags(schema, spec, layout=None, values=None):
     """Self root account flag tables, read by the unlock-expression evaluator (0xb674ec /
-    0xb67564). Values are tri-state (the evaluator writes 2 for true). Setting all to 2
-    unlocks destinations but also trophies, message-of-the-day and restriction flags."""
-    values = account_flag_values(spec)
-    def slots(handle, table):
-        return {f["off"]: values[table][i] for i, f in enumerate(schema[handle]["fields"])
+    0xb67564 in 01.00). Values are tri-state (2 = true)."""
+    layout = layout or flag_layout(schema)
+    if values is None:
+        values = account_flag_values(spec, {key: item["count"] for key, item in layout.items()})
+    def slots(table):
+        return {f["off"]: values[table][i] for i, f in enumerate(layout[table]["fields"])
                 if i in values[table]}
-    return {0x12a8: slots("0x80804595", "A"),
-            0x16a8: {0: False, 1: slots("0x808047d8", "B")}}
+    return {layout["A"]["offset"]: slots("A"),
+            layout["B"]["wrapper_offset"]: {layout["B"]["offset"]: slots("B")}}
 
 
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
-                version=1, flags=1, active_id=None, self_flags=None, peer=False):
+                version=1, flags=1, active_id=None, self_flags=None, peer=False, extras=None):
     """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
     (0x32f748 via 0x325350) proceeds only when it is set."""
     objects = []
+    extras = extras or {}
+    flags_layout = flag_layout(schema) if schema and family_type == 4 and self_flags is not None else None
+    flag_values = (account_flag_values(self_flags, {key: item["count"] for key, item in flags_layout.items()})
+                   if flags_layout else None)
     if schema and family_type in ROOT_OBJECTS:
         type_hash, handle, values = ROOT_OBJECTS[family_type]
         fields = values(root)
@@ -171,26 +379,28 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                 if active_id is not None:
                     fields[0][0x60] = active_id
         if family_type == 4 and self_flags is not None:
-            fields[0].update(account_flags(schema, self_flags))
+            fields[0].update(account_flags(schema, self_flags, flags_layout, flag_values))
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
-            objects.append(investment.obj(type_hash, character_id,
-                                          investment.encode(schema, handle, character_profile)))
+            objects.append(investment.obj(type_hash, character_id, investment.encode(
+                schema, handle, deep_merge(character_profile, extras.get("select")))))
         if family_type == 4 and character_id is not None and character_profile is not None:
             type_hash, handle = SELF_CHARACTER_OBJECT
-            profile = dict(character_profile)
+            profile = deep_merge(character_profile, extras.get("self"))
             if self_flags is not None:
-                chosen = account_flag_values(self_flags)["C"]
-                profile[0x3bc0] = {f["off"]: chosen[i] for i, f in
-                                   enumerate(schema["0x80804595"]["fields"]) if i in chosen}
+                chosen = flag_values["C"]
+                profile[flags_layout["C"]["offset"]] = {
+                    f["off"]: chosen[i] for i, f in enumerate(flags_layout["C"]["fields"])
+                    if i in chosen}
             objects.append(investment.obj(type_hash, character_id,
                                           investment.encode(schema, handle, {0: profile})))
     if peer and schema and family_type == 0 and character_id is not None and character_profile is not None:
         type_hash, handle = PEER_ACCOUNT_OBJECT
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, {0: root, 8: character_id})))
         type_hash, handle = PEER_CHARACTER_OBJECT
-        summary = {off: character_profile[off] for off in (0, 8, 12) if off in character_profile}
+        summary = deep_merge({off: character_profile[off] for off in (0, 8, 12) if off in character_profile},
+                             extras.get("peer"))
         objects.append(investment.obj(type_hash, character_id, investment.encode(schema, handle, summary)))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
     # Updates to an existing subscription use a delta and the next family version.
@@ -227,6 +437,8 @@ AH_NOT = 0x08
 # 0x80800a58 struct: @0 the request echoed (its first i32 must match the copy), @0xf8 a
 # result (0 = joined, stored as bits - 1 in 3 bits), @0xf9 char[128] activity session id,
 # then i32s @0x17c..0x188, u8 @0x18c, u16s @0x18e/0x190 (kept at 0x6930/0x6934), i32 @0x194.
+# These are 01.00 offsets. In 01.13/01.24 the request grows by 8 bytes, so the result and
+# session id move to +0x100/+0x101; join_response() finds them in the selected schema.
 # Next the client waits for its entity indices: b->c not type 0 (handler 0xd0d020), a
 # 0x80800d64 struct holding a 384-word bitmap (0x808043a7) that is ORed into the client's
 # index set (+0x5bf8) and marks the indices received (+0x61f8).
@@ -238,6 +450,8 @@ AH_NOT = 0x08
 # looked up as a resource key (0x1f6564, e.g. "orbit"; ":scenario_fah" etc. for parts).
 # The world id is the i16 at state @0x60 @0x990 (0x3254ec; checked for DLC by 0x4105c4,
 # "World-transition requires DLC."); service 105 carries the world the client asked for.
+# Those scene offsets are 01.00. The static 01.13/01.24 export moves world/map to
+# +0x5c8/+0x5d0; activity_state() reads the selected schema.
 AH_JOIN_REQUEST, AH_JOIN_RESPONSE, AH_ENTITY_INDICES = 3, 4, 0
 AH_STATE, AH_ESTABLISH = 1, 11
 STATE_TYPE = 0x80800E76
@@ -289,10 +503,17 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
         # ("activity checksum mismatch" fails the world load).
         values[0x5C] = checksum
     scene = {}
-    if map_name:
-        scene[0x994] = {0: char_array(map_name, 40)[0]}
-    if world is not None:
-        scene[0x990] = world
+    if map_name or world is not None:
+        scene_fields = schema["0x80800cc5"]["fields"]
+        map_offset = field_offset(schema, "0x80800cc5", "0x8080409f")
+        world_fields = [f for f in scene_fields if f["kind"] == 4 and f["width"] == 16
+                        and f["min"] == 0x8000]
+        if map_offset is None or len(world_fields) != 2 or world_fields[1]["off"] >= map_offset:
+            raise ValueError("unsupported activity scene layout")
+        if map_name:
+            scene[map_offset] = {0: char_array(map_name, 40)[0]}
+        if world is not None:
+            scene[world_fields[0]["off"]] = world
     if scene:
         values[0x60] = scene
     return investment.encode(schema, STATE_TYPE, {0: values})
@@ -303,6 +524,43 @@ ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
 AH_SIMULATION = 5
 OBJECT_ID_TYPE, SIM_PLAYER_TYPE, GAME_MODE_TYPE = 0x808004B1, 0x808022A5, 0x808008A3
 AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
+# Client -> host type 21 (sent by 0x257d28): one present bit + a delta of the client's 0x220-byte
+# state 0x80800c56 (host +0x6498 against the last sent copy at +0x66b8, encoder 0x1ca00c). Its
+# +0xb8 is the world controller's slice-set record 0x80800d9f: current record @0, target record
+# @0xa0 (0x80800d82: i32 slice-set index, u32 hash, i32), i8 @0x140/0x141, u3 state @0x142. The
+# client is the authority over its slice set and reports switches here (TEST366: target 112,
+# then current 112 with state 0).
+AH_CLIENT_STATE, CLIENT_STATE_TYPE = 21, 0x80800C56
+
+
+def client_slice_record(schema, body):
+    """The slice-set part of a type-21 client state delta: {"current"/"target": (index, hash),
+    "state": n} with the keys the delta carries, or None (no slice-set part, or no schema)."""
+    if not schema or f"{CLIENT_STATE_TYPE:#x}" not in schema or not body:
+        return None
+    reader = investment.BitReader(body)
+    if not reader.get(1):
+        return None
+    zone = investment.decode_from(reader, schema, CLIENT_STATE_TYPE).get(0xB8)
+    if not zone:
+        return None
+    record = {name: (zone[off].get(0), zone[off].get(4, 0))
+              for name, off in (("current", 0), ("target", 0xA0)) if off in zone}
+    if 0x142 in zone:
+        record["state"] = zone[0x142]
+    return record or None
+
+
+def client_slice_state(schema, body):
+    """One-line summary of client_slice_record, or None."""
+    record = client_slice_record(schema, body)
+    if not record:
+        return None
+    parts = [f"{name} {record[name][0]}:{record[name][1]:#010x}" for name in ("current", "target")
+             if name in record]
+    if "state" in record:
+        parts.append(f"state {record['state']}")
+    return ", ".join(parts)
 
 
 def machine_list(schema, machine_ids):
@@ -356,22 +614,46 @@ def sim_player(schema, group, index, machine_id, spawn=None):
     """Replicated state of simulation player INDEX (kind 0xc entities of the world's entity group
     GROUP; record +0xc type 0x808022a5 = the entity's 0x50-byte block at +0x144): the bools at +8
     (loading task 9, 0x3286a8) and +9 (spawn readiness 0x35793c) set, owner machine id at
-    +0x18 (0x80800646, entity +0x15c), which 0x4ed7b4 -> 0x14a270 matches against the local
-    player (pla +0x18) to bind it (pla +0x50)."""
+    +0x18 in 01.00 (0x80800646, entity +0x15c), which 0x4ed7b4 -> 0x14a270 matches against the
+    local player (pla +0x18) to bind it (pla +0x50). The 01.24 state puts the owner at +0x3c
+    and wraps the spawn flag in a struct at +0x6c; the offsets come from the selected schema."""
     object_id = {0: group, 4: 0xC, 6: index}
-    state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True}, 0x18: {0: machine_id}, 0x4C: -1}
+    fields = schema[f"{SIM_PLAYER_TYPE:#x}"]["fields"]
+    owner_offset = field_offset(schema, f"{SIM_PLAYER_TYPE:#x}", "0x80800646")
+    tail = fields[-2:]
+    if (owner_offset is None or len(tail) != 2 or tail[1]["kind"] != 5
+            or tail[1]["width"] != 32):
+        raise ValueError("unsupported simulation player layout")
+    state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True},
+             owner_offset: {0: machine_id}, tail[1]["off"]: -1}
     if spawn:
-        # bool +0x48 (entity +0x18c, reached through entity +0x1ec/+0x1f0 by 0x4ec7b4): the spawn
+        # 01.00 bool +0x48 (entity +0x18c, reached through entity +0x1ec/+0x1f0 by 0x4ec7b4): the spawn
         # processing (0x358688) sets a request flag on another component and waits for it.
-        state[0x48] = True
+        spawn_field = tail[0]
+        if spawn_field["kind"] == 2:
+            state[spawn_field["off"]] = True
+        elif (spawn_field["kind"] == 1 and
+              schema[f"{spawn_field['nested']:#x}"]["fields"][0]["kind"] == 2):
+            state[spawn_field["off"]] = {0: True}
+        else:
+            raise ValueError("unsupported simulation player spawn field")
     return object_id, SIM_PLAYER_TYPE, state, True
 
 
-def game_mode(group, index, state):
+def game_mode(schema, group, index, state):
     """Replicated state of the game-mode object (kind 0x10; type 0x808008a3 at entity +0x110).
     Its first field, a 4-bit state, is what loading task 9 (`0xb26e4c`, must be non-zero) and the
     spawn check `0x35793c` (jump table 0x11ed724 indexed by the value: only 3 continues) read."""
-    values = {0: state, 8: 0x811C9DC5, 0xC: -1, 0x984: -1, 0x988: 0x811C9DC5}
+    fields = schema[f"{GAME_MODE_TYPE:#x}"]["fields"]
+    nested = field_offset(schema, f"{GAME_MODE_TYPE:#x}", "0x8080533d")
+    hashes = [(i, f) for i, f in enumerate(fields) if f["kind"] == 9 and f["width"] == 32
+              and nested is not None and f["off"] > nested]
+    if (not hashes or hashes[0][0] == 0 or fields[hashes[0][0] - 1]["kind"] != 5):
+        raise ValueError("unsupported game mode layout")
+    index_field = fields[hashes[0][0] - 1]["off"]
+    hash_field = hashes[0][1]["off"]
+    values = {0: state, 8: 0x811C9DC5, 0xC: -1, index_field: -1,
+              hash_field: 0x811C9DC5}
     return {0: group, 4: 0x10, 6: index}, GAME_MODE_TYPE, values, False
 
 
@@ -380,6 +662,37 @@ def baseline_list(value):
     if value.startswith("@"):
         value = Path(value[1:]).read_text(encoding="utf-8")
     return [tuple(int(y, 0) for y in (x.strip().split("/") + ["0"])[:4]) for x in value.split(",") if x.strip()]
+
+
+def offset_keys(v):
+    """JSON object keys (decimal or 0x strings) -> int field offsets, recursively."""
+    if isinstance(v, dict):
+        return {int(k, 0): offset_keys(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [offset_keys(x) for x in v]
+    return v
+
+
+SQUAD_STATE_TYPE = 0x8080071E
+SQUAD_EXISTING_MEMBERS_OFFSET = {0x60: 0x5C, 0x7C: 0x74}
+
+
+def mission_offset_keys(values, schema, state_type):
+    """Resolve the squad existing-member policy for the selected client build."""
+    if "squad_existing_members" not in values:
+        return offset_keys(values)
+    if state_type != SQUAD_STATE_TYPE:
+        raise ValueError("squad_existing_members requires a squad state")
+    entry = schema.get(f"{state_type:#x}", {})
+    offset = SQUAD_EXISTING_MEMBERS_OFFSET.get(entry.get("size"))
+    field = next((f for f in entry.get("fields", []) if f["off"] == offset), None)
+    if offset is None or field is None or field["kind"] != 3 or field["width"] != 2:
+        raise ValueError(f"unsupported squad state layout for {state_type:#x}")
+    result = dict(values)
+    if str(offset) in result or f"{offset:#x}" in result:
+        raise ValueError("squad_existing_members conflicts with a numeric offset")
+    result[str(offset)] = result.pop("squad_existing_members")
+    return offset_keys(result)
 
 
 def object_spec(value):
@@ -391,22 +704,156 @@ def object_spec(value):
     group, kind, index, state_type = parts[:4]
     has_b = bool(parts[4]) if len(parts) > 4 else False
 
-    def keys(v):
-        if isinstance(v, dict):
-            return {int(k, 0): keys(x) for k, x in v.items()}
-        if isinstance(v, list):
-            return [keys(x) for x in v]
-        return v
-
     if body.startswith("@"):  # JSON in a file: command lines mangle embedded quotes (Start-Process)
         body = Path(body[1:]).read_text(encoding="utf-8")
-    return {0: group, 4: kind, 6: index}, state_type, keys(json.loads(body or "{}")), has_b
+    return {0: group, 4: kind, 6: index}, state_type, offset_keys(json.loads(body or "{}")), has_b
 
 
 def timed_object_spec(value):
     """Parse --ah-object-at SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON: (seconds, object_spec)."""
     seconds, _, spec = value.partition("@")
     return float(seconds), object_spec(spec)
+
+
+def reactive_object_spec(value):
+    """Parse --ah-on TYPE[/REGEX]=>SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON: (client message type,
+    compiled regex over the body hex or None, delay in seconds, object_spec)."""
+    trigger, sep, action = value.partition("=>")
+    if not sep:
+        raise ValueError("--ah-on expects TYPE[/REGEX]=>SECONDS@OBJECT")
+    ah_type, _, pattern = trigger.partition("/")
+    seconds, spec = timed_object_spec(action)
+    return int(ah_type, 0), re.compile(pattern) if pattern else None, seconds, spec
+
+
+def replace_object(objects, spec):
+    """Replace (or add) the replicated object that `spec` names in `objects`; returns its
+    (group, kind, index)."""
+    ident = (spec[0][0], spec[0][4], spec[0][6])
+    objects[:] = [o for o in objects if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
+    return ident
+
+
+ANY_MESSAGE = -1  # --ah-on / mission rule type matching every client message type
+
+
+class ObjectIdMatcher:
+    """Matches a client message body (hex, as `--ah-on` regexes see it) whose bits contain the
+    encoded id of one replicated object (type 0x808004b1: u32 group key, 6-bit kind, 16-bit
+    index) at any bit offset. The upstream object stream (client type 6) carries the ids of the
+    objects the client reports (TEST366/367: its own player 0x4786c0e0/0xc/5 at bit 11), so a
+    trigger the guardian walks into should show up the same way."""
+
+    def __init__(self, schema, group, kind, index):
+        w = investment.BitWriter()
+        investment.encode_into(w, schema, OBJECT_ID_TYPE, {0: group, 4: kind, 6: index})
+        self.bits, self.ident = "".join(map(str, w.bits)), (group, kind, index)
+
+    def search(self, body_hex):
+        return self.bits in "".join(f"{b:08b}" for b in bytes.fromhex(body_hex))
+
+
+class SliceSetMatcher:
+    """Matches a client type-21 state delta (body hex) whose slice-set record reports slice set
+    `index` as current - e.g. the client has switched into The Breach (24) by walking there."""
+
+    def __init__(self, schema, index):
+        self.schema, self.index = schema, index
+
+    def search(self, body_hex):
+        record = client_slice_record(self.schema, bytes.fromhex(body_hex))
+        return bool(record) and record.get("current", (None,))[0] == self.index
+
+
+def resolve_values(value, context):
+    """Fill mission placeholders at the moment a state is sent: "$player" (the local player's
+    machine id, the --ah-sim-player owner) and "$now" (the host simulation tick, see
+    --ah-sim-clock; 0 without it), optionally with an offset ("$now+300")."""
+    if isinstance(value, dict):
+        return {k: resolve_values(v, context) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_values(v, context) for v in value]
+    if isinstance(value, str) and value.startswith("$"):
+        match = re.fullmatch(r"\$(\w+)([+-]\d+)?", value)
+        if not match or match.group(1) not in context:
+            raise ValueError(f"unknown mission placeholder {value}")
+        return context[match.group(1)] + int(match.group(2) or 0)
+    return value
+
+
+def resolve_spec(spec, context):
+    ident, state_type, values, has_b = spec
+    return ident, state_type, resolve_values(values, context), has_b
+
+
+def expand_mission(mission, schema):
+    """A mission script (--ah-mission JSON) as --ah-object-at and --ah-on entries.
+    {"objects": {NAME: "GROUP:KIND:INDEX:TYPE[:B]"}, "steps": [{"at": SECONDS} or
+    {"on": {"type": N, "object": NAME} | {"type": 21, "slice_set": INDEX} | {"type": N, "regex": R},
+    "delay": SECONDS},
+    plus "set": {NAME: {offset: value}}]}. Each "set" entry becomes one timed or reactive object
+    change; reactive steps fire once, on the first matching client message."""
+    heads = {name: object_spec(f"{head}=") for name, head in mission.get("objects", {}).items()}
+    timed, reactive = [], []
+    for number, step in enumerate(mission.get("steps", [])):
+        changes = []
+        for name, values in step.get("set", {}).items():
+            if name not in heads:
+                raise ValueError(f"mission step {number}: unknown object {name!r}")
+            ident, state_type, _, has_b = heads[name]
+            changes.append((ident, state_type, mission_offset_keys(values, schema, state_type), has_b))
+        if "at" in step:
+            timed += [(float(step["at"]), change) for change in changes]
+            continue
+        on = step.get("on")
+        if not on or "type" not in on:  # "type": "any" matches every client message type
+            raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
+        if "object" in on:
+            ident = heads[on["object"]][0]
+            matcher = ObjectIdMatcher(schema, ident[0], ident[4], ident[6])
+        elif "slice_set" in on:
+            matcher = SliceSetMatcher(schema, int(on["slice_set"]))
+        else:
+            matcher = re.compile(on["regex"]) if on.get("regex") else None
+        on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
+        reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
+    return timed, reactive
+
+
+def validate_mission_states(schema, timed, reactive):
+    """Catch fields silently omitted or changed by the selected build's encoder."""
+    # Small stand-ins fit narrow synthetic test schemas; the preflight checks
+    # field layout and literal values, not a particular live identity or tick.
+    context = {"player": 1, "now": 1}
+
+    def check(expected, actual, path):
+        if isinstance(expected, dict):
+            if not isinstance(actual, dict):
+                raise ValueError(f"{path}: expected a struct")
+            for offset, value in expected.items():
+                if offset not in actual:
+                    raise ValueError(f"{path}/{offset:#x}: field is absent from the encoded state")
+                check(value, actual[offset], f"{path}/{offset:#x}")
+        elif isinstance(expected, list):
+            if not isinstance(actual, list) or len(expected) != len(actual):
+                raise ValueError(f"{path}: array length changed during encoding")
+            for index, value in enumerate(expected):
+                check(value, actual[index], f"{path}/{index}")
+        elif isinstance(expected, float):
+            if not math.isclose(expected, actual, rel_tol=1e-6, abs_tol=1e-6):
+                raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
+        elif expected != actual:
+            raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
+
+    for spec in [s for _, s in timed] + [entry[3] for entry in reactive]:
+        ident, state_type, values, _ = resolve_spec(spec, context)
+        path = f"{ident[0]:#x}/{ident[4]:#x}/{ident[6]} state {state_type:#x}"
+        try:
+            encoded = investment.encode(schema, state_type, values)
+            check(values, investment.decode(schema, state_type, encoded), path)
+        except KeyError as exc:
+            raise ValueError(f"{path}: schema lacks {exc}") from exc
+    return len(timed) + len(reactive)
 
 
 def default_baseline(key, kind, index, has_b=False):
@@ -442,15 +889,20 @@ def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0):
 
 def join_response(schema, request_body, session_id="d1local-activity", result=0, extra=None):
     request = join_request(schema, request_body)
-    values = {0: request, 0xF8: result, 0xF9: char_array(session_id)}
+    fields = schema[f"{JOIN_RESPONSE_TYPE:#x}"]["fields"]
+    results = [f["off"] for f in fields if f["kind"] == 3 and f["width"] == 3 and f["min"] == 1]
+    if (len(results) != 1 or not any(f["off"] == results[0] + 1
+                                    and f["nested"] == 0x80804056 for f in fields)):
+        raise ValueError("unsupported activity join response layout")
+    values = {0: request, results[0]: result, results[0] + 1: char_array(session_id)}
     values.update(extra or {})
     return investment.encode(schema, JOIN_RESPONSE_TYPE, values)
 
 
 def bc_notification(subtype, data, ident=0):
     return struct.pack(">BQII", 1, ident, subtype, len(data)) + data
-# Service replies that need more than the default: 104 carries the universe object at +8
-# (type 0x80801941, as in the sign-in reply); an absent universe root gives pig (0xa2).
+# On 01.00, service 104 carries the universe object at +8 (type 0x80801941,
+# as in the sign-in reply); an absent universe root gives pig (0xa2).
 WS_REPLY_VALUES = {104: {8: {0: 0x7FFFFFFFFFFFFFFF, 8: 1}}}
 # Universe +8 behaves like the server clock (the director compares character timestamps
 # with it, and the client reads no calendar clock of its own); its unit is still unknown.
@@ -459,10 +911,14 @@ UNIVERSE_TIME_UNITS = {"one": lambda t: 1, "s": lambda t: int(t), "ms": lambda t
                        "filetime": lambda t: int((t + 11644473600) * 1e7)}
 
 
-def universe_reply(args):
-    """Service 104 reply values: the universe object (0x80801941) with its root soid, the
-    server clock and, optionally, the i16 list at +0x10 (0x808045f0: u5 count + up to 20
-    i16) - flag indexes applied over the content defaults of the universe unlock table."""
+def universe_reply(args, schema=None):
+    """Service 104's universe object on 01.00; 01.24 has a bool instead."""
+    if schema:
+        entry = schema.get("services", {}).get("104")
+        response = schema.get(entry[1]) if entry else None
+        field = next((f for f in response["fields"] if f["off"] == 8), None) if response else None
+        if field is None or field["kind"] != 1:
+            return None  # 01.24's service 104 returns a bool instead of the universe object
     universe = {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}
     if args.universe_flags:
         universe[0x10] = {0: len(args.universe_flags), 4: list(args.universe_flags)}
@@ -511,7 +967,7 @@ class BitWriter:
 
 
 def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, opt_values=None,
-                    universe_flags=(), universe_values=()):
+                    universe_flags=(), universe_values=(), schema=None):
     """Service 503 (investment sign-in) response, type 0x80801825:
     {u4 result, i32 detail} u64 +0x08, u32 +0x10, u32 +0x14, then struct 0x80801941 of six
     optional fields (presence bit each): u64, u64, three counted lists, u32. Lists and the
@@ -520,7 +976,20 @@ def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, o
     Primitive kinds are biased on the wire (seen in decoded memory): the kind-3 result enum
     decodes as bits - 1 and the signed kind-5 detail as bits - 0x80000000. The completion
     handler 0x295794 (via 0xbb8a40) needs result 0 and takes the user's root soid from +0x08;
-    it then moves the local user entry from state 2 to 3."""
+    it then moves the local user entry from state 2 to 3. With a schema, the
+    response uses its current field widths and optional-field count."""
+    if schema:
+        universe = {}
+        if optional_ids:
+            values = opt_values or (UNIVERSE_SOID, 1)
+            universe.update({0: values[0], 8: values[1]})
+        if universe_flags:
+            universe[0x10] = {0: len(universe_flags), 4: list(universe_flags)}
+        if universe_values:
+            universe[0x3C] = {0: len(universe_values),
+                              4: [{0: index, 2: value} for index, value in universe_values]}
+        return default_ws_response(schema, 503, {0: {0: result, 4: 0}, 8: account_id,
+                                                 16: word1, 20: word2, 24: universe})
     w = BitWriter()
     w.put(0x01F7, 16)
     w.put(result + 1, 4); w.put(0x80000000, 32)
@@ -694,14 +1163,29 @@ def exact(conn, count):
     return bytes(data)
 
 
+# Structured run log: each connection writes <capture folder>/events.jsonl, one JSON object per
+# line - every log line ({"t", "log"}), every client frame ({"ev": "frame"}) and every client
+# activity-host message ({"ev": "ah"}), with full hex bodies. `server/run_log.py` reads it.
+_events = threading.local()
+
+
+def record_event(**fields):
+    sink = getattr(_events, "sink", None)
+    if sink is not None:
+        fields = {"t": datetime.datetime.now().isoformat(timespec="milliseconds"), **fields}
+        sink.write(json.dumps(fields) + "\n")
+
+
 def log(message):
     print(f"{datetime.datetime.now().isoformat(timespec='milliseconds')} {message}", flush=True)
+    record_event(log=message)
 
 
 def handle(conn, peer, args):
     tag = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     folder = args.capture_dir / tag
     folder.mkdir(parents=True)
+    _events.sink = open(folder / "events.jsonl", "w", encoding="utf-8", buffering=1)
     conn.settimeout(args.timeout)
     log(f"[{tag}] connection from {peer[0]}:{peer[1]}")
     rx = tx = None
@@ -712,10 +1196,19 @@ def handle(conn, peer, args):
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
     baselines_stamp = None  # modification time of --ah-baselines-watch when last read
     objects_applied = 0  # --ah-object-at entries already sent (they are sorted by time)
+    reactions_fired = set()  # --ah-on rules already triggered (each fires once)
+    reactions_due = []  # (absolute time, object spec, rule text) scheduled by --ah-on
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
+
+    def host_tick():
+        # --ah-sim-clock: host simulation ticks since the first simulation packet (0 without it)
+        return int((time.time() - sim_build[5]) * args.ah_sim_clock) if sim_build and args.ah_sim_clock else 0
+
+    def mission_context():
+        return {"player": args.ah_sim_player[2] if args.ah_sim_player else 0, "now": host_tick()}
 
     def push_self(number, reason):
         # Delta for the live self subscription: versions must advance by one (0x41b75c).
@@ -725,7 +1218,8 @@ def handle(conn, peer, args):
         self_version += 1
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
-            version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags))
+            version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags,
+            extras=args.character_extras))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
@@ -747,18 +1241,21 @@ def handle(conn, peer, args):
                 continue
             msg_type, msg_id = struct.unpack_from(">HI", body)
             payload = body[6:]
+            record_event(ev="frame", n=number, kind=kind, type=msg_type, name=NAMES.get(msg_type, hex(msg_type)),
+                   id=msg_id, payload=payload.hex())
             log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
                 f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
             if kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f7") and args.ws_signin:
                 account_id = int.from_bytes(payload[38:46], "big")
                 if args.ws_markers:
                     body = signin_response(0x3333333333333333, word1=0x44444444, word2=0x55555555,
-                                           opt_values=(0x1111111111111111, 0x2222222222222222))
+                                           opt_values=(0x1111111111111111, 0x2222222222222222),
+                                           schema=args.schema)
                 else:
                     body = signin_response(account_id, optional_ids=not args.ws_no_optional,
                                            opt_values=(UNIVERSE_SOID, universe_time(args.universe_time)),
                                            universe_flags=args.universe_flags,
-                                           universe_values=args.universe_values)
+                                           universe_values=args.universe_values, schema=args.schema)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
@@ -798,7 +1295,7 @@ def handle(conn, peer, args):
                 family_type, root = family_fetch_request(payload)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
                     family_type, root, blob=family_blob(args.schema, family_type, root, character_id,
-                                                       character_profile)))
+                                                       character_profile, extras=args.character_extras)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
                 log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, "
@@ -813,7 +1310,8 @@ def handle(conn, peer, args):
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
-                    args.schema, wire, universe_reply(args) if wire == 104 else WS_REPLY_VALUES.get(wire)))
+                    args.schema, wire, universe_reply(args, args.schema) if wire == 104
+                    else WS_REPLY_VALUES.get(wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
@@ -848,7 +1346,36 @@ def handle(conn, peer, args):
             if kind == 1 and msg_type == AH_NOT and len(payload) >= 21:
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
                 body = payload[21:21 + ah_len]
+                record_event(ev="ah", n=number, host=f"{host_id:#x}", ah_type=ah_type, body=body.hex())
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+                if ah_type == AH_CLIENT_STATE:
+                    try:
+                        record = client_slice_record(args.activity_schema, body)
+                    except ValueError:
+                        record = None
+                    if record:
+                        log(f"[{tag}] client slice set: {client_slice_state(args.activity_schema, body)}")
+                        # Mirror the client's switch in the world state's group record, as the
+                        # host that tracks the fireteam's slice set would (opt-in experiment)
+                        wanted = record.get("target", (-1, 0))[0]
+                        if wanted is None or wanted < 0:
+                            wanted = record.get("current", (-1, 0))[0]
+                        if (args.ah_follow_client_zone and world_params and wanted is not None
+                                and wanted >= 0 and wanted != zone_now):
+                            zone_now = wanted
+                            data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                     *world_params[1:])
+                            conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                              bc_notification(AH_ESTABLISH, data, host_id)))
+                            log(f"[{tag}] world state: zone set -> {zone_now} (following the client)")
+                for rule_index, (on_type, on_body, delay, spec) in enumerate(args.ah_on):
+                    # Script steps driven by what the client reports (sense state), not by time
+                    if (rule_index not in reactions_fired and on_type in (ah_type, ANY_MESSAGE)
+                            and (on_body is None or on_body.search(body.hex()))):
+                        reactions_fired.add(rule_index)
+                        reactions_due.append((time.time() + delay, spec, f"type {on_type} rule {rule_index}"))
+                        log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: object "
+                            f"{spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]} in {delay:g} s")
             if (kind == 1 and msg_type == AH_NOT and len(payload) >= 21 and ah_type == AH_JOIN_REQUEST
                     and args.ah_join and args.activity_schema):
                 request = join_request(args.activity_schema, body)
@@ -905,7 +1432,7 @@ def handle(conn, peer, args):
                         if args.ah_game_mode_schedule:
                             state = args.ah_game_mode_schedule[0][0]
                         game_mode_at, game_mode_now = len(objects), state
-                        objects.append(game_mode(group, index, state))
+                        objects.append(game_mode(args.activity_schema, group, index, state))
                         log(f"[{tag}] game mode {group:#x}:{index} state {state}")
                     for spec in args.ah_object:
                         objects.append(spec)
@@ -967,8 +1494,8 @@ def handle(conn, peer, args):
                         # (not `seconds`: that is the heartbeat interval used below - reusing it
                         # delayed the next heartbeat by the object's time, TEST361 baboon)
                         due_at, spec = args.ah_object_at[objects_applied]
-                        ident = (spec[0][0], spec[0][4], spec[0][6])
-                        objects_[:] = [o for o in objects_ if (o[0][0], o[0][4], o[0][6]) != ident] + [spec]
+                        spec = resolve_spec(spec, mission_context())
+                        ident = replace_object(objects_, spec)
                         objects_applied += 1
                         changed = True
                         log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {spec[2]} (at {due_at:g} s)")
@@ -976,15 +1503,31 @@ def handle(conn, peer, args):
                         at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    for entry in [e for e in reactions_due if e[0] <= time.time()]:
+                        reactions_due.remove(entry)
+                        entry = (entry[0], resolve_spec(entry[1], mission_context()), entry[2])
+                        ident = replace_object(objects_, entry[1])
+                        log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {entry[1][2]} ({entry[2]})")
+                    at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
+                    sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
+                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
                     if due and due[-1] != game_mode_now:
                         game_mode_now = due[-1]
                         group, index, _ = args.ah_game_mode
-                        objects_[at_] = game_mode(group, index, game_mode_now)
+                        objects_[at_] = game_mode(args.activity_schema, group, index, game_mode_now)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                         log(f"[{tag}] game mode {group:#x}:{index} -> state {game_mode_now}")
+                if sim_repeat and sim_build and args.ah_sim_clock:
+                    # an advancing host tick: the client's simulation time (0x1c94e0) is the last
+                    # host tick plus the time since, so with a constant tick it never advances
+                    peer_, slot_, gen_, objects_, at_, joined_ = sim_build
+                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_,
+                                            tick=host_tick(), objects=objects_)
                 if sim_repeat:
                     # the roster packet is dropped until the client's host session exists
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, sim_repeat, host_id)))
@@ -1031,7 +1574,8 @@ def handle(conn, peer, args):
                     push = encrypted_frame_kind(tx, QZ_UPDATE, 0,
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
-                                                            self_flags=args.self_flags, peer=args.peer_family))
+                                                            self_flags=args.self_flags, peer=args.peer_family,
+                                                            extras=args.character_extras))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
@@ -1052,9 +1596,13 @@ def handle(conn, peer, args):
         log(f"[{tag}] {exc}")
     finally:
         conn.close()
+        sink, _events.sink = _events.sink, None
+        sink.close()
 
 
-def main():
+def parse_args(argv=None):
+    """Command-line arguments, with the schemas loaded and the SignOn test keys set (also used
+    by the end-to-end tests, which call handle() with them)."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bind", default="127.1.1.127")
     ap.add_argument("--port", type=int, default=12850)
@@ -1090,6 +1638,15 @@ def main():
     ap.add_argument("--peer-family", action="store_true",
                     help="fill the peer family (0) subscription with the local account and character "
                          "summaries (the player's appearance and blueprint in activities come from it)")
+    ap.add_argument("--character-gear", type=gear_spec, metavar="starter:CLASS|SLOT=ITEM,...|@FILE",
+                    help="equip the stored character (peer/select summaries and self inventory): "
+                         "starter:titan|hunter|warlock, or item indexes of the investment globals "
+                         "item list per equipment slot 0-19 (scripts/d1_pkg.py items); without gear "
+                         "the guardian renders as the see-through placeholder")
+    ap.add_argument("--character-overlay", type=overlay_spec,
+                    metavar="JSON|@FILE",
+                    help='raw field values merged into the character objects: {"peer"|"select"|"self": '
+                         '{offset: value}} (peer = 0x808017fd, select = 0x80801954, self = 0x80801714)')
     ap.add_argument("--self-flags",
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')
@@ -1155,6 +1712,24 @@ def main():
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
+    ap.add_argument("--ah-follow-client-zone", action="store_true",
+                    help="with --ah-world-state, send a new world-state delta naming the zone set the "
+                         "client reports in its type-21 state (target, else current) whenever it changes")
+    ap.add_argument("--ah-on", action="append", default=[], type=reactive_object_spec,
+                    metavar="TYPE[/REGEX]=>SECONDS@GROUP:KIND:INDEX:TYPE[:B]=JSON",
+                    help="with --ah-roster and --ah-heartbeat, replicate this object state SECONDS after "
+                         "the client first sends activity-host message TYPE whose body hex matches REGEX "
+                         "(once per rule; repeatable), e.g. step the next objective when a trigger "
+                         "volume reports: 15/^41=>0@G:3:I:0x808004fa={\"0\": {\"0\": 2}}")
+    ap.add_argument("--ah-mission", type=Path, metavar="FILE",
+                    help="mission script (JSON, e.g. missions/a_guardian_rises.json): named objects "
+                         "and steps that set their states at a time or when the client first reports "
+                         "an object (expanded into --ah-object-at / --ah-on); \"$player\" and \"$now\" "
+                         "in states are the local player's machine id and the host tick")
+    ap.add_argument("--ah-sim-clock", type=float, default=0, metavar="HZ",
+                    help="send an advancing host tick (HZ ticks a second since the first simulation "
+                         "packet; the client's sequences and timers run on it; 30 matches the "
+                         "client's default rate) instead of a constant 0")
     ap.add_argument("--ah-baselines", default=[], metavar="KEY/KIND/INDEX[/B],...|@FILE", type=baseline_list,
                     help="with --ah-roster, default baselines for these replicated objects (B = 1 when the "
                          "record has a state B type); @FILE reads the list from a file written by "
@@ -1175,19 +1750,46 @@ def main():
     ap.add_argument("--ah-session", default="d1local-activity",
                     help="activity session id sent in the host join response")
     ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,
-                    help="activity host message schema exported by scripts/rpcs3_tiger_types.py")
+                    help="activity host message schema from a runtime dump or EBOOT type export")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
-                    help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
-    args = ap.parse_args()
-    args.ah_object_at.sort(key=lambda entry: entry[0])
+                    help="investment type schema from a runtime dump or EBOOT type export (optional)")
+    ap.add_argument("--services-schema", type=Path, default=investment.DEFAULT_SCHEMA,
+                    help="saved service ID table used when --schema is an EBOOT-only type export")
+    args = ap.parse_args(argv)
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
+    if args.schema and not args.schema.get("services"):
+        if not args.services_schema.exists():
+            ap.error(f"--schema has no service IDs; missing --services-schema {args.services_schema}")
+        try:
+            args.schema = with_service_map(args.schema, investment.load_schema(args.services_schema))
+        except ValueError as exc:
+            ap.error(str(exc))
+    args.character_extras = character_extras(args.character_gear, args.character_overlay,
+                                             character_layout(args.schema))
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
+    if args.ah_mission:
+        if not args.activity_schema:
+            ap.error("--ah-mission needs the activity schema (--activity-schema)")
+        timed, reactive = expand_mission(json.loads(args.ah_mission.read_text(encoding="utf-8")),
+                                         args.activity_schema)
+        try:
+            validate_mission_states(args.activity_schema, timed, reactive)
+        except ValueError as exc:
+            ap.error(f"--ah-mission: {exc}")
+        args.ah_object_at += timed
+        args.ah_on += reactive
+    args.ah_object_at.sort(key=lambda entry: entry[0])
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
     args.key, args.mac_key = signon_proto.TEST_SESSION_KEYS[1], signon_proto.TEST_SESSION_KEYS[2]
+    return args
+
+
+def main():
+    args = parse_args()
     with socket.socket() as server:
         server.bind((args.bind, args.port))
         server.listen(8)

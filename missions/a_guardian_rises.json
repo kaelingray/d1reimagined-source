@@ -1,0 +1,234 @@
+{
+  "comment": [
+    "A Guardian Rises (act_cosmo_m0_highway): the start of the first mission, as a stand-in activity-host script.",
+    "Use with bap_server.py --ah-mission missions/a_guardian_rises.json (see notes/mission-director.md).",
+    "Order from the reference recording: revival cinematic (third person, then first person), 'Enter the Wall',",
+    "trigger at the Wall, 'Find a Weapon' in The Breach, the Ghost's light (pf_104a_pwr), 'Grab the Rifle'.",
+    "Field meanings are from the EBOOT handlers; the values marked in the note as guesses are what the runs test.",
+    "Triggers (kind 0x1d): +0 true arms the trigger; the client reports once per arming, when its last report is older than",
+    "the arming time at +4 (0xb2fb68), so +4 = \"$now\" and --ah-sim-clock is required. Which client message carries the",
+    "report is not known yet, so the trigger steps match the trigger's object id in any client message type.",
+    "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
+    "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
+    "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
+    "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24."
+  ],
+  "objects": {
+    "cine_revival": "0x992bb471:0x6:1:0x8080254d",
+    "cine_revival_fp": "0x992bb471:0x6:2:0x8080254d",
+    "obj_enter_wall": "0x992bb471:0x20:3:0x80802a1b",
+    "seq_enter_wall_in": "0x992bb471:0x5:4:0x808029a1",
+    "seq_enter_wall_done": "0x992bb471:0x5:5:0x808029a1",
+    "trig_enter_wall": "0x992bb471:0x1d:30:0x80800463",
+    "obj_investigate": "0x992bb471:0x20:7:0x80802a1b",
+    "seq_investigate_in": "0x992bb471:0x5:8:0x808029a1",
+    "seq_investigate_done": "0x992bb471:0x5:9:0x808029a1",
+    "trig_investigate": "0x992bb471:0x1d:34:0x80800463",
+    "cine_ghost_light": "0x992bb471:0x6:10:0x8080254d",
+    "trig_ghost_light": "0x992bb471:0x1d:37:0x80800463",
+    "obj_get_weapon": "0x992bb471:0x20:11:0x80802a1b",
+    "seq_get_weapon_in": "0x992bb471:0x5:12:0x808029a1",
+    "seq_get_weapon_done": "0x992bb471:0x5:13:0x808029a1",
+    "trig_get_weapon": "0x992bb471:0x1d:35:0x80800463",
+    "obj_graveyard": "0x992bb471:0x20:14:0x80802a1b",
+    "seq_graveyard_in": "0x992bb471:0x5:15:0x808029a1",
+    "trig_graveyard": "0x992bb471:0x1d:38:0x80800463",
+    "sq_breach_floor_a": "0xfc0e45a3:0x1:34:0x8080071e:1",
+    "sq_breach_floor_b": "0xfc0e45a3:0x1:36:0x8080071e:1",
+    "sq_breach_wall_l_a": "0xfc0e45a3:0x1:32:0x8080071e:1"
+  },
+  "steps": [
+    {
+      "at": 20,
+      "set": {
+        "cine_revival": {
+          "4": 1,
+          "8": true,
+          "0x14": -1,
+          "0x9c": {
+            "0": 1,
+            "4": [
+              "$player"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "at": 90,
+      "set": {
+        "cine_revival": {
+          "4": 2,
+          "8": false,
+          "0x14": -1
+        },
+        "cine_revival_fp": {
+          "4": 1,
+          "8": true,
+          "0x14": -1,
+          "0x9c": {
+            "0": 1,
+            "4": [
+              "$player"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "at": 135,
+      "set": {
+        "cine_revival_fp": {
+          "4": 2,
+          "8": false,
+          "0x14": -1
+        }
+      }
+    },
+    {
+      "at": 140,
+      "set": {
+        "obj_enter_wall": {
+          "0": 1,
+          "0x2c0": -1
+        },
+        "seq_enter_wall_in": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_enter_wall": {
+          "0": true,
+          "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_enter_wall"
+      },
+      "set": {
+        "obj_enter_wall": {
+          "0": 3,
+          "0x2c0": -1
+        },
+        "seq_enter_wall_done": {
+          "0": "$now",
+          "4": 1
+        },
+        "obj_investigate": {
+          "0": 1,
+          "0x2c0": -1
+        },
+        "seq_investigate_in": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_investigate": {
+          "0": true,
+          "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_investigate"
+      },
+      "set": {
+        "obj_investigate": {
+          "0": 3,
+          "0x2c0": -1
+        },
+        "seq_investigate_done": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_ghost_light": {
+          "0": true,
+          "4": "$now"
+        },
+        "obj_get_weapon": {
+          "0": 1,
+          "0x2c0": -1
+        },
+        "seq_get_weapon_in": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_get_weapon": {
+          "0": true,
+          "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_ghost_light"
+      },
+      "set": {
+        "cine_ghost_light": {
+          "4": 1,
+          "8": true,
+          "0x14": -1,
+          "0x9c": {
+            "0": 1,
+            "4": [
+              "$player"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_get_weapon"
+      },
+      "set": {
+        "obj_get_weapon": {
+          "0": 3,
+          "0x2c0": -1
+        },
+        "seq_get_weapon_done": {
+          "0": "$now",
+          "4": 1
+        },
+        "obj_graveyard": {
+          "0": 1,
+          "0x2c0": -1
+        },
+        "seq_graveyard_in": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_graveyard": {
+          "0": true,
+          "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": 21,
+        "slice_set": 24
+      },
+      "delay": 20,
+      "set": {
+        "sq_breach_floor_a": {
+          "0x44": 1,
+          "squad_existing_members": -1
+        },
+        "sq_breach_floor_b": {
+          "0x44": 1,
+          "squad_existing_members": -1
+        },
+        "sq_breach_wall_l_a": {
+          "0x44": 1,
+          "squad_existing_members": -1
+        }
+      }
+    }
+  ]
+}

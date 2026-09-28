@@ -38,6 +38,59 @@ class JoinResponse(unittest.TestCase):
 
 
 
+class UpdatedBuildLayouts(unittest.TestCase):
+    def test_join_response_moves_after_larger_request(self):
+        schema = dict(SCHEMA)
+        schema[f"{b.JOIN_RESPONSE_TYPE:#x}"] = {"size": 0x1A8, "fields": [
+            nested(0, b.JOIN_REQUEST_TYPE), prim(0x100, 3, 3, 1), nested(0x101, 0x80804056)]}
+        request = investment.encode(schema, b.JOIN_REQUEST_TYPE, {0: 17, 8: 23})
+        values = investment.decode(schema, b.JOIN_RESPONSE_TYPE, b.join_response(schema, request, "act"))
+        self.assertEqual(values[0x100], 0)
+        self.assertEqual(bytes(values[0x101][0][i] for i in range(4)), b"act\0")
+
+    def test_activity_scene_world_and_map_follow_nested_layout(self):
+        schema = {f"{b.STATE_TYPE:#x}": {"fields": [nested(0, 0x80800B8F)]},
+                  "0x80800b8f": {"fields": [prim(0, 2, 0), prim(0x10, 5, 32, 0x80000000),
+                                                   nested(0x60, 0x80800CC5)]},
+                  "0x80800cc5": {"fields": [prim(0x5C8, 4, 16, 0x8000),
+                                                   prim(0x5CA, 4, 16, 0x8000),
+                                                   nested(0x5D0, 0x8080409F)]},
+                  "0x8080409f": {"fields": [nested(0, 0x80804008)]},
+                  "0x80804008": {"fields": [prim(i, 3, 8, 0x80) for i in range(40)]}}
+        values = investment.decode(schema, b.STATE_TYPE,
+                                   b.activity_state(schema, map_name="orbit", world=126))[0][0x60]
+        self.assertEqual(values[0x5C8], 126)
+        self.assertEqual(bytes(values[0x5D0][0][i] for i in range(6)), b"orbit\0")
+
+    def test_sim_player_and_game_mode_follow_shifted_fields(self):
+        schema = {f"{b.SIM_PLAYER_TYPE:#x}": {"fields": [nested(0, 0x80800540),
+                                                             nested(0x10, 0x80802619),
+                                                             nested(0x3C, 0x80800646),
+                                                             nested(0x6C, 0x808023A5),
+                                                             prim(0x70, 5, 32, 0x80000000)]},
+                  "0x80800540": {"fields": [prim(0, 5, 32, 0x80000000), prim(4, 9, 32),
+                                                prim(8, 2, 0), prim(9, 2, 0)]},
+                  "0x80802619": {"fields": []},
+                  "0x80800646": {"fields": [prim(0, 0x23, 64)]},
+                  "0x808023a5": {"fields": [prim(0, 2, 0), prim(2, 8, 16)]},
+                  f"{b.GAME_MODE_TYPE:#x}": {"fields": [prim(0, 3, 4, 1), prim(8, 9, 32),
+                                                            prim(0xC, 5, 32, 0x80000000),
+                                                            nested(0x10, 0x8080533D),
+                                                            prim(0x4C4, 5, 32, 0x80000000),
+                                                            prim(0x4C8, 5, 10, 1), prim(0x4CC, 9, 32)]},
+                  "0x8080533d": {"fields": []}}
+        player = b.sim_player(schema, 1, 5, 0x1234, True)[2]
+        decoded = investment.decode(schema, b.SIM_PLAYER_TYPE,
+                                    investment.encode(schema, b.SIM_PLAYER_TYPE, player))
+        self.assertEqual(decoded[0x3C][0], 0x1234)
+        self.assertTrue(decoded[0x6C][0])
+        self.assertEqual(decoded[0x70], -1)
+        mode = b.game_mode(schema, 1, 3, 3)[2]
+        decoded = investment.decode(schema, b.GAME_MODE_TYPE,
+                                    investment.encode(schema, b.GAME_MODE_TYPE, mode))
+        self.assertEqual((decoded[0], decoded[0x4C8], decoded[0x4CC]), (3, -1, 0x811C9DC5))
+
+
 class EntityIndices(unittest.TestCase):
     def test_bitmap_words(self):
         schema = {
@@ -171,3 +224,20 @@ class ObjectSpec(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientSliceState(unittest.TestCase):
+    def test_type21_slice_record(self):
+        schema = {
+            f"{b.CLIENT_STATE_TYPE:#x}": {"size": 0x220, "fields": [opt_nested(0xB8, 0x80800D9F)]},
+            "0x80800d9f": {"size": 0x148, "fields": [
+                opt_nested(0, 0x80800D82), opt_nested(0xA0, 0x80800D82), prim(0x142, 3, 3, 1, 1)]},
+            "0x80800d82": {"size": 0xA0, "fields": [prim(0, 5, 32, 0x80000000), prim(4, 9, 32)]},
+        }
+        w = investment.BitWriter()
+        w.put(1, 1)
+        investment.encode_into(w, schema, b.CLIENT_STATE_TYPE,
+                               {0xB8: {0: {0: 112, 4: 0x811C9DC5}, 0xA0: {0: -1, 4: 0x811C9DC5}, 0x142: 0}})
+        self.assertEqual(b.client_slice_state(schema, w.data()),
+                         "current 112:0x811c9dc5, target -1:0x811c9dc5, state 0")
+        self.assertIsNone(b.client_slice_state({}, w.data()))

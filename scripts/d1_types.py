@@ -1,0 +1,219 @@
+"""Destiny (BLES01857 01.00) runtime type definitions read statically from the decrypted EBOOT,
+plus the web-service table from the investment globals package - the same JSON schema that
+`scripts/rpcs3_tiger_types.py schema` exports from a running game, without running it.
+
+Every serializable type definition is compiled into the EBOOT. A definition holds its struct size
+at +0x14 and, at def+0x54+[def+0x54], its field list: u32 count, u32 own type handle
+(0x8080xxxx), u32 size, then (after a 0x14-byte header) 0x28-byte field entries: +0 struct
+offset, +8 presence-bit index, +0x10 kind, +0x11 optional, +0x14 nested type handle, +0x18 array
+mode byte / biased minimum, +0x1c bit width, +0x20 extra. The field list names its own handle, so
+a scan of the file finds every definition (4,387 in 01.00; all 816 types of the schemas exported
+at run time match field for field). The title updates (01.13 on) drop 0x20 bytes from the
+definition, linking the list from def+0x34, and each field entry leads with a repeat count (the
+rest of the entry follows, 4 bytes later): a fixed array such as u8[128] is one entry {128, offset
+= stride, ...} where 01.00 lists every element. The scan expands such arrays back into elements. Types without fields (raw blobs such as scenario_client) are
+not in the list.
+
+The web services are a tag of the investment globals (class 0x80803389 package, e.g.
+0x80a5806b): a dynamic array of 36-byte records of element class 0x80801820 - u32 name hash,
+u32, u16 wire id, u16, u32 request type, u32 response type.
+
+  python scripts/d1_types.py [--packages DIR --oodle DLL] schema OUT.json    # full schema (+ services)
+  python scripts/d1_types.py type 0x80801855 [--depth 3]                    # one type tree
+  python scripts/d1_types.py --packages DIR --oodle DLL services            # wire, request, response
+  python scripts/d1_types.py --packages DIR --oodle DLL --service-tag 0x80a5e21a service-map OUT.json
+"""
+
+import argparse
+import json
+import struct
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import d1_pkg  # noqa: E402
+
+DEFAULT_ELF = Path(__file__).resolve().parents[1] / "local" / "RESEARCH" / "ps3_decrypt" / "EBOOT.elf"
+TYPE_LO, TYPE_HI = 0x80800000, 0x80810000
+SERVICE_RECORD_CLASS = 0x80801820
+# (where a definition holds its field-list link, whether field entries lead with a repeat count):
+# 01.00, the title updates
+LAYOUTS = ((0x54, False), (0x34, True))
+KIND_NAMES = {1: "struct", 2: "bool", 3: "u8", 4: "i16", 5: "i32", 6: "u64", 7: "u8", 8: "u16", 9: "u32",
+              10: "u64", 11: "f32", 13: "k13", 0x23: "machine_id"}
+
+
+def scan_types(data):
+    """{"0x8080....": {"size", "fields"}} for every type definition in the EBOOT bytes: the build's
+    definitions all link their field lists from one offset, whichever finds the most types."""
+    return max((scan_layout(data, *layout) for layout in LAYOUTS), key=len)
+
+
+def scan_layout(data, link, counted):
+    types, end = {}, len(data)
+    shift = 4 if counted else 0
+    for p in range(0, end - 0x58, 4):
+        rel = struct.unpack_from(">I", data, p + link)[0]
+        if rel == 0 or rel > 0x100000 or rel % 4:
+            continue
+        q = p + link + rel
+        if q + 0x14 > end:
+            continue
+        count, handle, size = struct.unpack_from(">III", data, q)
+        if not TYPE_LO <= handle < TYPE_HI or count > 4096 or q + 0x14 + count * 0x28 > end:
+            continue
+        if struct.unpack_from(">I", data, p + 0x14)[0] != size:
+            continue
+        fields = []
+        for i in range(count):
+            e = q + 0x14 + i * 0x28
+            repeat = struct.unpack_from(">I", data, e)[0] if counted else 0
+            off, _, bit = struct.unpack_from(">III", data, e + shift)
+            nested, minimum, width, extra = struct.unpack_from(">IIII", data, e + shift + 0x14)
+            field = {"off": off, "bit": bit, "kind": data[e + shift + 0x10], "opt": data[e + shift + 0x11],
+                     "nested": nested, "arr": data[e + shift + 0x18], "min": minimum, "width": width,
+                     "extra": extra}
+            if repeat and count == 1 and repeat * off == size:  # a fixed array, the type's only field:
+                fields += [dict(field, off=off * n, bit=bit * n) for n in range(repeat)]  # offset = stride
+            else:
+                fields.append(field)
+        types[f"{handle:#x}"] = {"size": size, "fields": fields}
+    return types
+
+
+def parse_service_table(data):
+    """Decode a service table tag, or return [] when the tag has another layout."""
+    if struct.pack(">I", SERVICE_RECORD_CLASS) not in data[:0x40]:
+        return []
+    for field in range(4, 0x28, 4):
+        try:
+            count, first, elem = d1_pkg.dyn_array(data, field)
+        except (ValueError, struct.error):
+            continue
+        if elem == SERVICE_RECORD_CLASS and first + 36 * count <= len(data):
+            out = [struct.unpack_from(">IIHHII", data, first + 36 * i) for i in range(count)]
+            return sorted((wire, name, request, response)
+                          for name, _, wire, _, request, response in out)
+    return []
+
+
+def service_table(ps, tag=None):
+    """[(wire, name hash, request handle, response handle)] from the investment globals."""
+    if tag is not None:
+        data = ps.tag(tag)
+        return parse_service_table(data) if data is not None else []
+    for p in ps.by_id.values():
+        for e in p.entries:
+            if e["type"] != 16:
+                continue
+            try:
+                data = p.entry_data(e["index"], ps.oodle)
+            except (ValueError, struct.error, RuntimeError, FileNotFoundError):
+                # A partial update chain can omit base blocks unrelated to the
+                # service table. Keep scanning entries in the available patches.
+                continue
+            found = parse_service_table(data)
+            if found:
+                return found
+    return []
+
+
+def signature(types, handle, depth=0, max_depth=2):
+    """Compact field summary of a type, e.g. "u64 i16 {u8 i16}x6"."""
+    entry = types.get(f"{handle:#x}")
+    if entry is None:
+        return "?"
+    parts = []
+    for f in entry["fields"]:
+        if f["kind"] == 1:
+            inner = signature(types, f["nested"], depth + 1, max_depth) if depth < max_depth else f"{f['nested']:#x}"
+            part = f"[{inner}]" if f["arr"] == 1 else f"{{{inner}}}"
+        else:
+            name = KIND_NAMES.get(f["kind"], f"k{f['kind']}")
+            standard = f["width"] in (8, 16, 32, 64) or f["kind"] in (2, 6, 10, 11, 0x23)
+            part = name if standard else f"{name}:{f['width']}"
+        if f["opt"]:
+            part += "?"
+        if parts and parts[-1][0] == part:
+            parts[-1][1] += 1
+        else:
+            parts.append([part, 1])
+    return " ".join(p if n == 1 else f"{p}x{n}" for p, n in parts)
+
+
+def print_tree(types, handle, depth=0, max_depth=3):
+    entry = types.get(f"{handle:#x}")
+    if entry is None:
+        print("  " * depth + f"{handle:#x} (not in the EBOOT)")
+        return
+    print("  " * depth + f"{handle:#x} size {entry['size']:#x}, {len(entry['fields'])} fields")
+    previous = None
+    for f in entry["fields"]:
+        name = KIND_NAMES.get(f["kind"], f"k{f['kind']}")
+        line = (f"+{f['off']:#x} {name} w{f['width']} {'opt ' if f['opt'] else ''}"
+                f"{'array ' if f['kind'] == 1 and f['arr'] == 1 else ''}"
+                f"{'min ' + hex(f['min']) + ' ' if f['kind'] != 1 and f['min'] else ''}")
+        if f["kind"] == 1:
+            if f["nested"] == previous:
+                print("  " * depth + "  " + line + f"(same {f['nested']:#x})")
+                continue
+            previous = f["nested"]
+            print("  " * depth + "  " + line + "->")
+            if depth < max_depth:
+                print_tree(types, f["nested"], depth + 2, max_depth)
+        else:
+            previous = None
+            print("  " * depth + "  " + line)
+
+
+def package_set(a):
+    if not a.packages:
+        return None
+    return d1_pkg.PackageSet([a.packages], d1_pkg.Oodle(a.oodle) if a.oodle else None)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--elf", type=Path, default=DEFAULT_ELF, help="decrypted EBOOT")
+    ap.add_argument("--packages", help="folder with the investment globals package chain")
+    ap.add_argument("--oodle", help="oo2core_3_win64.dll (the packages' blocks are compressed)")
+    ap.add_argument("--service-tag", type=lambda value: int(value, 0),
+                    help="specific service table tag (01.24: 0x80a5e21a)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("schema"); s.add_argument("out", type=Path)
+    s = sub.add_parser("service-map"); s.add_argument("out", type=Path)
+    s = sub.add_parser("type"); s.add_argument("handle"); s.add_argument("--depth", type=int, default=3)
+    sub.add_parser("services")
+    a = ap.parse_args(argv)
+    types = scan_types(a.elf.read_bytes()) if a.cmd != "service-map" else {}
+    if a.cmd == "type":
+        print_tree(types, int(a.handle, 16), max_depth=a.depth)
+        return
+    ps = package_set(a)
+    services = service_table(ps, a.service_tag) if ps else []
+    if a.cmd == "service-map":
+        if not services:
+            sys.exit("service map needs --packages, --oodle and a valid --service-tag")
+        out = {
+            "services": {str(w): [f"{rq:#x}", f"{rs:#x}"] for w, _, rq, rs in services},
+            "name_hashes": {str(w): f"{name:#010x}" for w, name, _, _ in services},
+        }
+        a.out.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        print(f"{len(services)} services -> {a.out}")
+        return
+    if a.cmd == "schema":
+        out = dict(types)
+        if services:
+            out["services"] = {str(w): [f"{rq:#x}", f"{rs:#x}"] for w, _, rq, rs in services}
+        a.out.write_text(json.dumps(out, indent=0), encoding="utf-8")
+        print(f"{len(types)} types, {len(services)} services -> {a.out}")
+        return
+    if not services:
+        sys.exit("services need --packages (and --oodle) with the investment globals")
+    for wire, name, request, response in services:
+        print(f"{wire:5}  {name:#010x}  request {request:#x}: {signature(types, request)}")
+        print(f"{'':19}response {response:#x}: {signature(types, response)}")
+
+
+if __name__ == "__main__":
+    main()

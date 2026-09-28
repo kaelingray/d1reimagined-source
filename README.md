@@ -23,7 +23,13 @@ What a real host still has to provide there, from analysis of the executable (de
 - **Objectives** such as "Enter the Wall" are replicated script state machines: per-bubble objective sensors (kind 3, 24 states each) and step objects (kind 4; bubble 14 has 28). The stand-in sends them all at state 0, so no objective starts yet.
 - **Enemies** come from the bubble-local objects (kinds 1, 2, 4), still to be driven.
 
-Also next: the urgent-message trigger, an intermittent emulator freeze in the login cinematic (40 % of boots since the last rebuild; retried automatically), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Tests now run on a second PC (see "Moving to another PC"). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
+**What is still missing** (see-through guardian = no equipped gear, mission scripts, loot, XP, item services, other activities) and the data wanted for it: [`notes/feature-gaps.md`](notes/feature-gaps.md).
+
+The long-term target is the final PS3 build, 01.24 (Destiny 2.3.1 with The Taken King): [`notes/preservation-plan.md`](notes/preservation-plan.md). A static comparison with 01.00 ([`notes/final-build.md`](notes/final-build.md)) found stable type handles and web services, an unchanged sign-on reply, and no Demonware lobby step. It also records the RPCS3 patch addresses for that build.
+
+The mission start is scripted from the stand-in (`--ah-mission`, [`notes/mission-director.md`](notes/mission-director.md)): revival cinematic, objectives with dialogue, trigger-driven steps and Fallen squads, still to be run.
+
+Static analysis of the EBOOT (2026-09-27 evening) shows a mid-mission bubble change starts on the client, from the player's position (world-controller update `0x31dab0` -> engine request slot 2 "Change slice-set"), not from a host world-state push; the next run walks into The Breach to confirm it ([runbook](notes/next-session-playbook.md)). Also next: the urgent-message trigger, an intermittent emulator freeze in the login cinematic (40 % of boots since the last rebuild; retried automatically), and upstreaming the RPCS3 fixes (drafts in [`notes/rpcs3-upstream-draft.md`](notes/rpcs3-upstream-draft.md), not filed). Tests now run on a second PC (see "Moving to another PC"). The next PC session's ordered experiments and commands: [`notes/next-session-playbook.md`](notes/next-session-playbook.md). Detailed, dated findings: [`notes/checkpoint-2026-09-25-orbit.md`](notes/checkpoint-2026-09-25-orbit.md); per-run results: [`notes/test-log.md`](notes/test-log.md).
 
 ### Gates passed on the PS3 route
 
@@ -84,9 +90,15 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/d1trace_timeline.py`, `scripts/d1dump_scan.py`, `scripts/Invoke-MoveDump.ps1`: analysis of the instrumented RPCS3 build's timeline traces and render-target dumps.
 - `scripts/Invoke-SoakTest.ps1`: long in-mission runs (periodic movement, scored screenshots, RPCS3 memory).
 - `scripts/Invoke-BubbleSweep.ps1`: boots each given mission bubble in turn, feeds its replicated objects back to the stand-in (`--ah-baselines-watch`) so the guardian spawns there, and screenshots the Ghost's nav mode (location name).
+- `scripts/ah_log_summary.py LOG`: the client -> activity-host messages of a proxy log (`TESTnnn-ahl.log`), showing only the first occurrence of each type/body next to the stand-in's pushes, to spot new client reports among the ~30/s type-15 messages.
+- `scripts/d1_eboot.py`: static analysis of the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`): strings, references to an address or string (SNC `lis`+`addic`/`ori` pairs, TOC loads, data pointers), callers, the containing function and disassembly, e.g. `d1_eboot.py xref "Change slice-set"`.
+- `scripts/d1_addresses.py`: index of every EBOOT address in the notes with curated names ([`notes/eboot-labels.tsv`](notes/eboot-labels.tsv), generated [`notes/eboot-addresses.md`](notes/eboot-addresses.md)); `d1_addresses.py 0x3204a8` prints what is known about an address, `--ghidra FILE` writes a Ghidra script that labels the decrypted EBOOT.
+- `scripts/d1_pkg.py`: offline reader for the disc's Tiger packages (named tags, entries, blocks, extraction; compressed blocks need an Oodle decoder). Public Destiny networking and package research applied to the stand-in: [`notes/public-research.md`](notes/public-research.md).
 - `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller (the XInput config is active at the moment).
 
-Unit tests: `python -m unittest discover -s server -p "test_*.py"`.
+Unit tests: `python -m unittest discover -s server -p "test_*.py"` and `python -m unittest discover -s scripts -p "test_*.py"`.
+Before a scripted mission run, use `python scripts/d1_mission_preflight.py --schema <activity_schema.json> missions/a_guardian_rises.json missions/tower_npcs.json` to check its state fields against the selected client build.
+For a full build check covering join, world, player, game mode, gear, unlock flags and service mappings, use `scripts/d1_build_preflight.py` as shown in the [runbook](notes/next-session-playbook.md).
 
 ### Moving to another PC
 

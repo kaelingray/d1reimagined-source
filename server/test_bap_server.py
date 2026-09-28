@@ -1,5 +1,7 @@
+import json
 import struct
 import unittest
+from pathlib import Path
 
 import bap_server as bap
 
@@ -39,6 +41,194 @@ class ShelloReply(unittest.TestCase):
         self.assertEqual(frame[:6], bytes.fromhex("010100000018"))
 
 
+class ServiceSchema(unittest.TestCase):
+    def test_update_type_export_uses_saved_service_ids(self):
+        target = {"0x80801825": {"fields": []}, "0x80801774": {"fields": []}}
+        source = {"services": {"503": ["0x80801774", "0x80801825"]}}
+        merged = bap.with_service_map(target, source)
+        self.assertEqual(merged["services"], source["services"])
+        self.assertIsNone(bap.with_service_map(None, source))
+        self.assertIs(bap.with_service_map(merged, {}), merged)
+        with self.assertRaisesRegex(ValueError, "absent type"):
+            bap.with_service_map({"0x80801825": {"fields": []}}, source)
+
+
+class CharacterGear(unittest.TestCase):
+    def test_gear_spec(self):
+        gear = bap.gear_spec("7=0x64/2:5/3:6, 12=200")
+        self.assertEqual(gear, {7: {"item": 100, "id": 0x107, "dyes": [(2, 5), (3, 6)]},
+                                12: {"item": 200, "id": 0x10c, "dyes": []}})
+        with self.assertRaises(ValueError):
+            bap.gear_spec("20=1")
+
+    def test_starter_kit_with_override(self):
+        gear = bap.gear_spec("starter:titan,6=2008")
+        self.assertEqual({slot: g["item"] for slot, g in gear.items()},
+                         {**bap.STARTER_GEAR["titan"], 6: 2008})
+        self.assertEqual(gear[1]["id"], 0x101)
+        with self.assertRaises(ValueError):
+            bap.gear_spec("starter:guardian")
+
+    def test_gear_objects_fill_all_three_character_objects(self):
+        extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
+                                       12: {"item": 200, "id": 0x10c, "dyes": []}})
+        slot7 = {0: 0x107, 8: 100, 0xe: {0: {0: 2, 2: 5}}}
+        self.assertEqual(extras["peer"][0x30][0x138][7 * 0x28], slot7)
+        self.assertEqual(extras["select"][0x68][0x138][12 * 0x28], {0: 0x10c, 8: 200})
+        self.assertEqual(extras["self"][0x30], {0: 2, 8: {0: {0: 100, 8: 0x107, 0x10: 1},
+                                                          0x18: {0: 200, 8: 0x10c, 0x10: 1}}})
+        self.assertEqual(extras["self"][0x1838], {7 * 8: 0x107, 12 * 8: 0x10c})
+
+    def test_layout_follows_the_schema(self):
+        # a 01.24-shaped schema: same handles, grown types (slot 0x30 with dyes at +0x18, items at
+        # +0x1e8, equipped ids at +0x2900, inventory entries of 0x20 bytes)
+        def struct(off, nested):
+            return {"off": off, "kind": 1, "opt": 1, "nested": int(nested, 16)}
+        schema = {"0x80801855": {"size": 0x8c8, "fields": [struct(0x10, "0x80805513"), struct(0x1e8, "0x808045d9")]},
+                  "0x808017fd": {"size": 0x908, "fields": [struct(0x30, "0x80801855")]},
+                  "0x80801954": {"size": 0x940, "fields": [struct(0x68, "0x80801855")]},
+                  "0x80801714": {"size": 0x6db8, "fields": [struct(0xc, "0x8080181a"), struct(0x30, "0x80804a18"),
+                                                            struct(0x2900, "0x808045da")]},
+                  "0x80804a18": {"size": 0x2808, "fields": [{"off": 0, "kind": 5}, struct(8, "0x8080547d")]},
+                  "0x8080183c": {"size": 0x30, "fields": [struct(0x18, "0x808046bc")]},
+                  "0x808016e0": {"size": 0x20, "fields": []}}
+        layout = bap.character_layout(schema)
+        self.assertEqual(bap.character_layout(None), bap.LAYOUT_0100)
+        self.assertEqual((layout["progression_items"], layout["self_equipped"], layout["slot_size"],
+                          layout["slot_dyes"], layout["inventory_entry"]), (0x1e8, 0x2900, 0x30, 0x18, 0x20))
+        extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
+                                       12: {"item": 200, "id": 0x10c, "dyes": []}}, layout=layout)
+        self.assertEqual(extras["peer"][0x30][0x1e8][7 * 0x30], {0: 0x107, 8: 100, 0x18: {0: {0: 2, 2: 5}}})
+        self.assertEqual(extras["self"][0x30][8][0x20], {0: 200, 8: 0x10c, 0x10: 1})
+        self.assertEqual(extras["self"][0x2900], {7 * 8: 0x107, 12 * 8: 0x10c})
+
+    def test_overlay_merges_over_gear(self):
+        overlay = bap.overlay_spec('{"peer": {"0x30": {"0": 1, "0x138": {"0": {"8": 5}}}}}')
+        extras = bap.character_extras({0: {"item": 9, "id": 0x100, "dyes": []}}, overlay)
+        self.assertEqual(extras["peer"][0x30], {0: 1, 0x138: {0: {0: 0x100, 8: 5}}})
+        self.assertEqual(extras["select"][0x68][0x138][0], {0: 0x100, 8: 9})
+        with self.assertRaises(ValueError):
+            bap.overlay_spec('{"player": {}}')
+
+
+class UnlockFlags(unittest.TestCase):
+    @staticmethod
+    def schema(a_offset, a_handle, a_count, b_offset, b_inner, c_offset, c_handle, c_count):
+        def nested(off, handle):
+            return {"off": off, "kind": 1, "opt": 1, "nested": handle, "arr": 0, "min": 0, "width": 0}
+
+        def table(count):
+            return {"size": count, "fields": [
+                {"off": i, "kind": 3, "opt": 1, "nested": -1, "arr": 0, "min": 1, "width": 2}
+                for i in range(count)]}
+
+        return {"0x808018c7": {"fields": [nested(a_offset, a_handle), nested(b_offset, 0x80801807)]},
+                "0x80801807": {"fields": [nested(b_inner, 0x808047d8)]},
+                "0x80801714": {"fields": [nested(c_offset, c_handle)]},
+                f"{a_handle:#x}": table(a_count), "0x808047d8": table(256),
+                f"{c_handle:#x}": table(c_count)}
+
+    def test_flags_follow_old_and_new_schema_layouts(self):
+        cases = ((0x12a8, 0x80804595, 1024, 0x16a8, 1, 0x3bc0, 0x80804595, 1024),
+                 (0x383c, 0x80804b0c, 2560, 0x4f78, 8, 0x5000, 0x80804c21, 2048))
+        for args in cases:
+            schema = self.schema(*args)
+            layout = bap.flag_layout(schema)
+            self.assertEqual(tuple(layout[t]["count"] for t in ("A", "B", "C")),
+                             (args[2], 256, args[7]))
+            values = bap.account_flag_values("2", {t: layout[t]["count"] for t in layout})
+            self.assertEqual(tuple(len(values[t]) for t in ("A", "B", "C")), (args[2], 256, args[7]))
+            root = bap.account_flags(schema, "2", layout, values)
+            self.assertEqual(root[args[0]][args[2] - 1], 2)
+            self.assertEqual(root[args[3]][args[4]][255], 2)
+            self.assertEqual(values["C"][args[7] - 1], 2)
+            self.assertNotIn(0, root[args[3]])  # old bool defaults false; new u64 is optional
+
+    def test_explicit_ranges_use_the_selected_build_capacity(self):
+        counts = {"A": 2560, "B": 256, "C": 2048}
+        values = bap.account_flag_values("1;2@A2559,B0,C2047", counts)
+        self.assertEqual(values["A"][2559], 2)
+        self.assertEqual(values["B"][0], 2)
+        self.assertEqual(values["C"][2047], 2)
+        with self.assertRaisesRegex(ValueError, "outside"):
+            bap.account_flag_values("2@C2048", counts)
+
+
+class MissionScript(unittest.TestCase):
+    F = lambda off, kind, width, opt=0, minimum=0: {"off": off, "kind": kind, "opt": opt, "nested": -1,
+                                                    "arr": 0, "min": minimum, "width": width, "extra": 0}
+    SCHEMA = {"0x808004b1": {"size": 8, "fields": [F(0, 9, 32), F(4, 3, 6, 0, 1), F(6, 4, 16, 0, 0x8000)]},
+              "0x80800463": {"size": 8, "fields": [F(0, 2, 0), F(4, 5, 32, 0, 0x80000000)]},
+              "0x8080071e": {"size": 0x60, "fields": [F(0x44, 5, 31), F(0x5c, 3, 2, minimum=1)]}}
+    MISSION = {"objects": {"trig": "0x992bb471:0x1d:30:0x80800463", "other": "0x992bb471:0x1d:31:0x80800463"},
+               "steps": [{"at": 5, "set": {"trig": {"0": True, "4": "$now"}}},
+                         {"on": {"type": 6, "object": "trig"}, "delay": 1, "set": {"other": {"4": "$player"}}},
+                         {"on": {"type": 21, "regex": "^b8"}, "set": {"other": {"0": True}}}]}
+
+    def test_expand_and_resolve(self):
+        timed, reactive = bap.expand_mission(self.MISSION, self.SCHEMA)
+        self.assertEqual(len(timed), 1)
+        at, spec = timed[0]
+        self.assertEqual((at, spec[0], spec[1]), (5.0, {0: 0x992bb471, 4: 0x1d, 6: 30}, 0x80800463))
+        self.assertEqual(bap.resolve_spec(spec, {"now": 90, "player": 7})[2], {0: True, 4: 90})
+        (t1, m1, d1, s1), (t2, m2, d2, s2) = reactive
+        self.assertEqual((t1, d1, s1[0][6]), (6, 1.0, 31))
+        self.assertEqual(bap.resolve_spec(s1, {"now": 0, "player": 7})[2], {4: 7})
+        self.assertTrue(m2.search("b80000") and not m2.search("00b8"))
+        self.assertEqual(bap.resolve_values(["$now+30", "$now-5"], {"now": 100}), [130, 95])
+        any_rule = bap.expand_mission({"objects": self.MISSION["objects"], "steps": [
+            {"on": {"type": "any", "object": "trig"}, "set": {"other": {"0": True}}}]}, self.SCHEMA)[1][0]
+        self.assertEqual(any_rule[0], bap.ANY_MESSAGE)
+        with self.assertRaises(ValueError):
+            bap.resolve_values("$later", {"now": 0})
+        with self.assertRaises(ValueError):
+            bap.expand_mission({"objects": {}, "steps": [{"at": 1, "set": {"nope": {}}}]}, self.SCHEMA)
+
+    def test_object_matcher_finds_the_id_at_any_bit(self):
+        matcher = bap.ObjectIdMatcher(self.SCHEMA, 0x992bb471, 0x1d, 30)
+        for lead in (0, 3, 11):
+            w = bap.investment.BitWriter()
+            w.put(1, lead + 1)
+            bap.investment.encode_into(w, self.SCHEMA, bap.OBJECT_ID_TYPE, {0: 0x992bb471, 4: 0x1d, 6: 30})
+            w.put(0, 9)
+            self.assertTrue(matcher.search(w.data().hex()))
+        w = bap.investment.BitWriter()
+        bap.investment.encode_into(w, self.SCHEMA, bap.OBJECT_ID_TYPE, {0: 0x992bb471, 4: 0x1d, 6: 31})
+        self.assertFalse(matcher.search(w.data().hex()))
+
+    def test_shipped_scripts_expand(self):
+        folder = Path(__file__).resolve().parents[1] / "missions"
+        timed, _ = bap.expand_mission(json.loads((folder / "tower_npcs.json").read_text(encoding="utf-8")),
+                                      self.SCHEMA)
+        self.assertEqual({spec[0][4] for _, spec in timed}, {1})
+        mission = json.loads((folder / "a_guardian_rises.json").read_text(encoding="utf-8"))
+        timed, reactive = bap.expand_mission(mission, self.SCHEMA)
+        self.assertTrue(timed and reactive)
+        self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher)) for _, m, _, _ in reactive))
+        self.assertTrue(any(isinstance(m, bap.SliceSetMatcher) and m.index == 24 for _, m, _, _ in reactive))
+
+    def test_squad_field_resolves_for_both_build_layouts(self):
+        mission = {"objects": {"squad": "0x992bb471:1:3:0x8080071e"},
+                   "steps": [{"at": 1, "set": {"squad": {"0x44": 1, "squad_existing_members": -1}}}]}
+        for size, offset in ((0x60, 0x5c), (0x7c, 0x74)):
+            schema = dict(self.SCHEMA)
+            schema["0x8080071e"] = {"size": size, "fields": [MissionScript.F(0x44, 5, 31),
+                                                                 MissionScript.F(offset, 3, 2, minimum=1)]}
+            timed, reactive = bap.expand_mission(mission, schema)
+            self.assertEqual(timed[0][1][2], {0x44: 1, offset: -1})
+            self.assertEqual(bap.validate_mission_states(schema, timed, reactive), 1)
+
+    def test_preflight_rejects_a_dropped_field(self):
+        schema = dict(self.SCHEMA)
+        schema["0x8080071e"] = {"size": 0x7c, "fields": [MissionScript.F(0x44, 5, 31),
+                                                           MissionScript.F(0x74, 3, 2, minimum=1)]}
+        mission = {"objects": {"squad": "0x992bb471:1:3:0x8080071e"},
+                   "steps": [{"at": 1, "set": {"squad": {"0x5c": -1}}}]}
+        timed, reactive = bap.expand_mission(mission, schema)
+        with self.assertRaisesRegex(ValueError, "0x5c: field is absent"):
+            bap.validate_mission_states(schema, timed, reactive)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -48,3 +238,24 @@ class ClientConfigReply(unittest.TestCase):
         self.assertEqual(bap.client_config_reply(), bytes.fromhex("08011001"))
         self.assertEqual(bap.client_config_reply(0, 1), bytes.fromhex("08001001"))
         self.assertEqual(bap.client_config_reply(300, 2), bytes.fromhex("08ac021002"))
+
+
+class ReactiveObjects(unittest.TestCase):
+    def test_rule_parsing(self):
+        on_type, on_body, delay, spec = bap.reactive_object_spec(
+            '15/^41=>2.5@0xecf574b5:3:0:0x808004fa={"0": {"0": 2}}')
+        self.assertEqual((on_type, delay), (15, 2.5))
+        self.assertTrue(on_body.search("4100") and not on_body.search("0041"))
+        self.assertEqual(spec[0], {0: 0xecf574b5, 4: 3, 6: 0})
+        self.assertEqual(spec[1], 0x808004fa)
+        self.assertEqual(spec[2], {0: {0: 2}})
+        self.assertIsNone(bap.reactive_object_spec("0x14=>0@1:2:3:0x80800001")[1])
+        with self.assertRaises(ValueError):
+            bap.reactive_object_spec("15@1:2:3:0x80800001")
+
+    def test_replace_object_keeps_one_state_per_object(self):
+        objects = [bap.default_baseline(1, 3, 0), bap.default_baseline(1, 4, 0)]
+        spec = bap.object_spec('1:3:0:0x808004fa={"0": {"0": 1}}')
+        self.assertEqual(bap.replace_object(objects, spec), (1, 3, 0))
+        self.assertEqual(len(objects), 2)
+        self.assertEqual(objects[-1], spec)

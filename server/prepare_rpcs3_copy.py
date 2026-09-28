@@ -45,9 +45,17 @@ def main():
     ap.add_argument("--game-ca", type=Path, help="PEM CA certificate to patch over Destiny's embedded roots")
     ap.add_argument("--unsigned-manifest", action="store_true",
                     help="with --game-ca, also patch out the content manifest signature requirement")
+    ap.add_argument("--build", default="01.00", choices=sorted(game_ca_patch.BUILDS),
+                    help="game version the --game-ca patch targets (its addresses differ)")
+    ap.add_argument("--ppu-hash", help='RPCS3\'s "PPU executable hash" for --build, if not known yet')
     args = ap.parse_args()
     if args.unsigned_manifest and not args.game_ca:
         ap.error("--unsigned-manifest needs --game-ca")
+    if args.game_ca:
+        try:
+            game_ca_patch.build_sites(args.build, args.ppu_hash)
+        except ValueError as e:
+            ap.error(str(e))
 
     if not ipaddress.ip_address(args.dns).is_loopback:
         sys.exit("DNS address must be loopback so the game cannot resolve live hosts")
@@ -89,7 +97,8 @@ def main():
 
     if args.game_ca:
         patch_file, config_file = game_ca_patch.install(
-            args.dest, args.game_ca, unsigned_manifest=args.unsigned_manifest, replace=True)
+            args.dest, args.game_ca, unsigned_manifest=args.unsigned_manifest, replace=True,
+            build=args.build, ppu_hash=args.ppu_hash)
         print(f"wrote {patch_file} and enabled it in {config_file}")
 
 

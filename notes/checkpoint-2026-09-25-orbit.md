@@ -1141,3 +1141,219 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
   host must command slice-set transitions some other way. TEST366 traces the type-11 handler
   `0x25715c`, the slice-set loader `0x13f8ec`, `0x31f6bc` and the reason/state poster
   `0x3204a8` across a 112 -> 24 (The Breach) switch.
+
+## Static analysis of the uploaded EBOOT: how a slice-set switch starts (2026-09-27 evening)
+From the decrypted EBOOT in the private `d1xenia-data` repo (`scripts/d1_eboot.py`), the TEST364-366
+logs there and the exported schemas. Nothing here has run yet; the hooks in
+`next-session-playbook.md` step 2 check it.
+- **Engine requests.** `0x302100` registers 18 request slots through `0x11f80c` (table from
+  `0x11f690()` = `*(0x18a4328)`: handler descriptors at +0x80 + 4*slot, describers at +0xc8,
+  flags at +0x114, a 0x1804-byte parameter block per slot from +0x15c). Describers name them:
+  slot 1 = "De-instantiate CURRENT slice-set." (`0x303330`), slot 2 = "Change slice-set
+  (slice-set='%d', spawn='%s')." (`0x30335c`; handler `0x30256c`), slot 3 = "Change world
+  (...)" (`0x3033a0`; handler `0x302728`). `0x11f91c(table, slot, params)` posts one (flag 0 ->
+  1, parameters copied, flag 2); `0x11fa88` tests a slot for "posted".
+- **Only two places post slot 2**: the world load machine `0x4b2d00` (`0x4b3330`, at load) and
+  the world-controller zone machine `0x31eaf8` (`0x31ebf4`, in the world). The zone machine reads
+  the zone state object (`0x30e128()`): state byte +0, target slice-set index +0xa8 and hash
+  +0xac; when the target exists in the scenario object table (`0x140820` status 2/3) and slot 2
+  is free, it posts {0xc, index, hash}. The zone state is filled from the world controller's
+  slice record by event 0x4a / RPC entry 11 (see "Where the zone record comes from" above).
+- **Who sets the slice record's target** (`0x31d358(slice, state, index, &hash)`): the
+  world-controller update `0x31e658`, which runs only while `0x66c2d4()` == 0 (this machine is
+  the authority over the slice set; string "authority-over-current-slice-set") and slice +0x81
+  == 0, +0x88 != 0, state +0x89 < 6, +0x80 == 0. It calls, in order:
+  - `0x31e300`: a **pending request** at slice +0x220 (i32 index), +0x224 (hash), +0x228 (u8):
+    when the index is not -1, the target becomes {state 5, index, hash} and the request is
+    cleared (+0x220 = -1, +0x224 = 0x811c9dc5).
+  - `0x31dab0`: **follows the local player**. It resolves the local player's entity
+    (`0x68324c(0)` -> `0x2d6544`), walks a list of volumes testing positions, takes the bubble the
+    player is in, converts it with `0x14a8dc` (8 * bubble) and, when that base slice set is present
+    in the scenario object table (`0x140820` status not 5), writes target {state 3, index}.
+  - `0x31d778`: the arrival target (state 2) described earlier.
+  So a mid-mission bubble change starts on the client, from the player's position (a z-leg), as
+  in Bungie's description of bubble transitions (`public-research.md`). A host world-state delta
+  naming another zone set is not part of this path, which fits TEST350 and TEST366.
+- The pending request (+0x220) is written only by `0x31bcd0(index, &hash, u8)` (when
+  `0x66c2d4()` == 0 and slice +0x88 != 0). Its one caller is `0x35bfec`, a small request state
+  machine in the player spawner, reached through the spawner component's vtable (`0x12bbc18`,
+  installed by `0x35be78`; slot 29 = `0x4e9470` -> `0x35bfec`). Every tick `0x1c922c(sim)` (from
+  `0x1c5f08`, which walks the host sessions' simulations) calls vtable slot 28 with
+  (sim, sim+0x5078, sim+0x18) and slot 29 with (sim, sim+0x5080, sim+0x20). Slot 29 compares the
+  record at sim+0x5080 {u8 state @0, u8 @4, i32 index @8, u32 hash @0xc} with its copy at sim+0x20
+  and, on a new request, raises the pending slice-set request: a **host-driven teleport /
+  slice-set change** path (EBOOT transition kinds include `teleportation`). What fills sim+0x5080
+  is still open: it lies between the world-state copy (sim+8, 0x5038 bytes) and the activity
+  state (sim+0x50b0), and no host message handler touches it directly (checked two call levels
+  deep for all 17 types).
+- **Host message dispatch.** `0x258778` looks the subtype up in 17 {type, handler descriptor}
+  pairs at `0x175cf5c`: 0 `0xd0d020`, 1 `0xd0d250`, 2 `0xd0d3f0`, 4 `0xd0d560`, 5 `0x25b920`, 7
+  `0x257028`, 10 `0xd0d6a8`, 11 `0x2572e4` (a thunk to `0x25715c`), 18 `0xd0d6e8`, 23 `0xd0d88c`,
+  24 `0xd0da9c`, 27 `0xd0dca4`, 29 `0xd0dde8`, 38 `0x25b9a8`, 39 `0xd0df2c`, 42 `0xd0e08c`, 43
+  `0xd0e214`.
+- **TEST366 caveat.** Its hook log (in the data repo) has exactly 10 hits each for `0x25715c` and
+  `0x31f6bc`; six of the `0x25715c` hits fall within 1.6 ms at emu 5:15.95 (queued type-11
+  messages handled in one burst). Two watches ending at exactly 10 hits looks like the watch's hit
+  budget running out, so "type 11 no longer reaches the handler in the world" is not
+  established. Re-check with a large budget (`25715c 5000 ...`).
+- **Correction:** the string "objective sensor client update state" is referenced at
+  `0x1f6e98` in `0x1f6e70` (called from `0x35b844`), the function after the kind-3 handler;
+  `0x1f6aa4` ends at the tail branch `0x1f6e6c`.
+- **Client -> host senders** (each sends through the host messaging object, host +0xba8, virtual
+  +0x18, message number in r5; most encode a struct with a per-message descriptor global at
+  0x179eb80-0x179ec10 through `0x25bd0c`): 3 join (`0x259c84`), 6 raw (`0x258678`, reached only
+  through the interface table at 0x12b70b0), 8 (`0x259300`), 12 (`0x259904`), 13 (`0x259afc`), 14
+  (`0x259da4`), 15 (`0x258138`, the ~30/s one), 17 (`0x259f10`), 18 (`0x25a21c`), 19 (`0x2587ec`),
+  20 (`0x258934`), 21 (`0x257d28`), 22 (`0x257e18`), 25 (`0x25b274`), 26 (`0x25b46c`), 28
+  (`0x258c08`), 30 (`0x258d2c`), 31 (`0x258f0c`), 32 (`0x25b63c`), 33 (`0x25a548`), 35
+  (`0x25a094`), 36 (`0x25a73c`), 37 (`0x25a360`), 44 (`0x2590d8`), 45 (`0x2591ec`).
+- **Type 21 = the client's own state, including its slice set.** `0x257c80` encodes one present
+  bit + a delta (`0x1ca00c`) of the 0x220-byte struct 0x80800c56 at host +0x6498 against the last
+  sent copy at +0x66b8. Its +0xb8 is 0x80800d9f, the world controller's slice-set record: current
+  record @0, target record @0xa0 (0x80800d82: i32 slice-set index, u32 hash, i32), u3 state
+  @0x142. TEST366 decoded: join -> state 5; 20:23:22 target 112 (state 4); 20:23:27 current 112,
+  target -1, state 0. So the client reports every slice-set change to the host; the BAP stand-in
+  now logs these as "client slice set: ..." (`client_slice_state`).
+- **Type 6 = the client's upstream replicated object stream** (the "sense state" direction).
+  `0x1ce098(sim, peer)` runs while the simulation's state (+0x604) is 3: `0x1cdb10` encodes the
+  records the client authors into a 15 KB buffer (a flag bit from sim +0x613, the u8 epoch from
+  +0x608, a 0 bit, then objects), the host session's messaging interface (vtable 0x12b70a0,
+  slot +0x10 = `0x258678`) sends it as type 6, and each sent record's state becomes its new
+  baseline (`0x25ffb8` / `0x25ff48`). In TEST366 all three type-6 messages carry one object,
+  0x4786c0e0 / kind 0xc / index 5 = the local player's simulation player (object id at bit 11).
+  The per-object header after the id does not match the host stream's u32 length, and neither
+  state type decodes cleanly: hook `0x1cdb10` (or dump the buffer at `0x1ce134`) to pin it down.
+  Trigger volumes and squads would report the same way once the client authors such records.
+- Client -> host messages in TEST366 (`scripts/ah_log_summary.py`): 3 (join), 17 (8 bytes), 37
+  (1087), 21 (164, 10, 16, 28 bytes: different bodies), 15 (1 byte, ~30/s), 20 (1536), 36 (4), 6
+  (41 bytes, three times with a counter 1/2/3 at the end, from emu ~5:27) and 18 (54 bytes). After
+  the zone-set switch at 20:25:46 the client sent nothing new. The client -> host type table
+  (`*(0x179eba4)` = 0x18cffe0) is filled at run time, so the struct types need a run-time dump.
+
+## PS3 packages read offline (2026-09-27 evening)
+`scripts/d1_pkg.py` on the ten packages in the data repo: every header, table and block SHA-1
+checks (791 blocks), so the big-endian v24 layout is right. Build string `live tool_lib test
+pc_x64 41345.14.06.30.2046.live`, build time 2014-06-30/07-01.
+- Compressed blocks (flag 0x100) start with 0xB7, the older Oodle framing of the PS4 D1 study:
+  reading tag data needs a user-owned `oo2core_3_win64.dll`. Uncompressed blocks in the activity
+  packages hold only Wwise streams (type 8:21), so no mission data is readable without it.
+- **Charm's Rise of Iron class ids hold for this 2014 build**: the named tags are
+  `map:cosmo:root` / `map:bootstrap:root` (class 0x8080052e = SActivity), `ambient_cosmo:
+  scenario_client` / `ambient_bootstrap:scenario_client` (0x80800616, the activity info type),
+  `ambient_cosmo` / `ambient_bootstrap` / `map:cosmo:unused` (0x808008ba).
+- The shared manifests (packages 0x0430/0x0431) are stored uncompressed: 12,159 global-tag
+  records {u32 size, u32 own tag, u32 child class, u32 child tag, dependency package-id list},
+  14 classes. Among them 21 SActivity roots, 81 activity infos (0x80800616), 100 x 0x808008ba and
+  136 bubble definitions (manifest class 0x80800580, as in the PS4 study); 8 bubble definitions
+  sit in the Cosmodrome destination package 0x026d. Mapping the other package ids to names needs
+  the disc's package file list.
+
+## Cosmodrome map from the packages (Oodle available, 2026-09-27 night)
+With the user-supplied `oo2core_3_win64.dll` (loaded on Linux by `scripts/oodle_pe_shim.c`), all 585
+compressed blocks of the ten uploaded packages decode to exactly their used size.
+`python scripts/d1_pkg.py bubbles 80cda002 <packages> --oodle <dll>` prints the result below.
+- `map:cosmo:root` (0x80cda002, SActivity 0x8080052e) = {u32 size, u32 names tag 0x80cda003, u32
+  tag 0x80cda004, array @0xc of **22** bubble definition tags}: the 22 bubbles the client checks
+  for act_cosmo_m0_highway. Arrays on PS3: {u32 count, u32 offset from the count field} -> a
+  0x14-byte header {0x80800184, count, element class, 0, 0} then the elements.
+- The names tag (0x80800636) is an array of 82 location rows {u32, u32, u32 name hash, u8 kind +
+  u16 row, i32 bubble index or -1, u32 flags}: 22 bubbles (kind 0), 26 kind-1 and 34 kind-2
+  locations. **Names are FNV-1 hashes of short dev names**: bubble 0 `array` (Skywatch), 2
+  `blast`, 3 `breach`, 8 `dome_a`, 9 `dome_c` (the Lunar / Terrestrial Complexes), 10
+  `dome_hive`, 12 `graveyard`, 13 `hangar` (Dock 13), **14 `highway`** (confirms TEST342), 15
+  `hive_shore`, 19 `refinery`, 20 `rocketyard`, 21 `ship`; a kind-2 row is `breach_sky`. Bubbles 6
+  and 7 (Mothyards, Steppes) hash to names that differ only in the last character.
+- Bubble definitions: 8 in package 0x26d (bubbles 0-7), the rest in 0x270 (8-12), 0x271 (13-16),
+  0x272 (17-20), 0x274 (21). Each is {u32 size, array @4 of map-container tags}: bubble 0 has
+  154, bubble 1 (sky) 6, 2 38, 3 9, 4 42, 5 8, 6 182, 7 172. So map containers are map chunks,
+  **not** slice sets; the idea that slice set 8b + n is bubble b's container n
+  (`public-research.md`) is wrong. The extra slice sets (105, 113) must come from elsewhere,
+  probably the mission's activity data.
+- Not in the uploaded packages: the mission's activity data (`act_cosmo_m0_highway` and its group
+  keys appear in none of them; the Cosmodrome's 11 activity infos are in
+  `ps3_cosmo_activities_activity_025c_0.pkg`) and the destination packages 0x270-0x274.
+
+## act_cosmo_m0_highway from the disc (package 025c, 2026-09-27 night)
+Named tags: `act_cosmo_m0_highway` (0x80cb8001, class 0x808008ba) and
+`act_cosmo_m0_highway:scenario_client` (0x80cb800d, class 0x80800616); the package holds every
+Cosmodrome story activity (m0 highway, m0_5 hangar, m1 dome_a, m2/m4 dome_c, m5 refinery, m6
+rasputin, m7 command, portals, patrols).
+- **scenario_client** = {u32 size, +4 0x992bb471 (activity group key = FNV-1 of the activity
+  name), +8 0x79130968 (the activity checksum the client compares), ..., array @0x30 of 22
+  per-bubble slice-set lists {bubble name hash, array of 0x3c-byte slice-set records}}. Every
+  bubble has one slice set except `hangar` (13) and `highway` (14), which have a second one:
+  **`cosmo_m0_phase04_outro` = 105 and `cosmo_m0_phase00_highway_intro` = 113** (both flagged
+  1/1/1 at +0x10..+0x18). So slice set 8b + n is bubble b's n-th slice set in this list; each
+  record names a slice-set tag (112 -> 0x80cb801d -> 0x80cb8ce3, 113 -> 0x80cb801e -> 0x80cb8d50)
+  whose arrays list the replicated groups loaded with it. The tag ends with the mission's phases
+  in order with a kind (0 cinematic, 2 gameplay): phase00_highway_intro (0), phase00_highway,
+  phase01_breach, phase01b_breach, phase02_graveyard, phase03_hangar, phase04_outro (0).
+- More bubble dev names: 6 `delta_n`, 7 `delta_s`, 11 `dry_sea`, 17 `rasputin`, 18
+  `rasputin_vendor`.
+- **Replicated groups** (class 0x8080076e; `d1_pkg.py groups`): {size, destination hash, group
+  key, u32, array @0x10 of {u8 kind, 3 bytes, u32}, ...} then one dev name per object; **an
+  object's replicated index is its position in the list** - all 118 records of TEST362 match.
+  Full table: [`mission-objects-highway.md`](mission-objects-highway.md). The kinds, named:
+  0x20 `_player_objective` (e.g. 0x992bb471/0x20/3 = obj_m0_phase00_m1, "Enter the Wall"), 0x5
+  `_incoming_sequence` / `_completion_sequence`, 0x6 `_cinematic` (1 pf_104_res intro, 2
+  pf_104_res_fp, 10 pf_104a_pwr, 29 pf_105_cto outro), 0x4 spawned props (skeleton_static_1,
+  o_weapon; in bubble 14 the o_ghost_* lights and pigeon_1-22), 0x1 squads (sq_ghost), 0x1d
+  `_player_trigger` / pt_* points, 0x1c pm_in_wall, 0x1e tg_m0_gating. Kinds 0x2c (nav points),
+  0x37 (bubble links), 0x3a (trigger volumes), 0x3b (script objects), 0x3c (phases), 0x3d are
+  listed but not replicated. The game-mode group 0x4786c0e0 (ambient package 0268): 0xf/0
+  `scoreboard`, 0x22/1 `hard_wipe_globals`, 0x11/2 `lifetime_timer`, 0x10/3 `lifetime` (what
+  `--ah-game-mode` sends), **0x27/4 `new_user_experience`**, 0xc/5-20 `players[0..15]`.
+  Several earlier guesses were wrong (kind 0x20 is not a spawn group, 0xf not a per-player
+  activity table); the handler labels are renamed.
+- Each object has a definition tag (class 0x80800861) with typed components; the objective's
+  (0x80cb911e) embeds a 0x80802a1b component (the kind-0x20 state type: u3 state @0, target
+  object ids, ten 64-byte per-entry records) with a back-reference 992bb471/0x20/3. Its apply
+  handler `0x3561d8` copies the state to component +0x110 and special-cases state 3.
+- **Objective text from the disc** (`d1_pkg.py strings`: string index class 0x8080035a +
+  language table 0x808008be, text bytes stored minus 0x1f). Each `_player_objective` definition
+  carries its title and description hashes; the chain, with the activity-group kind-0x20 index:
+  3 "Enter the Wall" / "Take refuge inside the ancient wall." (0x52ff1516 / 0xb1fb2ef7);
+  7 "Find a Weapon"; 11 "Grab the Rifle"; 14 "Fight through the Wall"; 17 "Fight through the
+  Fallen" ("Fight to the other side of the Divide..."); 20 and 23 "Find the Ship"; 26 "Clear out
+  the Fallen" ("Eliminate the Fallen looting the ship."). This is the published objective order of
+  A Guardian Rises, so the objects above are the mission script's objectives in order.
+
+## Character gear: why the guardian renders see-through (static analysis, 2026-09-27)
+
+- `0x670e40` -> `0x6706b0` build a player's appearance from its character data (player record
+  +0x8b0, copied from the peer-family summary). Besides class/race/gender and the customization
+  struct, `0x6706b0` reads the 20 equipment slots of progression struct `0x80801855` (+0x138:
+  20 x `0x8080183c` {u64 instance id, i16 item index, i8, i16, six dyes}). The char data places
+  that struct at +0x408, so the slots are at +0x540 (stride 0x28), the weapon perks at
+  +0x914/0x934/0x954 and the weapon stats at +0x9f4/0xa74/0xaf4.
+- Item index -> definition: `0x41436c` (-1 = none) -> `0x28a304` -> investment globals root
+  +0xd8 item list (`0x288278`), 8-byte entries {u32, u32 definition tag}. The slot table (root
+  +0xc8, `0x28a1dc`) gives the slot of each bucket: +7..+0xb armour, +0xc..+0xe weapons.
+- The stand-in's summaries leave every slot empty, so no gear loads and the guardian stays the
+  translucent gear placeholder. `bap_server.py --character-gear` / `--character-overlay` fill
+  the slots (peer +0x30, select +0x68, self inventory +0x30 and equipped +0x1838). The item
+  indexes need the investment globals packages. Details, the full gap list and the data wanted:
+  [`feature-gaps.md`](feature-gaps.md).
+- No Lua bytecode in any of the 79,148 decompressed Cosmodrome tags: the mission scripts are not
+  on the disc and have to be rewritten for the stand-in host.
+- Update (packages uploaded the same evening): the investment globals root is the named tag
+  `investment_globals` `0x80a58000`; +0xd8 = 3,181-item list (definitions in package 012e),
+  +0xb0 = the 14 equippable buckets (Subclass, Helmet, Gauntlets, Chest, Legs, Class Armor,
+  Primary, Special, Heavy, Ships, Vehicle, Ghost, Emblems, Shaders; Bungie's public D1 API
+  bucket hashes). The starter "wire armor" per class and `--character-gear starter:CLASS`:
+  [`feature-gaps.md`](feature-gaps.md) section 1; next run TEST370.
+
+## Mission object states decoded (static analysis, 2026-09-28)
+
+The field-level meanings of the objective (`0x3561d8`), cinematic (`0x4ed278` / `0x4ece68` /
+`0x4ecd08`), sequence (`0xb94414` / `0xb942a0`) and squad (`0x1f8d20`) states are in
+[`mission-director.md`](mission-director.md). The main findings:
+- An objective shows only for players in its +0x2c0 mask.
+- A cinematic starts on a changed +0x4 counter with +0x8 set and the player in the cast list.
+- A sequence plays only if its start time (+0x0) plus its duration is still ahead of the
+  simulation clock. That clock (`0x1c94e0`) is the host tick of the type-5 packets, which the
+  stand-in had always sent as 0; `--ah-sim-clock` fixes it.
+- The client's type-6 upstream messages carry its own player object `0x4786c0e0/0xc/5`, with the
+  object id at bit 11.
+- TEST367: the host-pushed zone set 24 was ignored; the client stayed in 112 (test log).
+

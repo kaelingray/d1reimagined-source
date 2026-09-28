@@ -33,10 +33,18 @@ Response (HTTP 2xx, application/octet-stream):
               other denied); 2 int32; 3 uint64; 4 string[200]; 5 string[50].
   8  int32, optional.   10 message {1: repeated int32 [64]}.   12 uint64, optional.
 
+The title updates (01.24; notes/final-build.md) add optional response fields 13 (string[64],
+copied to sign-on singleton +0x47cc; use UNKNOWN) and 14 (u32). Field 14 goes as an IPv4
+address record to the network_demonware module (+0x184, 0x132cb4), which compares it with its
+own address (+0x154) at 0x132cf4: LIKELY the client's public address as the server saw it. The
+byte order is not confirmed; `public_ip` sends it as a big-endian u32. The request adds
+optional fields 20 (8 integers) and 21 (five strings). The success message (field 2) is the same.
+
 HTTP 500 maps to _internal_server_error, 503/509 to _server_unavailable, and any other
 non-2xx status to _retriable_error.
 """
 
+import socket
 import struct
 
 VARINT, FIXED64, BYTES, FIXED32 = 0, 1, 2, 5
@@ -86,7 +94,7 @@ def title_config(manifest_url, manifest_guid):
 
 
 def success_response(token, key1, key2, key3, expires_at, ip, port, expires_in=None,
-                     config=None, config_ids=(1, 1)):
+                     config=None, config_ids=(1, 1), public_ip=None):
     for k in (key1, key2, key3):
         if len(k) != 16:
             raise ValueError("session keys are 16 bytes")
@@ -101,6 +109,8 @@ def success_response(token, key1, key2, key3, expires_at, ip, port, expires_in=N
     if config is not None:
         reply += field(4, BYTES, field(1, VARINT, config_ids[0]) + field(2, VARINT, config_ids[1])
                        + field(3, BYTES, config))
+    if public_ip is not None:  # field 14: only the title updates read it (01.00 skips the tag)
+        reply += field(14, VARINT, struct.unpack(">I", socket.inet_aton(public_ip))[0])
     return reply
 
 

@@ -18,6 +18,12 @@ class TitleConfigAndManifest(unittest.TestCase):
         content = sp.decode(sp.decode(block[2][2])[0][2])
         self.assertEqual(content, [(2, 2, b"http://content.local.test/manifest"), (3, 2, b"guid-1")])
 
+    def test_public_ip_field_for_the_title_updates(self):
+        args = (b"token", b"a" * 16, b"b" * 16, b"c" * 16, 1, sp.ipv4_symmetric("127.1.1.127"), 12850)
+        self.assertNotIn(14, [n for n, _, _ in sp.decode(sp.success_response(*args))])
+        fields = sp.decode(sp.success_response(*args, public_ip="127.0.0.1"))
+        self.assertEqual(fields[-1], (14, 0, 0x7F000001))
+
     def test_manifest_lists_disc_packages(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
