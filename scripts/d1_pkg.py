@@ -470,6 +470,43 @@ def cmd_groups(a):
                     print(f"  {key:#010x}/{kind:#x}/{i} {name}")
 
 
+# Baselines: the replicated objects the host must list (with a state-B bit) before the client
+# applies any replicated state (0x1ce1b8). The client creates a record for an object once the
+# object's definition is loaded (objectives and sequences always; triggers, props and squads with
+# their bubble's map containers) and skips ids it has no record for, so a superset of a mission's
+# groups is safe while a missing object blocks everything. State B presence is per kind (TEST350,
+# TEST362: the kinds below); kinds 0x2c/0x37/0x3a/0x3b/0x3c/0x3d are not replicated.
+KINDS_WITH_B = {0x1, 0x2, 0x3, 0x4, 0xC, 0x1C, 0x27}
+KINDS_NOT_REPLICATED = {0x2C, 0x37, 0x3A, 0x3B, 0x3C, 0x3D}
+
+
+def baselines(ps, keys):
+    """[(key, kind, index, has_b)] for every replicated object of the groups `keys`."""
+    out = []
+    for p in ps.by_id.values():
+        for e in p.entries:
+            if e["reference"] != GROUP_CLASS:
+                continue
+            try:
+                key, objects = entity_group(p.entry_data(e["index"], ps.oodle))
+            except (ValueError, struct.error, RuntimeError):
+                continue
+            if key in keys and not any(o[0] == key for o in out):
+                out += [(key, kind, i, kind in KINDS_WITH_B) for i, (kind, _) in enumerate(objects)
+                        if kind not in KINDS_NOT_REPLICATED]
+    return out
+
+
+def cmd_baselines(a):
+    ps = PackageSet(a.paths, Oodle(a.oodle) if a.oodle else None)
+    keys = [parse_int(k) for k in a.keys.split(",")]
+    found = baselines(ps, set(keys))
+    missing = [k for k in keys if not any(o[0] == k for o in found)]
+    if missing:
+        print("# groups not found: " + ", ".join(f"{k:#010x}" for k in missing), file=sys.stderr)
+    print(",".join(f"{k:#010x}/{kind:#x}/{i}" + ("/1" if b else "") for k, kind, i, b in found))
+
+
 # Localized strings. An index tag (class 0x8080035a) is {u32 size, u32 count, u32, 12 language
 # table tags from +0xc (English first), array of `count` sorted u32 string hashes}. A language
 # table (class 0x808008be) has an array @0x4 of 0x14-byte parts {u32, u32 offset from the
@@ -623,6 +660,10 @@ def main(argv=None):
     s.set_defaults(fn=cmd_groups)
     s = sub.add_parser("strings"); s.add_argument("paths", nargs="*"); s.add_argument("--oodle")
     s.add_argument("--grep", help="text substring or an 8-digit hash"); s.set_defaults(fn=cmd_strings)
+    s = sub.add_parser("baselines", help="--ah-baselines list (KEY/KIND/INDEX[/1]) for replicated groups")
+    s.add_argument("paths", nargs="*"); s.add_argument("--oodle")
+    s.add_argument("--keys", required=True, help="group keys, e.g. 0x992bb471,0x3c2f5ed5,0x4786c0e0,0xecf574b5")
+    s.set_defaults(fn=cmd_baselines)
     s = sub.add_parser("items", help="the investment item list: item index, bucket, type, name")
     s.add_argument("paths", nargs="*"); s.add_argument("--oodle"); s.add_argument("--grep")
     s.add_argument("--buckets", action="store_true", help="list the equippable buckets instead")

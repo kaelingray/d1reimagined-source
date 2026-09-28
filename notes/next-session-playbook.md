@@ -30,6 +30,19 @@ package steps `local\oo2core_3_win64.dll` (or `-Oodle <path>`). Push these files
 
 The ELFs and packages stay private.
 
+## Baselines without the live dump
+
+The disc now gives the full object list for a zone (`preservation-plan.md`, "Done since"). For
+the highway start plus The Breach:
+
+```powershell
+python scripts\d1_pkg.py baselines local\01_WORKING\ps3_destiny\PS3_GAME\USRDIR\packages --oodle <dll> `
+  --keys 0x992bb471,0x3c2f5ed5,0x4786c0e0,0xecf574b5,0xfc0e45a3 > local\SIGNON_LOCAL\baselines_highway_disc.txt
+```
+
+Pass it as `--ah-baselines @local\SIGNON_LOCAL\baselines_highway_disc.txt` (in `-ExtraAh`). The
+live watch still runs and simply finds nothing new.
+
 ## 0. Pull and check (2 minutes)
 
 ```powershell

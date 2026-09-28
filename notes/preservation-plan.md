@@ -392,6 +392,23 @@ M13 and build every later milestone on it.
 
 ---
 
+## Done since the plan was written
+
+- **Baselines from the disc.** `d1_pkg.py baselines <packages> --oodle <dll> --keys <group keys>`
+  prints the `--ah-baselines` list. For the highway start (keys 0x992bb471, 0x3c2f5ed5,
+  0x4786c0e0, 0xecf574b5) it gives 158 objects covering all 139 live-dumped records, with the
+  same state-B flags. For Dock 13 (0x062dd95d in place of 0xecf574b5) it gives 165 covering all
+  121.
+  - Why it works: the client creates a record only for objects whose definitions are loaded,
+    and skips unknown ids, so a disc superset is safe. Adding The Breach's group (0xfc0e45a3)
+    covers the walk into bubble 3 without the live watch.
+  - State B is fixed per kind: 1, 2, 3, 4, 0xc, 0x1c and 0x27 have it.
+- **Final-build export.** `scripts/Invoke-FinalBuildExport.ps1` (PC):
+  - fetches the update EBOOTs over HTTP ranges (`ps3_update.py`);
+  - decrypts them with RPCS3;
+  - exports the types;
+  - writes `d1_builddiff.py` reports 01.00 -> 01.13 -> 01.24.
+
 ## NEXT 10 ENGINEERING TASKS
 
 1. **Run TEST371, the mission script**
@@ -418,7 +435,7 @@ M13 and build every later milestone on it.
    - EXPERIMENT: offline, with the patch chains (the scratchpad method; the user can download
      the chains).
    - EXPECTED: a table like `investment-services.md` for 01.24.
-4. **Baselines from the disc**
+4. **Baselines from the disc (DONE 2026-09-28: `d1_pkg.py baselines --keys ...`)**
    - WHY: removes the live-dump step (`--ah-baselines-watch`) and makes new activities one
      command.
    - WHAT: `d1_pkg.py baselines <activity>` from the groups and bubble tables.
