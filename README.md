@@ -14,7 +14,7 @@ for investigating Destiny's PS3 mission replication.
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
 41 intact packages and all twelve package parts are individually below 100 MB.
-The 84 data files total 1,945,301,276 bytes.
+The data-file sizes and hashes are recorded in `SHA256SUMS.txt`.
 `package_names.txt` lists all 247 package filenames from the disc's
 `PS3_GAME/USRDIR/packages` directory, including packages not copied into this
 repository. It contains names only, one per line.
@@ -22,9 +22,9 @@ repository. It contains names only, one per line.
 The 01.13 and 01.24 update EBOOTs were extracted from their Sony update PKGs
 and decrypted by RPCS3; the encrypted EBOOTs and update PKGs are not included.
 The default export did not fetch the full update package set, so no `final_*.txt`
-lists were generated. See `ps3_updates/EXPORT_VALIDATION.md` before interpreting
-the comparison reports: the static scanner recognized far fewer types in the
-update EBOOTs than in 01.00, and the large "removed types" counts are provisional.
+lists were generated. The type exports, handle maps and comparison reports were
+regenerated with the corrected update-build scanner. See
+`ps3_updates/EXPORT_VALIDATION.md` for the counts and validation limits.
 
 The Cosmodrome activity package `ps3_cosmo_activities_activity_025c_0.pkg`,
 destination package `ps3_cosmo_destination_0274_0.pkg`, and player gear package
