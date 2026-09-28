@@ -5,6 +5,31 @@ experiments below and the offline tools they need. In order of cost: the offline
 minutes and need no emulator; each mission run takes 8-10 minutes. Background and predictions:
 [`public-research.md`](public-research.md). Run everything from the repository root in `pwsh`.
 
+## Final PS3 build export (any time, no game run needed)
+
+`scripts\Invoke-FinalBuildExport.ps1` does the following:
+1. Downloads the EBOOTs of the PS3 updates 01.13 and 01.24. It reads only those files out of
+   Sony's update PKGs, so this is about 60 MB.
+2. Decrypts them with RPCS3 (`rpcs3.exe --decrypt`).
+3. Exports every runtime type (`d1_types.py`).
+4. Writes the comparison reports 01.00 -> 01.13, 01.00 -> 01.24 and 01.13 -> 01.24
+   (`d1_builddiff.py`).
+
+```powershell
+scripts\Invoke-FinalBuildExport.ps1                 # add -Versions all for every update
+scripts\Invoke-FinalBuildExport.ps1 -Packages       # also the full final package set (~12 GB)
+```
+
+It needs the decrypted 01.00 EBOOT at `local\RESEARCH\ps3_decrypt\EBOOT.elf`, and for the
+package steps `local\oo2core_3_win64.dll` (or `-Oodle <path>`). Push these files from
+`local\RESEARCH\ps3_updates` to the data repo:
+- the `.md` reports;
+- `types_*.json` and `handles_*.json`;
+- `updates.json` and `update-list.txt`;
+- with `-Packages`, the `final_*.txt` lists.
+
+The ELFs and packages stay private.
+
 ## 0. Pull and check (2 minutes)
 
 ```powershell

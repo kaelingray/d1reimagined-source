@@ -27,6 +27,15 @@ they match the run-time exports field for field. With `--packages`, it also read
 services from the investment globals. `schema OUT.json` writes the same JSON the stand-in loads,
 `type HANDLE` prints one type, and `services` lists each service's request and response
 layout ([`investment-services.md`](investment-services.md)). No running game is needed.
+`ps3_update.py` lists Sony's PS3 title updates and extracts chosen files from the update PKGs
+over HTTP ranges. `d1_builddiff.py` compares two builds:
+- types, matched by structure because handles are renumbered;
+- the handles the stand-in uses;
+- web services;
+- strings.
+
+`Invoke-FinalBuildExport.ps1` runs the whole 01.00 -> final comparison on the PC
+([`preservation-plan.md`](preservation-plan.md)).
 
 ## Destiny 2 asset tools: background only for now
 
