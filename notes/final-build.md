@@ -138,6 +138,15 @@ repo (`ps3_updates/services_01.24.json`). It covers all 94 service IDs;
 - 19 old services changed a request or response payload (often only through a nested type).
   Those the stand-in answers: **104** universe (both), **503** sign-in (response `0x80801825`
   0xe0 → 0x3c8), **201/202/203/205** (responses). Service **206** (family fetch) is unchanged.
+- Service 104 no longer carries the universe object: 01.13 has a result-only
+  response and 01.24 adds a bool at +0x8. The stand-in now sends the universe
+  object there only when the selected response schema has that struct.
+- Service 503 still carries the universe object at +0x18. In 01.24 its flag
+  override list grows from 20 to 50 entries and its optional fields expand.
+  The former hand-written sign-in reply decoded a populated override list
+  incorrectly on 01.24. It now uses the selected schema for that reply.
+  The build preflight checks populated sign-in and service-104 replies on
+  01.00, 01.13 and 01.24.
 - `d1_types.py --packages <012f chain folder> --oodle <DLL> --service-tag 0x80a5e21a
   service-map services_01.24.json` exports the mapping and name hashes. The four update
   files `_1` through `_4` suffice because the table lives in `_4`; unrelated entries can

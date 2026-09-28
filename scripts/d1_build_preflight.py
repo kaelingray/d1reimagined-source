@@ -100,6 +100,38 @@ def service_checks(schema):
         investment.decode_from(reader, schema, int(pair[1], 16))
         if reader.get(1):
             raise ValueError(f"service {wire}: unexpected response blob")
+    if "503" in schema["services"]:
+        expected = {0: {0: 0, 4: 0}, 8: 0x123456789, 16: 1, 20: 1,
+                    24: {0: bap_server.UNIVERSE_SOID, 8: 1,
+                         0x10: {0: 2, 4: [1, 2]},
+                         0x3C: {0: 1, 4: [{0: 3, 2: 1}]}}}
+        payload = bap_server.signin_response(0x123456789, universe_flags=(1, 2),
+                                             universe_values=((3, 1),), schema=schema)
+        reader = investment.BitReader(payload)
+        if reader.get(16) != 503:
+            raise ValueError("service 503: response wire ID changed")
+        actual = investment.decode_from(reader, schema, int(schema["services"]["503"][1], 16))
+        check(expected, actual, "service 503 sign-in")
+        if reader.get(1):
+            raise ValueError("service 503: unexpected response blob")
+    if "104" in schema["services"]:
+        args = argparse.Namespace(universe_time="one", universe_flags=(1, 2),
+                                  universe_values=((3, 1),))
+        values = bap_server.universe_reply(args, schema)
+        payload = bap_server.default_ws_response(schema, 104, values)
+        reader = investment.BitReader(payload)
+        if reader.get(16) != 104:
+            raise ValueError("service 104: response wire ID changed")
+        actual = investment.decode_from(reader, schema, int(schema["services"]["104"][1], 16))
+        if values is not None:
+            check(values, actual, "service 104 universe")
+        else:
+            fields = schema[schema["services"]["104"][1]]["fields"]
+            has_bool = any(field["off"] == 8 and field["kind"] == 2 for field in fields)
+            if (has_bool and actual.get(8) is not False) or (not has_bool and 8 in actual):
+                raise ValueError("service 104: unexpected response field")
+        if reader.get(1):
+            raise ValueError("service 104: unexpected response blob")
     return len(schema["services"])
 
 

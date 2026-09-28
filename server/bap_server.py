@@ -901,8 +901,8 @@ def join_response(schema, request_body, session_id="d1local-activity", result=0,
 
 def bc_notification(subtype, data, ident=0):
     return struct.pack(">BQII", 1, ident, subtype, len(data)) + data
-# Service replies that need more than the default: 104 carries the universe object at +8
-# (type 0x80801941, as in the sign-in reply); an absent universe root gives pig (0xa2).
+# On 01.00, service 104 carries the universe object at +8 (type 0x80801941,
+# as in the sign-in reply); an absent universe root gives pig (0xa2).
 WS_REPLY_VALUES = {104: {8: {0: 0x7FFFFFFFFFFFFFFF, 8: 1}}}
 # Universe +8 behaves like the server clock (the director compares character timestamps
 # with it, and the client reads no calendar clock of its own); its unit is still unknown.
@@ -911,10 +911,14 @@ UNIVERSE_TIME_UNITS = {"one": lambda t: 1, "s": lambda t: int(t), "ms": lambda t
                        "filetime": lambda t: int((t + 11644473600) * 1e7)}
 
 
-def universe_reply(args):
-    """Service 104 reply values: the universe object (0x80801941) with its root soid, the
-    server clock and, optionally, the i16 list at +0x10 (0x808045f0: u5 count + up to 20
-    i16) - flag indexes applied over the content defaults of the universe unlock table."""
+def universe_reply(args, schema=None):
+    """Service 104's universe object on 01.00; 01.24 has a bool instead."""
+    if schema:
+        entry = schema.get("services", {}).get("104")
+        response = schema.get(entry[1]) if entry else None
+        field = next((f for f in response["fields"] if f["off"] == 8), None) if response else None
+        if field is None or field["kind"] != 1:
+            return None  # 01.24's service 104 returns a bool instead of the universe object
     universe = {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}
     if args.universe_flags:
         universe[0x10] = {0: len(args.universe_flags), 4: list(args.universe_flags)}
@@ -963,7 +967,7 @@ class BitWriter:
 
 
 def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, opt_values=None,
-                    universe_flags=(), universe_values=()):
+                    universe_flags=(), universe_values=(), schema=None):
     """Service 503 (investment sign-in) response, type 0x80801825:
     {u4 result, i32 detail} u64 +0x08, u32 +0x10, u32 +0x14, then struct 0x80801941 of six
     optional fields (presence bit each): u64, u64, three counted lists, u32. Lists and the
@@ -972,7 +976,20 @@ def signin_response(account_id, result=0, word1=1, word2=1, optional_ids=True, o
     Primitive kinds are biased on the wire (seen in decoded memory): the kind-3 result enum
     decodes as bits - 1 and the signed kind-5 detail as bits - 0x80000000. The completion
     handler 0x295794 (via 0xbb8a40) needs result 0 and takes the user's root soid from +0x08;
-    it then moves the local user entry from state 2 to 3."""
+    it then moves the local user entry from state 2 to 3. With a schema, the
+    response uses its current field widths and optional-field count."""
+    if schema:
+        universe = {}
+        if optional_ids:
+            values = opt_values or (UNIVERSE_SOID, 1)
+            universe.update({0: values[0], 8: values[1]})
+        if universe_flags:
+            universe[0x10] = {0: len(universe_flags), 4: list(universe_flags)}
+        if universe_values:
+            universe[0x3C] = {0: len(universe_values),
+                              4: [{0: index, 2: value} for index, value in universe_values]}
+        return default_ws_response(schema, 503, {0: {0: result, 4: 0}, 8: account_id,
+                                                 16: word1, 20: word2, 24: universe})
     w = BitWriter()
     w.put(0x01F7, 16)
     w.put(result + 1, 4); w.put(0x80000000, 32)
@@ -1232,12 +1249,13 @@ def handle(conn, peer, args):
                 account_id = int.from_bytes(payload[38:46], "big")
                 if args.ws_markers:
                     body = signin_response(0x3333333333333333, word1=0x44444444, word2=0x55555555,
-                                           opt_values=(0x1111111111111111, 0x2222222222222222))
+                                           opt_values=(0x1111111111111111, 0x2222222222222222),
+                                           schema=args.schema)
                 else:
                     body = signin_response(account_id, optional_ids=not args.ws_no_optional,
                                            opt_values=(UNIVERSE_SOID, universe_time(args.universe_time)),
                                            universe_flags=args.universe_flags,
-                                           universe_values=args.universe_values)
+                                           universe_values=args.universe_values, schema=args.schema)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
@@ -1292,7 +1310,8 @@ def handle(conn, peer, args):
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
-                    args.schema, wire, universe_reply(args) if wire == 104 else WS_REPLY_VALUES.get(wire)))
+                    args.schema, wire, universe_reply(args, args.schema) if wire == 104
+                    else WS_REPLY_VALUES.get(wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
