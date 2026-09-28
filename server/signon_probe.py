@@ -291,7 +291,7 @@ def signon_response(args):
         expires_at=now + 86400, expires_in=86400,
         ip=signon_proto.ipv4_symmetric(args.session_ip), port=args.session_port,
         config=signon_proto.title_config(args.manifest_url.encode(), args.manifest_guid.encode())
-        if args.manifest_url else None)
+        if args.manifest_url else None, public_ip=args.public_ip)
 
 
 def serve(addr, port, args, certs, bound_host=None):
@@ -330,6 +330,8 @@ def main():
     ap.add_argument("--manifest-guid", default="00000000-0000-0000-0000-000000000001")
     ap.add_argument("--manifest-packages", type=Path,
                     help="PS3_GAME/USRDIR/packages folder whose file names are listed in the manifest")
+    ap.add_argument("--public-ip", help="01.24: report this client address in SignOn field 14 "
+                    "(LIKELY its public IPv4; notes/final-build.md)")
     ap.add_argument("--timeout", type=float, default=15.0)
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:

@@ -92,7 +92,18 @@ directly from the executable or the packages.
 - New optional fields:
   - request 20 (8 integers) and 21 (five strings of 64/64/128/32/32 bytes);
   - response 13 (string[64]) and 14 (u32).
-- The request table is at 0x12e66dd and the response table at 0x12e6850.
+- The request table is at 0x12e66dd and the response table at 0x12e6850. The handler is at
+  0x28dbd4 (01.00: 0x126744). It decodes into a stack struct at r1+0x70:
+  - field 13 is copied to the sign-on singleton at +0x47cc. No other code touches it except a
+    reset at 0x28cf38, so its use is UNKNOWN;
+  - field 14 is wrapped in an address record (u32, then u16 4 at +0x12) and handed to the
+    `network_demonware` module (0x1326e8 returns it; 0x132cb4 validates and stores it at
+    +0x184). Its STUN/relay code (0x132cf4) compares it with the module's own address (+0x154)
+    and records whether they match, then passes it with a port to 0x1197bc.
+
+  This is LIKELY the client's public IPv4 address as the sign-on server saw it, used for NAT
+  traversal. `signon_probe.py --public-ip ADDR` sends it (optional; the byte order is not
+  confirmed).
 - `SignOn?platform=%s&build=%s` and the two sign-on domains are unchanged.
 - New: `stun1`–`stun8.signon.deadorbit.net` / `.gravityshavings.net` and
   `destiny-stun.{us,eu,jp,au}.demonware.net`. The DNS sinkhole already answers every name
