@@ -247,3 +247,15 @@ The extracted tag has 94 unique IDs and all 66 old wire IDs and request/response
 handles match the saved 01.00 map exactly. All 188 handles are present in the
 corrected 01.24 type export. The derived map is in `d1xenia-data`; the raw
 update packages remain in local scratch storage.
+
+**First-run manifest question (offline count):** The existing stand-in builds its content
+manifest from the disc's package folder. With the `en` language filter that yields 160
+package IDs. The non-superseded update inventory has 310 `en` or language-neutral IDs,
+152 of them absent from the disc set (312 distinct IDs in the union). Six required update
+filenames have the special `_unp1`/`_unp2` suffix and do not have a hex package ID in the
+name; those are unpatchable bootstrap/UI packages. A sampled 01.23 package
+(`ps3_investment_globals_012f_4.pkg`) retains the same header ID/value shape used by the
+disc manifest generator. Whether the client registers these update-only IDs from the
+content manifest or separately from installed patch metadata is **UNKNOWN**. On the first
+run, preserve the sign-on manifest reply and package-registration lines before changing
+the manifest; this count narrows a likely failure if the new content does not load.

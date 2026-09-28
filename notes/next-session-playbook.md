@@ -75,7 +75,10 @@ manual for the first observation. It records logs under `local\SIGNON_LOCAL\logs
 Python environment with `requirements.txt` installed. The launcher uses the
 chosen RPCS3 copy and disc folder rather than its 01.00 defaults. If sign-on or
 package registration fails, keep the DNS, sign-on, BAP and RPCS3 logs; the
-01.24 client's exact content-manifest needs still require a live check.
+01.24 client's exact content-manifest needs still require a live check. The
+current reply names 160 English/language-neutral disc package IDs; the update
+inventory adds 152 IDs absent from that set. Look for missing-package or
+registration messages before deciding how to include them.
 
 ## Baselines without the live dump
 
