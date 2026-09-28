@@ -10,11 +10,11 @@ for investigating Destiny's PS3 mission replication.
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
 | `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
-| `ps3_updates/` | `RESEARCH/ps3_updates/` | 01.13 and 01.24 decrypted EBOOTs, type exports, handle maps, comparison reports and update lists |
+| `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | 01.13 and 01.24 decrypted EBOOTs, type exports, the derived 01.24 service map, handle maps, comparison reports and update lists |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
 41 intact packages and all twelve package parts are individually below 100 MB.
-The 84 data files total 1,945,301,276 bytes.
+The data-file sizes and hashes are recorded in `SHA256SUMS.txt`.
 `package_names.txt` lists all 247 package filenames from the disc's
 `PS3_GAME/USRDIR/packages` directory, including packages not copied into this
 repository. It contains names only, one per line.
@@ -22,9 +22,11 @@ repository. It contains names only, one per line.
 The 01.13 and 01.24 update EBOOTs were extracted from their Sony update PKGs
 and decrypted by RPCS3; the encrypted EBOOTs and update PKGs are not included.
 The default export did not fetch the full update package set, so no `final_*.txt`
-lists were generated. See `ps3_updates/EXPORT_VALIDATION.md` before interpreting
-the comparison reports: the static scanner recognized far fewer types in the
-update EBOOTs than in 01.00, and the large "removed types" counts are provisional.
+lists were generated. A later targeted fetch of four 012f update packages
+provided the 01.24 service table; only its small derived map is included here.
+The type exports, handle maps and comparison reports were regenerated with the
+corrected update-build scanner. See
+`ps3_updates/EXPORT_VALIDATION.md` for the counts and validation limits.
 
 The Cosmodrome activity package `ps3_cosmo_activities_activity_025c_0.pkg`,
 destination package `ps3_cosmo_destination_0274_0.pkg`, and player gear package
@@ -51,8 +53,9 @@ exports were not present when this update was prepared; a character/inventory
 BAP capture remains pending. The optional
 `oo2core_3_win64.dll` was supplied from the user's Downloads folder. It is an
 unsigned 64-bit Windows DLL containing an Oodle decompression export. Its original
-download source and distribution terms have not been verified; it was not executed
-while preparing this repository.
+download source and distribution terms have not been verified. The existing copy
+was used locally to decode the 01.24 service table; the four update packages
+remain outside this repository.
 
 This repository intentionally excludes private CA keys, the RPCN account database,
 firmware, console keys, save data, RPCS3 installations and caches. Keep the repository

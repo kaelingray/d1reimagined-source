@@ -1,38 +1,302 @@
 # Build difference: 01.13 -> 01.24
 
-- Types: 352 in 01.13, 351 in 01.24; 323 structurally identical, 15 changed, 14 removed, 14 added.
-- Handles renumbered: 16 of 338 matched types.
+- Types: 4942 in 01.13, 5041 in 01.24; 4858 structurally identical, 59 changed, 25 removed, 124 added.
+- Handles renumbered: 11 of 4917 matched types.
 
 ## Handles the stand-in uses
 
 | 01.13 | 01.24 | match | first use |
 | --- | --- | --- | --- |
+| `0x808004ac` | `0x808004ac` | same | investment.py:16 |
+| `0x808004b1` | `0x808004b1` | same | bap_server.py:460 |
+| `0x808004fa` | `0x808004fa` | same | bap_server.py:1543 |
+| `0x80800646` | `0x80800646` | same | bap_server.py:552 |
+| `0x808008a3` | `0x808008a3` | same | bap_server.py:460 |
+| `0x808009ed` | `0x808009ed` | same | bap_server.py:457 |
+| `0x80800a58` | `0x80800a58` | changed | bap_server.py:383 |
+| `0x80800c56` | `0x80800c56` | same | bap_server.py:463 |
+| `0x80800c6f` | `0x80800c6f` | same | bap_server.py:722 |
+| `0x80800cc5` | `0x80800cc5` | same | bap_server.py:393 |
+| `0x80800cf7` | `0x80800cf7` | same | bap_server.py:458 |
+| `0x80800d64` | `0x80800d64` | same | bap_server.py:387 |
+| `0x80800d82` | `0x80800d82` | same | bap_server.py:465 |
+| `0x80800d9f` | `0x80800d9f` | same | bap_server.py:464 |
+| `0x80800e76` | `0x80800e76` | same | bap_server.py:391 |
+| `0x80800e98` | `0x80800e98` | changed | bap_server.py:381 |
+| `0x80800f1a` | `0x80800f1a` | same | bap_server.py:461 |
+| `0x808016e0` | `0x808016e0` | same | bap_server.py:113 |
+| `0x80801704` | `0x80801704` | same | bap_server.py:107 |
+| `0x80801714` | `0x80801714` | changed | bap_server.py:112 |
+| `0x80801743` | `0x80801743` | changed | bap_server.py:71 |
+| `0x80801774` | `0x80801774` | same | bap_server.py:863 |
+| `0x808017fd` | `0x808017fd` | changed | bap_server.py:77 |
+| `0x80801803` | `0x80801803` | changed | bap_server.py:68 |
+| `0x8080181a` | `0x8080181a` | same | bap_server.py:162 |
+| `0x80801825` | `0x80801825` | changed | bap_server.py:815 |
+| `0x8080183c` | `0x8080183c` | changed | bap_server.py:106 |
+| `0x80801855` | `0x80801855` | changed | bap_server.py:105 |
+| `0x8080185c` | `0x8080185c` | same | bap_server.py:840 |
+| `0x80801869` | `0x80801869` | same | bap_server.py:868 |
+| `0x80801921` | `0x80801921` | same | bap_server.py:76 |
+| `0x80801932` | `0x80801932` | same | investment.py:16 |
+| `0x80801941` | `0x80801941` | changed | bap_server.py:753 |
+| `0x80801951` | `0x80801951` | same | bap_server.py:69 |
+| `0x80801954` | `0x80801954` | changed | bap_server.py:70 |
+| `0x808022a5` | `0x808022a5` | same | bap_server.py:460 |
+| `0x80802a1b` | `0x80802a1b` | same | bap_server.py:590 |
+| `0x80804008` | `0x80804008` | same | bap_server.py:406 |
+| `0x80804056` | `0x80804056` | same | bap_server.py:406 |
+| `0x8080409f` | `0x8080409f` | same | bap_server.py:393 |
+| `0x808043a7` | `0x808043a7` | same | bap_server.py:387 |
+| `0x80804595` | `0x80804595` | same | bap_server.py:305 |
+| `0x808045d9` | `0x808045d9` | changed | bap_server.py:165 |
+| `0x808045da` | `0x808045da` | same | bap_server.py:169 |
+| `0x808045f0` | `0x808045f0` | same | bap_server.py:764 |
+| `0x808046bc` | `0x808046bc` | same | bap_server.py:171 |
+| `0x808046e7` | `0x808046e7` | same | bap_server.py:840 |
+| `0x808047d8` | `0x808047d8` | same | bap_server.py:306 |
+
+### Their field layouts
+
+Offset, kind and nested type of each field, old | new (a stand-in built for the old layout writes the wrong offsets on the new one).
+
+`0x80800a58` (size 0x1a8) -> `0x80800a58` (size 0x1a8):
+
+```
+  +0x0000 struct:0 0x80800e98         | +0x0000 struct:0 0x80800e98
+  +0x0100 u8:3                        | +0x0100 u8:3
+  +0x0101 struct:0 0x80804056         | +0x0101 struct:0 0x80804056
+  +0x0184 u32:32                      | +0x0184 u32:32
+  +0x0188 i32:32                      | +0x0188 i32:32
+  +0x018c u32:32                      | +0x018c u32:32
+  +0x0190 i32:32                      | +0x0190 i32:32
+  +0x0194 u8:8                        | +0x0194 u8:8
+  +0x0196 u16:16                      | +0x0196 u16:16
+  +0x0198 u16:16                      | +0x0198 u16:16
+  +0x019c u32:32                      | +0x019c u32:32
+  +0x01a0 u32:32                      | +0x01a0 u32:32
+  +0x01a4 u16:16                      | +0x01a4 u16:16
+```
+
+`0x80800e98` (size 0x100) -> `0x80800e98` (size 0x100):
+
+```
+  +0x0000 u32:32                      | +0x0000 u32:32
+  +0x0008 u64:64                      | +0x0008 u64:64
+  +0x0010 struct:0 0x80800c2d         | +0x0010 struct:0 0x80800c2d
+  +0x0038 struct:0 0x80800b1f         | +0x0038 struct:0 0x80800b1f
+  +0x00f0 bool:0                      | +0x00f0 bool:0
+* +0x00f2 u16:16                      | +0x00f4 u32:17
+  +0x00f4 u32:32                      | +0x00f8 u32:32
+  +0x00f8 u16:16                      | +0x00fc u16:16
+```
+
+`0x80801714` (size 0x6ae8) -> `0x80801714` (size 0x6db8):
+
+```
+  +0x0000 u64?:64                     | +0x0000 u64?:64
+  +0x0008 struct?:0 0x808017fc        | +0x0008 struct?:0 0x808017fc
+  +0x000c struct?:0 0x8080181a        | +0x000c struct?:0 0x8080181a
+  +0x0030 struct?:0 0x80804a18        | +0x0030 struct?:0 0x80804a18
+  +0x2838 struct?:0 0x808019ff        | +0x2838 struct?:0 0x808019ff
+  +0x2900 struct?:0 0x808045da        | +0x2900 struct?:0 0x808045da
+  +0x29a0 struct?:0 0x808017b9        | +0x29a0 struct?:0 0x808017b9
+  +0x29c0 struct?:0 0x8080193c        | +0x29c0 struct?:0 0x8080193c
+  +0x33a0 struct?:0 0x808047a7        | +0x33a0 struct?:0 0x808047a7
+  +0x3b98 struct?:0 0x80801755        | +0x3b98 struct?:0 0x80801755
+  +0x3bd0 struct?:0 0x80801701        | +0x3bd0 struct?:0 0x80801701
+  +0x4e30 struct?:0 0x80804c21        | +0x5000 struct?:0 0x80804c21
+  +0x5630 struct?:0 0x80805bc7        | +0x5800 struct?:0 0x80805bc7
+* +0x6630 struct?:0 0x80804707        | +0x6800 struct?:0 0x80801082
+  +0x6730 struct?:0 0x80801724        | +0x6a00 struct?:0 0x80801724
+  +0x6740 struct?:0 0x808018bb        | +0x6a10 struct?:0 0x808018bb
+  +0x68d4 struct?:0 0x8080472b        | +0x6ba4 struct?:0 0x8080472b
+  +0x6ad4 struct?:0 0x808016f8        | +0x6da4 struct?:0 0x808016f8
+```
+
+`0x80801743` (size 0x6ae8) -> `0x80801743` (size 0x6db8):
+
+```
+  +0x0000 struct:0 0x80801714         | +0x0000 struct:0 0x80801714
+```
+
+`0x808017fd` (size 0x868) -> `0x808017fd` (size 0x908):
+
+```
+  +0x0000 u64?:64                     | +0x0000 u64?:64
+  +0x0008 struct?:0 0x808017fc        | +0x0008 struct?:0 0x808017fc
+  +0x000c struct?:0 0x8080181a        | +0x000c struct?:0 0x8080181a
+  +0x0030 struct?:0 0x80801855        | +0x0030 struct?:0 0x80801855
+  +0x0858 struct?:0 0x80801923        | +0x08f8 struct?:0 0x80801923
+```
+
+`0x80801803` (size 0x5498) -> `0x80801803` (size 0x7050):
+
+```
+  +0x0000 struct:0 0x808018c7         | +0x0000 struct:0 0x808018c7
+```
+
+`0x80801825` (size 0x2f0) -> `0x80801825` (size 0x3c8):
+
+```
+  +0x0000 struct:0 0x80801796         | +0x0000 struct:0 0x80801796
+  +0x0008 u64:64                      | +0x0008 u64:64
+  +0x0010 u32:32                      | +0x0010 u32:32
+  +0x0014 u32:32                      | +0x0014 u32:32
+  +0x0018 struct:0 0x80801941         | +0x0018 struct:0 0x80801941
+```
+
+`0x8080183c` (size 0x28) -> `0x8080183c` (size 0x30):
+
+```
+  +0x0000 u64?:64                     | +0x0000 u64?:64
+  +0x0008 i16?:16                     | +0x0008 i16?:16
+  +0x000a i16?:16                     | +0x000a i16?:16
+  +0x000c i16?:16                     | +0x000c i16?:16
+*                                     | +0x0010 struct?:0 0x80801069
+  +0x000e struct?:0 0x808046bc        | +0x0018 struct?:0 0x808046bc
+```
+
+`0x80801855` (size 0x828) -> `0x80801855` (size 0x8c8):
+
+```
+  +0x0000 i32?:32                     | +0x0000 i32?:32
+  +0x0004 f32?:0                      | +0x0004 f32?:0
+  +0x0008 f32?:0                      | +0x0008 f32?:0
+  +0x000c f32?:0                      | +0x000c f32?:0
+  +0x0010 struct?:0 0x80805513        | +0x0010 struct?:0 0x80805513
+  +0x0164 struct?:0 0x808040d1        | +0x0164 struct?:0 0x808040d1
+  +0x01e8 struct?:0 0x808045d9        | +0x01e8 struct?:0 0x808045d9
+  +0x0508 struct?:0 0x808045ad        | +0x05a8 struct?:0 0x808045ad
+  +0x0588 struct?:0 0x8080599a        | +0x0628 struct?:0 0x8080599a
+  +0x05c8 struct?:0 0x808045c4        | +0x0668 struct?:0 0x808045c4
+  +0x05e8 struct?:0 0x808045c4        | +0x0688 struct?:0 0x808045c4
+  +0x0608 struct?:0 0x808045c4        | +0x06a8 struct?:0 0x808045c4
+  +0x0628 struct?:0 0x80804703        | +0x06c8 struct?:0 0x80804703
+  +0x06a8 struct?:0 0x80804703        | +0x0748 struct?:0 0x80804703
+  +0x0728 struct?:0 0x80804703        | +0x07c8 struct?:0 0x80804703
+  +0x07a8 struct?:0 0x80804703        | +0x0848 struct?:0 0x80804703
+```
+
+`0x80801941` (size 0x2d8) -> `0x80801941` (size 0x3b0):
+
+```
+  +0x0000 u64?:64                     | +0x0000 u64?:64
+  +0x0008 u64?:64                     | +0x0008 u64?:64
+  +0x0010 struct?:0 0x808045f0        | +0x0010 struct?:0 0x808045f0
+  +0x003c struct?:0 0x80804681        | +0x003c struct?:0 0x80804681
+  +0x0108 struct?:0 0x80804ee0        | +0x0108 struct?:0 0x80804ee0
+* +0x029c struct?:0 0x808047ad        | +0x029c struct?:0 0x808010c6
+  +0x02d0 u32?:32                     | +0x02dc u32?:32
+*                                     | +0x02e0 struct?:0 0x808010c7
+```
+
+`0x80801954` (size 0x8a0) -> `0x80801954` (size 0x940):
+
+```
+  +0x0000 u64?:64                     | +0x0000 u64?:64
+  +0x0008 struct?:0 0x808017fc        | +0x0008 struct?:0 0x808017fc
+  +0x000c struct?:0 0x8080181a        | +0x000c struct?:0 0x8080181a
+  +0x0030 struct?:0 0x80801755        | +0x0030 struct?:0 0x80801755
+  +0x0068 struct?:0 0x80801855        | +0x0068 struct?:0 0x80801855
+  +0x0890 struct?:0 0x80801923        | +0x0930 struct?:0 0x80801923
+```
+
+`0x808045d9` (size 0x320) -> `0x808045d9` (size 0x3c0):
+
+```
+  +0x0000 struct:0 0x8080183c         | +0x0000 struct:0 0x8080183c
+  +0x0028 struct:0 0x8080183c         | +0x0030 struct:0 0x8080183c
+  +0x0050 struct:0 0x8080183c         | +0x0060 struct:0 0x8080183c
+  +0x0078 struct:0 0x8080183c         | +0x0090 struct:0 0x8080183c
+  +0x00a0 struct:0 0x8080183c         | +0x00c0 struct:0 0x8080183c
+  +0x00c8 struct:0 0x8080183c         | +0x00f0 struct:0 0x8080183c
+  +0x00f0 struct:0 0x8080183c         | +0x0120 struct:0 0x8080183c
+  +0x0118 struct:0 0x8080183c         | +0x0150 struct:0 0x8080183c
+  +0x0140 struct:0 0x8080183c         | +0x0180 struct:0 0x8080183c
+  +0x0168 struct:0 0x8080183c         | +0x01b0 struct:0 0x8080183c
+  +0x0190 struct:0 0x8080183c         | +0x01e0 struct:0 0x8080183c
+  +0x01b8 struct:0 0x8080183c         | +0x0210 struct:0 0x8080183c
+  +0x01e0 struct:0 0x8080183c         | +0x0240 struct:0 0x8080183c
+  +0x0208 struct:0 0x8080183c         | +0x0270 struct:0 0x8080183c
+  +0x0230 struct:0 0x8080183c         | +0x02a0 struct:0 0x8080183c
+  +0x0258 struct:0 0x8080183c         | +0x02d0 struct:0 0x8080183c
+  +0x0280 struct:0 0x8080183c         | +0x0300 struct:0 0x8080183c
+  +0x02a8 struct:0 0x8080183c         | +0x0330 struct:0 0x8080183c
+  +0x02d0 struct:0 0x8080183c         | +0x0360 struct:0 0x8080183c
+  +0x02f8 struct:0 0x8080183c         | +0x0390 struct:0 0x8080183c
+```
+
 
 ## Changed types
 
-- `0x80802141` -> `0x80802185` (size 0x4 -> 0x4): 
-- `0x80802e9f` -> `0x808028bb` (size 0xc -> 0xc): 
-- `0x8080cff2` -> `0x8080cff2` (size 0x0 -> 0x0): @@ -5 +5 @@; -(4294967295, 0, 0, 1532712); +(4294967295, 0, 0, 1563132); @@ -10 +10 @@; -(910440, 128, 181, 352); +(929972, 128, 181, 352) ...
-- `0x80804b3b` -> `0x80805bf7` (size 0x4 -> 0x4): 
-- `0x80805d1e` -> `0x8080542e` (size 0x4 -> 0x4): 
-- `0x80802b10` -> `0x80802141` (size 0x8 -> 0x8): 
-- `0x80800012` -> `0x8080004d` (size 0x4 -> 0x4): 
-- `0x80804105` -> `0x80800127` (size 0x1 -> 0x1): 
-- `0x80805b73` -> `0x80800f9e` (size 0x1 -> 0x1): 
-- `0x808019d2` -> `0x80801ea5` (size 0x1 -> 0x1): 
-- `0x80805e61` -> `0x80804b92` (size 0x1 -> 0x1): 
-- `0x80804fb7` -> `0x80804278` (size 0x1 -> 0x1): 
-- `0x80805b7b` -> `0x80804233` (size 0x1 -> 0x1): 
-- `0x808043ca` -> `0x80805fc0` (size 0x1 -> 0x1): 
-- `0x80804e4a` -> `0x80800f9b` (size 0x1 -> 0x1): 
+- `0x80803142` -> `0x80803142` (size 0x70 -> 0x90): same fields at new offsets
+- `0x80802681` -> `0x80802681` (size 0x100 -> 0x180): same fields; value ranges or array settings changed
+- `0x80802b26` -> `0x80802b26` (size 0x300 -> 0x3d0): `u8:3 u8` -> `i32 u8:3 u8 i32`
+- `0x80802460` -> `0x80802460` (size 0x2c0 -> 0x340): same fields; value ranges or array settings changed
+- `0x80802a67` -> `0x80802a67` (size 0x8f0 -> 0x900): same fields at new offsets
+- `0x808045d9` -> `0x808045d9` (size 0x320 -> 0x3c0): same fields at new offsets
+- `0x80801803` -> `0x80801803` (size 0x5498 -> 0x7050): same fields; nested types changed: `0x808018c7`
+- `0x8080265c` -> `0x8080265c` (size 0x4 -> 0x8): `i32` -> `i32x2`
+- `0x80801830` -> `0x80801830` (size 0x1b48 -> 0x28c8): same fields; nested types changed: `0x80804b6c`
+- `0x80801936` -> `0x80801936` (size 0x444 -> 0x614): same fields at new offsets
+- `0x808027e7` -> `0x808027e7` (size 0x100 -> 0x120): same fields at new offsets
+- `0x80802145` -> `0x80802145` (size 0x34 -> 0x38): `f32x3` -> `f32x3 i32`
+- `0x80801941` -> `0x80801941` (size 0x2d8 -> 0x3b0): `u64?x2 {0x808045f0}? {0x80804681}? {0x80804ee0}? {0x808047ad}? u32?` -> `u64?x2 {0x808045f0}? {0x80804681}? {0x80804ee0}? {0x808010c6}? u32? {0x808010c7}?`
+- `0x808017d6` -> `0x808017d6` (size 0x30 -> 0x30): same fields; nested types changed: `0x80801705`, `0x808017f0`, `0x80801a29`
+- `0x80801743` -> `0x80801743` (size 0x6ae8 -> 0x6db8): same fields; nested types changed: `0x80801714`
+- `0x808023ba` -> `0x808023ba` (size 0x7c -> 0x80): `bool {0x80805c6c} {0x80805c2f}` -> `bool {0x80805c6c} {0x80805c2f} u32`
+- `0x808017fd` -> `0x808017fd` (size 0x868 -> 0x908): same fields at new offsets
+- `0x8080261d` -> `0x8080261d` (size 0x1310 -> 0x1390): same fields at new offsets
+- `0x80800595` -> `0x80800595` (size 0x60 -> 0x70): `{0x8080056f} {0x80800d28} u8:2 u8:3 u32x5 bool f32` -> `{0x8080056f} {0x80800d28} u8:2 u8:3 u32x5 bool f32 i32x4`
+- `0x808016dd` -> `0x808016dd` (size 0x440 -> 0x440): same fields; nested types changed: `0x80801716`
+- `0x80800f7d` -> `0x80800f7d` (size 0x18 -> 0x24): `u32x6` -> `u32x6 {0x80804060}`
+- `0x808000c2` -> `0x808000c2` (size 0xc -> 0xc): `i32 k17:0 k0:0` -> `i32 k17:0 i32`
+- `0x808018f8` -> `0x808018f8` (size 0x8 -> 0xc): `{0x80801796}` -> `{0x80801796} bool`
+- `0x8080183c` -> `0x8080183c` (size 0x28 -> 0x30): `u64? i16?x3 {0x808046bc}?` -> `u64? i16?x3 {0x80801069}? {0x808046bc}?`
+- `0x80800d06` -> `0x80800d06` (size 0xb1c0 -> 0xb1d0): same fields; value ranges or array settings changed
+- `0x80801825` -> `0x80801825` (size 0x2f0 -> 0x3c8): same fields; nested types changed: `0x80801796`, `0x80801941`
+- `0x808017a5` -> `0x808017a5` (size 0x1398 -> 0x1438): same fields at new offsets
+- `0x80801e7a` -> `0x80801e7a` (size 0x20 -> 0x18): same fields; nested types changed: `0x80801a21`
+- `0x808000c6` -> `0x808000c6` (size 0x40 -> 0x40): `i32x4 u8:4 u32 k33:0x4 u32 k0:0 k33:0x3` -> `i32x4 u8:4 u32 k33:0x4 u32 k0:0 k33:0x4`
+- `0x80800a58` -> `0x80800a58` (size 0x1a8 -> 0x1a8): same fields; nested types changed: `0x80800e98`, `0x80804056`
+- `0x808018c7` -> `0x808018c7` (size 0x5498 -> 0x7050): `u64? {0x80804621}? u32? u64? {0x808019c6}? {0x80801716}? {0x80804b6c}? {0x808019ff}? {0x8080472b}? {0x80804b0c}? {0x80805bb9}? {0x80801ea6}? {0x808018` -> `u64? {0x80804621}? u32? u64? {0x808019c6}? {0x80801716}? {0x80801087}? {0x808019ff}? {0x8080472b}? {0x80804745}? {0x80804b0c}? {0x80805bb9}? {0x80801e`
+- `0x80803580` -> `0x80803580` (size 0x38 -> 0x38): same fields; nested types changed: `0x808017d6`
+- `0x80801855` -> `0x80801855` (size 0x828 -> 0x8c8): same fields at new offsets
+- `0x80801954` -> `0x80801954` (size 0x8a0 -> 0x940): same fields at new offsets
+- `0x808019c9` -> `0x808019c9` (size 0x28 -> 0x20): same fields; nested types changed: `0x80801a21`
+- `0x80802310` -> `0x80802310` (size 0xe0 -> 0x120): same fields; value ranges or array settings changed
+- `0x80801701` -> `0x80801701` (size 0x1260 -> 0x1430): same fields at new offsets
+- `0x80801714` -> `0x80801714` (size 0x6ae8 -> 0x6db8): same fields at new offsets
+- `0x808018eb` -> `0x808018eb` (size 0x6af0 -> 0x6dc0): same fields; nested types changed: `0x80801714`
+- `0x80802ddb` -> `0x80802ddb` (size 0x70 -> 0x80): `{0x8080056f} u8:3 {0x80800d28}x2` -> `{0x8080056f} u8:3 {0x80800d28}x2 {0x80800193}`
+- `0x808017f0` -> `0x808017f0` (size 0x14 -> 0x15): `bool? u8:4? u8:3? u8:4? u8:2?x3 u8:3? u8:2? u8:3? u8:2? u8:3? u8:4?x2 bool?x6` -> `bool? u8:4? u8:3? u8:4? u8:2?x3 u8:3? u8:2? u8:3? u8:2? u8:3? u8:4?x2 bool?x6 u8:3?`
+- `0x80801a21` -> `0x80801a21` (size 0x20 -> 0x18): same fields; nested types changed: `0x808059e9`
+- `0x80801716` -> `0x80801716` (size 0x440 -> 0x440): same fields; nested types changed: `0x8080172c`, `0x808017d6`
+- `0x80802865` -> `0x80802865` (size 0x1b0 -> 0x230): same fields; value ranges or array settings changed
+- `0x80801e9f` -> `0x80801e9f` (size 0x14 -> 0x18): same fields; value ranges or array settings changed
+- `0x80804572` -> `0x80804572` (size 0x320 -> 0x3c0): same fields; nested types changed: `0x808045d9`
+- `0x80801813` -> `0x80801813` (size 0x54a0 -> 0x7058): same fields; nested types changed: `0x808018c7`
+- `0x80801827` -> `0x80801827` (size 0x2e0 -> 0x3b8): same fields; nested types changed: `0x80801941`
+- `0x80802f50` -> `0x80802f50` (size 0xb1b0 -> 0xb1b8): `bool i32 i16 {0x80804fb5} {0x80802f84}? {0x80805759}? {0x8080579f}? f32? {0x80802d54}? {0x80802d4a}? {0x80802e0c}? {0x80802fae}? {0x80802ea7}? {0x8080` -> `bool i32 i16 {0x80804fb5} u8:4 {0x80802f84}? {0x80805759}? {0x8080579f}? f32? {0x80802d54}? {0x80802d4a}? {0x80802e0c}? {0x80802fae}? {0x80802ea7}? {0`
+- `0x8080271d` -> `0x8080271d` (size 0x100 -> 0x140): same fields; nested types changed: `0x80802219`
+- `0x80803218` -> `0x80803218` (size 0x18 -> 0x28): `{0x8080055b} i32` -> `{0x8080055b}x2 i32`
+- `0x80800e98` -> `0x80800e98` (size 0x100 -> 0x100): `u32 u64 {0x80800c2d} {0x80800b1f} bool u16 u32 u16` -> `u32 u64 {0x80800c2d} {0x80800b1f} bool u32:17 u32 u16`
+- `0x80804655` -> `0x80805fb6` (size 0x30 -> 0x20): same fields at new offsets
+- `0x808019ca` -> `0x80801054` (size 0x4 -> 0x4): same fields; value ranges or array settings changed
+- `0x808047ad` -> `0x80805fae` (size 0x34 -> 0x24): same fields; nested types changed: `0x80804655`
+- `0x808000f0` -> `0x80801068` (size 0x4 -> 0x4): same fields; value ranges or array settings changed
+- `0x80804687` -> `0x808002d4` (size 0x100 -> 0x100): same fields; nested types changed: `0x80804707`
+- `0x808000f4` -> `0x808010ad` (size 0x4 -> 0x4): same fields; value ranges or array settings changed
+- `0x808000f1` -> `0x8080109c` (size 0x4 -> 0x4): same fields; value ranges or array settings changed
 
-## Removed types (14)
+## Removed types (25)
 
-`0x80801b33`, `0x80800480`, `0x80800074`, `0x8080299f`, `0x80800050`, `0x8080231c`, `0x80800073`, `0x80804810`, `0x808000e0`, `0x80804b7b`, `0x8080511b`, `0x80804bf8`, `0x80804dbe`, `0x80802b20`
+`0x8080319e`, `0x808028ef`, `0x80804b6c`, `0x8080479b`, `0x80800074`, `0x80802b20`, `0x808050e3`, `0x808059a1`, `0x808059e9`, `0x80804707`, `0x808000f3`, `0x80805ac6`, `0x80800073`, `0x808018d1`, `0x80804728`, `0x80805c21`, `0x80804de9`, `0x808051bf`, `0x8080191c`, `0x808000ef`, `0x808000f2`, `0x80804278`, `0x80805bc3`, `0x80805bcb`, `0x808000f5`
 
-## Added types (14)
+## Added types (124)
 
-`0x8080039b`, `0x80800050`, `0x80800074`, `0x80802a8a`, `0x8080012e`, `0x8080046e`, `0x80800073`, `0x8080476f`, `0x808000a5`, `0x80801eab`, `0x808015a4`, `0x80805c61`, `0x808015fc`, `0x80802b20`
+`0x80800fae`, `0x80800302`, `0x808028ef`, `0x80800f99`, `0x8080319e`, `0x808018d1`, `0x80805faf`, `0x80805fb0`, `0x80805fb1`, `0x80801035`, `0x80805fb4`, `0x80801086`, `0x8080107f`, `0x8080106b`, `0x80805fb5`, `0x8080032e`, `0x80800307`, `0x808002ff`, `0x80805fb7`, `0x80800074`, `0x8080191c`, `0x80805fb9`, `0x808010c9`, `0x80802b20`, `0x808010c7`, `0x80801eb8`, `0x80801eaf`, `0x80801eb0`, `0x80800f93`, `0x8080030f`, `0x80801034`, `0x80801089`, `0x808010c8`, `0x8080032f`, `0x8080103a`, `0x80801eb3`, `0x80801038`, `0x808010d0`, `0x808010ec`, `0x808010d7`, `0x8080103b`, `0x80800fb0`, `0x808002d6`, `0x80801087`, `0x8080103c`, `0x80800073`, `0x80801095`, `0x80801082`, `0x808010eb`, `0x808010ee`, `0x80805fc2`, `0x80800fb1`, `0x808010c6`, `0x808002d5`, `0x80801eb9`, `0x80800fc5`, `0x80800faf`, `0x808019ca`, `0x808010c2`, `0x80800fb4`, `0x80805fb2`, `0x80801ea8`, `0x8080107e`, `0x8080101d`, `0x80800fb3`, `0x808010e4`, `0x80805fc6`, `0x80805fc7`, `0x80800fa3`, `0x80801028`, `0x808002fd`, `0x80800f94`, `0x808051bf`, `0x80805fb8`, `0x808010ce`, `0x80801eb1`, `0x808010c4`, `0x808010bb`, `0x80800fe9`, `0x8080101f`, `0x80805fd6`, `0x80801088`, `0x80801026`, `0x8080102b`, `0x808010d5`, `0x8080104d`, `0x80801094`, `0x80800fce`, `0x80801025`, `0x80801eae`, `0x80801036`, `0x80801081`, `0x80801069`, `0x80804278`, `0x80800304`, `0x808010d6`, `0x8080102a`, `0x80800fc4`, `0x80801056`, `0x8080102f`, `0x80805c21`, `0x8080102d`, `0x808010cf`, `0x80800f9e`, `0x80800308`, `0x8080106a`, `0x808010b4`, `0x80801eb7`, `0x808010a3`, `0x8080104b`, `0x80805fc1`, `0x8080223d`, `0x80805e61`, `0x80801023`, `0x8080108c`, `0x8080031e`, `0x80801085`, `0x80800f9b`, `0x80805fca`, `0x8080032d`, `0x80801ebb`, `0x80805fdb`, `0x80800f9f`, `0x80801020`
 
 ## Strings: 2943 removed, 1759 added
 
