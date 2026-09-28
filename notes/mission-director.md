@@ -74,7 +74,7 @@ type 6 (the client's own player object) and one type 18, which decodes as 8 obje
 of type `0x808004b1` but not this mission's. The script therefore matches the trigger's encoded
 id in any client message type (`"type": "any"`).
 
-**Squad, kind 0x1, state `0x8080071e`.** Handler `0x1f8d20`.
+**Squad, kind 0x1, state `0x8080071e`.** Handler `0x1f8d20` in 01.00.
 - `+0x44` (u31) is a generation: a new value re-runs the squad.
 - `+0x5c` (2 bits, bias 1) decides what happens to the squad's current members when the
   generation changes:
@@ -83,7 +83,10 @@ id in any client message type (`"type": "any"`).
   - −1: nothing.
 
   Either way `0x233470` then clears the member list. It is **not** a spawn switch; the scripts
-  use −1.
+  use −1. In the corrected 01.24 static type export, the same 2-bit, bias-1 field is at
+  **+0x74** in the enlarged 0x7c-byte squad state. Mission JSON names it
+  `squad_existing_members`; expansion maps that name to +0x5c for 01.00 or +0x74 for 01.24.
+  The 01.24 runtime handler has not yet been traced, so its behavior remains to be verified.
 - `+0x40` (2 bits): a per-member value applied to every member when it changes (`0x857cd8`),
   probably an AI state.
 - `+0x50` goes to component +0x110 and is applied to the members as well. `+0x54`, `+0x58` and
@@ -113,6 +116,8 @@ and `--ah-on` (reactive) changes:
   for counted arrays. Two placeholders are filled in when a change is sent:
   - `"$player"`: the local player's machine id, the `--ah-sim-player` owner;
   - `"$now"`: the host tick.
+  Squad states may also use the key `"squad_existing_members"` for the build-specific field
+  above. Other keys remain numeric offsets.
 - **`on` matchers:**
   - `object`: the object's encoded id appears in a client message of that type;
   - `slice_set`: the client's slice-set report (type 21) names that slice set as current;
@@ -132,3 +137,15 @@ and `--ah-on` (reactive) changes:
 7. 20 s after the client reports The Breach (slice set 24): three Fallen squads.
 
 The timings and values marked as guesses are what TEST371 checks.
+
+Before a mission run, check both scripts against the activity schema that the stand-in will
+load. The preflight encodes and decodes every scripted state to catch missing offsets and values
+that do not fit the selected build's schema. `--ah-mission` now runs the same check at startup:
+
+```powershell
+python scripts\d1_mission_preflight.py --schema local\SIGNON_LOCAL\investment_schema_full.json `
+  missions\a_guardian_rises.json missions\tower_npcs.json
+```
+
+The offline check passes for both scripts against the saved 01.00 activity schema and the
+corrected 01.24 EBOOT type export. It verifies serialization, not client behavior.

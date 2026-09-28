@@ -97,6 +97,7 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller (the XInput config is active at the moment).
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"` and `python -m unittest discover -s scripts -p "test_*.py"`.
+Before a scripted mission run, use `python scripts/d1_mission_preflight.py --schema <activity_schema.json> missions/a_guardian_rises.json missions/tower_npcs.json` to check its state fields against the selected client build.
 
 ### Moving to another PC
 

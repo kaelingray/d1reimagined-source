@@ -10,7 +10,7 @@
     "report is not known yet, so the trigger steps match the trigger's object id in any client message type.",
     "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
     "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
-    "the squad; +0x5c says what happens to its current members (0 destroy, 1 release, -1 nothing). What makes the client",
+    "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
     "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24."
   ],
   "objects": {
@@ -218,15 +218,15 @@
       "set": {
         "sq_breach_floor_a": {
           "0x44": 1,
-          "0x5c": -1
+          "squad_existing_members": -1
         },
         "sq_breach_floor_b": {
           "0x44": 1,
-          "0x5c": -1
+          "squad_existing_members": -1
         },
         "sq_breach_wall_l_a": {
           "0x44": 1,
-          "0x5c": -1
+          "squad_existing_members": -1
         }
       }
     }

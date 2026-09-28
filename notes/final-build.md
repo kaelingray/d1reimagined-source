@@ -70,11 +70,21 @@ directly from the executable or the packages.
   | Cinematic `0x8080254d` | 0xd4 bytes and all 9 fields identical | The play counter, playing flag and cast-list offsets remain valid. |
   | Player trigger `0x80800463` | 8 bytes and both fields identical | The armed flag and arming time remain at their old offsets. |
   | Sequence `0x808029a1` | 0x2c -> 0x20 bytes; nested state at +0x8 changes from `0x80805b11` to `0x80805cf5`; final object reference moves +0x24 -> +0x18 | Rebuild the sequence state with the 01.24 schema; copying the 01.00 payload would misplace the reference. |
-  | Squad `0x8080071e` | 0x60 -> 0x7c bytes; 13 -> 18 fields | Revisit generation, member-handling and AI fields before sending a squad state. |
+  | Squad `0x8080071e` | 0x60 -> 0x7c bytes; 13 -> 18 fields; the 2-bit, bias-1 existing-member field moves +0x5c -> +0x74 | The scripts use `squad_existing_members` to resolve that field from the selected schema. Confirm 01.24 behavior in a run. |
   | Objective `0x80802a1b` | 0x2d0 -> 0x2f0 bytes; 13 -> 16 fields | The player mask remains at +0x2c0, but serialize the full new layout. |
 
   The data repo's initial update-build reports used the old type scanner.
   Corrected exports and one-to-one handle maps are in `d1xenia-data/ps3_updates/`.
+
+  An offline encode/decode check of all 80 state changes in the A Guardian Rises and Tower
+  scripts passes with both the saved 01.00 activity schema and the corrected 01.24 type export.
+  Before the field migration, 56 squad changes still named +0x5c; the 01.24 encoder silently
+  omitted that field. `scripts/d1_mission_preflight.py` now catches such omissions, and
+  `--ah-mission` runs it at startup. This does not establish that 01.24 accepts or acts on the
+  states; that requires a live run.
+  The run scripts still default to the saved 01.00 schemas. For an 01.24 run, pass the
+  corrected `types_01.24.json` as `--schema` to the BAP stand-in and as
+  `--activity-schema` to the activity host (via `-ExtraBap` and `-ExtraAh`).
 
 **Web services (CONFIRMED):**
 

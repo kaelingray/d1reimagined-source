@@ -44,6 +44,7 @@ import hmac
 import ipaddress
 import itertools
 import json
+import math
 import re
 import secrets
 import socket
@@ -584,6 +585,28 @@ def offset_keys(v):
     return v
 
 
+SQUAD_STATE_TYPE = 0x8080071E
+SQUAD_EXISTING_MEMBERS_OFFSET = {0x60: 0x5C, 0x7C: 0x74}
+
+
+def mission_offset_keys(values, schema, state_type):
+    """Resolve the squad existing-member policy for the selected client build."""
+    if "squad_existing_members" not in values:
+        return offset_keys(values)
+    if state_type != SQUAD_STATE_TYPE:
+        raise ValueError("squad_existing_members requires a squad state")
+    entry = schema.get(f"{state_type:#x}", {})
+    offset = SQUAD_EXISTING_MEMBERS_OFFSET.get(entry.get("size"))
+    field = next((f for f in entry.get("fields", []) if f["off"] == offset), None)
+    if offset is None or field is None or field["kind"] != 3 or field["width"] != 2:
+        raise ValueError(f"unsupported squad state layout for {state_type:#x}")
+    result = dict(values)
+    if str(offset) in result or f"{offset:#x}" in result:
+        raise ValueError("squad_existing_members conflicts with a numeric offset")
+    result[str(offset)] = result.pop("squad_existing_members")
+    return offset_keys(result)
+
+
 def object_spec(value):
     """Parse --ah-object GROUP:KIND:INDEX:TYPE[:B]=JSON into an sim_packet object: JSON maps field
     offsets (decimal or 0x strings) to values, nested dicts for struct fields, lists for counted
@@ -690,7 +713,7 @@ def expand_mission(mission, schema):
             if name not in heads:
                 raise ValueError(f"mission step {number}: unknown object {name!r}")
             ident, state_type, _, has_b = heads[name]
-            changes.append((ident, state_type, offset_keys(values), has_b))
+            changes.append((ident, state_type, mission_offset_keys(values, schema, state_type), has_b))
         if "at" in step:
             timed += [(float(step["at"]), change) for change in changes]
             continue
@@ -707,6 +730,42 @@ def expand_mission(mission, schema):
         on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
         reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
     return timed, reactive
+
+
+def validate_mission_states(schema, timed, reactive):
+    """Catch fields silently omitted or changed by the selected build's encoder."""
+    # Small stand-ins fit narrow synthetic test schemas; the preflight checks
+    # field layout and literal values, not a particular live identity or tick.
+    context = {"player": 1, "now": 1}
+
+    def check(expected, actual, path):
+        if isinstance(expected, dict):
+            if not isinstance(actual, dict):
+                raise ValueError(f"{path}: expected a struct")
+            for offset, value in expected.items():
+                if offset not in actual:
+                    raise ValueError(f"{path}/{offset:#x}: field is absent from the encoded state")
+                check(value, actual[offset], f"{path}/{offset:#x}")
+        elif isinstance(expected, list):
+            if not isinstance(actual, list) or len(expected) != len(actual):
+                raise ValueError(f"{path}: array length changed during encoding")
+            for index, value in enumerate(expected):
+                check(value, actual[index], f"{path}/{index}")
+        elif isinstance(expected, float):
+            if not math.isclose(expected, actual, rel_tol=1e-6, abs_tol=1e-6):
+                raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
+        elif expected != actual:
+            raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
+
+    for spec in [s for _, s in timed] + [entry[3] for entry in reactive]:
+        ident, state_type, values, _ = resolve_spec(spec, context)
+        path = f"{ident[0]:#x}/{ident[4]:#x}/{ident[6]} state {state_type:#x}"
+        try:
+            encoded = investment.encode(schema, state_type, values)
+            check(values, investment.decode(schema, state_type, encoded), path)
+        except KeyError as exc:
+            raise ValueError(f"{path}: schema lacks {exc}") from exc
+    return len(timed) + len(reactive)
 
 
 def default_baseline(key, kind, index, has_b=False):
@@ -1595,6 +1654,10 @@ def parse_args(argv=None):
             ap.error("--ah-mission needs the activity schema (--activity-schema)")
         timed, reactive = expand_mission(json.loads(args.ah_mission.read_text(encoding="utf-8")),
                                          args.activity_schema)
+        try:
+            validate_mission_states(args.activity_schema, timed, reactive)
+        except ValueError as exc:
+            ap.error(f"--ah-mission: {exc}")
         args.ah_object_at += timed
         args.ah_on += reactive
     args.ah_object_at.sort(key=lambda entry: entry[0])

@@ -103,7 +103,8 @@ class MissionScript(unittest.TestCase):
     F = lambda off, kind, width, opt=0, minimum=0: {"off": off, "kind": kind, "opt": opt, "nested": -1,
                                                     "arr": 0, "min": minimum, "width": width, "extra": 0}
     SCHEMA = {"0x808004b1": {"size": 8, "fields": [F(0, 9, 32), F(4, 3, 6, 0, 1), F(6, 4, 16, 0, 0x8000)]},
-              "0x80800463": {"size": 8, "fields": [F(0, 2, 0), F(4, 5, 32, 0, 0x80000000)]}}
+              "0x80800463": {"size": 8, "fields": [F(0, 2, 0), F(4, 5, 32, 0, 0x80000000)]},
+              "0x8080071e": {"size": 0x60, "fields": [F(0x44, 5, 31), F(0x5c, 3, 2, minimum=1)]}}
     MISSION = {"objects": {"trig": "0x992bb471:0x1d:30:0x80800463", "other": "0x992bb471:0x1d:31:0x80800463"},
                "steps": [{"at": 5, "set": {"trig": {"0": True, "4": "$now"}}},
                          {"on": {"type": 6, "object": "trig"}, "delay": 1, "set": {"other": {"4": "$player"}}},
@@ -150,6 +151,27 @@ class MissionScript(unittest.TestCase):
         self.assertTrue(timed and reactive)
         self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher)) for _, m, _, _ in reactive))
         self.assertTrue(any(isinstance(m, bap.SliceSetMatcher) and m.index == 24 for _, m, _, _ in reactive))
+
+    def test_squad_field_resolves_for_both_build_layouts(self):
+        mission = {"objects": {"squad": "0x992bb471:1:3:0x8080071e"},
+                   "steps": [{"at": 1, "set": {"squad": {"0x44": 1, "squad_existing_members": -1}}}]}
+        for size, offset in ((0x60, 0x5c), (0x7c, 0x74)):
+            schema = dict(self.SCHEMA)
+            schema["0x8080071e"] = {"size": size, "fields": [MissionScript.F(0x44, 5, 31),
+                                                                 MissionScript.F(offset, 3, 2, minimum=1)]}
+            timed, reactive = bap.expand_mission(mission, schema)
+            self.assertEqual(timed[0][1][2], {0x44: 1, offset: -1})
+            self.assertEqual(bap.validate_mission_states(schema, timed, reactive), 1)
+
+    def test_preflight_rejects_a_dropped_field(self):
+        schema = dict(self.SCHEMA)
+        schema["0x8080071e"] = {"size": 0x7c, "fields": [MissionScript.F(0x44, 5, 31),
+                                                           MissionScript.F(0x74, 3, 2, minimum=1)]}
+        mission = {"objects": {"squad": "0x992bb471:1:3:0x8080071e"},
+                   "steps": [{"at": 1, "set": {"squad": {"0x5c": -1}}}]}
+        timed, reactive = bap.expand_mission(mission, schema)
+        with self.assertRaisesRegex(ValueError, "0x5c: field is absent"):
+            bap.validate_mission_states(schema, timed, reactive)
 
 
 if __name__ == "__main__":

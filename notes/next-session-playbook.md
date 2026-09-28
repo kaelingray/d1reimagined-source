@@ -64,10 +64,29 @@ git pull
 python -m pip install -r requirements.txt        # adds capstone for d1_eboot.py disasm
 python -m unittest discover -s server -p "test_*.py"
 python -m unittest discover -s scripts -p "test_*.py"
+python scripts\d1_mission_preflight.py --schema local\SIGNON_LOCAL\investment_schema_full.json `
+  missions\a_guardian_rises.json missions\tower_npcs.json
 ```
 
 `server\test_ah_session.py` now drives the stand-in end to end (handshake, join, heartbeats,
 object steps) with a fake client, so a stand-in change that breaks the join shows up here first.
+For 01.24, pass its corrected `types_01.24.json` export as `--schema` instead. The mission
+preflight checks every scripted state before any game launch, and `--ah-mission` repeats the
+check when the stand-in starts. Both scripts passed the 01.00 and 01.24 schemas on 2026-09-28;
+01.24 still needs a live behavior check.
+
+The run scripts default to the saved 01.00 schemas. On a future 01.24 run, supply the
+corrected export to both stand-ins, for example:
+
+```powershell
+$types = (Resolve-Path ..\d1xenia-data\ps3_updates\types_01.24.json).Path
+python scripts\d1_mission_preflight.py --schema $types `
+  missions\a_guardian_rises.json missions\tower_npcs.json
+# Include '--schema', $types in -ExtraBap and '--activity-schema', $types in -ExtraAh.
+```
+
+The first 01.24 boot should establish sign-on and activity join before attempting the mission
+script; the static schema check cannot verify client acceptance.
 
 ## 1. Offline analysis (done in the cloud session; what is left)
 
