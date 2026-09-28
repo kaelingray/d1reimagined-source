@@ -17,9 +17,9 @@ class GameCaPatch(unittest.TestCase):
         self.assertIn("[ byte, 0x0179d5f4, 0x00 ]", text)
         self.assertTrue(g.config_yaml().startswith(g.PPU_HASH + ":"))
 
-    def test_final_build_needs_its_hash(self):
-        with self.assertRaises(ValueError):
-            g.build_sites("01.24")
+    def test_final_build_hash_and_sites(self):
+        self.assertEqual(g.build_sites("01.24")["ppu_hash"],
+                         "PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea")
         with self.assertRaises(ValueError):
             g.build_sites("01.25", "PPU-00")
         sites = g.build_sites("01.24", "PPU-1234")

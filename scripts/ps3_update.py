@@ -9,6 +9,7 @@ u32 flags, u32}. Offsets are relative to the data area.
 
   python scripts/ps3_update.py list BLES01857
   python scripts/ps3_update.py files BLES01857 01.24
+  python scripts/ps3_update.py inventory BLES01857 --out final_packages.json
   python scripts/ps3_update.py fetch BLES01857 --versions 01.13,01.24 --match EBOOT.BIN,PARAM.SFO --out DIR
   python scripts/ps3_update.py fetch BLES01857 --packages --out DIR   # every game package, in order
 
@@ -103,11 +104,26 @@ def package_name(path):
     return path.rsplit("/", 1)[-1]
 
 
+def stale_packages(final):
+    """Patch names superseded when an update restarts a package's patch numbering."""
+    stale, by_id = [], {}
+    for base, version in final.items():
+        m = re.match(r"(.+)_(\d+)\.pkg$", base)
+        if m:
+            by_id.setdefault(m.group(1), []).append((int(m.group(2)), version, base))
+    for group in by_id.values():
+        newest = max(v for _, v, _ in group)
+        latest_number = max(n for n, v, _ in group if v == newest)
+        stale += [base for n, v, base in group if v < newest and n > latest_number]
+    return sorted(stale)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("list"); s.add_argument("title")
     s = sub.add_parser("files"); s.add_argument("title"); s.add_argument("version")
+    s = sub.add_parser("inventory"); s.add_argument("title"); s.add_argument("--out", type=Path, required=True)
     s = sub.add_parser("fetch"); s.add_argument("title"); s.add_argument("--out", type=Path, required=True)
     s.add_argument("--versions", help="comma-separated (default: all)")
     s.add_argument("--match", default="EBOOT.BIN,PARAM.SFO", help="comma-separated file names to extract")
@@ -124,6 +140,21 @@ def main(argv=None):
         print(pkg.content_id, len(pkg.files), "files")
         for name, off, size, flags in pkg.files:
             print(f"{size:12d}  {name}")
+        return
+    if a.cmd == "inventory":
+        final = {}
+        for version, url, *_ in chain:
+            pkg = RemotePkg(url)
+            for name, _, size, flags in pkg.files:
+                base = package_name(name)
+                if flags != 4 and size and base.endswith(".pkg"):
+                    final[base] = {"update": version, "path": name, "size": size}
+        stale = stale_packages({base: meta["update"] for base, meta in final.items()})
+        a.out.parent.mkdir(parents=True, exist_ok=True)
+        a.out.write_bytes((json.dumps({"title": a.title, "packages": final, "stale": stale},
+                                     indent=2) + "\n").encode("utf-8"))
+        print(f"{len(final)} package filenames, {len(stale)} stale, "
+              f"{len(final) - len(stale)} required -> {a.out}")
         return
     wanted = set(a.versions.split(",")) if a.versions else None
     match = {m for m in a.match.split(",") if m}
@@ -153,15 +184,7 @@ def main(argv=None):
     (a.out / "updates.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     if final:
         # an id whose files were renumbered: an older update's _N above the newest update's _M
-        stale = []
-        by_id = {}
-        for base, version in final.items():
-            m = re.match(r"(.+)_(\d+)\.pkg$", base)
-            if m:
-                by_id.setdefault(m.group(1), []).append((int(m.group(2)), version, base))
-        for group in by_id.values():
-            newest = max(v for _, v, _ in group)
-            stale += [b for n, v, b in group if v < newest and n > max(n2 for n2, v2, _ in group if v2 == newest)]
+        stale = stale_packages(final)
         (a.out / "final" / "stale.txt").write_text("\n".join(sorted(stale)) + "\n", encoding="utf-8")
         # which update supplied each final file: the input for a final-build content manifest
         (a.out / "final" / "packages.json").write_text(json.dumps(final, indent=0, sort_keys=True), encoding="utf-8")

@@ -46,6 +46,12 @@ class RemotePkgTest(unittest.TestCase):
         name, off, size, _ = remote.files[1]
         self.assertEqual(remote.decrypt(off + 5, 20), bytes(range(5, 25)))  # an unaligned range
 
+    def test_patch_number_reset_excludes_superseded_files(self):
+        versions = {"ps3_a_1.pkg": "01.20", "ps3_a_2.pkg": "01.13",
+                    "ps3_a_3.pkg": "01.13", "ps3_b_1.pkg": "01.13"}
+        self.assertEqual(ps3_update.stale_packages(versions),
+                         ["ps3_a_2.pkg", "ps3_a_3.pkg"])
+
 
 if __name__ == "__main__":
     unittest.main()

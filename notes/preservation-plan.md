@@ -190,7 +190,7 @@ The static diff of the decrypted 01.13 and 01.24 EBOOTs is done; details and the
 | Sign-on | success message unchanged; new optional request fields 20/21 and response fields 13/14 | CONFIRMED |
 | Demonware lobby/auth3 | host names and the 01.00 lobby client strings are gone in 01.24 (present in 01.13) | LIKELY removed |
 | Error ids | the `error.*` string table is gone (248 → 1) | CONFIRMED |
-| RPCS3 patch sites | 01.24: embedded CA 0x12d3740 (same PEM), manifest signature flag 0x18dca64 | CONFIRMED (PPU hash still needed) |
+| RPCS3 patch sites | 01.24: embedded CA 0x12d3740 (same PEM), manifest signature flag 0x18dca64, calculated PPU hash `PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea` | CONFIRMED offline; live log check pending |
 | Build ids | tool strings `live` → `evil` → `v230`; changelist 41345 → 51273 | CONFIRMED |
 
 ## 8. Expected server compatibility
@@ -451,8 +451,8 @@ M13 and build every later milestone on it.
   - the stand-in derives its gear offsets from the loaded schema.
 
   First-boot checklist for 01.24:
-  1. Read the PPU hash from the RPCS3 log.
-  2. Rebuild the copy with `--game-ca ... --unsigned-manifest --build 01.24 --ppu-hash PPU-...`.
+  1. Build the copy with `--game-ca ... --unsigned-manifest --build 01.24`.
+  2. Compare the PPU hash in the first RPCS3 log with the calculated value above.
   3. Export the runtime schema (or use `d1_types.py schema`).
   4. Watch DNS and connections after sign-on to see whether anything replaces the lobby.
 

@@ -197,17 +197,19 @@ are all present. A `network_bap_nat_punch_queue` was added.
 screen is therefore no longer found by string. Map it through the 01.00 table where the meaning
 carried over.
 
-**Patches for RPCS3 (CONFIRMED addresses; the PPU hash comes from the first boot):**
+**Patches for RPCS3 (CONFIRMED addresses; the PPU hash was derived offline):**
 
 - The embedded sign-on CA is the identical 2,390-byte PEM ("Tiger Root Authority" + GeoTrust) at
   **0x12d3740**, used at 0x113894 (01.00: 0x11b7218).
 - The content-manifest signature flag is **0x18dca64** (initially 1), read only at 0xc65d14,
   which has the same `cmplwi 0x108` shape as 01.00's 0xb6f3cc (01.00: 0x179d5f4).
-- `game_ca_patch.BUILDS["01.24"]` holds both. The PPU hash must be copied from RPCS3's log
-  ("PPU executable hash") on the first 01.24 boot:
-  `prepare_rpcs3_copy.py --game-ca ... --build 01.24 --ppu-hash PPU-...`. A local
-  reimplementation of RPCS3's hash did not reproduce the known 01.00 value, so it is not
-  guessed.
+- `game_ca_patch.BUILDS["01.24"]` holds both and the calculated key
+  `PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea`.
+  `d1_ppu_hash.py` matches the known 01.00 key exactly. The algorithm follows
+  [RPCS3's executable loader](https://github.com/RPCS3/rpcs3/blob/master/rpcs3/Emu/Cell/PPUModule.cpp):
+  hash every ELF program header's type and flags, then each nonempty LOAD segment's
+  address, memory size and file bytes. The first live boot should confirm the 01.24
+  key in `RPCS3.log`.
 
 **Packages and DLC (CONFIRMED strings):**
 

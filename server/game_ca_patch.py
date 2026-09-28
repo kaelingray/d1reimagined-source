@@ -37,12 +37,13 @@ MANIFEST_DESCRIPTION = "d1xenia: accept unsigned content manifest"
 
 # The same two patch sites in the title updates, found statically (notes/final-build.md). 01.24
 # embeds the identical 2,390-byte PEM at 0x12d3740 (used at 0x113894) and reads its manifest
-# flag (initially 1) only at 0xc65d14. Its PPU hash is whatever RPCS3 logs as "PPU executable
-# hash" on the first boot of that EBOOT; until it is recorded here, pass it with --ppu-hash.
+# flag (initially 1) only at 0xc65d14. The PPU hash was calculated with
+# scripts/d1_ppu_hash.py, whose result matches RPCS3's known 01.00 hash exactly.
 BUILDS = {
     "01.00": {"ppu_hash": PPU_HASH, "ca_addr": EMBEDDED_CA_ADDR, "ca_len": EMBEDDED_CA_LEN,
               "manifest_flag": MANIFEST_FLAG_ADDR},
-    "01.24": {"ppu_hash": None, "ca_addr": 0x012D3740, "ca_len": 2390, "manifest_flag": 0x018DCA64},
+    "01.24": {"ppu_hash": "PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea", "ca_addr": 0x012D3740,
+              "ca_len": 2390, "manifest_flag": 0x018DCA64},
 }
 
 

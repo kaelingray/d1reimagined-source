@@ -14,8 +14,8 @@ $repo = Split-Path $PSScriptRoot -Parent
 $root = $D1Local
 $logs = "$root\SIGNON_LOCAL\logs"
 $py = $D1Python
-$rpcs3 = "$root\RPCS3_TEST048_SETUP"
-$usrdir = "$root\01_WORKING\ps3_destiny\PS3_GAME\USRDIR"
+$rpcs3 = $D1Rpcs3
+$usrdir = $D1Usrdir
 
 Get-Process rpcs3 -ErrorAction SilentlyContinue | Stop-Process -Confirm:$false
 Get-CimInstance Win32_Process -Filter "Name like 'python%'" |
@@ -29,7 +29,7 @@ function Start-Service([string]$Tag, [string[]]$ArgList) {
 }
 
 if (-not (Get-Process rpcn -ErrorAction SilentlyContinue)) {
-    Start-Process -FilePath "$root\RPCN_LOCAL\rpcn.exe" -WorkingDirectory "$root\RPCN_LOCAL" -WindowStyle Minimized
+    Start-Process -FilePath "$root\RPCN_LOCAL\rpcn.exe" -WorkingDirectory "$root\RPCN_LOCAL" -WindowStyle Hidden
 }
 Start-Service dns @('server/dns_sinkhole.py', '--destiny-hosts', '--log', "$logs\$Name-dns-queries.log")
 Start-Service stun @('server/stun_stub.py')

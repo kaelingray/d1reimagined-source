@@ -32,17 +32,50 @@ The ELFs and packages stay private.
 
 Done once (2026-09-28): the findings are in [`final-build.md`](final-build.md).
 The data repo's `types_*.json`, `diff_*.md` and handle maps have been regenerated
-with the corrected type scanner and one-to-one matcher. The full export still
-needs the final 012f chain (the command at the end of `final-build.md`) for
-the 01.24 service table.
+with the corrected type scanner and one-to-one matcher. The 01.24 service
+table is exported separately as `d1xenia-data/ps3_updates/services_01.24.json`
+(94 services), with a metadata-only update package inventory beside it.
 
-For the first 01.24 boot, build the RPCS3 copy with the 01.24 patch sites. Get the hash from
-`RPCS3.log`, line "PPU executable hash", after one plain boot:
+For the first 01.24 boot, build the RPCS3 copy with the 01.24 patch sites and its
+calculated PPU hash (`PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea`):
 
 ```powershell
 & $D1Python server\prepare_rpcs3_copy.py <source> <dest> --game-ca <ca.pem> --unsigned-manifest `
-    --build 01.24 --ppu-hash PPU-<hash from the log>
+    --build 01.24
 ```
+
+The offline `scripts/d1_ppu_hash.py` calculation reproduces the known 01.00 hash
+exactly, then derives the 01.24 key from the saved ELF using RPCS3's
+[`ppu_load_exec` hashing sequence](https://github.com/RPCS3/rpcs3/blob/master/rpcs3/Emu/Cell/PPUModule.cpp).
+Compare the boot log's "PPU executable hash" with this key as an extra identity check.
+
+Before that boot, check the data without launching anything:
+
+```powershell
+scripts\Start-FinalBuildSmoke.ps1 -DataRepo ..\d1xenia-data
+```
+
+For the first actual 01.24 run, install the title updates through 01.24 in an
+isolated RPCS3 copy, then build the patched copy. The readiness check requires the disc's 247 package filenames and the
+1,034 non-superseded update packages at their expected sizes, plus the exact
+Sony 01.24 EBOOT (SHA-256 `cd612e9b448e28e05c06d17ecc715996722fe6eea31465080a3ba1b21cc67a8c`),
+both enabled patches, loopback DNS and the corrected schemas:
+
+```powershell
+$rpcs3 = '<patched RPCS3 copy containing the installed updates>'
+$usrdir = '<disc PS3_GAME\USRDIR folder>'
+scripts\Start-FinalBuildSmoke.ps1 -DataRepo ..\d1xenia-data `
+  -Rpcs3Dir $rpcs3 -GameUsrdir $usrdir
+# When every check passes, add -Run to start loopback services and the game.
+```
+
+The smoke run supplies the 01.24 type and service maps to BAP and leaves login
+manual for the first observation. It records logs under `local\SIGNON_LOCAL\logs`.
+`D1_LOCAL` can point to the private runtime folder; `D1_PYTHON` can point to the
+Python environment with `requirements.txt` installed. The launcher uses the
+chosen RPCS3 copy and disc folder rather than its 01.00 defaults. If sign-on or
+package registration fails, keep the DNS, sign-on, BAP and RPCS3 logs; the
+01.24 client's exact content-manifest needs still require a live check.
 
 ## Baselines without the live dump
 
