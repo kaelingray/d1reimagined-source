@@ -994,14 +994,29 @@ def exact(conn, count):
     return bytes(data)
 
 
+# Structured run log: each connection writes <capture folder>/events.jsonl, one JSON object per
+# line - every log line ({"t", "log"}), every client frame ({"ev": "frame"}) and every client
+# activity-host message ({"ev": "ah"}), with full hex bodies. `server/run_log.py` reads it.
+_events = threading.local()
+
+
+def record_event(**fields):
+    sink = getattr(_events, "sink", None)
+    if sink is not None:
+        fields = {"t": datetime.datetime.now().isoformat(timespec="milliseconds"), **fields}
+        sink.write(json.dumps(fields) + "\n")
+
+
 def log(message):
     print(f"{datetime.datetime.now().isoformat(timespec='milliseconds')} {message}", flush=True)
+    record_event(log=message)
 
 
 def handle(conn, peer, args):
     tag = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     folder = args.capture_dir / tag
     folder.mkdir(parents=True)
+    _events.sink = open(folder / "events.jsonl", "w", encoding="utf-8", buffering=1)
     conn.settimeout(args.timeout)
     log(f"[{tag}] connection from {peer[0]}:{peer[1]}")
     rx = tx = None
@@ -1057,6 +1072,8 @@ def handle(conn, peer, args):
                 continue
             msg_type, msg_id = struct.unpack_from(">HI", body)
             payload = body[6:]
+            record_event(ev="frame", n=number, kind=kind, type=msg_type, name=NAMES.get(msg_type, hex(msg_type)),
+                   id=msg_id, payload=payload.hex())
             log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
                 f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
             if kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f7") and args.ws_signin:
@@ -1158,6 +1175,7 @@ def handle(conn, peer, args):
             if kind == 1 and msg_type == AH_NOT and len(payload) >= 21:
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
                 body = payload[21:21 + ah_len]
+                record_event(ev="ah", n=number, host=f"{host_id:#x}", ah_type=ah_type, body=body.hex())
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
                 if ah_type == AH_CLIENT_STATE:
                     try:
@@ -1407,6 +1425,8 @@ def handle(conn, peer, args):
         log(f"[{tag}] {exc}")
     finally:
         conn.close()
+        sink, _events.sink = _events.sink, None
+        sink.close()
 
 
 def parse_args(argv=None):

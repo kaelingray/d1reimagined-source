@@ -16,7 +16,8 @@ Loopback-only tools for replacing, one gate at a time, the online services Desti
 | `session_listener.py` | Loopback TCP/UDP catch-all for the server address given in the SignOn reply (default 127.1.1.127:12850); logs and saves, never replies. |
 | `lobby_probe.py` | Demonware lobby on 127.0.3.1:3074: answers the greeting (`server_header_ack`, protocol 210) and `client_auth` (`server_auth_done`). Picks the auth3 session whose key reproduces the client's challenge. Saves frames and derived keys privately; does not implement the encrypted READY-state messages. |
 | `bap_server.py` | Bungie session server (BAP) stand-in on 127.1.1.127:12850: answers `shello` (AES-CBC/HMAC-sealed with the SignOn keys) and then the GCM-encrypted `qz_reg`, `rrc` and `echo` requests; `--ws-zero-bytes` gives a placeholder `c->ws` reply. |
-| `game_ca_patch.py` | RPCS3 patch (`patches/imported_patch.yml` + `config/patch_config.yml`) that overwrites the root PEM embedded in Destiny's EBOOT (`0x011b7218`) with the local CA, in guest memory only. |
+| `run_log.py` | Reads the stand-in's per-connection `events.jsonl` (client frames, activity-host messages with full bodies, log lines): `summary`, `ah --type N [--distinct]`, `bits --type N` (varying header bits), `timeline`. |
+| `game_ca_patch.py` | RPCS3 patch (`patches/imported_patch.yml` + `config/patch_config.yml`) that overwrites the root PEM embedded in Destiny's EBOOT (`0x011b7218`; 01.24: `--build 01.24` with the PPU hash) with the local CA, in guest memory only. |
 
 ## Typical run
 

@@ -230,6 +230,18 @@ What to look for:
 - **In The Breach,** Fallen appear 20 s after the client reports slice set 24 (`0x1f8d20` hits).
 - The HUD/screen timeline from the screenshots, against the reference video.
 
+The stand-in also writes a structured log per connection, `events.jsonl` in its capture
+folder (`local\SIGNON_LOCAL\captures\bap\<time>\`). It holds every client frame and host
+message with its full body, plus every log line. Push the activity connection's file with the
+logs. It answers the trigger question offline:
+
+```powershell
+$ev = (Get-ChildItem local\SIGNON_LOCAL\captures\bap\*\events.jsonl | Sort-Object Length)[-1].FullName
+python server\run_log.py summary $ev                    # message counts per type, rules fired
+python server\run_log.py ah $ev --type 6 --distinct     # each distinct type-6 body once
+python server\run_log.py bits $ev --type 6              # which header bits vary
+```
+
 ## 8. TEST372: the Tower (after TEST371 shows whether squads spawn)
 
 Pick the Tower in orbit and join with the Tower's values; the vendors and NPCs are placed by

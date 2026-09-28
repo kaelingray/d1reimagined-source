@@ -489,7 +489,7 @@ M13 and build every later milestone on it.
    - FILES: `scripts/d1_pkg.py`, `bap_server.py`.
    - EXPERIMENT: compare with `baselines_highway_z112.txt` (138 objects).
    - EXPECTED: an identical list.
-5. **Structured run log**
+5. **Structured run log (DONE 2026-09-28: `events.jsonl` per connection, `server/run_log.py`)**
    - WHY: every later experiment needs decoded traffic.
    - WHAT: JSON-lines output of client messages (decoded by type), pushes and rule firings.
    - FILES: `bap_server.py`, `ah_log_summary.py`.

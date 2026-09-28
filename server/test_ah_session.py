@@ -176,6 +176,15 @@ class ActivityHostSession(unittest.TestCase):
         self.assertTrue(after and all(state == {0: 2} for state in after))
         self.assertEqual(sum("--ah-on rule 0 matched" in line for line in self.logs), 1)
 
+    def test_events_log_records_frames_and_host_messages(self):
+        c = self.start("--ah-heartbeat", "0.1:-1", "--ah-baselines", "0x10/3/0")
+        self.run_client(c, 0.3, reports=[(0.1, b"\x41")])
+        path = next(Path(self.tmp.name).glob("*/events.jsonl"))
+        events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        host = [e for e in events if e.get("ev") == "ah"]
+        self.assertEqual(host[0]["ah_type"], b.AH_JOIN_REQUEST)
+        self.assertIn({"ah_type": 15, "body": "41"}, [{k: e[k] for k in ("ah_type", "body")} for e in host])
+        self.assertTrue(any(e.get("ev") == "frame" and e["type"] == b.SHELLO_REQ for e in events))
 
     def test_mission_script_with_clock_and_trigger(self):
         mission = {"objects": {"timed": "0x10:3:0:0x80809002", "next": "0x10:3:1:0x80809002",
