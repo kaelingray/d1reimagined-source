@@ -98,6 +98,7 @@ One cycle takes 8–10 minutes. Useful companions:
 
 Unit tests: `python -m unittest discover -s server -p "test_*.py"` and `python -m unittest discover -s scripts -p "test_*.py"`.
 Before a scripted mission run, use `python scripts/d1_mission_preflight.py --schema <activity_schema.json> missions/a_guardian_rises.json missions/tower_npcs.json` to check its state fields against the selected client build.
+For a full build check covering join, world, player, game mode, gear, unlock flags and service mappings, use `scripts/d1_build_preflight.py` as shown in the [runbook](notes/next-session-playbook.md).
 
 ### Moving to another PC
 

@@ -76,17 +76,22 @@ check when the stand-in starts. Both scripts passed the 01.00 and 01.24 schemas 
 01.24 still needs a live behavior check.
 
 The run scripts default to the saved 01.00 schemas. On a future 01.24 run, supply the
-corrected export to both stand-ins, for example:
+corrected export to both stand-ins and the saved service ID table to the BAP stand-in:
 
 ```powershell
 $types = (Resolve-Path ..\d1xenia-data\ps3_updates\types_01.24.json).Path
-python scripts\d1_mission_preflight.py --schema $types `
+$services = (Resolve-Path ..\d1xenia-data\schema\investment_schema.json).Path
+python scripts\d1_build_preflight.py --activity-schema $types `
+  --investment-schema $types --services-schema $services `
   missions\a_guardian_rises.json missions\tower_npcs.json
-# Include '--schema', $types in -ExtraBap and '--activity-schema', $types in -ExtraAh.
+# Include '--schema', $types, '--services-schema', $services in -ExtraBap.
+# Include '--activity-schema', $types in -ExtraAh.
 ```
 
 The first 01.24 boot should establish sign-on and activity join before attempting the mission
-script; the static schema check cannot verify client acceptance.
+script; the static schema check cannot verify client acceptance. The 01.24 EBOOT export has
+no service ID table of its own; the 66 saved 01.00 mappings work for their stable handles,
+while 28 new services still need the update package table.
 
 ## 1. Offline analysis (done in the cloud session; what is left)
 

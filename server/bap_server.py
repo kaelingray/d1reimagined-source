@@ -91,6 +91,20 @@ def default_ws_response(schema, wire, values=None):
     return w.data()
 
 
+def with_service_map(schema, source):
+    """Add the stable 01.00 service IDs to an update EBOOT type export without a service table."""
+    if schema is None or schema.get("services"):
+        return schema
+    services = (source or {}).get("services")
+    if not services:
+        raise ValueError("schema has no service IDs; provide a saved service schema")
+    missing = [(wire, handle) for wire, pair in services.items() for handle in pair
+               if handle not in schema]
+    if missing:
+        raise ValueError(f"service mapping references absent type {missing[0][1]} (wire {missing[0][0]})")
+    return {**schema, "services": services}
+
+
 def character_from_request(schema, character_id, request_payload):
     """Profile of a created character: its id plus the class and appearance structs of the
     service-501 request (request offsets 0 and 4 -> character offsets 8 and 0xc)."""
@@ -269,42 +283,77 @@ def save_character(path, account_id, character_id, request_payload):
     path.write_text(json.dumps(store, indent=1), encoding="utf-8")
 
 
-def parse_flag_spec(spec):
+def parse_flag_spec(spec, counts=None):
     """"2" (every flag) or "2@A0-511,B0-15" - value, then index ranges in account table A
-    (+0x12a8, 1024 flags), account table B (+0x16a8+1, 256 flags) and character table C
-    (self character object +0x3bc0, 1024 flags)."""
+    and B and character table C. Unqualified "2" fills each table's build-specific length."""
+    counts = counts or {"A": 1024, "B": 256, "C": 1024}
     value, _, ranges = str(spec).partition("@")
     out = {"A": set(), "B": set(), "C": set()}
     if not ranges:
-        out = {"A": set(range(1024)), "B": set(range(256)), "C": set(range(1024))}
+        out = {table: set(range(counts[table])) for table in out}
     for part in filter(None, ranges.split(",")):
         table, span = part[0].upper(), part[1:]
+        if table not in counts:
+            raise ValueError(f"unknown unlock flag table {table!r}")
         lo, _, hi = span.partition("-")
-        out[table].update(range(int(lo), int(hi or lo) + 1))
+        first, last = int(lo), int(hi or lo)
+        if not 0 <= first <= last < counts[table]:
+            raise ValueError(f"unlock flag {table}{first}-{last} outside 0-{counts[table] - 1}")
+        out[table].update(range(first, last + 1))
     return int(value), out
 
 
-def account_flag_values(spec):
+def account_flag_values(spec, counts=None):
     """Layered specs separated by ";" - later ones win, e.g. "1;2@B0" = every flag false
     (1) except B0 true (2). Returns {"A": {index: value}, "B": {...}}."""
     values = {"A": {}, "B": {}, "C": {}}
     for part in filter(None, str(spec).split(";")):
-        value, chosen = parse_flag_spec(part)
+        value, chosen = parse_flag_spec(part, counts)
         for table, indexes in chosen.items():
             values[table].update(dict.fromkeys(indexes, value))
     return values
 
 
-def account_flags(schema, spec):
+def flag_layout(schema):
+    """Find the A/B/C unlock tables from the selected build's nested type layout."""
+    def is_table(entry, minimum):
+        fields = (entry or {}).get("fields", [])
+        return (len(fields) >= minimum and entry.get("size") == len(fields)
+                and all(fields[i]["off"] == i and fields[i]["kind"] == 3
+                        and fields[i]["width"] == 2 and fields[i]["min"] == 1
+                        for i in (0, 1, len(fields) - 1)))
+
+    def table(owner, minimum):
+        fields = schema.get(owner, {}).get("fields", [])
+        matches = [(field["off"], field["nested"],
+                    schema.get(f"{field['nested']:#x}", {}).get("fields", []))
+                   for field in fields if field["kind"] == 1
+                   and is_table(schema.get(f"{field['nested']:#x}"), minimum)]
+        if len(matches) != 1:
+            raise ValueError(f"expected one unlock flag table in {owner}, found {len(matches)}")
+        offset, handle, entries = matches[0]
+        return {"offset": offset, "handle": handle, "fields": entries, "count": len(entries)}
+
+    account = schema.get("0x808018c7", {}).get("fields", [])
+    wrappers = [field for field in account if field["kind"] == 1 and field["nested"] == 0x80801807]
+    if len(wrappers) != 1:
+        raise ValueError("expected one account B flag wrapper")
+    return {"A": table("0x808018c7", 1024),
+            "B": {**table("0x80801807", 256), "wrapper_offset": wrappers[0]["off"]},
+            "C": table("0x80801714", 1024)}
+
+
+def account_flags(schema, spec, layout=None, values=None):
     """Self root account flag tables, read by the unlock-expression evaluator (0xb674ec /
-    0xb67564). Values are tri-state (the evaluator writes 2 for true). Setting all to 2
-    unlocks destinations but also trophies, message-of-the-day and restriction flags."""
-    values = account_flag_values(spec)
-    def slots(handle, table):
-        return {f["off"]: values[table][i] for i, f in enumerate(schema[handle]["fields"])
+    0xb67564 in 01.00). Values are tri-state (2 = true)."""
+    layout = layout or flag_layout(schema)
+    if values is None:
+        values = account_flag_values(spec, {key: item["count"] for key, item in layout.items()})
+    def slots(table):
+        return {f["off"]: values[table][i] for i, f in enumerate(layout[table]["fields"])
                 if i in values[table]}
-    return {0x12a8: slots("0x80804595", "A"),
-            0x16a8: {0: False, 1: slots("0x808047d8", "B")}}
+    return {layout["A"]["offset"]: slots("A"),
+            layout["B"]["wrapper_offset"]: {layout["B"]["offset"]: slots("B")}}
 
 
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
@@ -315,6 +364,9 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
     (0x32f748 via 0x325350) proceeds only when it is set."""
     objects = []
     extras = extras or {}
+    flags_layout = flag_layout(schema) if schema and family_type == 4 and self_flags is not None else None
+    flag_values = (account_flag_values(self_flags, {key: item["count"] for key, item in flags_layout.items()})
+                   if flags_layout else None)
     if schema and family_type in ROOT_OBJECTS:
         type_hash, handle, values = ROOT_OBJECTS[family_type]
         fields = values(root)
@@ -327,7 +379,7 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                 if active_id is not None:
                     fields[0][0x60] = active_id
         if family_type == 4 and self_flags is not None:
-            fields[0].update(account_flags(schema, self_flags))
+            fields[0].update(account_flags(schema, self_flags, flags_layout, flag_values))
         objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
@@ -337,9 +389,10 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
             type_hash, handle = SELF_CHARACTER_OBJECT
             profile = deep_merge(character_profile, extras.get("self"))
             if self_flags is not None:
-                chosen = account_flag_values(self_flags)["C"]
-                profile[0x3bc0] = {f["off"]: chosen[i] for i, f in
-                                   enumerate(schema["0x80804595"]["fields"]) if i in chosen}
+                chosen = flag_values["C"]
+                profile[flags_layout["C"]["offset"]] = {
+                    f["off"]: chosen[i] for i, f in enumerate(flags_layout["C"]["fields"])
+                    if i in chosen}
             objects.append(investment.obj(type_hash, character_id,
                                           investment.encode(schema, handle, {0: profile})))
     if peer and schema and family_type == 0 and character_id is not None and character_profile is not None:
@@ -384,6 +437,8 @@ AH_NOT = 0x08
 # 0x80800a58 struct: @0 the request echoed (its first i32 must match the copy), @0xf8 a
 # result (0 = joined, stored as bits - 1 in 3 bits), @0xf9 char[128] activity session id,
 # then i32s @0x17c..0x188, u8 @0x18c, u16s @0x18e/0x190 (kept at 0x6930/0x6934), i32 @0x194.
+# These are 01.00 offsets. In 01.13/01.24 the request grows by 8 bytes, so the result and
+# session id move to +0x100/+0x101; join_response() finds them in the selected schema.
 # Next the client waits for its entity indices: b->c not type 0 (handler 0xd0d020), a
 # 0x80800d64 struct holding a 384-word bitmap (0x808043a7) that is ORed into the client's
 # index set (+0x5bf8) and marks the indices received (+0x61f8).
@@ -395,6 +450,8 @@ AH_NOT = 0x08
 # looked up as a resource key (0x1f6564, e.g. "orbit"; ":scenario_fah" etc. for parts).
 # The world id is the i16 at state @0x60 @0x990 (0x3254ec; checked for DLC by 0x4105c4,
 # "World-transition requires DLC."); service 105 carries the world the client asked for.
+# Those scene offsets are 01.00. The static 01.13/01.24 export moves world/map to
+# +0x5c8/+0x5d0; activity_state() reads the selected schema.
 AH_JOIN_REQUEST, AH_JOIN_RESPONSE, AH_ENTITY_INDICES = 3, 4, 0
 AH_STATE, AH_ESTABLISH = 1, 11
 STATE_TYPE = 0x80800E76
@@ -446,10 +503,17 @@ def activity_state(schema, map_name=None, world=None, checksum=None, bubbles=Non
         # ("activity checksum mismatch" fails the world load).
         values[0x5C] = checksum
     scene = {}
-    if map_name:
-        scene[0x994] = {0: char_array(map_name, 40)[0]}
-    if world is not None:
-        scene[0x990] = world
+    if map_name or world is not None:
+        scene_fields = schema["0x80800cc5"]["fields"]
+        map_offset = field_offset(schema, "0x80800cc5", "0x8080409f")
+        world_fields = [f for f in scene_fields if f["kind"] == 4 and f["width"] == 16
+                        and f["min"] == 0x8000]
+        if map_offset is None or len(world_fields) != 2 or world_fields[1]["off"] >= map_offset:
+            raise ValueError("unsupported activity scene layout")
+        if map_name:
+            scene[map_offset] = {0: char_array(map_name, 40)[0]}
+        if world is not None:
+            scene[world_fields[0]["off"]] = world
     if scene:
         values[0x60] = scene
     return investment.encode(schema, STATE_TYPE, {0: values})
@@ -550,22 +614,46 @@ def sim_player(schema, group, index, machine_id, spawn=None):
     """Replicated state of simulation player INDEX (kind 0xc entities of the world's entity group
     GROUP; record +0xc type 0x808022a5 = the entity's 0x50-byte block at +0x144): the bools at +8
     (loading task 9, 0x3286a8) and +9 (spawn readiness 0x35793c) set, owner machine id at
-    +0x18 (0x80800646, entity +0x15c), which 0x4ed7b4 -> 0x14a270 matches against the local
-    player (pla +0x18) to bind it (pla +0x50)."""
+    +0x18 in 01.00 (0x80800646, entity +0x15c), which 0x4ed7b4 -> 0x14a270 matches against the
+    local player (pla +0x18) to bind it (pla +0x50). The 01.24 state puts the owner at +0x3c
+    and wraps the spawn flag in a struct at +0x6c; the offsets come from the selected schema."""
     object_id = {0: group, 4: 0xC, 6: index}
-    state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True}, 0x18: {0: machine_id}, 0x4C: -1}
+    fields = schema[f"{SIM_PLAYER_TYPE:#x}"]["fields"]
+    owner_offset = field_offset(schema, f"{SIM_PLAYER_TYPE:#x}", "0x80800646")
+    tail = fields[-2:]
+    if (owner_offset is None or len(tail) != 2 or tail[1]["kind"] != 5
+            or tail[1]["width"] != 32):
+        raise ValueError("unsupported simulation player layout")
+    state = {0: {0: -1, 4: 0x811C9DC5, 8: True, 9: True},
+             owner_offset: {0: machine_id}, tail[1]["off"]: -1}
     if spawn:
-        # bool +0x48 (entity +0x18c, reached through entity +0x1ec/+0x1f0 by 0x4ec7b4): the spawn
+        # 01.00 bool +0x48 (entity +0x18c, reached through entity +0x1ec/+0x1f0 by 0x4ec7b4): the spawn
         # processing (0x358688) sets a request flag on another component and waits for it.
-        state[0x48] = True
+        spawn_field = tail[0]
+        if spawn_field["kind"] == 2:
+            state[spawn_field["off"]] = True
+        elif (spawn_field["kind"] == 1 and
+              schema[f"{spawn_field['nested']:#x}"]["fields"][0]["kind"] == 2):
+            state[spawn_field["off"]] = {0: True}
+        else:
+            raise ValueError("unsupported simulation player spawn field")
     return object_id, SIM_PLAYER_TYPE, state, True
 
 
-def game_mode(group, index, state):
+def game_mode(schema, group, index, state):
     """Replicated state of the game-mode object (kind 0x10; type 0x808008a3 at entity +0x110).
     Its first field, a 4-bit state, is what loading task 9 (`0xb26e4c`, must be non-zero) and the
     spawn check `0x35793c` (jump table 0x11ed724 indexed by the value: only 3 continues) read."""
-    values = {0: state, 8: 0x811C9DC5, 0xC: -1, 0x984: -1, 0x988: 0x811C9DC5}
+    fields = schema[f"{GAME_MODE_TYPE:#x}"]["fields"]
+    nested = field_offset(schema, f"{GAME_MODE_TYPE:#x}", "0x8080533d")
+    hashes = [(i, f) for i, f in enumerate(fields) if f["kind"] == 9 and f["width"] == 32
+              and nested is not None and f["off"] > nested]
+    if (not hashes or hashes[0][0] == 0 or fields[hashes[0][0] - 1]["kind"] != 5):
+        raise ValueError("unsupported game mode layout")
+    index_field = fields[hashes[0][0] - 1]["off"]
+    hash_field = hashes[0][1]["off"]
+    values = {0: state, 8: 0x811C9DC5, 0xC: -1, index_field: -1,
+              hash_field: 0x811C9DC5}
     return {0: group, 4: 0x10, 6: index}, GAME_MODE_TYPE, values, False
 
 
@@ -801,7 +889,12 @@ def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0):
 
 def join_response(schema, request_body, session_id="d1local-activity", result=0, extra=None):
     request = join_request(schema, request_body)
-    values = {0: request, 0xF8: result, 0xF9: char_array(session_id)}
+    fields = schema[f"{JOIN_RESPONSE_TYPE:#x}"]["fields"]
+    results = [f["off"] for f in fields if f["kind"] == 3 and f["width"] == 3 and f["min"] == 1]
+    if (len(results) != 1 or not any(f["off"] == results[0] + 1
+                                    and f["nested"] == 0x80804056 for f in fields)):
+        raise ValueError("unsupported activity join response layout")
+    values = {0: request, results[0]: result, results[0] + 1: char_array(session_id)}
     values.update(extra or {})
     return investment.encode(schema, JOIN_RESPONSE_TYPE, values)
 
@@ -1320,7 +1413,7 @@ def handle(conn, peer, args):
                         if args.ah_game_mode_schedule:
                             state = args.ah_game_mode_schedule[0][0]
                         game_mode_at, game_mode_now = len(objects), state
-                        objects.append(game_mode(group, index, state))
+                        objects.append(game_mode(args.activity_schema, group, index, state))
                         log(f"[{tag}] game mode {group:#x}:{index} state {state}")
                     for spec in args.ah_object:
                         objects.append(spec)
@@ -1407,7 +1500,7 @@ def handle(conn, peer, args):
                     if due and due[-1] != game_mode_now:
                         game_mode_now = due[-1]
                         group, index, _ = args.ah_game_mode
-                        objects_[at_] = game_mode(group, index, game_mode_now)
+                        objects_[at_] = game_mode(args.activity_schema, group, index, game_mode_now)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                         log(f"[{tag}] game mode {group:#x}:{index} -> state {game_mode_now}")
                 if sim_repeat and sim_build and args.ah_sim_clock:
@@ -1638,13 +1731,22 @@ def parse_args(argv=None):
     ap.add_argument("--ah-session", default="d1local-activity",
                     help="activity session id sent in the host join response")
     ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,
-                    help="activity host message schema exported by scripts/rpcs3_tiger_types.py")
+                    help="activity host message schema from a runtime dump or EBOOT type export")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
-                    help="investment type schema exported by scripts/rpcs3_tiger_types.py (optional)")
+                    help="investment type schema from a runtime dump or EBOOT type export (optional)")
+    ap.add_argument("--services-schema", type=Path, default=investment.DEFAULT_SCHEMA,
+                    help="saved service ID table used when --schema is an EBOOT-only type export")
     args = ap.parse_args(argv)
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
+    if args.schema and not args.schema.get("services"):
+        if not args.services_schema.exists():
+            ap.error(f"--schema has no service IDs; missing --services-schema {args.services_schema}")
+        try:
+            args.schema = with_service_map(args.schema, investment.load_schema(args.services_schema))
+        except ValueError as exc:
+            ap.error(str(exc))
     args.character_extras = character_extras(args.character_gear, args.character_overlay,
                                              character_layout(args.schema))
     args.activity_schema = (investment.load_schema(args.activity_schema)

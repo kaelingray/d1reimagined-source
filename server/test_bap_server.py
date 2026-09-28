@@ -41,6 +41,18 @@ class ShelloReply(unittest.TestCase):
         self.assertEqual(frame[:6], bytes.fromhex("010100000018"))
 
 
+class ServiceSchema(unittest.TestCase):
+    def test_update_type_export_uses_saved_service_ids(self):
+        target = {"0x80801825": {"fields": []}, "0x80801774": {"fields": []}}
+        source = {"services": {"503": ["0x80801774", "0x80801825"]}}
+        merged = bap.with_service_map(target, source)
+        self.assertEqual(merged["services"], source["services"])
+        self.assertIsNone(bap.with_service_map(None, source))
+        self.assertIs(bap.with_service_map(merged, {}), merged)
+        with self.assertRaisesRegex(ValueError, "absent type"):
+            bap.with_service_map({"0x80801825": {"fields": []}}, source)
+
+
 class CharacterGear(unittest.TestCase):
     def test_gear_spec(self):
         gear = bap.gear_spec("7=0x64/2:5/3:6, 12=200")
@@ -97,6 +109,49 @@ class CharacterGear(unittest.TestCase):
         self.assertEqual(extras["select"][0x68][0x138][0], {0: 0x100, 8: 9})
         with self.assertRaises(ValueError):
             bap.overlay_spec('{"player": {}}')
+
+
+class UnlockFlags(unittest.TestCase):
+    @staticmethod
+    def schema(a_offset, a_handle, a_count, b_offset, b_inner, c_offset, c_handle, c_count):
+        def nested(off, handle):
+            return {"off": off, "kind": 1, "opt": 1, "nested": handle, "arr": 0, "min": 0, "width": 0}
+
+        def table(count):
+            return {"size": count, "fields": [
+                {"off": i, "kind": 3, "opt": 1, "nested": -1, "arr": 0, "min": 1, "width": 2}
+                for i in range(count)]}
+
+        return {"0x808018c7": {"fields": [nested(a_offset, a_handle), nested(b_offset, 0x80801807)]},
+                "0x80801807": {"fields": [nested(b_inner, 0x808047d8)]},
+                "0x80801714": {"fields": [nested(c_offset, c_handle)]},
+                f"{a_handle:#x}": table(a_count), "0x808047d8": table(256),
+                f"{c_handle:#x}": table(c_count)}
+
+    def test_flags_follow_old_and_new_schema_layouts(self):
+        cases = ((0x12a8, 0x80804595, 1024, 0x16a8, 1, 0x3bc0, 0x80804595, 1024),
+                 (0x383c, 0x80804b0c, 2560, 0x4f78, 8, 0x5000, 0x80804c21, 2048))
+        for args in cases:
+            schema = self.schema(*args)
+            layout = bap.flag_layout(schema)
+            self.assertEqual(tuple(layout[t]["count"] for t in ("A", "B", "C")),
+                             (args[2], 256, args[7]))
+            values = bap.account_flag_values("2", {t: layout[t]["count"] for t in layout})
+            self.assertEqual(tuple(len(values[t]) for t in ("A", "B", "C")), (args[2], 256, args[7]))
+            root = bap.account_flags(schema, "2", layout, values)
+            self.assertEqual(root[args[0]][args[2] - 1], 2)
+            self.assertEqual(root[args[3]][args[4]][255], 2)
+            self.assertEqual(values["C"][args[7] - 1], 2)
+            self.assertNotIn(0, root[args[3]])  # old bool defaults false; new u64 is optional
+
+    def test_explicit_ranges_use_the_selected_build_capacity(self):
+        counts = {"A": 2560, "B": 256, "C": 2048}
+        values = bap.account_flag_values("1;2@A2559,B0,C2047", counts)
+        self.assertEqual(values["A"][2559], 2)
+        self.assertEqual(values["B"][0], 2)
+        self.assertEqual(values["C"][2047], 2)
+        with self.assertRaisesRegex(ValueError, "outside"):
+            bap.account_flag_values("2@C2048", counts)
 
 
 class MissionScript(unittest.TestCase):

@@ -54,7 +54,11 @@ directly from the executable or the packages.
   stand-in loads. It finds each field by its nested type's handle, so `--character-gear`
   writes 01.24's layout when given a 01.24 schema. With the 01.00 schema (or none) it gives
   the old constants.
-- The `--account-flags` tables are still 01.00-only.
+- `--self-flags` now finds account tables A/B and character table C in the loaded schema.
+  The 01.24 static layout gives A at +0x383c (2,560 flags), B at +0x4f78/+8
+  (256), and C at self character +0x5000 (2,048). An unqualified `--self-flags 2`
+  fills the full capacity of each selected table. These are structural matches;
+  which new flags grant which content still needs runtime work.
 
 **Mission objects (CONFIRMED):**
 
@@ -85,6 +89,29 @@ directly from the executable or the packages.
   The run scripts still default to the saved 01.00 schemas. For an 01.24 run, pass the
   corrected `types_01.24.json` as `--schema` to the BAP stand-in and as
   `--activity-schema` to the activity host (via `-ExtraBap` and `-ExtraAh`).
+
+**Core activity-host payloads (static encode/decode checks):** the first audit found 01.00
+offsets that the 01.24 encoder silently omitted. The stand-in now derives these fields from
+the selected schema:
+
+| Field | 01.00 | 01.13/01.24 |
+| --- | ---: | ---: |
+| Join result / session ID | +0xf8 / +0xf9 | +0x100 / +0x101 |
+| Activity scene world / map | +0x990 / +0x994 | +0x5c8 / +0x5d0 |
+| Simulation-player owner | +0x18 | +0x3c |
+| Simulation-player spawn flag | bool +0x48 | nested bool +0x6c/+0 |
+| Game-mode trailing signed value / hash | +0x984 / +0x988 | +0x4c8 / +0x4cc |
+
+The core preflight also roundtrips the world-state zone and peer masks, starter
+gear, all three unlock tables, and both mission scripts against the saved 01.00
+schema and the corrected 01.13/01.24 exports. It verifies serialization; the
+01.24 client handlers and the wrapped spawn flag still need a game run.
+
+The EBOOT-only `types_01.24.json` has no web-service ID table. The BAP stand-in
+now takes `--services-schema` to overlay the 66 saved 01.00 service mappings;
+all their request and response type handles are present in 01.24. The 28 added
+service IDs remain unavailable until the update-build package service table is
+exported. `scripts/d1_build_preflight.py` checks this overlay before a run.
 
 **Web services (CONFIRMED):**
 
