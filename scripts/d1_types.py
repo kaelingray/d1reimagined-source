@@ -18,9 +18,10 @@ The web services are a tag of the investment globals (class 0x80803389 package, 
 0x80a5806b): a dynamic array of 36-byte records of element class 0x80801820 - u32 name hash,
 u32, u16 wire id, u16, u32 request type, u32 response type.
 
-  python scripts/d1_types.py schema OUT.json [--packages DIR --oodle DLL]  # full schema (+ services)
+  python scripts/d1_types.py [--packages DIR --oodle DLL] schema OUT.json    # full schema (+ services)
   python scripts/d1_types.py type 0x80801855 [--depth 3]                    # one type tree
-  python scripts/d1_types.py services --packages DIR --oodle DLL            # wire, request, response
+  python scripts/d1_types.py --packages DIR --oodle DLL services            # wire, request, response
+  python scripts/d1_types.py --packages DIR --oodle DLL --service-tag 0x80a5e21a service-map OUT.json
 """
 
 import argparse
@@ -80,32 +81,40 @@ def scan_layout(data, link, counted):
     return types
 
 
-def service_table(ps):
+def parse_service_table(data):
+    """Decode a service table tag, or return [] when the tag has another layout."""
+    if struct.pack(">I", SERVICE_RECORD_CLASS) not in data[:0x40]:
+        return []
+    for field in range(4, 0x28, 4):
+        try:
+            count, first, elem = d1_pkg.dyn_array(data, field)
+        except (ValueError, struct.error):
+            continue
+        if elem == SERVICE_RECORD_CLASS and first + 36 * count <= len(data):
+            out = [struct.unpack_from(">IIHHII", data, first + 36 * i) for i in range(count)]
+            return sorted((wire, name, request, response)
+                          for name, _, wire, _, request, response in out)
+    return []
+
+
+def service_table(ps, tag=None):
     """[(wire, name hash, request handle, response handle)] from the investment globals."""
+    if tag is not None:
+        data = ps.tag(tag)
+        return parse_service_table(data) if data is not None else []
     for p in ps.by_id.values():
         for e in p.entries:
             if e["type"] != 16:
                 continue
             try:
                 data = p.entry_data(e["index"], ps.oodle)
-            except (ValueError, struct.error, RuntimeError):
+            except (ValueError, struct.error, RuntimeError, FileNotFoundError):
+                # A partial update chain can omit base blocks unrelated to the
+                # service table. Keep scanning entries in the available patches.
                 continue
-            if struct.pack(">I", SERVICE_RECORD_CLASS) not in data[:0x40]:
-                continue
-            for field in range(4, 0x28, 4):
-                try:
-                    count, first, elem = d1_pkg.dyn_array(data, field)
-                except (ValueError, struct.error):
-                    continue
-                if elem == SERVICE_RECORD_CLASS:
-                    break
-            else:
-                continue
-            out = []
-            for i in range(count):
-                name, _, wire, _, request, response = struct.unpack_from(">IIHHII", data, first + 36 * i)
-                out.append((wire, name, request, response))
-            return sorted(out)
+            found = parse_service_table(data)
+            if found:
+                return found
     return []
 
 
@@ -166,19 +175,32 @@ def package_set(a):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--elf", type=Path, default=DEFAULT_ELF, help="decrypted EBOOT")
-    ap.add_argument("--packages", help="folder with ps3_investment_globals_012c (for the services)")
+    ap.add_argument("--packages", help="folder with the investment globals package chain")
     ap.add_argument("--oodle", help="oo2core_3_win64.dll (the packages' blocks are compressed)")
+    ap.add_argument("--service-tag", type=lambda value: int(value, 0),
+                    help="specific service table tag (01.24: 0x80a5e21a)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("schema"); s.add_argument("out", type=Path)
+    s = sub.add_parser("service-map"); s.add_argument("out", type=Path)
     s = sub.add_parser("type"); s.add_argument("handle"); s.add_argument("--depth", type=int, default=3)
     sub.add_parser("services")
     a = ap.parse_args(argv)
-    types = scan_types(a.elf.read_bytes())
+    types = scan_types(a.elf.read_bytes()) if a.cmd != "service-map" else {}
     if a.cmd == "type":
         print_tree(types, int(a.handle, 16), max_depth=a.depth)
         return
     ps = package_set(a)
-    services = service_table(ps) if ps else []
+    services = service_table(ps, a.service_tag) if ps else []
+    if a.cmd == "service-map":
+        if not services:
+            sys.exit("service map needs --packages, --oodle and a valid --service-tag")
+        out = {
+            "services": {str(w): [f"{rq:#x}", f"{rs:#x}"] for w, _, rq, rs in services},
+            "name_hashes": {str(w): f"{name:#010x}" for w, name, _, _ in services},
+        }
+        a.out.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        print(f"{len(services)} services -> {a.out}")
+        return
     if a.cmd == "schema":
         out = dict(types)
         if services:

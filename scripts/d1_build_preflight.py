@@ -88,12 +88,27 @@ def investment_checks(schema):
     return counts
 
 
+def service_checks(schema):
+    """Every mapped service must have a decodable default stand-in reply."""
+    for wire, pair in schema["services"].items():
+        payload = bap_server.default_ws_response(schema, int(wire))
+        if payload is None:
+            raise ValueError(f"service {wire}: no default response")
+        reader = investment.BitReader(payload)
+        if reader.get(16) != int(wire):
+            raise ValueError(f"service {wire}: response wire ID changed")
+        investment.decode_from(reader, schema, int(pair[1], 16))
+        if reader.get(1):
+            raise ValueError(f"service {wire}: unexpected response blob")
+    return len(schema["services"])
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--activity-schema", type=Path, required=True)
     ap.add_argument("--investment-schema", type=Path, required=True)
     ap.add_argument("--services-schema", type=Path, required=True,
-                    help="saved service ID table; required for an EBOOT-only type export")
+                    help="service ID map; required for an EBOOT-only type export")
     ap.add_argument("missions", nargs="*", type=Path)
     args = ap.parse_args(argv)
     try:
@@ -104,7 +119,8 @@ def main(argv=None):
         print(f"PASS activity join/state/player/game mode/world: result {result_offset:#x}, "
               f"world {world_offset:#x}, map {map_offset:#x}")
         counts = investment_checks(investment_schema)
-        print(f"PASS services/flags/starter gear: {len(investment_schema['services'])} known services, "
+        service_count = service_checks(investment_schema)
+        print(f"PASS services/flags/starter gear: {service_count} encodable services, "
               + ", ".join(f"{name}={count}" for name, count in counts.items()))
         for path in args.missions:
             mission = json.loads(path.read_text(encoding="utf-8"))

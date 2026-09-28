@@ -92,7 +92,7 @@ def default_ws_response(schema, wire, values=None):
 
 
 def with_service_map(schema, source):
-    """Add the stable 01.00 service IDs to an update EBOOT type export without a service table."""
+    """Add service IDs from a package-derived map to an EBOOT-only type export."""
     if schema is None or schema.get("services"):
         return schema
     services = (source or {}).get("services")

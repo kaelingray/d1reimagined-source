@@ -108,10 +108,9 @@ schema and the corrected 01.13/01.24 exports. It verifies serialization; the
 01.24 client handlers and the wrapped spawn flag still need a game run.
 
 The EBOOT-only `types_01.24.json` has no web-service ID table. The BAP stand-in
-now takes `--services-schema` to overlay the 66 saved 01.00 service mappings;
-all their request and response type handles are present in 01.24. The 28 added
-service IDs remain unavailable until the update-build package service table is
-exported. `scripts/d1_build_preflight.py` checks this overlay before a run.
+takes `--services-schema` to overlay the package-derived 01.24 map in the data
+repo (`ps3_updates/services_01.24.json`). It covers all 94 service IDs;
+`scripts/d1_build_preflight.py` checks their type handles before a run.
 
 **Web services (CONFIRMED):**
 
@@ -131,11 +130,18 @@ exported. `scripts/d1_build_preflight.py` checks this overlay before a run.
   - 1601, 1602, 1606, 1609–1614;
   - 1701, 1702;
   - 1801.
+- Static response shapes put **208, 209, 211, 1305, 1306 and 1601** first on
+  the capture list: their replies carry fields beyond the common result/status
+  shape. The other 22 new replies have only a result field or a result plus a
+  32-bit status field. This says nothing yet about which services the client
+  calls or what values it expects.
 - 19 old services changed a request or response payload (often only through a nested type).
   Those the stand-in answers: **104** universe (both), **503** sign-in (response `0x80801825`
   0xe0 → 0x3c8), **201/202/203/205** (responses). Service **206** (family fetch) is unchanged.
-- `d1_types.py services --packages <folder with 012c and 012f chains>` prints the table. It
-  already searches every package.
+- `d1_types.py --packages <012f chain folder> --oodle <DLL> --service-tag 0x80a5e21a
+  service-map services_01.24.json` exports the mapping and name hashes. The four update
+  files `_1` through `_4` suffice because the table lives in `_4`; unrelated entries can
+  refer back to the disc's `_0` package.
 
 **Sign-on (CONFIRMED):**
 
@@ -226,3 +232,7 @@ python scripts/ps3_update.py fetch BLES01857 --versions 01.13,01.20,01.22,01.23 
 ```
 
 The final 012f chain is _1 (01.13), _2 (01.20), _3 (01.22) and _4 (01.23). 01.19's _5 is stale.
+The extracted tag has 94 unique IDs and all 66 old wire IDs and request/response
+handles match the saved 01.00 map exactly. All 188 handles are present in the
+corrected 01.24 type export. The derived map is in `d1xenia-data`; the raw
+update packages remain in local scratch storage.
