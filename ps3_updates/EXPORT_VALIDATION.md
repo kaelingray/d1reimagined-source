@@ -37,7 +37,7 @@ update-build package service table: the default export did not fetch the full
 update package set. The separately documented 01.24 service-table analysis is
 in `d1xenia/notes/final-build.md`.
 
-Validation on the current code branch: 53 server tests passed (one skipped),
+Validation on the current code branch: 59 server tests ran successfully (one skipped),
 and 21 script tests passed. The tests use synthetic fixtures and do not prove
 complete runtime type coverage.
 
@@ -53,3 +53,16 @@ existing-member field moved from +0x5c to +0x74. The former scripts named
 code branch now resolves `squad_existing_members` to the offset for the
 selected schema and rejects dropped fields before a run. Client behavior on
 01.24 remains untested.
+
+Core build preflight on 2026-09-28 with `d1xenia` commit
+`cc25790a0d2ac51eb1580a8633084b3523e58b1a`:
+`scripts/d1_build_preflight.py` passed against the saved 01.00 schemas and
+the corrected 01.13 and 01.24 type exports. It checks join response, activity
+world/map, simulation player, game mode, world-state zone and peer masks,
+starter gear, all three unlock-flag tables, and the 80 mission state changes.
+For 01.24, the account/character flag capacities are 2,560/256/2,048;
+the shifted activity fields and flags roundtrip without omission. All 66
+saved 01.00 service request/response handles exist in the 01.24 export, so
+their ID table can be supplied separately. The EBOOT-only export contains no
+service ID table for the 28 added services. These checks verify serialization
+against static type definitions, not runtime client behavior.
