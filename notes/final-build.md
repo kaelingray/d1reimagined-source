@@ -162,8 +162,40 @@ repo (`ps3_updates/services_01.24.json`). It covers all 94 service IDs;
   - response 13 (string[64]) and 14 (u32).
 - The request table is at 0x12e66dd and the response table at 0x12e6850. The handler is at
   0x28dbd4 (01.00: 0x126744). It decodes into a stack struct at r1+0x70:
-  - field 13 is copied to the sign-on singleton at +0x47cc. No other code touches it except a
-    reset at 0x28cf38, so its use is UNKNOWN;
+  - field 13 is a **serialized blob, not a bare string**; its real location in the SignOn
+    singleton is **+0x4460 (u64 pointer) and +0x4468 (u32 length)**, not +0x47cc as first
+    written here. The store is at `0x28e170`/`0x28e174` (`std`/`stw` on the singleton base
+    `r30`), guarded by `lbz r3, 0x508(r1)`; `0x28e6ec`/`0x28e6f0` write the pair again from
+    another path. (The only literal `0x47cc` stores in the build are unrelated singletons at
+    `0x1aa`, `0x1ab` and `0x1bc`; find them with `scripts/d1_offset_scan.py`.)
+  - field 13's consumer is a **single accessor and a single caller**, which makes its purpose
+    knowable offline:
+    - `0x35af6c` is the accessor: `332614(3)` fetches the SignOn singleton, then
+      `lwz r31, 0x4468(0x1aa49f8)` returns the blob **length** (0 if absent).
+    - its one caller `0x490474` is a **3-iteration loop** (`cmpwi r30, 3`, `r31 += 0x1a0`), so
+      the blob is parsed once per region. It first compares the incoming length against the
+      cached `+0x468`; if it differs it reparses, else it skips — the same "only act when
+      something changed" guard seen elsewhere in this codebase.
+    - on a change it copies **0x178 bytes** into `+0x470` (`9a7540`, then `99e380`) and records
+      the new signature: `+0x450` (u16 version), `+0x458` (bool), `+0x460` (f64), `+0x468`
+      (length), `+0x46c` (u8). Only the success path bumps the object's own counter at
+      `+0x5e8`, saturating rather than wrapping.
+    - the actual decode is `0x490174` (also reached via `0x48ff28`): it dispatches on a type
+      byte at `+0x1c`, and when that byte is 0 it takes the "write defaults" path, clearing
+      `+0x454`/`+0x458`/`+0x460`/`+0x468`/`+0x46c` first.
+    - the loop's caller is `0x5b4bb8`, which requires `475d50() == 3` (a count of **three**,
+      matching three regions) and a guard byte at `+0x5080`; afterwards the same function walks
+      **ten** 0x240-byte records (`cmpwi r31, 0xa`) through the expiry helpers
+      `48eedc`/`48f2dc`/`48ef24`, which compare `+0x21c`/`+0x238` counters — those are timers,
+      not host names.
+
+    **Consequence for the stand-in:** an absent or empty field 13 is handled (length 0, the
+    cached signature cleared and defaults written), so field 13 is not *required* for the
+    client to continue. But the 0x178-byte record is the only sign-on-supplied configuration
+    01.24 has left now that the Demonware lobby step is gone (see `Demonware lobby (LIKELY
+    removed)` below). The region's `0x1a0` stride suggests one blob per region holding that
+    region's endpoints. **The blob's contents are still undecoded**; what is confirmed here is
+    the plumbing, not the schema.
   - field 14 is wrapped in an address record (u32, then u16 4 at +0x12) and handed to the
     `network_demonware` module (0x1326e8 returns it; 0x132cb4 validates and stores it at
     +0x184). Its STUN/relay code (0x132cf4) compares it with the module's own address (+0x154)
@@ -171,7 +203,14 @@ repo (`ps3_updates/services_01.24.json`). It covers all 94 service IDs;
 
   This is LIKELY the client's public IPv4 address as the sign-on server saw it, used for NAT
   traversal. `signon_probe.py --public-ip ADDR` sends it (optional; the byte order is not
-  confirmed).
+  confirmed). **This is the one new field the failing 01.24 runs already send** (as
+  `127.0.0.1`), and it feeds the STUN/relay/NAT path, so it is now the strongest single
+  candidate for the "Passed Verifying Content to Preparing, then black screen with no BAP"
+  stall. Its byte order is still unconfirmed, and a wrong one may be worse than omitting it:
+  `0x132cf4` compares the value with the module's own address at `+0x154` and records the
+  match. **Next experiment for the next PC session: run the same manifest with field 14
+  omitted entirely (the `--public-ip` flag already makes it optional), so only one variable
+  changes.**
 - `SignOn?platform=%s&build=%s` and the two sign-on domains are unchanged.
 - New: `stun1`–`stun8.signon.deadorbit.net` / `.gravityshavings.net` and
   `destiny-stun.{us,eu,jp,au}.demonware.net`. The DNS sinkhole already answers every name
@@ -228,6 +267,43 @@ carried over.
   - `bootflow:illegal_dlc_media`;
   - `bootflow:check_media: NPDRM check failed`;
   - `offer_key.edat`, `destiny.edat`.
+
+**DLC entitlement gate in 01.24 (CONFIRMED, `0x36e92c`; the 01.00 twin is `0x334004`):**
+this is the function that emits the two strings above. It is the gate that
+[`bap_server.py`](../server/bap_server.py) already works around on 01.00 through
+`--self-flags` (see `0x4105c4 world_transition_dlc_check`, the unlock-expression evaluator
+that feeds it, and the orbit checkpoint's world 125/126 runs), so this is a relocation, not a
+new mechanism. What is new is the shape in 01.24:
+
+- `+0x660`, `+0x668`, `+0x670` are three optional DLC reference slots on the transition
+  object, tested as `clrlwi`/`cmpdi` against 0 in that order, producing a **priority code**:
+  0 = all three set, 1 = `+0x668` and `+0x660`, 2 = `+0x670` only, and `r28` stays -1 when none
+  is set. The priority, not the slot, selects the path.
+- `2a8080(4)` fetches the entitlement/permission service; if it is absent the check is skipped.
+  Otherwise two virtual calls on it (vtable +0x2c and +0x8, the latter returning a bool at
+  `+0x6b8c`) must both be true.
+- `35cd7c` writes the resolved **licence id** into the caller's `r1+0x70`. `470384` returns
+  **true when an id was resolved** and 0 only for -1 (it counts leading zeros of `id + 1`),
+  i.e. it answers "does this transition name a DLC at all?". A resolved id takes the failure
+  branch: `355d54(0x19, 0x17, 0x12fcc20)` ("World-transition requires DLC."), returning
+  0x17 = 23. **Both pointers come from `lis r5, 0x130` + `addic r5, -0x33e0`/`-0x33c0`;
+  `0x130cc20`/`0x130cc40` are the neighbouring UTF-16 Portuguese copies in a localization
+  table, not the ones this code passes.**
+- With no DLC named (id -1) the same service is asked again through `46db2c(licence)`, which
+  returns non-zero to mean "permission granted". Zero reports
+  `355d54(0x19, 0x18, 0x12fcc40)` ("World-transition requires permissions.") and returns
+  0x18 = 24, matching the 01.00 observation that 0x17 is the DLC gate and 0x18 the next one.
+- Only the success path sets `+0x30` of the transition object, resolves the activity handle
+  through `337540`/`3375c0`, checks `332614(3)` and `359ec4() == 2`, and returns 1 at
+  `0x36ec28`.
+
+So the gates are 0x17 = "this world names a DLC you must own" and 0x18 = "you do not hold the
+permission for it", and both read only client-side state: the transition object's DLC slots and
+the local entitlement enumeration. The activity host is never consulted, which is why the
+existing `--self-flags` answer for 01.00 carries over. The open item "DLC entitlement check" in
+[`preservation-plan.md`](preservation-plan.md) is resolved for 01.24 as far as offline work
+goes; what is left is a runtime confirmation that the 01.24 client evaluates the same unlock
+expressions the stand-in already serves.
 - New bootflow states: `check_media` and `confirm_account_transfer`.
 
 ## Reports

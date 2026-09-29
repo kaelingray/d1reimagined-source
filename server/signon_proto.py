@@ -33,12 +33,17 @@ Response (HTTP 2xx, application/octet-stream):
               other denied); 2 int32; 3 uint64; 4 string[200]; 5 string[50].
   8  int32, optional.   10 message {1: repeated int32 [64]}.   12 uint64, optional.
 
-The title updates (01.24; notes/final-build.md) add optional response fields 13 (string[64],
-copied to sign-on singleton +0x47cc; use UNKNOWN) and 14 (u32). Field 14 goes as an IPv4
-address record to the network_demonware module (+0x184, 0x132cb4), which compares it with its
-own address (+0x154) at 0x132cf4: LIKELY the client's public address as the server saw it. The
-byte order is not confirmed; `public_ip` sends it as a big-endian u32. The request adds
-optional fields 20 (8 integers) and 21 (five strings). The success message (field 2) is the same.
+The title updates (01.24; notes/final-build.md) add optional response fields 13 (string[64])
+and 14 (u32). Field 13 is a serialized blob stored as {u64 pointer, u32 length} at sign-on
+singleton +0x4460/+0x4468 (not +0x47cc, an earlier reading). Its only consumer parses a
+0x178-byte record once per region and copes with an empty field (length 0 -> defaults), so
+omitting it is safe; its contents are still undecoded. Field 14 goes as an IPv4 address record
+to the network_demonware module (+0x184, 0x132cb4), which compares it with its own address
+(+0x154) at 0x132cf4: LIKELY the client's public address as the server saw it. The byte order is
+not confirmed; `public_ip` sends it as a big-endian u32. Runs 007-009 sent 127.0.0.1 and then
+stalled before BAP, so treat it as a suspect and A/B it with `Start-FinalBuildSmoke.ps1
+-PublicIp ''`. The request adds optional fields 20 (8 integers) and 21 (five strings). The
+success message (field 2) is the same.
 
 HTTP 500 maps to _internal_server_error, 503/509 to _server_unavailable, and any other
 non-2xx status to _retriable_error.

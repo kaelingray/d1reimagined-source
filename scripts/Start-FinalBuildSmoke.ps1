@@ -8,11 +8,19 @@ param(
     [string]$PpuHash,
     [string]$ManifestFile,
     [string]$Name = ("FINAL124_" + (Get-Date -Format 'yyyyMMdd_HHmmss')),
-    [string[]]$SignonArgs = @('--title-config-format', '01.24', '--public-ip', '127.0.0.1'),
+    [string[]]$SignonArgs = @('--title-config-format', '01.24'),
+    # SignOn response field 14: the address the client is told the server saw it at, which
+    # feeds the STUN/relay/NAT path (notes/final-build.md). Runs 007-009 sent 127.0.0.1 and
+    # then stalled before BAP, so it is the first thing to A/B. -PublicIp '' omits the field
+    # entirely, which is the control run; its byte order is still unconfirmed.
+    [AllowEmptyString()][string]$PublicIp = '127.0.0.1',
     [switch]$Run
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\Paths.ps1"
+
+$signonArguments = $SignonArgs
+if ($PublicIp -ne '') { $signonArguments += @('--public-ip', $PublicIp) }
 
 $data = (Resolve-Path -LiteralPath $DataRepo).Path
 $types = Join-Path $data 'ps3_updates\types_01.24.json'
@@ -34,9 +42,9 @@ if (-not $Run) { return }
 
 $manifestArgument = @()
 if ($ManifestFile) {
-    if ($SignonArgs -contains '--manifest-file') { throw 'Specify a manifest file only once.' }
+    if ($signonArguments -contains '--manifest-file') { throw 'Specify a manifest file only once.' }
     $manifestArgument = @('--manifest-file', (Resolve-Path -LiteralPath $ManifestFile).Path)
-} elseif ($SignonArgs -notcontains '--manifest-file') {
+} elseif ($signonArguments -notcontains '--manifest-file') {
     $updatePackages = Join-Path $rpcs3 'dev_hdd0\game\BLES01857\USRDIR\a0000001\packages'
     $manifest = Join-Path $D1Local 'RESEARCH\ps3_updates\manifest-final-smoke.bin'
     & $D1Python "$PSScriptRoot\build_manifest_probe.py" `
@@ -51,7 +59,7 @@ $previousUsrdir = $env:D1_USRDIR
 try {
     $env:D1_RPCS3 = $rpcs3
     $env:D1_USRDIR = $usrdir
-    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($SignonArgs + $manifestArgument) -BapArgs @(
+    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -BapArgs @(
         '--universe-time', 's', '--self-flags', '1;2@B0,C0-1023',
         '--schema', $types, '--services-schema', $services,
         '--activity-schema', $types)

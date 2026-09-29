@@ -125,5 +125,70 @@ pwsh -NoProfile -File scripts/Invoke-RpcsStep.ps1 -Keys X -WaitSeconds 20
    `services_01.24.json` from the data repo, preserve all BAP and activity
    host captures, and index each run before making handler changes.
 
+### Cheapest next run: A/B SignOn field 14
+
+Runs 005-009 differ in the manifest, but 007/008/009 all introduced one more
+thing at once: **SignOn response field 14 = `127.0.0.1`**, and that is the run
+that first got past "Verifying Content" into "Preparing". It is also the only
+new field that feeds the STUN/relay/NAT path, so it is now the leading
+suspect for the stall before BAP. Its byte order is unconfirmed, and
+`0x132cf4` compares the value against the module's own address, so a
+wrong-endian value may be worse than none at all.
+
+The launcher now takes it as a parameter, so the control run is one flag:
+
+```powershell
+# control: field 14 omitted entirely (what 005/006 did, and it reached marionberry)
+pwsh -NoProfile -File scripts/Start-FinalBuildSmoke.ps1 -DataRepo ../d1xenia-data `
+  -Rpcs3Dir local/RPCS3_FINAL124_SMOKE001 -GameUsrdir local/01_WORKING/ps3_destiny/PS3_GAME/USRDIR `
+  -PublicIp '' -Name FINAL124_NOFIELD14 -Run
+
+# same manifest, field 14 present again (reproduces 009)
+... -PublicIp '127.0.0.1' -Name FINAL124_FIELD14 -Run
+```
+
+Keep the manifest identical between the two, and index both runs with
+`scripts/summarize_final_smoke.py` before drawing a conclusion. If omitting the
+field changes where the client stops, the stall is in the NAT/STUN path, not in
+the manifest, and that makes item 1 above the priority.
+
+### Item 2: where the 01.24 STUN client lives (offline search, 2026-09-29)
+
+`scripts/stun_scan.py` searches the code for the immediates that shape the
+packets (`--li`, `--word`, `--cmpwi`; the Demonware range defaults to
+`0xa00000-0xc00000`). Note the encoding, verified against capstone: in
+`cmpwi` the immediate is the **low** 16 bits of the word (`0x2c030004` =
+`cmpwi r3, 4`), so matching the high half gives thousands of false hits.
+
+What is known:
+
+- The client's own STUN shim is `0x11e348`, which registers the two handler
+  tables at `0x185da68` / `0x185da70` and the module name
+  `network_stun_client_demonware_shim` (`0x12d60c4`).
+- `0x1329ac` loads the STUN host table: 16 names, `stun1`-`stun8.signon.
+  deadorbit.net` and `stun1`-`stun8.signon.gravityshavings.net`, from the
+  pointer array at `0x12d6dc0`. Alongside them sit the config keys
+  `stun_udp`, `stun_version`, `stun_request_stage`, `client_ipv4`,
+  `client_port`, `alternate_stun_ipv4`, `alternate_stun_port` (so the client
+  is told its own view of its address and port, not just the server's).
+- The four `destiny-stun.{us,eu,jp,au}.demonware.net` names are referenced
+  from `0x11e704`; `stun.{us,eu,jp,au}.demonware.net` (`0x14028f8`+) are the
+  01.00-era names, still present in 01.24.
+- The Demonware transport-startup state machine is `0xb3012c` ("Starting
+  external STUN client." at `0xb30230`), but it only orchestrates
+  `b32dd4` / `b334e4` / `b2d91c` / `b2f8a4` through vtable slots; the packet
+  codec is behind one of those virtuals and has not been identified.
+
+**Not found, and worth not redoing:** the 01.00 request types (30 = `1e`,
+20 = `14`) and reply types (31 = `1f`, 21 = `15`) do **not** appear as
+`cmpwi` immediates anywhere in the Demonware range of 01.24. The dense
+`cmpwi 0x1e` cluster at `0xba33a8`-`0xba3c50` is a generic varint/msgpack
+value decoder (it branches on `0x1c`, `0x1d`, `0xf7`, `0xfb` and builds
+values byte by byte), not a STUN type switch. So 01.24 does not dispatch on
+the request-type byte by comparing it to a small constant: the type is most
+likely read into a register (`lbz`) and used as a table index or compared
+against a value loaded from `.rodata`. Continue from the vtable slots that
+`0xb3012c` calls, or capture a real reply on the owner's console.
+
 Keep raw run data under `local/`; never stage private keys, account data,
 decrypted ELFs, packages, or full captures in the code repository.

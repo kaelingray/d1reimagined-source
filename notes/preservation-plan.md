@@ -547,8 +547,13 @@ M13 and build every later milestone on it.
    messages; check whether the client asks for anything.
 7. **Final service table.** DONE: 012f tag 0x80a5e21a; 94 services, the old 66 unchanged in
    wire id and handles.
-8. **DLC entitlement check.** Offline static search, then boot 01.24 with no licences and read
-   the error code.
+8. **DLC entitlement check.** MOSTLY DONE (offline): the gate is `0x334004` in 01.00 and
+   `0x36e92c` in 01.24, both emitting the two messages and returning 0x17 = "this world names a
+   DLC" / 0x18 = "you lack the permission". 01.00 already had the `--self-flags` answer
+   (`0x4105c4 world_transition_dlc_check`, the unlock-expression evaluator). It reads only
+   client-side state, so the activity host never sees it. Left: confirm at runtime that the
+   01.24 client evaluates the same unlock expressions. Details in
+   [`final-build.md`](final-build.md).
 9. **Patch-file selection after 01.20.** Install 01.19 then 01.24 in RPCS3 and log which
    `_N.pkg` files the game opens (the RPCS3 file log).
 10. **The urgent-message trigger.** Bisect `--self-flags` tables A/B/C in halves over about 10
