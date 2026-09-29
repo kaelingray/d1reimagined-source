@@ -570,3 +570,47 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   - **Fix.** The script now always rewrites the watch file and saves the list as
     `<Name>-watch.txt`. TEST367's own list (runbook step 2) is still to run; TEST368 (walk into
     The Breach) is the more useful next run.
+
+## Session 2026-09-29 — sync to origin/master, 01.24 environment rebuilt
+
+- **Repo sync.** Git was not installed on this PC and `p3n1cillin/d1xenia` is private, so the
+  checkout had sat at `0cb84ba` (TEST263-270) with 12 files modified or untracked after it. Git
+  2.55.0 was installed with winget and the remote was authenticated through Git Credential
+  Manager. `origin/master` had advanced to `ec5040f` (~90 commits, +10,238 lines) and already
+  contains the whole 01.24 effort. Fetched, then compared every one of the 12 local files
+  against the remote blob by SHA-256: `d1coverage_diff.py`, `Test-ScreenReady.ps1` and
+  `Get-RpcsHotThreads.ps1` were byte-identical (already committed from the other PC) and
+  `Invoke-ObjectExperiment.ps1` was **older** on the remote (2848 B local vs 3784 B remote).
+  The local copies were therefore superseded, not lost: stashed as
+  `pre-pull local state TEST271-367 (superseded by origin/master)` and merged
+  `--ff-only` with no conflict. A copy of all 12 files plus `uncommitted.patch` was kept
+  outside the repo at `F:\d1\d1xenia-backup-prepull`. `local\` (786,479 files) untouched.
+- **Correction to an earlier reading of this log.** The 01.00-era assumption that the disc's
+  `PS3_UPDATE\PS3UPDAT.PUP` is the source of 01.24 is wrong: its header is `SCEUF` / `4.60`,
+  i.e. PS3 **system firmware**, not a Destiny title update. The disc genuinely carries only
+  01.00. 01.24 comes from Sony's update server instead.
+- **01.24 obtained.** `scripts/ps3_update.py list BLES01857` reaches
+  `a0.ww.np.dl.playstation.net` and lists 01.01-01.24; 01.24 is
+  `EP0002-BLES01857_00-DESTINYPATCH0024` (31.6 MB). Fetched `EBOOT.BIN` (26,183,840 B, against
+  01.00's 24,855,968 B) and decrypted it to `EBOOT.elf` with `rpcs3.exe --decrypt`.
+- **Every 01.24 constant verified against the real binary**, not just read from the notes:
+  `d1_ppu_hash.py` gives `PPU-ac58999f254e8d9dc817426c8c84b068ee8caaea` for 01.24 and
+  reproduces the known 01.00 hash `PPU-10d41d88e5ce442299c2ba4cb681f0b307f33527` exactly, which
+  validates the tool. Through `d1_eboot.py` (PPU virtual addresses, not file offsets) the
+  2,390-byte PEM really is at `0x12d3740`, referenced only from `0x113894`, and the manifest flag
+  at `0x18dca64` reads 1 and is referenced from `0xc65d14` — both matching `BUILDS["01.24"]` in
+  `server/game_ca_patch.py`. `patch_yaml(..., sites=build_sites("01.24"))` emits the 01.24 hash
+  and `0x012d3740`.
+- **Data repo.** `p3n1cillin/d1xenia-data` cloned to `F:\d1\d1xenia-data`; it carries
+  `types_01.24.json` (5,041 types), `services_01.24.json` (94 services),
+  `handles_01.00_01.24.json` and `package_inventory_01.24.json` (1,034 files).
+- **Preflight.** `scripts/d1_final_preflight.py --data-root F:\d1\d1xenia-data` passes all seven
+  read-only checks (EBOOT identity/hash/patch sites, 94 services, 1,034-package inventory,
+  activity join/state payloads, encodable services, both mission scripts). Server tests: 60
+  passed (29 before the pull).
+- **Still missing on this PC**, so no 01.24 run has happened here yet:
+  `local\RPCS3_FINAL124_SMOKE001` (the isolated 01.24-patched RPCS3 copy), `local\RESEARCH`
+  beyond the EBOOT fetched today, and the installed 1,034 update package files
+  (`local\01_WORKING\ps3_destiny\PS3_UPDATE` is still empty). Next step is
+  `scripts\Invoke-FinalBuildExport.ps1 -Packages` (about 10 GB) to populate them, then the
+  A/B on SignOn field 14 from the 01.24 checkpoint.
