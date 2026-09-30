@@ -1707,3 +1707,53 @@ whole project: **find what makes the client move from state 19 to state 21 at
 callers of the nine sites, and the state-19 handler specifically. Nothing in the
 stand-ins can move this forward; it is a client state machine, and the state numbers are
 now known.
+**The 19 -> 21 transition, read out (this closes the chain).** `0x367090` is 14
+instructions and is the *only* place that produces the state 19 the walk stops on:
+
+```
+0x36709c  lwz   r4, 0x30(r3)      ; read the field the gate also reads
+0x3670a0  cmpwi r4, 5              ; is it 5?
+0x3670a4  beq   0x3670b0           ; yes -> park in 19
+0x3670a8  bl    0x366b88           ; no  -> the long path (322 instructions)
+0x3670b0  li    r3, 0x13           ; state 19
+0x3670b4  bl    0x356494
+0x3670c4  blr
+```
+
+and the long path, `0x366b88`, starts by re-reading the same field:
+
+```
+0x366ba0  lwz   r4, 0x30(r22)
+0x366bb0  cmpwi r4, 0
+0x366bb8  bne   0x366d64           ; non-zero -> jump into the middle
+0x366bbc  bl    0x1269f8           ; zero: a first attempt of something
+0x366bc0  cmpwi r3, 0
+0x366bc4  bne   0x367088
+```
+
+So the picture is complete and it is a **single field, `0x30`, with two values that matter**:
+`0x30 == 5` parks the client in state 19 (which is where every run ends), and
+`0x30 == 0` starts the work that ends in the states already observed - 2, 3, 4, 6, 7, 8,
+0xd, 0x12 - before returning to `0x367090` and parking again. The value 21, which the
+dial gate wants, is written only by `0x366350`, and reaching it requires the long path to
+complete instead of looping.
+
+In our runs the field is 0, the long path runs, and the walk ends at 19 - so the long
+path is not completing. That is the narrow question now, and it is a *client-side
+sequence* like everything above it. What is worth trying next, in order:
+
+1. hook `0x366b88` and the state setter with a high cap and read the **order** of the
+   nine transitions across a longer run, to see whether it loops 2..19 or advances once
+   and stalls. That distinguishes "retrying" from "waiting";
+2. hook `0x1269f8` (the `0x30 == 0` first attempt) and `0x126648` (called first thing in
+   the long path) - if the latter returns a failure the rest of the 322 instructions
+   cannot succeed;
+3. only after that, revisit whether `0x30` can be influenced at all. Everything so far
+   says the stand-ins cannot, because `0x30` is set by client code and never by the
+   network - but nothing has yet shown which client code, and `0x126648` is the first
+   instruction of the long path, so it is the cheapest place to look.
+
+**This is a good place to leave the project for a session.** The gate is located, its two
+required values are known, the state sequence is enumerated, and the writer of the
+required value is a single 14-instruction function. What is not known is why the 322-
+instruction path does not complete, and that is one hook on `0x126648` away.
