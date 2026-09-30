@@ -2468,3 +2468,53 @@ structure so the search is not swamped the way `0x94` was - i.e. look for code t
 `0x118`, `0x11c`, `0x128` and `0x12c` together, since they are evidently maintained as a
 set. That gives a small candidate list and, unlike the last four attempts, the candidates
 will be structurally related to the field rather than merely sharing an offset.
+**The advance site, located: `0x356ab0`, and it copies rather than computes.** Restricting
+the search to `0x350000-0x370000` and grouping by 4KB block, exactly one block touches
+three or more of the four fields - `0x356000`, the dispatcher''s own block. Within it the
+store cluster is unambiguous:
+
+```
+0x00356aa4  lwz   r5, 0x128(r28)
+0x00356aac  lwz   r6, 0x12c(r28)
+0x00356ab0  stw   r5, 0x118(r28)     <- 0x118 = 0x128. A COPY, not an increment.
+0x00356abc  stw   r6, 0x11c(r28)     <- 0x11c = 0x12c
+```
+
+**`0x118` is not computed at all - it is copied from `0x128`.** That is the missing piece
+and it re-frames the last result. The dispatch index does not "fail to advance"; it is
+faithfully mirroring `0x128` every cycle, and `0x128` itself is the thing that stops.
+The measured `idx` and `gen` tracking each other exactly (1/1, 2/2, 3/3) is now explained
+by construction rather than being a coincidence.
+
+There is also a second, one-shot copy of the same four fields at `0x35692c` and a third at
+`0x3569d8`, so there are three sites that fill this structure; `0x356ab0` is the one on the
+dispatch path because it sits immediately before the indirect call.
+
+**Two global flags gate the advance**, and this is new:
+
+```
+0x00356ab4  lbz   r7, -0x2990(r3)    <- r3 = 0x1a2, so global 0x1a1d670
+0x00356ac0  cmpwi r7, 0
+0x00356ac4  bne   0x356ad4           <- skip the initialiser if already set
+0x00356ac8  bl    0x106618           <- otherwise do a one-time setup
+
+0x00356b14  lbz   r3, -0x2c60(r3)    <- r3 = 0x1ac, so global 0x1acd3a0
+0x00356b18  cmpwi r3, 0
+0x00356b1c  bne   0x356b3c
+0x00356b24  bl    0x116dbc
+0x00356b34  stw   r3, -0x2c58(r4)    <- result cached at 0x1acd3a8
+0x00356b38  stb   r6, -0x2c60(r5)    <- and the flag set to 1
+```
+
+`0x1acd3a8` is computed **once** by `0x116dbc` and cached, guarded by the flag at
+`0x1acd3a0`. That is a lazily-initialised singleton, and it is consulted on every
+iteration of the dispatch loop.
+
+**So the next step is concrete and small: find the writers of `0x128(r28)`.** Everything
+else has been pushed to its conclusion - the index is a copy, the copier is found, and the
+one quantity that must move is `0x128`. Two globals (`0x1a1d670`, `0x1acd3a0`) are also
+worth dumping in the same run, since a flag that is set when it should not be, or a
+singleton initialised from a failed call, would explain a stall that never advances.
+
+I will hook `0x356ab0`, `0x116dbc` and `0x106618` with `r28` and the two globals dumped.
+That is three hooks and answers both remaining questions at once.
