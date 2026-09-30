@@ -1889,3 +1889,41 @@ what performs the `/ticket_drop` step and sets `0x94` - and because it is an upl
 stand-in may well need to *serve* that endpoint, which would finally be a thing the
 network side can do rather than a thing it can only observe. That is the first lead in
 this project that suggests the fix is on our side of the wire.
+**RUN W94B - none of the ten `0x94 = 1` writers ever execute.** The deciding test
+itself fires 200 times as always, so the client keeps reaching the check and keeps
+getting the same answer - but not one of the sites in the Demonware transport that
+would set the flag is ever entered:
+
+```
+0x121168  0x1217d0  0x12197c  0x123f7c  0x123fbc
+0x12a14c  0x12c5d8  0x12c610  0x12c64c  0x12d1b0      all 0 hits
+0x366df8  200 hits                                (the deciding test)
+```
+
+That is a stronger result than "0x94 reads 0". It says the code that sets the flag is
+never reached at all, so `0x94` is not being *written zero* by something - the whole
+region of the transport that ends in `0x94 = 1` is skipped. The step that would upload
+to `/ticket_drop` and record success never begins.
+
+This also explains the flat punch-sweep result from the other direction. The sweeps
+varied the STUN reply and nothing changed, and now we can see why: the sweep was
+changing the input to a stage that this run is not entering. The upload is downstream of
+the punch in the code, and the run is dying upstream of it.
+
+**Where the evidence lives.** The hook lines from all three runs are kept, trimmed to the
+watched addresses, in `local/RESEARCH/final124-hooks/`:
+
+```
+RUN_LOOP-rpcs3.log.hooksonly.txt   the looping-vs-waiting run
+RUN_W94-rpcs3.log.hooksonly.txt    the 0x94 measurement, with the 0x100 byte object dump
+RUN_W94B-rpcs3.log.hooksonly.txt   the ten 0x94 writers, all silent
+```
+
+**Next, precisely.** The question is no longer "what sets 0x94" - it is "what calls the
+code that sets it, and why is that never called". `0x127100`, the 2,556-instruction
+function that holds both the upload host and `/ticket_drop`, has exactly two callers
+(`0x28a744` and `0x28a850`). Those are the two addresses to hook next: if neither fires,
+the transport is never asked to upload, and the reason will be upstream of them. If one
+fires and the ten writers still do not, the failure is inside `0x127100` and the upload
+reply handling is where to look. Either way it is two hooks and the question is closed
+either way - which is why this is worth doing first next session.
