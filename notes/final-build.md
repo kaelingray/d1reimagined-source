@@ -99,16 +99,52 @@ then waits. All 20 STUN hostnames resolve to the stub; 93 probes arrive and none
 answered; **the BAP stand-in never sees a connection**. So STUN, not BAP, is what
 blocks progress past `bap_signin`.
 
-**The 01.24 probes are MessagePack.** Captured shapes:
+**The 01.24 probe is `type, version, fields` - the same layout as 01.00, NOT MessagePack.**
+Captured shapes:
 
 ```
 len=4   00 01 00 01
-len=29  0e 02 00 00 00 00 ... 00 ff 00 ff 00 00 00 ff 00 ff 00 00
+len=29  0e 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff 00 ff 00 00 00 ff 00 ff 00 00
 ```
 
-`0x0e` is a MessagePack fixmap of 14 elements = 7 integer pairs; the `-1` values are
-unbound port sentinels (`scripts/decode_stun_probe.py` decodes them). This is why the
-01.00 stub answered neither shape.
+This was first read as MessagePack (`0x0e` = fixmap(14), 7 int pairs, `-1` = unbound
+ports) and **that reading is wrong** - it is recorded only because `decode_stun_probe.py`
+and the `--fill` option were built on it. The disassembly settles it. The request is
+assembled by `0xb4695c`, which in order does:
+
+```
+lbz  r11, 0(r4)      ; r11 = the type byte, read from the caller's buffer (0x0e)
+sth  r0,  2(r9)      ; (li r0,2 precedes) store the CONSTANT 2 at offset 2
+stw  r5, 0x10(r9)    ; the caller's r5 (0) at offset 0x10
+stb  r11, 0(r9)      ; the type byte at offset 0
+```
+
+so the header is `type, version, field` exactly as 01.00 sent `1e 03 00 <mapped> <port>`
+(type 30, version 3). Reading `0x0e` as a MessagePack fixmap was arithmetically valid,
+which is why it survived a first pass, but the byte is a **type** (14) and the `0x02`
+beside it is the **version** (2) - not a key and a map header. The 27 trailing bytes are
+fixed fields, not 7 key/value pairs.
+
+Consequence: `--fill` and `--shape` were shaping replies for a protocol the client never
+sent. Their negative results still hold (no sign-on request either way) but they were
+varied on a wrong model and should be re-run once the field layout is read properly.
+
+**Re-run on the corrected model: `--shape typeversion` (RUN TV).** With the header
+understood, the stub can finally emit the 01.00 layout - `type, version, 0, mapped
+IPv4, mapped port` - via `--reply-type`/`--reply-version` (defaults 15 and 2, i.e. one
+above the request's type 14 as a response). The reply it produced is
+`0f 02 00 7f 00 00 01 02 0c`, which is byte-for-byte the same shape 01.00 sent for type
+30 (`1f 03 00 7f 00 00 01 02 0c`). Result: **still no change** - 21 probes, the 4-byte
+probe stopping after 5, the counter still cycling `1..10`, no BAP connection and still
+zero sign-on requests.
+
+So even a correctly framed, correctly addressed reply is not accepted. That narrows it
+further: the client is not waiting for a plainer or cleverer reply body, so either the
+type/version pair is wrong (15/2 is an assumption - the real response type may not be
+request+1), or the 29-byte probe is not asking for an address at all and needs some
+other payload, or the client is blocked on something outside this exchange entirely.
+Sweeping `--reply-type` over 0..31 is the cheapest way to settle the first of those,
+since the type byte is the first thing the client reads.
 
 **Where the reply is dispatched (answers the open question in the runbook).** The
 earlier note guessed the type "is most likely read into a register and used as a table

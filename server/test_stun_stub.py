@@ -20,6 +20,8 @@ class Args:
     reply_index = 0
     fill = "all"
     shape = "map"
+    reply_type = 15
+    reply_version = 2
 
 
 PEER = ("127.0.0.1", 3074)
@@ -112,6 +114,25 @@ class ShapeTest(unittest.TestCase):
         args.shape = "map"
         self.assertIsNotNone(stun_stub.parse_mp_map(
             stun_stub.build_reply(PROBE29, PEER, SERVER, args)))
+
+    def test_typeversion_shape_is_the_0100_layout(self):
+        args = Args()
+        args.shape = "typeversion"
+        reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+        # type, version, 0, then the mapped address - the shape 01.00 sent
+        self.assertEqual(reply[0], args.reply_type)
+        self.assertEqual(reply[1], args.reply_version)
+        self.assertEqual(reply[2], 0)
+        self.assertEqual(reply[3:7], bytes([127, 0, 0, 1]))
+        self.assertEqual(int.from_bytes(reply[7:9], "little"), PEER[1])
+
+    def test_typeversion_header_is_configurable(self):
+        args = Args()
+        args.shape = "typeversion"
+        for type_byte, version_byte in ((0, 0), (15, 2), (31, 3)):
+            args.reply_type, args.reply_version = type_byte, version_byte
+            reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+            self.assertEqual((reply[0], reply[1]), (type_byte, version_byte))
 
 
 class FillTest(unittest.TestCase):

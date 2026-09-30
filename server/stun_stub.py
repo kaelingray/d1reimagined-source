@@ -121,10 +121,15 @@ def _read_mp_int(buf, pos):
 
 
 def build_0124_reply(packet, peer, server, args):
-    """Reply to a 01.24 probe: the 4-byte ack, or a msgpack map mirroring it."""
+    """Reply to a 01.24 probe: the 4-byte ack, or a type/version/fields reply.
+
+    01.24 uses the same `type, version, fields` layout as 01.00, not MessagePack:
+    the request is assembled at 0xb4695c, which reads a type byte and stores it at
+    offset 0 and a constant 2 at offset 2 (notes/final-build.md). So the 29-byte probe
+    is `0e 02 ...` = type 14, version 2.
+    """
     if len(packet) == 4 and packet[:2] == b"\x00\x01":
-        # the short probe. The client's dispatch index comes from the first word,
-        # so answer with index (default 0) followed by the mapped address.
+        # the short probe: type 0, version 1.
         if args.reply_index < 0:
             return None
         return _mp_int(args.reply_index) + address_fields(peer[0], peer[1], args.byteorder)
@@ -145,6 +150,13 @@ def build_0124_reply(packet, peer, server, args):
         return _mp_int(args.reply_index)
     if args.shape == "binary":
         return _mp_int(args.reply_index) + address_fields(peer[0], peer[1], args.byteorder)
+    if args.shape == "typeversion":
+        # The layout 01.00 actually used: type, version, 0, then the address the
+        # server saw the probe come from. --reply-type/--reply-version set the two
+        # header bytes. The client reads the reply's type first, so getting these
+        # right matters more than anything after them.
+        return (bytes([args.reply_type, args.reply_version, 0])
+                + address_fields(peer[0], peer[1], args.byteorder))
 
     # Mirror the request's keys. The -1 values are the client's unbound port
     # fields; fill them with the address this server saw the probe come from, so
@@ -208,9 +220,15 @@ def main():
     ap.add_argument("--fill", choices=["all", "one", "none"], default="all",
                     help="how many of the request's unbound (-1) port fields to fill with the "
                          "mapped port in a 01.24 map reply")
-    ap.add_argument("--shape", choices=["map", "binary", "index"], default="map",
+    ap.add_argument("--shape", choices=["map", "binary", "index", "typeversion"], default="map",
                     help="reply layout for 01.24 map probes: mirror the request's keys (map), "
-                         "the 01.00-style binary address (binary), or the dispatch index alone")
+                         "the dispatch index plus a binary address (binary), the index alone "
+                         "(index), or the 01.00 type/version header (typeversion)")
+    ap.add_argument("--reply-type", type=lambda v: int(v, 0), default=15,
+                    help="first header byte of a --shape typeversion reply (the request is "
+                         "type 14, so 15 is the usual success/response value)")
+    ap.add_argument("--reply-version", type=lambda v: int(v, 0), default=2,
+                    help="second header byte of a --shape typeversion reply")
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")
