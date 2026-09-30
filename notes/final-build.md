@@ -143,8 +143,33 @@ further: the client is not waiting for a plainer or cleverer reply body, so eith
 type/version pair is wrong (15/2 is an assumption - the real response type may not be
 request+1), or the 29-byte probe is not asking for an address at all and needs some
 other payload, or the client is blocked on something outside this exchange entirely.
-Sweeping `--reply-type` over 0..31 is the cheapest way to settle the first of those,
-since the type byte is the first thing the client reads.
+
+**Reply-type sweep (RUN RT0/RT1/RT2/RT15) - the type byte is not the variable.** With
+the header understood, `--reply-type` was swept over 0, 1, 2 and 15 on the
+`--shape typeversion` reply, one variable per run, breaking out early on any progress:
+
+| `--reply-type` | probes | replies | sign-on requests | BAP connections | verdict |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 0 | 17 | 17 | 0 | 0 | no progress |
+| 1 | 17 | 17 | 0 | 0 | no progress |
+| 2 | 16 | 16 | 0 | 0 | no progress |
+| 15 | 17 | 17 | 0 | 0 | no progress |
+
+Identical in every respect. So the client is not selecting its next step based on a
+response type we can influence, which is consistent with the PPU-hook result that the
+dispatched word is client state. Combined with the earlier sweeps (dispatch index, fill,
+shape, per-name addresses) that is now **six independent reply-side variables with no
+effect at all**. The evidence is consistent with the client simply not considering this
+exchange successful regardless of what comes back - which points away from the STUN reply
+and towards whatever gates the transition out of the retry loop.
+
+**Practical conclusion for the next session.** Answering STUN correctly is necessary but
+demonstrably not sufficient, and the reply is not where the remaining work is. The two
+things that would actually settle it are (a) the 47-byte unconnected send on socket 26,
+which no run has ever delivered anywhere, and (b) a lawful capture of a real STUN
+exchange from the owner's console, which would give the actual request/reply pair instead
+of six guesses. Static analysis of the reply parser has not produced the field layout and
+should not be the next thing attempted without one of those.
 
 **Where the reply is dispatched (answers the open question in the runbook).** The
 earlier note guessed the type "is most likely read into a register and used as a table
