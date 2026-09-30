@@ -349,6 +349,28 @@ and still does not leave the loop - so the remaining unknown is a **client-side
 condition** (what it decides must be true before advancing) rather than anything missing
 from the wire.
 
+**The transport state machine behind that loop, decoded.** `0xb33814` is the outer state
+machine; at `0xb338a8` it loads its own word counter and bounds-checks it against **7**,
+then at `0xb3393c` uses it to index a second jump table (TOC `-0x2990`, table at
+`0xb33958`, entries pc-relative). The eight states:
+
+| state | target | what it does |
+| ---: | --- | --- |
+| 0 | `0xb33978` | logs (`0x64` = line 100) then falls through to the state-6 tail |
+| 1 | `0xb33ab8` | |
+| 2 | `0xb33a14` | |
+| 3 | `0xb339ec` | |
+| 4 | `0xb339b8` | **calls `0xb36fd8` - the STUN response handler.** This is the probe state. |
+| 5 | `0xb3385c` | |
+| 6 | `0xb33880` | the shared tail every state branches back to (`0xb3385c`-`0xb33880` are reached by `b 0xb33880`) |
+| 7 | `0xb339a4` | calls `0xd73b10` on `r3+0xac` |
+
+State 4 reaching `0xb36fd8` confirms the PPU-hook attribution: the handler we have been
+tracing is entered from the transport machine's probe state, and the loop is this 8-state
+machine cycling rather than the 20-entry reply table. What decides the transition out of
+state 4 is the remaining question, and it is a single branch in `0xb339b8`/`0xb36fd8`
+rather than anything on the wire.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
