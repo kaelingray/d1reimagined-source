@@ -1034,6 +1034,41 @@ from the owner's console to see what makes the module decide it has a result; mo
 reply variants cannot, and the notes now say so explicitly so the next session does not
 repeat them.
 
+**RUN TICK corrects the previous paragraph: the engine tick never fires either.** Adding
+`0x8ad930` and its shim to the watch list, with `0xb36fd8` again proving the hooks are
+live:
+
+```
+0x8ad930  the engine update tick     :  0 hits
+0x11cc94  its shim                   :  0 hits
+0x121128  the STUN module poll       :  0 hits
+0xb3f6a4  the builder's caller       :  0 hits
+0xb3e9e0  the result-record builder  :  0 hits
+0xb35c94  the reply consumer         :  0 hits
+0xb36fd8  the handler                : 13 hits   <- live
+```
+
+So the whole chain from the engine tick down is **dormant** - not declining a condition,
+never entered at all. That is a cleaner and more useful result than "a gate is failing":
+the code that would judge a reply is not being executed because a *higher-level*
+dispatch is not reaching it, and that higher-level dispatch lives in the engine, not in
+the STUN module. The handler `0xb36fd8` that does run is on a separate, timer-driven
+path, which is why it fires 13 times while everything else is silent.
+
+**Revised bottom line, and it is the most important thing in this section:** the 01.24
+client's STUN exchange in our runs runs entirely on a **timer/callback path**, and the
+**data-driven path that would consume a reply is never entered**. That is why no reply
+content could ever matter, and it is not a detail of the reply format - it is a different
+execution path in the client that our environment never triggers. Two things follow:
+
+1. the next investigation should be *what enters that data path*, not what the reply
+   contains. `0x8ad930`'s caller, and the condition guarding it, is the place to start;
+2. it is worth asking whether a real server's reply would enter it at all, or whether it
+   is entered by a *socket read callback* the stand-in's UDP traffic does not provoke
+   (for example because the real reply arrives while the client is blocked in a receive
+   rather than on a poll). That is exactly the question a single capture from the owner's
+   console answers, and nothing in the stand-in can.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
