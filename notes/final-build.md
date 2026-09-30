@@ -1549,3 +1549,46 @@ the chain:
    is still what 01.24 sends, since the client may be refusing to even open the socket;
 3. the DLC entitlement gate at `0x36e92c` (noted in `final-build.md` as the 01.24 twin of
    the 01.00 check) is a plausible pre-dial gate worth ruling in or out early.
+**RUN LOGIN1 - the full title -> setup -> character-select sequence, automated, and where
+it stops.** `Invoke-Final124Login.ps1` is the 01.24 counterpart of `Invoke-TitanLogin.ps1`.
+The important difference is the progress signal: TitanLogin watches the **BAP** log for
+`sent sign-in rsp` and `select-character rsp`, which on 01.24 never appear because the
+client never reaches BAP - it would time out on a client that has in fact signed on. So
+this driver watches the SignOn listener instead (`replied 200 SignOn success`, `replied
+200 content manifest`) and uses the `BETA BUILD` watermark screenshot test for menu
+readiness, and it reports every stage whether or not the run completes.
+
+Result, with the whole sequence driven unattended:
+
+```
+stage 1  title screen        : sign-on OK after 1 Cross press
+stage 2  setup screens       : Cross, Cross, stick-down, Cross - manifest fetched
+stage 3  menu readiness      : no BETA BUILD watermark within 120 s
+stage 4  character select    : cursor moved, Cross x3 - not confirmed (no BAP line)
+BAP log lines                 : 1 (its listening banner, as always)
+```
+
+The screenshots are the useful part, because they show the client is not stuck at a menu
+it is failing to accept input on:
+
+- `14:42:29` - the **Destiny loading spinner** (the glyph bottom right), screen otherwise
+  black;
+- `14:45:41` - the same spinner, ~3 minutes later, after six more Cross presses.
+
+So on 01.24 the client gets: title -> Cross -> Bungie logo -> sign-on 200 -> manifest 200
+-> **and then sits on a loading spinner indefinitely**, with the setup screens and
+character select never appearing. The BETA BUILD watermark that TitanLogin waits for is
+never drawn, so there is no menu to drive.
+
+This is consistent with everything else and it localises the gate more sharply than the
+STUN work did: the client is past sign-on and past the manifest, and it is waiting on
+whatever comes between them and a character-select menu. On 01.00 that step is the BAP
+connection (`network_bap_nat_punch_queue` -> `waiting_for_bap_refresh` -> dial), and BAP is
+still the only thing with no traffic. So the spinner is the BAP wait, made visible: this
+is a real, correct-looking loading screen that never completes, not a hang.
+
+Practical consequence for automation: a 01.24 unattended driver cannot press its way past
+this, because the client is not waiting for input. The correct next move is to satisfy the
+BAP dial, not to press more keys - pressing is now provably useless (six presses, no
+change). The DLC entitlement gate at `0x36e92c` and the punch consumer are the two
+candidates to test first.
