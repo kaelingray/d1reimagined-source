@@ -481,6 +481,56 @@ configurations: the word is not counting anything we influence. It is most likel
 with a *specific* reply it has not yet been given - which brings us back to needing the
 real reply bytes rather than more shapes to try.
 
+**What 01.00 actually needed, for comparison (from TEST005/006 in `test-log.md`).** This
+is the most useful reference in the repo and it sharpens the question:
+
+- 01.00 sent two probes, `1e 03 00` (IP discovery) then `14 02 00 xx` (NAT discovery);
+  `stun_stub.py` answered them in the BO4 layout (types 30/20 -> 31/21) and **marionberry
+  cleared**. That is the whole reason 01.00 got as far as it did.
+- The **same TEST006 entry records a 29-byte type `0x0e` packet repeating every 15 s to
+  the STUN host, unanswered** - and 01.00 still proceeded. So 01.00 *tolerated* an
+  unanswered `0x0e`; it did not need it to succeed.
+- 01.24 sends only `00 01 00 01` and `0e 02 ...`. We answer both, on the same
+  loopback-and-stub setup that worked for 01.00, and it still loops.
+
+That is the real asymmetry. 01.00's gate was satisfied by the *type 30/20 exchange alone*
+and treated `0x0e` as noise. 01.24 has no 30/20 exchange at all, so the gate must be
+carried by something else - and since answering `0x0e` correctly is the only thing left in
+this exchange, the `0x0e` reply is where the answer is. Guessing its contents has failed
+seven ways now (index, fill, shape, per-name addresses, reply type, reply version,
+host-count), which is strong evidence the reply is not a short fixed record like 01.00's -
+it is more likely a structured payload whose length and field order matter, which is
+exactly what a real capture would settle and what no amount of sweeping will.
+
+**Control run (RUN LEGACY): the stub with no 01.24 replies at all**, reproducing the
+01.00-era behaviour, to confirm the difference is in the reply rather than the setup.
+Result: 21 probes, 21 replies (all the 01.00 types), **the field still 0 in 195 of 200**
+getter calls, no BAP connection, no sign-on request.
+
+That is the cleanest result of the session. With `--reply-index` at its default the stub
+still answers (the 01.00 branches are tried first and then 01.24), and the measured field
+distribution is **byte-identical to RUN GATE18 and RUN ALL20** (195/193/198 zeros, the
+occasional 1, one stray pointer value). So across every configuration tried - 01.00
+replies, 01.24 replies in four shapes, four reply types, two versions, per-name addresses,
+all-hosts-answering - the value the client keeps in that field never changes.
+
+**What that means.** The field is not a function of anything we transmit. Whatever the
+client needs in order to leave the probe state, it is not obtaining from this exchange at
+all in any form we have tried. Either
+
+1. the `0x0e` reply has to be substantially correct - a structured payload, not the
+   short address record we have been sending - and no short variant will do; or
+2. the client is waiting on a *second* channel (a different port, a different host
+   family, or a result delivered by the platform layer) before it will set that state,
+   in which case no STUN reply is relevant at all.
+
+Distinguishing those two needs one more piece of information that only the client or a
+real capture can give: what the client does with the bytes after the type/version header
+in the `0x0e` request, i.e. the field layout at offsets 2..28 that we have never read
+(`0xb4695c` builds the header, but the body is written elsewhere). That is the single
+highest-value next task, and the PPU hook on `0xb4695c` with a wider dump is the tool for
+it.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
