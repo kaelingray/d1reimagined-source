@@ -2286,3 +2286,64 @@ dispatched slot *and* the state of the object the handler is working on, which i
 to tell whether the loop is re-entering the same slot with the same inputs forever - and
 if so, which input is supposed to change. That is one hook and one run, and it is the
 cheapest informative experiment left.
+**RUN VT - the loop is three consecutive vtable slots, and slot 10 resets the gate
+field. This is the tightest explanation of the stall so far.**
+
+Hooking the table itself rather than individual guesses:
+
+```
+slot  0  0x3665a4 : 1        slot  8  0x366ab8 : 1
+slot  1  0x3666f0 : 1        slot 10  0x366b24 : 20
+slot  2  0x3668a8 : 0        slot 11  0x366b50 : 20
+                           slot 12  0x367090 : 30
+0x366df8 deciding test : 30   0x366ea4 write 5 : 20   0x363138 gate : 50
+```
+
+So slots 0, 1 and 8 fire **once each** - they are the startup, already finished - and
+then slots **10, 11, 12 cycle indefinitely**. That is the loop, and it is a three-slot
+cycle, not a single stuck slot as I said last section. The object dump at every slot-12
+hit is byte-identical:
+
+```
+0x30=0  0x34=0  0x80=0  0x90=0  0x94=0        (30 of 30 hits, no variation)
+r4=0x367090   r5=0x1c18c50
+```
+
+**And slot 10 is the one that resets the gate field:**
+
+```
+0x00366b24  stdu  r1, -0x70(r1)
+0x00366b30  li    r4, 0
+0x00366b34  stw   r4, 0x30(r3)     <- CLEARS 0x30, the field the gate reads
+0x00366b38  li    r3, 0x10
+0x00366b3c  bl    0x3595a0         <- state 16
+```
+
+slot 11 then reads that field and branches on it:
+
+```
+0x00366b60  lwz   r3, 0x30(r3)      <- reads back what slot 10 just cleared
+0x00366b68  cmpwi r3, 3             <- == 3 ?
+0x00366b6c  bne   0x366b74
+0x00366b70  bl    0xe6778
+```
+
+**This closes the loop mechanically.** Slot 10 sets `0x30 = 0` and moves the state to
+16; slot 11 reads `0x30`, sees 0 (not 3), and does nothing; slot 12 reads `0x30`, sees it
+is not 5, and runs the long path, which writes 5 via `0x366ea4` and re-enters. The gate
+at `0x363138` wants **`0x30 == 21` and `0x34 == 3`** - and the slot-10 handler is
+*clearing the very field the gate reads, every single cycle*. Whatever sets `0x30` to 21
+has to win a race against slot 10, and slot 10 always runs.
+
+**So the useful question is no longer "what writes 0x30 = 21" - it is "what is supposed
+to stop slot 10 from clearing it".** That is a much better-formed question, and it points
+at the state machine's own exit condition rather than at a missing writer. `0x366348`
+(the 21/22 writer) has still never executed, so the branch that would stop the cycle is
+never taken.
+
+**Next, concretely.** Slot 10's guard is whatever leads the dispatcher to choose slot 10
+instead of a later slot - the index is the thing to watch, not the slot bodies. Dump the
+dispatch index register at the `0x366b24` hit (it is already dumped as `r5 = 0x1c18c50`,
+which is a pointer, so the real index is likely elsewhere) and hook the dispatch stub
+itself. Finding *where* the index comes from tells us which value would move the client
+off the 10 -> 11 -> 12 cycle, and that value is the whole game.
