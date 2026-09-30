@@ -15,3 +15,5 @@ __pycache__/
 # Private runtime and data (game dump, RPCS3 build and config, saves, stand-in data, logs,
 # captures). Never commit anything from here.
 /local/
+# Stray installer logs from the Qt/QtCreator tooling.
+aqtinstall.log
