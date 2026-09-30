@@ -2623,3 +2623,93 @@ inside the same `0x356000` block whose other entries are already mapped.
 than register dumps, since memory dumps have been reliable), then read `r30` at
 `0x356120` and follow where its value at `+0x128` came from. Given the tooling issue, I
 would rather change the measurement than draw another conclusion I cannot back.
+## CORRECTION - the dispatch index does NOT stop at 3. It reaches 19.
+
+Everything above about "the index advances 1 -> 2 -> 3, then stops" is **wrong**, and the
+error was mine: I was reading the `m28=` memory dump but had the field offsets wrong.
+Re-reading the archived dumps at the correct offsets gives the whole sequence.
+
+`m28=` is 320 bytes of hex. Reading it properly:
+
+```
+dump   0x118   0x11c   0x128   0x12c     <- the four state words, big-endian
+  0   0xffffffff 0xffffffff    1       0
+  1        1         0         2       0
+  2        2         0         3       0
+  3        3         0         4       0
+  4        4         0         5       0
+  5        5         0         6       0
+  6        6         0         7       0
+  7        7         0         8       0
+  8        8         0        13       0
+  9       13         0        18       0
+ 10       18         0        19       0
+```
+
+**Both fields walk the full sequence `1 2 3 4 5 6 7 8 13 18 19`**, offset by one because
+`0x118` is the previous value of `0x128` (the copy at `0x356ab0` happens one step behind
+the store). Corroborated independently by `r5` at `0x356ab0`, which *is* the value being
+written to `0x118` (`stw r5, 0x118(r28)`), and it reads the same eleven values in both
+RUN_W128 and RUN_GUARD:
+
+```
+r5 at 0x356ab0: [1, 2, 3, 4, 5, 6, 7, 8, 13, 18, 19]
+```
+
+So the state machine is **not** stalling at 3. It runs to completion and terminates at
+**19**, which is exactly the state the client parks in (`+0x94 == 0` -> state 19 via
+`0x366ea4`). The earlier "stops at 3" came from the truncated tail of the dump being
+misread, and the "1,2,3 then stops" pattern was an artefact of only seeing the first few
+entries. **The index reaches its terminal state; it never was the blocker.**
+
+### What this rules out
+
+The whole `0x128`-writer investigation was chasing a non-problem. `0x356120` writing
+`0x128` ten times was never "the same value each time" - it was writing the whole
+sequence, and `r5` proves the receiving end advanced in lockstep. The guards pass, the
+store runs, the copy runs, and the index reaches 19. That chain is healthy.
+
+### The gate, read properly
+
+```
+0x00363148  ori   r31, r3, 0
+0x0036314c  lwz   r3, 0x30(r31)
+0x00363150  cmpwi r3, 0x15        <- 21 decimal. Requires +0x30 == 21.
+0x00363154  beq   0x363164        <- taken path continues
+0x00363158  ori   r3, r31, 0
+0x0036315c  bl    0x3629ec        <- failure path
+0x00363164  lwz   r3, 0x34(r31)
+0x00363168  cmpwi r3, 3           <- requires +0x34 == 3
+0x0036316c  beq   0x3632d4        <- the success continuation
+```
+
+`0x15` is 21 - matching the earlier note. **The gate is a two-stage check and both
+stages must pass.** `+0x30` is set to 5 by the failure path at `0x366ea4`, never 21.
+
+Note `0x363138` itself is just the function prologue (`mflr r0`) - it is being hit 40-50
+times per run as a call-rate counter, not as a gate outcome. The real decision points are
+`0x363150` and `0x363168`. I had been hooking the entry and reading `r4=0x363138`, which
+is only the return address, and treating the call count as meaningful. It is not.
+
+### Corrected picture
+
+The state machine is fine and reaches 19. The blocker is the `+0x30 == 21` check at
+`0x363150`, whose value is set by whatever drives the BAP connection attempt - and the
+only writer we have seen put 5 there. Nothing about the dispatcher needs fixing.
+
+### Next
+
+Hook the two decision points with `r31` and the loaded value, so we read the actual
+`+0x30`/`+0x34` at the moment of comparison rather than inferring it:
+
+```
+0x36314c  r31:0x40
+0x363150  r31:0x40
+0x363164  r31:0x40
+0x363168  r31:0x40
+```
+
+Per the hook-format spec in `Invoke-ObjectExperiment.ps1` the dump syntax is
+`rN[+OFF]:LEN` - **there is no `mN:` form**, which is why RUN R26 armed zero hooks
+(`coverage 0`, zero `D1P` lines) while W128 and GUARD worked. `coverage 0` is printed by
+every run regardless and is not a health signal.
