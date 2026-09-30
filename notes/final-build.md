@@ -1514,3 +1514,38 @@ past the title screen, re-run the STUN reply variants and look for the first con
 `127.1.1.127:12850` rather than for the field values. `bap_server.py`'s framing is
 documented as taken from 01.00, so if a punch does complete, the shello handshake is the
 next thing to verify.
+**RUN PUNCH sweep - three variants, all identical, and the signal is now end-to-end.**
+`Invoke-Final124PunchSweep.ps1` presses Cross until sign-on is clearly done (so the
+title screen is out of the way) and then watches for the first TCP connection to the
+BAP stand-in, which is the outcome that matters rather than any field value:
+
+| variant | reply sent | presses | sign-on | probes | BAP log lines |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `none` | never answers (`--reply-index -1`) | 2 | 13 | 33 | 1 |
+| `mirror` | the request's own 29-byte record, `ff00` slots filled with the port | 3 | 13 | 32 | 1 |
+| `typeversion` | 01.00-style `0f 02 00 7f 00 00 01 02 0c` | 3 | 13 | 32 | 1 |
+
+Sign-on is 13 in all three, so the title screen is genuinely out of the way every time,
+and the BAP log is one line - its listening banner - in all three. **The client never
+connects to `127.1.1.127:12850` in any variant.**
+
+That includes the `none` control, which is the important one: it behaves the same as
+answering. So on the evidence available the STUN reply is not what decides whether BAP is
+dialled - a silent stub and an answering stub are indistinguishable from BAP's point of
+view. Something between the manifest and the dial is failing, and it is not the reply.
+
+**What is now known, and what is left.** Solved on 01.24, with the existing stand-ins and
+no changes to them: booting, the title screen, SSLv3 sign-on returning 200, the content
+manifest, and the 1,034 update packages. Not solved: the BAP connection. The client
+reaches `bootflow:bap_signin` and sits in `network_bap_nat_punch_queue` /
+`waiting_for_bap_refresh`, with 30+ STUN retries and no dial.
+
+The next session should therefore stop sweeping replies and start from the other end of
+the chain:
+
+1. hook the code that **consumes the NAT punch** (the `bap_nat_punch_queue` string is a
+   concrete anchor) and find what it waits for;
+2. in parallel, check whether `bap_server.py`'s framing - documented as taken from 01.00 -
+   is still what 01.24 sends, since the client may be refusing to even open the socket;
+3. the DLC entitlement gate at `0x36e92c` (noted in `final-build.md` as the 01.24 twin of
+   the 01.00 check) is a plausible pre-dial gate worth ruling in or out early.
