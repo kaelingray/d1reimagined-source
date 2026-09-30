@@ -2372,3 +2372,56 @@ close the last gap in this line of enquiry.
 I want to be explicit that the "slot 12" framing was an over-reach on my part - it came
 from a plausible-looking table walk that turned out to be noise, and I am withdrawing it
 rather than leaving it to be trusted. The measured cycle underneath it is unaffected.
+**FOUND THE DISPATCHER, from the `lr` in the hook line.** Every `0x367090` hit carries
+`lr=0x356bcc`, and that address is the indirect call itself:
+
+```
+0x00356b90  lwz     r4, 0(r4)        <- load the handler pointer
+0x00356b94  mtctr   r4
+0x00356b98  bdnzctrl                 <- indirect call  == the return address
+0x00356bb4  lwz     r3, 0x80(r3)     <- r3: an array of objects, indexed
+0x00356bb8  lwz     r4, 0(r3)
+0x00356bbc  lwz     r4, 0x1c(r4)     <- +0x1c: the handler slot on that object
+0x00356bc0  lwz     r4, 0(r4)        <- +0x00: the function itself
+0x00356bc4  mtctr   r4
+0x00356bc8  bdnzctrl
+```
+
+So the chain is `r28 + (0x118(r28) << 2)` -> `+0x80` -> `+0x1c` -> `+0x00` -> call. That
+matches the observed `r4=0x367090` exactly: `r4` already held the handler address before
+the `lwz 0(r4)` load, and the slot lives at **`+0x1c` of a per-entry object**.
+
+**And the loop has an explicit bound:**
+
+```
+0x00356bcc  addic  r26, r26, 1
+0x00356bd0  cmplwi r26, 0x26      <- 38 iterations
+0x00356bd4  bge    0x356bf8
+```
+
+`r26` counts 0..0x26 (**38**) and falls out to `0x356bf8` when exhausted. So this is a
+**bounded 38-step dispatch loop, not an infinite spin.** That is an important correction to
+"the client is stuck looping" - it is running a fixed-length schedule, and if it is
+repeating we are seeing that 38-step loop restart rather than a hang.
+
+The loop reads these fields off `r28`, and they are the real state of the connection:
+
+```
+0x118(r28)   the dispatch index, scaled by 4 (slwi r3,r3,2)
+0x11c(r28)   compared against 0x12c(r28) as a loop bound
+0x128(r28)   a second index / generation counter
+0x12c(r28)   the upper bound
++0x80        object array base
+```
+
+**`0x118(r28)` is the dispatch index.** That is the value to watch - it is what selects
+between the handlers, it is what the whole BAP progression depends on, and it has never
+been read. One hook on the dispatcher with `r28` dumped gives the index, the bounds, and
+the handler slot together, which is the last piece needed to say what the client *thinks*
+its BAP state is at each step versus what it actually is.
+
+**Next.** Hook `0x356ba4` (the index load) and `0x356bc4` (the final call) with `r28`
+dumped, and compare `0x118`/`0x11c`/`0x128`/`0x12c` across hits. If `0x118` is pinned at
+one value while the object stays all-zero, the client never advances its dispatch index
+and the question becomes "what advances `0x118`" - which is a single word, in a single
+structure, and the most tractable target found so far.
