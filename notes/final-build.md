@@ -164,12 +164,14 @@ exchange successful regardless of what comes back - which points away from the S
 and towards whatever gates the transition out of the retry loop.
 
 **Practical conclusion for the next session.** Answering STUN correctly is necessary but
-demonstrably not sufficient, and the reply is not where the remaining work is. The two
-things that would actually settle it are (a) the 47-byte unconnected send on socket 26,
-which no run has ever delivered anywhere, and (b) a lawful capture of a real STUN
-exchange from the owner's console, which would give the actual request/reply pair instead
-of six guesses. Static analysis of the reply parser has not produced the field layout and
-should not be the next thing attempted without one of those.
+demonstrably not sufficient, and the reply is not where the remaining work is. The 47-byte
+send that looked like a missing third probe turned out to be the DNS query (RUN P47), so
+it is closed. What remains is a **client-side condition**: the client has everything we
+can send it and still does not advance, so the next step is to find the test it applies
+before leaving the retry loop - the branch at the `1..10` sub-step counter's terminal
+state, and whatever it requires to be true. A lawful capture of a real STUN exchange from
+the owner's console would give the actual request/reply pair and is the fastest way to
+confirm or refute everything inferred here; further reply guessing is not.
 
 **Where the reply is dispatched (answers the open question in the runbook).** The
 earlier note guessed the type "is most likely read into a register and used as a table
@@ -313,15 +315,39 @@ variables have now been ruled out by experiment - the dispatch index, how many o
 unbound ports we fill, and the reply layout.
 
 That is a useful result rather than a dead end: it says the missing piece is not a knob
-on the reply we are already sending, but something we are not sending at all. The
-strongest remaining candidates, in order:
+on the reply we are already sending. The strongest remaining candidates, in order:
 
-1. **the 47-byte unconnected send** on socket 26 (`addrlen=0`) seen in every run - a
+1. the **47-byte unconnected send** on socket 26 (`addrlen=0`) seen in every run - a
    message that is neither probe shape and that nothing is listening for;
-2. the **reply key semantics** - we mirror the request's integer keys, but the client
-   may expect specific keys (a string key naming the field), and msgpack maps with
-   integer keys are unusual enough that this is worth ruling in or out;
+2. the **reply field semantics** - the client may expect specific field values in the
+   `type, version, fields` reply, not just a plausible address;
 3. a **second exchange** the client expects before it will leave the loop.
+
+**The 47-byte "third STUN shape" is a DNS query - resolved and closed (RUN P47).** It was
+listed above as a lead and it is now answered. Tracing `0xb340bc` (the socket-send wrapper
+the PPU hook watched) shows the sequence plainly:
+
+```
+sys_net_bnet_socket(family=INET, type=DGRAM, protocol=IPPROTO_IP)
+sys_net_bnet_connect(s=26, ...)
+sys_net: [Native] Attempting to connect on 127.0.0.1:53
+sys_net: [Native] sys_net_bnet_connect: using DNS...
+sys_net_bnet_sendto(s=26, buf=*0x323ae010, len=47, flags=0x0, addr=*0x0, addrlen=0)
+```
+
+The send goes to **port 53** - it *is* the DNS query, 47 bytes of DNS wire format, which
+is why no destination is recorded and why it never reaches the STUN stub. There are
+exactly **20** such connects in a run, one per STUN hostname, and the sinkhole answered
+all 20. (The only other outbound UDP is 3 connects to `192.168.0.1:1900` - SSDP/UPnP,
+unrelated and unanswered.) So this is neither a missing third probe shape nor a missing
+listener: the two shapes the stub sees are the complete set of STUN probes, and every
+name resolves.
+
+That closes the last "something we are not sending" candidate. Together with the six flat
+reply-side sweeps, the picture is that the client resolves, probes, receives our replies,
+and still does not leave the loop - so the remaining unknown is a **client-side
+condition** (what it decides must be true before advancing) rather than anything missing
+from the wire.
 
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
