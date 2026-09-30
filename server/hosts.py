@@ -49,5 +49,16 @@ DEMONWARE_HOSTS = {}
 for i, (env, svc) in enumerate((e, s) for e in ("prod", "cert", "dev") for s in ("lobby", "auth", "auth3")):
     DEMONWARE_HOSTS[f"panther-ps3-{svc}.{env}.demonware.net"] = f"127.0.3.{i + 1}"
 
-HTTPS_HOSTS = {**SIGNON_HOSTS, **DEMONWARE_HOSTS}
+# The BAP connection object on 01.24 holds this upload host and the path '/ticket_drop'
+# (EBOOT 0x012d6598 / 0x012d65c0; the path is at 0x011bdc01 in 01.00 too, so it is not new).
+# It is a result flag's endpoint, not a sign-on host, so it was missing here - and a name
+# the sinkhole does not know would be resolved against the real internet, which the data
+# policy forbids. Pointed at the loopback sign-on range: no listener is bound to it yet,
+# so nothing is served and the lookup cannot escape.
+UPLOAD_HOSTS = {
+    "dm-partnernet.upload.deadorbit.net": "127.0.1.9",
+    "dm-partnernet.upload.gravityshavings.net": "127.0.2.9",
+}
+
+HTTPS_HOSTS = {**SIGNON_HOSTS, **DEMONWARE_HOSTS, **UPLOAD_HOSTS}
 ALL_OVERRIDES = {**STUN_HOSTS, **HTTPS_HOSTS}
