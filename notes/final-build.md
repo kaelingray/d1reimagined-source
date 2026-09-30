@@ -1069,6 +1069,35 @@ execution path in the client that our environment never triggers. Two things fol
    rather than on a poll). That is exactly the question a single capture from the owner's
    console answers, and nothing in the stand-in can.
 
+**The guard on the dormant path, one level up (`0x8aedc8`, one caller at `0x8aee28`).**
+The tick is not called unconditionally; the caller tests two fields of a module
+descriptor before entering:
+
+```
+0xaedd8  lis   r31, 0x1b7
+0xaeddc  addic r31, r31, -0x5280   ; r31 = the module descriptor (relocated at runtime)
+0xaede0  lbz   r3, 0xc(r31)        ; a flag byte
+0xaede4  clrlwi r3, r3, 0x1f       ; clear the low 5 bits
+0xaede8  cmpwi r3, 0
+0xaedec  beq   0x8aee40            ; zero -> skip the whole path
+0xaedf0  lwz   r3, 0x28(r31)       ; a count
+0xaedf8  cmpwi r3, 0
+0xaedfc  ble   0x8aee40            ; <= 0 -> skip
+```
+
+So the entire data-driven path - tick, STUN module poll, result builder, consumer - is
+behind **two conditions on one module descriptor**: a flag at `+0xc` with its low 5 bits
+masked off, and a non-zero count at `+0x28`. In our runs neither holds, which is why
+every one of those functions returns zero hits.
+
+The descriptor address cannot be resolved statically (`lis`/`addic` is a relocated
+pair, and reading it gives code rather than data), so the descriptor's *identity* has to
+be found by following what writes `+0xc` and `+0x28`. **That is the concrete next task
+and it is small:** find the writer of the flag at `+0xc`, and its two conditions tell the
+next session what state the client must reach before it will look at a reply at all. This
+is a better starting point than anything in the section above, because it is upstream of
+all of it and it is a single field.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
