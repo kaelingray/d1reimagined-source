@@ -673,6 +673,55 @@ code, upstream of the handler, and the `0xb34ed8` / `0xb35398` hooks already wat
 path are the instrument. Everything else in this section - the eight reply variants - sat
 downstream of a gate that never opened, which is why none of them could have mattered.
 
+**ANSWERED - the reply consumer, `0xb35c94`, and the accept set (read, 21 instructions).**
+This is the only writer of the gate field in the whole STUN region, and it is short enough
+to read in full:
+
+```
+0xb35c94  mr    r11, r3
+0xb35c98  cmpwi cr6, r4, 1
+0xb35c9c  lwz   r0, 0(r11)      ; r0 = the reply's first word
+0xb35ca0  cmpwi cr7, r0, 0
+0xb35ca4  beqlr cr7              ; r0 == 0 -> return, no state change
+0xb35ca8  cmpwi cr7, r4, 0
+0xb35cac  beq   cr6, 0xb35ce4   ; r4 == 0 -> b 0xb35b38 (the bail)
+0xb35cb0  cmpwi cr6, r0, 0x11
+0xb35cb4  bnelr cr7
+0xb35cb8  cmpwi cr7, r0, 0x0e
+0xb35cbc  beqlr cr6
+0xb35cc0  cmpwi cr6, r0, 0x0f
+0xb35cc4  beqlr cr7
+0xb35cc8  cmpwi cr7, r0, 0x10
+0xb35ccc  beqlr cr6
+0xb35cd0  beqlr cr7              ; (0x10 path lands here)
+0xb35cd4  li    r0, 1
+0xb35cd8  stw   r4, 8(r11)       ; <-- writes the gate field 8(r3)
+0xb35cdc  stb   r0, 4(r11)       ; <-- sets 4(r3) = 1, the flag the handler reads first
+0xb35ce0  blr
+0xb35ce4  b     0xb35b38         ; the bail
+```
+
+So the reply is accepted **only if its first word is one of `0x0e, 0x0f, 0x10, 0x11`** and
+`r4` is non-zero. On acceptance the client writes `8(r3) = r4` and sets `4(r3) = 1`, which
+is exactly what the handler's gate at `0xb36fe8` (`lbz r0,4(r3)`) and `0xb37034`
+(`8(r3) != 0`) require - so acceptance means the next handler call reaches the jump table.
+
+**The accept set is `{14, 15, 16, 17}` and nothing else.** Two things follow, and both
+matter:
+
+- **18 and 19 are rejected.** That independently confirms the earlier reading that they are
+  error states: the client's own reply consumer refuses them. The state 4 exit test
+  (advance on 18 or 19) is therefore only reachable via the bail path, not via a good reply.
+- **`0x0f` is in the set**, so the `typeversion` reply (type 15) we have been sending passes
+  the type check. What is still unknown is `r4` - the value stored into the gate field - and
+  where it comes from. It is a second parameter to `0xb35c94`, supplied by its three
+  callers (`0xb337c8`, `0xb337f0` in `0xb3376c`, and `0xb33ec0` in the transport machine),
+  so it is derived by the caller rather than from the packet, which is why no reply-side
+  experiment could have moved it.
+
+The next step is therefore to read the three callers and find how `r4` is computed. That
+is the last untraced link between "a reply arrived" and "the client accepts it".
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
