@@ -33,6 +33,122 @@ def address_fields(ip, port, byteorder):
     return packed_ip + struct.pack(">H", port)
 
 
+# ---------------------------------------------------------------- 01.24 probes
+#
+# 01.24 does not use the 01.00 fixed request types. Two shapes were captured on
+# this machine (local/SIGNON_LOCAL/logs/FINAL124_S01-stun.log):
+#
+#   len=4   00 01 00 01
+#   len=29  0e 02 00 00 ... 00 ff 00 ff 00 00 00 ff 00 ff 00 00
+#
+# The 29-byte one is MessagePack: byte 0 = 0x0e is a fixmap of 14 elements, i.e.
+# seven integer key/value pairs, all of the rest being MessagePack integers. The
+# client is reporting its own socket table before binding, so the -1 values are
+# "not bound yet" port fields.
+#
+# The reply shape is still inferred, not confirmed from the client's parser. What
+# is known about the parser (01.24 EBOOT): the STUN response handler is 0xb36fd8,
+# called from the transport state machine at 0xb33910/0xb339c4; at 0xb3707c it
+# loads the reply's first word and bounds-checks it against 0x13 (0..19), then at
+# 0xb370e0 indexes a jump table at 0xb370fc with that value. So the reply is
+# dispatched on a small integer index taken from the front of the packet, and
+# indices 0..19 are valid.
+#
+# --reply-index picks that first index (-1 sends none). The msgpack reply echoes
+# the request's own shape and fills the mapped address in, which is the least
+# assumption that still tells the client what address the server saw it at.
+
+
+def _mp_int(value):
+    """Encode a small integer as MessagePack, shortest form.
+
+    Ports reach 65535, so uint16 (0xcd) is required as well as the fixint forms.
+    The reader must be able to walk the value back, so the width actually used
+    has to match what the client expects for that field; 0xcd is the widest form
+    used here on purpose (the captured request only ever holds -1..127).
+    """
+    if 0 <= value <= 127:
+        return bytes([value])
+    if -32 <= value < 0:
+        return bytes([value + 0x100])
+    if 0 <= value <= 0xFF:
+        return b"\xcc" + bytes([value])
+    if -128 <= value < 0:
+        return b"\xd0" + struct.pack("b", value)
+    if 0 <= value <= 0xFFFF:
+        return b"\xcd" + struct.pack(">H", value)
+    return b"\xce" + struct.pack(">I", value)
+
+
+def _mp_fixmap_header(pairs):
+    """Header for a map of `pairs` entries; use map16 past 15."""
+    if pairs <= 15:
+        return bytes([pairs])
+    return b"\x8f" + struct.pack(">H", pairs)
+
+
+def parse_mp_map(packet):
+    """[(key, value)] from a MessagePack int->int map. None if it is not one."""
+    if not packet or packet[0] & 0xF0 != 0x00 or packet[0] > 0x0F:
+        return None
+    pairs = packet[0] & 0x0F
+    pos, out = 1, []
+    for _ in range(pairs):
+        key, pos = _read_mp_int(packet, pos)
+        value, pos = _read_mp_int(packet, pos)
+        if key is None or value is None:
+            return None
+        out.append((key, value))
+    return out
+
+
+def _read_mp_int(buf, pos):
+    if pos >= len(buf):
+        return None, pos
+    b = buf[pos]
+    if b <= 0x7F:
+        return b, pos + 1
+    if b >= 0xE0:
+        return b - 0x100, pos + 1
+    if b == 0xCC and pos + 2 <= len(buf):
+        return buf[pos + 1], pos + 2
+    if b == 0xD0 and pos + 2 <= len(buf):
+        return struct.unpack("b", buf[pos + 1:pos + 2])[0], pos + 2
+    if b == 0xCD and pos + 3 <= len(buf):
+        return struct.unpack(">H", buf[pos + 1:pos + 3])[0], pos + 3
+    return None, pos
+
+
+def build_0124_reply(packet, peer, server, args):
+    """Reply to a 01.24 probe: the 4-byte ack, or a msgpack map mirroring it."""
+    if len(packet) == 4 and packet[:2] == b"\x00\x01":
+        # the short probe. The client's dispatch index comes from the first word,
+        # so answer with index (default 0) followed by the mapped address.
+        if args.reply_index < 0:
+            return None
+        return _mp_int(args.reply_index) + address_fields(peer[0], peer[1], args.byteorder)
+
+    pairs = parse_mp_map(packet)
+    if pairs is None:
+        return None
+
+    # Mirror the request's own keys. Any value of -1 is a "not bound" port; fill
+    # the first such slot with the address the server saw, so the client has a
+    # mapped address to report onward. This is the minimal informative answer.
+    if args.reply_index >= 0:
+        out = _mp_fixmap_header(len(pairs))
+        first_port = True
+        for key, value in pairs:
+            new_value = value
+            if value == -1 and first_port:
+                new_value = peer[1]
+                first_port = False
+            out += _mp_int(key) + _mp_int(new_value)
+        # the dispatch word: the client reads the first 4 bytes as an index
+        return out
+    return None
+
+
 def build_reply(packet, peer, server, args):
     if len(packet) < 2:
         return None
@@ -43,6 +159,9 @@ def build_reply(packet, peer, server, args):
         return bytes([31, reply_version, 0]) + mapped
     if ptype == 20:
         return bytes([21, reply_version, 0]) + mapped + address_fields(server[0], server[1], args.byteorder)
+    reply = build_0124_reply(packet, peer, server, args)
+    if reply is not None:
+        return reply
     return None
 
 
@@ -54,6 +173,9 @@ def main():
     ap.add_argument("--byteorder", choices=["little", "big"], default="little",
                     help="port byte order in replies (the IPv4 is always network order)")
     ap.add_argument("--echo-version", action="store_true", help="reply with the request's version byte instead of 2")
+    ap.add_argument("--reply-index", type=int, default=0,
+                    help="01.24 dispatch index to answer 01.24 probes with (-1 = stay silent); "
+                         "the client reads this from the reply's first word and accepts 0..19")
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")

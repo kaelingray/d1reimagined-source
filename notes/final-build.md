@@ -91,6 +91,50 @@ packages. The first live 01.24 runs and their remaining loading problem are reco
   corrected `types_01.24.json` as `--schema` to the BAP stand-in and as
   `--activity-schema` to the activity host (via `-ExtraBap` and `-ExtraAh`).
 
+**01.24 STUN is the remaining blocker (RUN A01, 2026-09-30, MATILDASPC).** After
+installing the 1,034 update packages into `RPCS3_FINAL124_SMOKE001`, the first full
+01.24 run on this PC reaches `bootflow:bap_signin` (state 19 of 38 - the transferred
+SMOKE019-023 captures show the same, so content and package handling are solved) and
+then waits. All 20 STUN hostnames resolve to the stub; 93 probes arrive and none are
+answered; **the BAP stand-in never sees a connection**. So STUN, not BAP, is what
+blocks progress past `bap_signin`.
+
+**The 01.24 probes are MessagePack.** Captured shapes:
+
+```
+len=4   00 01 00 01
+len=29  0e 02 00 00 00 00 ... 00 ff 00 ff 00 00 00 ff 00 ff 00 00
+```
+
+`0x0e` is a MessagePack fixmap of 14 elements = 7 integer pairs; the `-1` values are
+unbound port sentinels (`scripts/decode_stun_probe.py` decodes them). This is why the
+01.00 stub answered neither shape.
+
+**Where the reply is dispatched (answers the open question in the runbook).** The
+earlier note guessed the type "is most likely read into a register and used as a table
+index" because the 01.00 types are absent from `cmpwi`. That is confirmed:
+
+- response handler `0xb36fd8`, called from the transport state machine at `0xb33910`
+  and `0xb339c4` (inside `0xb33814`, the state machine `0xb3012c` drives)
+- `0xb3707c`: `lwz r0, 0(r3)` + `cmplwi cr7, r0, 0x13` - bounds check on the reply's
+  first word, so valid indices are 0..19
+- `0xb370e0`: `lwz r11, -0x2834(r2)` (TOC) + `rldic r9, r0, 2, 0x1e` + `lwzx r0, r9,
+  r11` - a **jump table at `0xb370fc` indexed by that word**, entries signed
+  pc-relative to `0xb370e4` (20 entries: idx 0 -> `0xb37410`, 1 -> `0xb373e4`,
+  2 -> `0xb37620`, ... 16 -> `0xb371c0`, 19 -> `0xb37190`)
+
+So 01.24 dispatches STUN replies on a small integer index read from the packet, not on
+a type byte compared with a constant - which is exactly why searching for the type
+constants found nothing. `server/stun_stub.py` now answers both 01.24 shapes with
+`--reply-index` (default 0) choosing the dispatch word; the reply body is still inferred,
+not confirmed from the client, and is the next thing to confirm by running.
+
+**Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
+capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
+silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
+address arguments now accept a `0x` prefix. `capstone` must be pip-installed for
+`disasm`; nothing else in the tool needs it.
+
 **Core activity-host payloads (static encode/decode checks):** the first audit found 01.00
 offsets that the 01.24 encoder silently omitted. The stand-in now derives these fields from
 the selected schema:
