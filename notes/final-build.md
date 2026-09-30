@@ -2713,3 +2713,73 @@ Per the hook-format spec in `Invoke-ObjectExperiment.ps1` the dump syntax is
 `rN[+OFF]:LEN` - **there is no `mN:` form**, which is why RUN R26 armed zero hooks
 (`coverage 0`, zero `D1P` lines) while W128 and GUARD worked. `coverage 0` is printed by
 every run regardless and is not a health signal.
+## RUN GATE2 - the gate fields, measured directly. `+0x30 = 0`, `+0x34 = 0`, 60/60.
+
+The gate function at `0x363138` **is** reached every run: it fired 60 times, always with
+`lr=0x356bcc`, which is the return address of the dispatcher's indirect call at
+`0x356ba4-0x356bc8`. So the dispatcher really does route into the gate - the connection
+attempt is being made, not skipped. Reading the object (`r3` at entry becomes `r31` at
+`0x363148`) gives, across all 60 calls:
+
+```
++0x30 = 0    +0x34 = 0    x60
+```
+
+No variation whatsoever. The gate compares `+0x30` against 21 (`0x15`) and `+0x34`
+against 3, sees 0 and 0, and takes the failure path at `0x3629ec` - which fired 40 times
+alongside it. **The `+0x30 == 21` writer has never run in any run we have captured.**
+
+### A second correction: the mid-function hooks do not fire
+
+RUN GATE armed all seven of `0x363148/0x36314c/0x363150/0x363154/0x363164/0x363168/
+0x36316c` with valid `rN:LEN` syntax. **None of them fired**, while `0x363138` (the
+function entry, 16 bytes earlier), `0x3629ec`, `0x367090`, `0x366df8` and `0x356ab0` all
+fired normally in the same run. The instrumented build only takes watches at **function
+entry points**, not arbitrary addresses.
+
+That invalidates a lot of earlier measurement. Any watch placed mid-function was never
+live, so its "zero hits" meant nothing. This specifically means:
+
+- `0x356108` never firing in RUN GUARD was **not** evidence that guard 1 was skipped.
+  It was simply not an instrumented address.
+- `0x366ea4`/`0x366df8`/`0x366b24`/`0x366b50` firing shows those *are* entries.
+- The "success writer `0x366348` never executed" claim is **unproven** - it may simply
+  never have been hooked correctly.
+
+Hit counts in earlier notes need re-reading with this in mind: a zero can mean
+"not an entry point" rather than "not reached".
+
+### Hook syntax, settled by evidence
+
+The label in the log (`m3=`, `m28=`, `m30=`) comes from the spec `r3:`, `r28:`, `r30:` -
+the `m` prefix is just how the dump is printed. RUN R26 wrote `m30:0x140` in the spec
+position, which is not the documented form, and armed nothing. RUN GATE2 used `r3:0x40`
+and dumped correctly. `coverage 0` is printed on every reload regardless and is not a
+health signal; the reliable check is that `D1P` hit lines exist for the addresses of
+interest.
+
+### Where this leaves the blocker
+
+Three things are now established and mutually consistent:
+
+1. The state machine runs `1 2 3 4 5 6 7 8 13 18 19` and terminates at 19 - healthy.
+2. The gate function is entered 60 times per run from the dispatcher - healthy.
+3. `+0x30` is 0 at every one of those entries and `+0x34` is 0 - **this is the blocker**.
+
+The client wants `+0x30 == 21` before it will dial, and nothing in these runs ever sets
+it. That is a *value* that some writer must produce, and the write is not happening at
+all - as opposed to being written and then overwritten, which is what the earlier
+"+0x30 gets set to 5" reading implied.
+
+### Next
+
+Stop hooking mid-function. The productive step is to find **function entries** that write
+21 into `+0x30`, by scanning for the store-and-compare pattern rather than guessing
+offsets: `li rX, 0x15` / `stw rX, 0x30(rY)` sequences, and the callers of the gate
+(`0x363138` has `lr=0x356bcc`, i.e. it is reached through the dispatch table, so the
+value must be set by whichever handler fills the object before the dispatch).
+
+Concretely: locate the function that owns the dispatch table at `0x356ba4`, dump the
+object it dispatches on at the **entry** of `0x356ba4`'s function, and walk its `+0x30`
+across the whole run. If it is 0 from the first call, the writer is never invoked at all
+and the search moves upstream to whatever constructs the object.
