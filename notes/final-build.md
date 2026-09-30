@@ -1149,6 +1149,42 @@ are the obvious suspects now that the client is actually getting this far - if i
 loading the 1,034 packages on this machine that is a long, silent wait, and the answer may
 simply be more time rather than a new blocker.
 
+**The STUN work was not wasted - it is the NAT punch that precedes BAP.** A string sweep
+of the 01.24 EBOOT for `BAP` shows why the client wants a working STUN exchange *before*
+it dials the session server:
+
+```
+0x012fa560  'Primary outbound BAP connection failed during start_connection'
+0x012fa5a0  "BAP connection failed due to hitting timeout '%lld'ms"
+0x01304df0  'bap message queue heap'
+0x01306cf0  'network_bap_nat_punch_queue'
+0x01307078  'waiting_for_bap_refresh'
+0x0134e810  '_connection_failure_failed_to_decode_bap_header'
+0x0134f000  'BAP connection %d'
+0x01357798  'investment_bap_connection_identifier'
+0x0134fad0  'b->c shello req'
+0x0134fae0  'b->c shello rsp'
+```
+
+`network_bap_nat_punch_queue` is the link: Demonware records the client's perceived
+address from the STUN exchange and **punches a NAT hole** before the BAP connection is
+attempted, and `waiting_for_bap_refresh` says it blocks on that. So the STUN reply is
+*not* a side quest after all - it is an input to dialling BAP, which is why the two
+looked unrelated from the logs.
+
+That reframes the earlier STUN work usefully rather than making it moot. The reply
+format itself was never the problem, and the reply consumer (`0xb35c94`, accepting first
+words 14-17) is still the right place to look - but it is on the *pre-sign-on* side of a
+conversation whose outcome only matters once sign-on has happened. The correct order for
+the next session is therefore:
+
+1. press Cross, get sign-on and the manifest (now working);
+2. then re-run the STUN experiments **in that context**, where a NAT punch completing
+   would show up as the first connection to `127.1.1.127:12850`;
+3. if it does not, the gate is whichever of `0xb35c94`'s preconditions the client is not
+   meeting, and the `bap_nat_punch_queue` string gives a hook target for the code that
+   consumes the punch.
+
 **The guard on the dormant path, one level up (`0x8aedc8`, one caller at `0x8aee28`).**
 The tick is not called unconditionally; the caller tests two fields of a module
 descriptor before entering:
