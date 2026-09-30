@@ -262,6 +262,13 @@ strongest remaining candidates, in order:
    integer keys are unusual enough that this is worth ruling in or out;
 3. a **second exchange** the client expects before it will leave the loop.
 
+**The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
+`Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
+RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
+matches what the earlier 01.24 runs already found. Chasing socket-error counts will not
+move this forward; the signal that matters is "did the client resolve a new hostname" and
+"did anything connect to the BAP stand-in", neither of which has happened.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
