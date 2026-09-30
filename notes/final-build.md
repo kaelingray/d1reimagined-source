@@ -873,6 +873,45 @@ status byte `0xa8(r31)` at `0xb33eb0`. Two concrete next steps:
 2. read `0xa8(r31)`: who sets it, and what it means. If it is only cleared on a reply the
    client considers well-formed, then its writer is the real gate.
 
+**Who writes `0xa8(r31)` (part 2, in progress).** The byte is not written inline in the
+transport machine, so it has to be copied in as part of a larger record. Scanning the STUN
+region for `0xa8(` references (in windows - a single large read silently decodes zero
+instructions, the same trap as the capstone mode bug) gives:
+
+```
+0xb3d304  stw  r0, 0xa8(r31)
+0xb3d674  lwz  r7, 0xa8(r31)
+0xb3e494  lwz  r0, 0xa8(r29)
+0xb3ee2c  stw  r0, 0xa8(r29)
+0xb3f2d0  stw  r9, 0xa8(r31)     <- inside a struct initialiser
+0xb3f4d4  lwz  r7, 0xa8(r29)
+0xb3f4f0  stw  r7, 0xa8(r28)
+```
+
+`0xb3f2d0` is the interesting one: it sits in a run of stores that copies a whole result
+structure into the object one field at a time -
+
+```
+0xb3f2b0  std  r0, 0xd0(r31)
+0xb3f2bc  std  r9, 0xd8(r31)
+0xb3f2c8  std  r0, 0xe0(r31)
+0xb3f2c4  lwz  r9, 0x128(r1)     <- the status field, loaded first
+0xb3f2d0  stw  r9, 0xa8(r31)     <- and stored into the object
+0xb3f2d4  std  r0, 0xe8(r31)
+```
+
+It belongs to `0xb3e9e0` (817 instructions, one caller at `0xb3f71c` in `0xb3f6a4`) - a
+**result-structure builder**. So the status byte the gate tests is one field of a record
+produced elsewhere and copied wholesale, not something the receive path sets. That is
+consistent with everything observed: the reply arrives, but the record that would carry
+"a reply was accepted" is built somewhere we have not looked, and the transport machine
+only consumes it.
+
+**So the remaining trace is a single call chain:** `0xb3f6a4` -> `0xb3e9e0` (builds the
+result) -> `0xb33ec0` (consumes it). Reading `0xb3f6a4` and whoever calls it should show
+where a received datagram becomes that record - and therefore what the reply has to
+contain to produce a status byte of 0.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
