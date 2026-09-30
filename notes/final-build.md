@@ -466,6 +466,21 @@ condition that makes the client compute that word - not to choose a reply. The h
 one field at a time, and the value that first appears as 18-or-anything-else is the
 success encoding.
 
+**"All 20 hosts must answer" is not it either (RUN ALL20).** Since 18/19 sit right at the
+size of the host list, the obvious guess is that the field counts completed hosts and the
+client waits for all 20. Tested properly: `--stun-distinct --bind-count 20` so each of the
+20 names resolves to its own address and is answered by its own socket, with the
+`typeversion` reply. Result: 20 DNS answers (all distinct), **0 probes reached the stub**,
+and the field still returned **0 in 198 of 200** getter calls (1 once, one stray value).
+No BAP connection, no sign-on request.
+
+So the field is not a host-completion counter either. Combined with the earlier
+measurement (RUN GATE18, same 193/200 zeros) the conclusion is stable across both
+configurations: the word is not counting anything we influence. It is most likely a
+**sub-state within the STUN sequence** that only advances when the client is satisfied
+with a *specific* reply it has not yet been given - which brings us back to needing the
+real reply bytes rather than more shapes to try.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
