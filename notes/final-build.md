@@ -129,11 +129,41 @@ constants found nothing. `server/stun_stub.py` now answers both 01.24 shapes wit
 `--reply-index` (default 0) choosing the dispatch word; the reply body is still inferred,
 not confirmed from the client, and is the next thing to confirm by running.
 
+**The reply dispatch index is NOT a field of the packet (PPU hook, RUN HOOK01).** The
+instrumented build traced the handler directly (`d1\d1ppu.txt`, watched `0xb36fd8`,
+`0xb33814`, `0xb370e0`). The handler ran 40 times and the dispatch 14 times, so replies
+*are* arriving and being accepted - but the 64-byte object at `r3` on entry is:
+
+```
+word  0(r3) : 1, 2, 3, 3, ... 10, 10      <- increments across calls
+dword 0x10  : 0x01a8c0  (constant)
+byte  0x18  : 0, 0, 0 ... 3, 3           <- advances late in the run
+```
+
+So the word at `0(r3)` is **client-side state, not something the stub sent**: it counts
+calls to the handler and is the value bounds-checked against `0x13` at `0xb3707c` and
+used to index the jump table. The client walks its own state machine 1..0x13 as it
+retries. This reframes the problem: `--reply-index` cannot steer the client's path
+(because the index is not ours to choose), it only has to be a legal, self-consistent
+reply. What still has to be discovered is which of the 20 table branches each stage
+needs, and what the client then *does* with the parsed map.
+
+Observed effect of answering (RUN t4, `--reply-index 0`): the client **stopped sending
+the 4-byte probe** and sent only the 29-byte map from then on, while BAP still saw no
+connection. So a reply is recognised and changes behaviour; it is not yet accepted as
+success. The byte at `0x18` going 0 -> 3 is the visible progress in that run.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
 address arguments now accept a `0x` prefix. `capstone` must be pip-installed for
 `disasm`; nothing else in the tool needs it.
+
+**Passing array arguments to these scripts.** `Start-LocalStack.ps1`/`Start-FinalBuildSmoke.ps1`
+take `-StunArgs`, but it must be one **semicolon separated** token. Under `pwsh -File`
+a second value of a `[string[]]` parameter binds to the *next* parameter instead of
+joining the array, so `-StunArgs '--reply-index' '0'` silently passed `0` as
+`-PpuHash` and preflight failed with `FAIL invalid PPU hash`.
 
 **Core activity-host payloads (static encode/decode checks):** the first audit found 01.00
 offsets that the 01.24 encoder silently omitted. The stand-in now derives these fields from
