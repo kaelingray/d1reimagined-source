@@ -14,6 +14,15 @@ param(
     # then stalled before BAP, so it is the first thing to A/B. -PublicIp '' omits the field
     # entirely, which is the control run; its byte order is still unconfirmed.
     [AllowEmptyString()][string]$PublicIp = '127.0.0.1',
+    # STUN stub extras. 01.24 answers the MessagePack probes; --reply-index is the
+    # dispatch word the client reads from the reply's first word (0..19 valid,
+    # bounds-checked against 0x13 at 0xb3707c). Vary one index per run to find which
+    # branch of the jump table at 0xb370fc the client needs.
+    #
+    # Semicolon separated, e.g. -StunArgs '--reply-index;0'. `pwsh -File` binds a
+    # second value of a [string[]] parameter to the *next* parameter instead of
+    # appending it, so a space-separated list cannot be passed this way.
+    [string]$StunArgs = '',
     [switch]$Run
 )
 $ErrorActionPreference = 'Stop'
@@ -21,6 +30,10 @@ $ErrorActionPreference = 'Stop'
 
 $signonArguments = $SignonArgs
 if ($PublicIp -ne '') { $signonArguments += @('--public-ip', $PublicIp) }
+
+# '-StunArgs' arrives as one semicolon separated token; split it here.
+$stunArguments = @()
+if ($StunArgs) { $stunArguments = @($StunArgs -split ';' | Where-Object { $_ }) }
 
 $data = (Resolve-Path -LiteralPath $DataRepo).Path
 $types = Join-Path $data 'ps3_updates\types_01.24.json'
@@ -59,7 +72,7 @@ $previousUsrdir = $env:D1_USRDIR
 try {
     $env:D1_RPCS3 = $rpcs3
     $env:D1_USRDIR = $usrdir
-    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -BapArgs @(
+    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -BapArgs @(
         '--universe-time', 's', '--self-flags', '1;2@B0,C0-1023',
         '--schema', $types, '--services-schema', $services,
         '--activity-schema', $types)
