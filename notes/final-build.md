@@ -912,6 +912,51 @@ result) -> `0xb33ec0` (consumes it). Reading `0xb3f6a4` and whoever calls it sho
 where a received datagram becomes that record - and therefore what the reply has to
 contain to produce a status byte of 0.
 
+**RUN CHAIN: the whole chain is dead. Zero hits at every level.** Watching all of it at
+once, alongside addresses known to be live so the hook mechanism is demonstrably working:
+
+```
+0xb35c94  the reply consumer          :  0 hits
+0xb33ebc  its transport call site     :  0 hits
+0xb3e9e0  the result-record builder   :  0 hits
+0xb3f6a4  the builder's only caller   :  0 hits
+0x121128  the top of the chain        :  0 hits
+0xb36fd8  the handler                 : 50 hits   <- live
+0xb4695c  the request builder         : 60 hits   <- live
+0xb34ed8  the field reader            : 37 hits   <- live
+0xb35398  the receive path            :  5 hits   <- live
+0x69ddb0  the gate getter             :400 hits   <- live
+```
+
+The chain from `0x121128` down to the consumer **never executes**, while the addresses
+immediately around it fire constantly. So the result record is not built, the status
+byte is never written, and the consumer is never called - which is a complete,
+self-consistent explanation of the stall that needs no further speculation:
+
+> the client receives the datagram and runs its receive path, but never produces the
+> "a reply was accepted" record, so it keeps the probe loop open.
+
+**What this rules out.** The whole reply-shaping avenue, definitively: the code that would
+judge a reply is downstream of a builder that never runs, so no byte we could put in a
+packet changes anything. That is why nine variants produced identical results, and it is
+why this should not be attempted again.
+
+**Where the work actually is now.** `0x121128` is 569 instructions with one caller, and
+its first action is `lbz r3, 1(r3)` on the value built at `0x19e260` by
+`lis r3,0x1a2` / `addic r3,r3,-0x3da0` - a **module-state flag tested against 0**, i.e. a
+lifecycle check ("is the STUN module idle?"), not a packet test. Since the chain is
+one-caller-deep, the most likely reading is that `0x121128` is a *startup/registration*
+routine for the STUN module rather than a per-datagram path, and that the per-reply work
+happens on a different, so-far-untraced branch.
+
+Next session's first task, therefore, is no longer the reply body. It is to find what
+*does* call the consumer in a working case - and the fastest way to get there is a
+capture of a real 01.24 STUN exchange from the owner's own console, which would show
+both sides of an exchange that the client actually accepts. Everything above is a
+faithful reading of the 01.24 binary and every run so far, but it is inference from one
+failing configuration, and this last result says the missing piece is not in the reply
+path at all.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
