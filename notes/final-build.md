@@ -221,6 +221,17 @@ stage past its current stop), plus that unconnected 47-byte send. Neither is gue
 from the notes; both need either more static analysis of the map parser or a lawful
 capture of a real STUN exchange from the owner's console.
 
+**Sign-on is never reached at all.** Worth stating plainly, because it changes what the
+blocker is: across FINAL124_S01, t4, STAGE and DISTINCT the SignOn listener logged
+**56 lines, all of them "listening on ..." banners, and not one client request**. The
+client's first network act is DNS for the 20 STUN names (06:36:45) followed immediately
+by the probes (06:36:58), and in 12+ minutes it never opens an HTTPS connection to
+SignOn at all. So "01.24 stalls before BAP" understates it: it stalls before
+**sign-on**, at the very first thing it does. That is consistent with the 01.00 route,
+where STUN precedes sign-on too, and it means getting the STUN exchange right is worth
+more than anything downstream - nothing else can even be tested until the client leaves
+this loop.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
