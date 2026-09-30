@@ -2200,3 +2200,52 @@ SSLv3 sign-on 200, manifest, 1,034 packages. Character selection and orbit remai
 unreached because `0x94` is never set, and the writer of `0x94` remains unidentified
 after four attempts, the last three of which I have now documented as wrong turns.
 That is the honest state, and the durable output is the map plus the four corrections.
+**SOLVED: the `0x367090` oddity is a vtable at `0x01855b40`, and it explains the loop.**
+Searching the whole image for any word whose low half is `0x7090` and whose value lands
+in the BAP region returns **exactly one hit**:
+
+```
+0x01855ba0  ->  0x00367090     the parking spot
+```
+
+Reading outward from it reveals a table of BAP handlers on an 8-byte stride (a function
+pointer alternating with the constant `0x01891798`):
+
+```
+0x01855b40  slot  0 -> 0x003665a4      0x01855ba4  slot 10 -> 0x00366ab8
+0x01855b48  slot  1 -> 0x003666f0      0x01855bac  slot 11 -> 0x0036295c
+0x01855b50  slot  2 -> 0x003668a8      0x01855bb4  slot 12 -> 0x00366b24
+0x01855b58  slot  3 -> 0x003669b4      0x01855bbc  slot 13 -> 0x00366b50
+0x01855b60  slot  4 -> 0x00366a84      0x01855bc4  slot 14 -> 0x00367090  <==
+0x01855b68  slot  5 -> 0x00220db8      0x01855bcc  slot 15 -> 0x003670c8
+0x01855b70  slot  6 -> 0x00e4f2d8      0x01855bd4  slot 16 -> 0x00367114
+0x01855b78  slot  7 -> 0x00e4f9c4      0x01855bdc  slot 17 -> 0x003671fc
+0x01855b80  slot  8 -> 0x00366ab8      0x01855be4  slot 18 -> 0x003672d8
+0x01855b88  slot  9 -> 0x0036295c      0x01855bec  slot 19 -> 0x00e4fa98
+0x01855b90  slot 10 -> 0x00366b24      ...
+0x01855b98  slot 11 -> 0x00366b50
+0x01855ba0  slot 12 -> 0x00367090   <== the parking spot is slot 12
+```
+
+**This resolves several things at once.**
+
+1. **Why a linear scan could not see it.** The parking spot is not branched to and not
+   computed with a `lis`/`addi` pair; it is reached by indexing this table. Every earlier
+   scan method was structurally incapable of finding it.
+2. **Why the loop repeats.** This is a handler table indexed by connection state. The
+   client is dispatching the same slot over and over, which is precisely the observed
+   behaviour - `0x367090` at 200 hits, `0x366df8` at 200, the gate at 400, with the state
+   setter untouched at 9. **The loop is the table being re-indexed on the same state**, so
+   the client is not retrying the sequence, it is stuck re-entering one slot.
+3. **It gives the missing index.** Slot 12 holds `0x367090`, so the state being
+   dispatched is **12** - and `0x12` (18) is one of the nine states the client reached
+   in the very first state-walker measurement. The sequence stopped at 19 (`0x13`), but
+   the slot being dispatched is 12, so the state field and the dispatch index are not the
+   same quantity, and that mismatch is now a concrete thing to test rather than a guess.
+
+**Next, and it is now a two-hook job:** dump the table pointer and the index register at
+a `0x367090` hit, to confirm the index really is 12, and hook the sibling slots - in
+particular `0x3665a4`, `0x3666f0` and `0x366ab8`, which are in the same BAP block and may
+be the ones that would set `0x94`. This is the first lead that is derived from the
+binary's own structure rather than from pattern-matching an offset that turned out to
+have 1,434 writers.
