@@ -232,7 +232,11 @@ class Eboot:
             import capstone
         except ImportError:
             sys.exit("disasm needs capstone: pip install capstone")
-        md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_64 | capstone.CS_MODE_BIG_ENDIAN)
+        # PowerPC in capstone is 32-bit only; CS_MODE_64 is a PPC64 mode that
+        # capstone does not support and silently decodes nothing. The PS3's PPU
+        # is a 64-bit PowerPC but its instructions are the 32-bit big-endian set,
+        # so PPC32+BE is the correct mode here.
+        md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_32 | capstone.CS_MODE_BIG_ENDIAN)
         raw = self.read(va, 4 * count) or b""
         for i in md.disasm(raw, va):
             note = ""
@@ -282,15 +286,15 @@ def main(argv=None):
             for va in eb.data_refs(target):
                 print(f"  data 0x{va:x}")
     elif a.cmd == "callers":
-        target = int(a.target, 16)
+        target = int(a.target, 0) if a.target.lower().startswith("0x") else int(a.target, 16)
         for pc in eb.callers(target):
             print(f"  {describe(eb, pc)}")
     elif a.cmd == "func":
-        start, end = eb.function_of(int(a.target, 16))
+        start, end = eb.function_of(int(a.target, 0) if a.target.lower().startswith("0x") else int(a.target, 16))
         print(f"{eb.name(start)} .. 0x{end:x} ({(end - start) // 4} instructions), "
               f"{len(eb.callers(start))} callers")
     elif a.cmd == "disasm":
-        va = int(a.target, 16)
+        va = int(a.target, 0) if a.target.lower().startswith("0x") else int(a.target, 16)
         count = a.count
         if a.func:
             va, end = eb.function_of(va)
