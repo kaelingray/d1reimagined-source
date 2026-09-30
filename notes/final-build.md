@@ -996,6 +996,44 @@ built, and the record is built by a chain with one caller that never executes. T
 question for the next session is now precisely "what makes `0xb3e9e0` run", and it is a
 much smaller question than "what should the reply contain".
 
+**The chain is reached from the engine's tick, and the whole path has one caller per
+level** (so it is a straight line, not a vtable):
+
+```
+0x8adbf4  bl   0x11cc94   ; in 0x8ad930
+0x11cca0  bl   0x121128   ; in 0x11cc94   (a shim: bl + mtlr + blr)
+0xb3f71c  bl   0xb3e9e0   ; in 0xb3f6a4    (the result-record builder)
+0xb33ec0  bl   0xb35c94   ; in 0xb33814    (the consumer)
+```
+
+and the top of it checks the return:
+
+```
+0x8adbf4  bl     0x11cc94
+0x8adbf8  cmpwi  r3, -1        ; failure?
+0x8adbfc  stw    r3, 0x34(r24)
+0x8adc00  beq    0x8adcc0
+```
+
+`0x8ad930` is nowhere near the STUN code, so this is **the engine's own update tick** -
+which is a useful thing to know, because it means the builder is not gated on a
+STUN-specific condition at all. It is on the main loop reaching a state where it decides
+to poll the network. A `-1` return means "nothing to do" and the tick moves on.
+
+So the chain is: engine tick -> STUN module poll -> result-record builder -> (needs a
+result) -> consumer. The builder runs only when the module believes it has something
+pending, and in our runs it believes it has nothing - which is consistent with the
+status byte being zero from the very first probe and the module simply waiting.
+
+**That is the honest bottom line of this session, and it is a real narrowing:** the
+stand-in's replies are received (5,472 `recvfrom` on the STUN sockets), the receive path
+runs, the engine tick runs, and the only thing never happening is the module deciding it
+has a result. Nothing in the packet can change that decision, because it is made before
+the payload is interpreted. Closing this needs a capture of a real 01.24 STUN exchange
+from the owner's console to see what makes the module decide it has a result; more
+reply variants cannot, and the notes now say so explicitly so the next session does not
+repeat them.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
