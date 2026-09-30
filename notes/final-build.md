@@ -2088,3 +2088,70 @@ properly, by scanning the whole image for branches to it rather than trusting th
 function boundary. That gives the real entry point of the upload builder, and its caller
 is what to hook next. The `d1_eboot.py` truncation is worth fixing at the same time -
 it will silently mislead any other scan that crosses a page.
+**Correction to the previous section, twice over. `d1_eboot.py` is not buggy and I was
+wrong twice.** Having claimed a page-boundary truncation bug, I checked it directly:
+
+```
+read(0x127100, 0xc30) -> 3120 bytes     # 0xc30 IS 3120 - it returned exactly what I asked
+read(0x127100, 0xc00) -> 3072
+read(0x127100, 0xd00) -> 3328
+```
+
+`read()` is correct. My scan size ended *precisely* at `0x127d30`, so the address I was
+looking for was the first word past the end of my own buffer. The tool was never at
+fault; I was looking one instruction too far. **No fix to `d1_eboot.py` is needed and
+none was made.**
+
+**Second correction: `0x127100` is not an upload function, and the 200 hits mean
+nothing.** What it actually does is visible in its first three calls:
+
+```
+0x00127108  bl 0xd98a98
+0x0012710c  bl 0xd98ae4
+0x00127130  bl 0x9a746c      <- memcpy/memset family
+```
+
+and then it is a long uninterrupted run of immediate loads with **no conditional branch
+whatsoever** in the first 3,120 bytes, materialising a configuration table:
+
+```
+0x0012713c  li   r5, 0x7530     = 30000
+0x00127158  li   r8, 0x7d0      = 2000
+0x00127168  li   r10, 0x1388    = 5000
+0x00127170  li   r11, 0x3a98    = 15000
+0x00127180  li   r30, 0x2710    = 10000
+0x00127188  li   r29, 6
+0x00127190  li   r28, 5
+0x00127160  li   r9, 0xa        = 10
+```
+
+Those are decimal-looking port and interval values, and the pattern
+(`std r6, ...` zeroing a block, then filling constants) is a struct being initialised.
+So `0x127100` is a **configuration/timing initialiser for the Demonware transport**, and
+its 200 hits just mean that initialiser is called on every connection attempt. It holds
+the upload host and `/ticket_drop` strings further along because the config record
+includes them, not because it performs the upload.
+
+**This retires the whole "the upload transport runs 200 times" line of enquiry.** It was
+measuring a config initialiser. What remains true and useful:
+
+- `0x127d30` / `0x127e40`, where the host and path are actually placed into a request
+  object, are never reached - but they may be reached from a *different* entry point, and
+  I have not yet established one;
+- the client never resolves the upload host, so no responder could help;
+- ports 2000/5000/10000/15000/30000 are configured. **None of them is 12850**, the BAP
+  session port, which is worth noting: the ports in play are not the one the gate wants.
+
+**Honest status.** The BAP gate is fully mapped - `0x94 == 1` permits the dial, anything
+else parks the client in state 19 - but I have still not found the code that *sets*
+`0x94`, and three consecutive attempts to find it by pattern-matching the offset have
+now failed for concrete and different reasons each time (1,434 candidate writers;
+`0x12d160` is a constructor; `0x127100` is a config initialiser). The offset itself is
+the problem: it is not unique. **The right next move is to stop searching for `0x94` and
+instead find who calls the deciding function `0x366df8`'s block from above**, i.e. walk
+backwards from the gate to the state that must be true before it, rather than hunting
+for a writer of a common offset.
+
+Worth saying plainly: several hours of hooks have now produced a good map of the gate and
+a set of corrections, but not yet a fix. The map is the durable result; it should be
+trusted over the intermediate claims, which two of them turned out to be wrong about.
