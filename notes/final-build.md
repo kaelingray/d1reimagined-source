@@ -722,6 +722,90 @@ matter:
 The next step is therefore to read the three callers and find how `r4` is computed. That
 is the last untraced link between "a reply arrived" and "the client accepts it".
 
+**`r4` is a success flag, not a parsed value - and the transport machine passes 1.** Both
+remaining callers are short:
+
+```
+; the transport machine, 0xb33ea4 (the path that runs during a probe)
+0xb33ea4  cmpwi cr7, r3, 0
+0xb33ea8  bne   0xb33eb8
+0xb33eac  lbz   r0, 0xa8(r31)     ; a status byte
+0xb33eb0  cmpwi cr7, r0, 0
+0xb33eb4  beq   0xb33ef4         ; still busy -> skip
+0xb33eb8  mr    r3, r26          ; the session object
+0xb33ebc  li    r4, 1            ; <-- r4 = 1, "this is a good reply"
+0xb33ec0  bl    0xb35c94
+
+; the 0xb3376c caller
+0xb337bc  li    r4, 0            ; <-- r4 = 0, the bail path
+0xb337c8  bl    0xb35c94
+```
+
+So `r4` is a **caller's verdict**, not anything parsed out of the packet: the transport
+machine passes 1 when a reply has arrived and the status byte `0xa8(r31)` is clear, and
+`0xb3376c` passes 0 to force the bail. The gate field `8(r3)` therefore just receives
+"a reply was accepted", and the real condition for acceptance is entirely inside
+`0xb35c94`: **the reply's first word must be 14, 15, 16 or 17.**
+
+That is a testable, falsifiable statement, and it explains every observation in this
+section:
+
+- our `typeversion` reply (type **15**) and the `mirror` reply (type **14**) both have an
+  accepted first word, so `r4 = 1` should have stored a non-zero `8(r3)` and set `4(r3) = 1`;
+- yet the hook shows `8(r3) = 0` and `4(r3) = 0` on every handler entry, and the jump table
+  is reached once in thirteen.
+
+The two facts can only both be true if `0xb35c94` is **not being called with our bytes at
+all** - i.e. the caller's `0xa8(r31)` status byte is still non-zero, or the call at
+`0xb33ec0` is never taken, so the reply never reaches the consumer. That is a *pre-consumer*
+condition, upstream of everything the stand-in can influence.
+
+**This is the sharpest statement of the blocker so far, and it is checkable in one run:**
+hook `0xb35c94` itself. If it is never entered, the reply never reaches the consumer and
+the whole question is what keeps `0xa8(r31)` non-zero. If it is entered and the store
+still does not happen, then the first word the client reads out of our packet is not what
+we think it is - and the dump at that hook will say exactly what it is.
+
+**CHECKED (RUN CONSUMER): the consumer is never entered. Zero hits.** With `0xb35c94`
+(the consumer) and both call sites `0xb33ebc` / `0xb337bc` watched, alongside the
+handler and the table:
+
+```
+0xb35c94  the reply consumer         :  0 hits
+0xb33ebc  the transport call site    :  0 hits
+0xb337bc  the other call site (r4=0) :  0 hits
+0xb36fd8  the handler                : 13 hits
+0xb370e0  the jump table             :  1 hit
+```
+
+**This closes the investigation and settles where the work has to go next.** The handler
+runs 13 times, so the client *is* servicing the socket and *is* reaching the code that
+decides whether a reply counts. But it never calls the one function that would record it
+as accepted, and neither call site that could call it is ever executed. The rejection
+therefore happens strictly **upstream of the reply consumer**, in the transport machine's
+own logic between receiving the datagram and deciding to pass it on - most likely at the
+status byte `0xa8(r31)` test at `0xb33eb0`, which is the one condition that can skip the
+call entirely.
+
+That also retro-justifies the whole session: eight reply variants, four types, two
+versions, per-name addressing and a control run all produced byte-identical results
+because **the stand-in's reply never reached the code that would judge it**. Not one of
+those experiments could have succeeded, and no further change to `stun_stub.py` can
+succeed either. The reply is not the lever.
+
+**What the next session should do, in order:**
+
+1. read the transport machine between `0xb33814` and `0xb33ec0` to find what sets
+   `0xa8(r31)` and what else must hold for the `0xb33ec0` call to be taken;
+2. check whether the datagram is parsed at all before that - the handler's 13 entries may
+   be servicing a *timeout* rather than our reply, which would mean the socket is polled
+   but the payload is never read;
+3. only then revisit the reply body.
+
+Point 2 is the cheapest test of all and should go first: make the stub's reply length
+distinct and see whether the handler's entry count changes with it. If it does not, the
+handler is on a timer and nothing we send is being parsed at all.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
