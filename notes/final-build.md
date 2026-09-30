@@ -837,6 +837,42 @@ causes, in order of how cheaply they can be checked:
 
 Cause 1 is the one to test next, and it costs a single run.
 
+**Cause 1 disproved by inspection; the client does receive the datagrams.** Reading
+RPCS3's own network trace in RUN LENBIG settles three things at once:
+
+```
+5  x  sendto(s=52, len=4)    the 4-byte probe socket
+12 x  sendto(s=53, len=29)   the 29-byte probe socket
+16319 x bnet_recvfrom in total, of which 5472 on sockets 52/53
+bnet_recvfrom(s=52, buf=*0xd018b46c, len=32, flags=0x0, ...)
+```
+
+- the addressing is already correct: the client sends from `127.0.0.1:3074` to the stub's
+  `127.0.2.2:3074`, and the stub replies from `127.0.2.2:3074` to `127.0.0.1:3074` - exactly
+  what a real NAT server does, so the source-address hypothesis is wrong;
+- the receive buffer is **32 bytes**, and both reply sizes fit (7 and 29), so truncation is
+  not the problem either;
+- **the client is reading its socket thousands of times.** It receives our replies and
+  does not act on them.
+
+Also worth recording: the client never *connects* to port 3074 - the only outbound
+connections in the whole run are 20 to `127.0.0.1:53` (DNS) and 3 to `192.168.0.1:1900`
+(SSDP/UPnP). Sockets 52/53 are only ever `bind`-ed, and the probes go out via `sendto`
+with the destination pre-set. So the STUN exchange is connectionless by design, which is
+consistent with the client's own STUN client.
+
+**Revised position.** The reply arrives, is read into a 32-byte buffer, and is discarded
+without reaching the consumer. So the filter is inside the client, between `recvfrom` and
+`0xb35c94`, and the only condition identified so far that can skip the call is the
+status byte `0xa8(r31)` at `0xb33eb0`. Two concrete next steps:
+
+1. hook the `bnet_recvfrom` wrapper's **caller** - or, easier, the first client
+   instruction after the syscall returns - to see how many bytes came back and what it
+   does with them, since the 5,472 reads and 13 handler entries do not line up and one
+   of the two numbers is about something other than the reply;
+2. read `0xa8(r31)`: who sets it, and what it means. If it is only cleared on a reply the
+   client considers well-formed, then its writer is the real gate.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
