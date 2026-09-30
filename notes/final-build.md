@@ -232,6 +232,17 @@ where STUN precedes sign-on too, and it means getting the STUN exchange right is
 more than anything downstream - nothing else can even be tested until the client leaves
 this loop.
 
+**Environment re-verified, so the stall is the protocol and not the setup** (2026-09-30).
+Worth recording because "it is just broken locally" is the obvious thing to suspect on a
+freshly rebuilt PC: RPCN is running and port 31313 accepts, and its log shows the client
+authenticating (`Succeeded with NoError` for `ResetState`); `config.yml` has
+`PSN status: RPCN` and `DNS address: 127.0.0.1`; `rpcn.yml` points at
+`127.0.0.1:31313` as the local test server. The preflight also passes all 14 checks
+(1,034 packages at the right sizes, both 01.24 patches enabled, CA matching). So the
+stand-ins, the RPCS3 copy and the emulator are all in the state the 01.00 route used, and
+the remaining difference is that 01.24's first request is one we do not yet answer
+correctly.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
