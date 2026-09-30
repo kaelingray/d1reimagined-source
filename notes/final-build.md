@@ -588,6 +588,56 @@ information needed is the *real* exchange - either a capture from the owner's ow
 or a much deeper read of the client's STUN success path (the `stw` stores in the live
 jump-table branches at `0xb3724c`/`0xb372bc`/`0xb371e0`, none of which we have entered).
 
+**WHERE THE REPLY IS ACTUALLY REJECTED (RUN BRANCH) - the real gate, at last.** Watching
+the four live jump-table branches plus the table itself shows the handler almost never
+reaches the table at all:
+
+```
+0xb36fd8  handler entry       : 13 hits
+0xb370e0  the jump table      :  1 hit    <- one dispatch in an entire run
+0xb371e0  index 15 (stores 17) :  0
+0xb3724c  index 7  (stores 2)  :  0
+0xb372bc  index 10            :  0
+0xb374e4  index 9             :  0
+```
+
+So replies are not being mis-dispatched - they are **rejected before the dispatch**, on
+almost every call. The test that does it is a few instructions into the handler:
+
+```
+0xb36fe8  lbz   r0, 4(r3)
+0xb36ff4  cmpwi r0, 0
+0xb3700c  beq   0xb3707c        ; == 0 -> carry on
+   ... sets the field to 0x11 and returns (the "already have a result" path)
+0xb37034  lwz   r0, 8(r30)      ; field at offset 8
+0xb37038  cmpwi r0, 0
+0xb3703c  bne   0xb3704c        ; non-zero -> carry on to the range check
+0xb37040  lwz   r0, 0xc(r30)    ; field at offset 12
+0xb37044  cmpwi r0, 3
+0xb37048  beq   0xb3714c        ; == 3 -> carry on (the short-probe branch)
+0xb3704c  bl    0xb35b38        ; otherwise: give up
+```
+
+and the captured session object has **offset 8 = 0 and offset 12 = 0** (the 32-byte hook
+dump is `00000001 00000000 00000000 c0a80001 ...`). Both conditions therefore fail on
+every call, and the handler bails through `0xb3704c` - which is why the jump table is
+reached once in thirteen calls and why no reply we send has mattered.
+
+**This finally names the two fields the stand-in has to influence**, and they are not in
+the packet we were editing at all:
+
+- `8(r3)` - a non-zero value here short-circuits the whole dispatch, and
+- `0xc(r3)` - the value **3** is the other way through, via the short-probe branch.
+
+Both are written by the client before it calls the handler, most likely by the routines
+that fill in the address it just learned from our reply. So the chain is:
+**reply arrives -> the client copies our address into its session object -> only then does
+it reach the table.** Our replies are apparently not being copied, which is the first
+thing in this whole investigation that is a *client-side* condition we can name rather
+than a value we failed to guess. The next task is unambiguous: find the writers of
+`8(r3)` and `0xc(r3)` - they are the code that consumes the reply body - and read what
+they require of it.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
