@@ -371,6 +371,52 @@ machine cycling rather than the 20-entry reply table. What decides the transitio
 state 4 is the remaining question, and it is a single branch in `0xb339b8`/`0xb36fd8`
 rather than anything on the wire.
 
+**THE GATE (RUN GATE18): state 4 exits only on 18 or 19, and the client never reports
+either.** This is the concrete condition, found by reading state 4's own exit test and
+then measuring it with the PPU hook on `0x69ddb0` (the session getter state 4 calls after
+the STUN handler):
+
+```
+0xb339b8  addi r0, r3, 0x4c0
+0xb339c4  bl   0xb36fd8        ; the STUN response handler
+0xb339d0  bl   0x69ddb0        ; read the session result into r3
+0xb339d8  cmpwi r3, 0x12       ; 18 -> carry on
+0xb339dc  bne  0xb33b3c
+...
+0xb33b48  cmpwi r3, 0x13       ; 19 -> carry on
+0xb33b4c  beq  0xb33b64
+0xb33b5c  cmpwi r3, 0          ; 0 -> back to the shared tail, keep looping
+```
+
+Measured return values of `0x69ddb0` over a full run (RUN GATE18, 200 hook hits):
+
+| value | calls | meaning |
+| ---: | ---: | --- |
+| 0 | 193 | not ready - the value that keeps the loop going |
+| 1 | 6 | |
+| other | 1 | |
+| **18** | **0** | **required to advance** |
+| **19** | **0** | **also advances** |
+
+**This explains every negative result in this section at once.** The stub's replies *are*
+received and parsed - the handler runs, the sub-step counter advances, the 4-byte probe
+stops - but the session getter that state 4 actually tests keeps returning 0. Nothing we
+put in the packet can change that, because the value is not a packet field: it is the
+client's own "STUN exchange complete" flag, and it is set by the parser only when the
+reply satisfies conditions we have not identified. Every reply-side variable
+(dispatch index, fill, shape, per-name addresses, reply shape, reply type) was therefore
+guessing at a value the client never reads from the wire in the first place.
+
+So the remaining work is precise and bounded: **find what makes the parser set that
+flag.** The next concrete steps, in order:
+
+1. read the success path of the parse routine that feeds `0x69ddb0`'s value, to see the
+   condition under which it becomes 18/19 rather than 0;
+2. since 18/19 sit right at the size of the host list (20 names, 20-entry table), check
+   whether the value is a count of hosts completed and whether all 20 must answer;
+3. the 01.00 twin of this test is the same shape (its types 20/30 answer with 21/31), so
+   the 01.00 route's success value is worth reading for the expected encoding.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
