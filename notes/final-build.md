@@ -2155,3 +2155,48 @@ for a writer of a common offset.
 Worth saying plainly: several hours of hooks have now produced a good map of the gate and
 a set of corrections, but not yet a fix. The map is the durable result; it should be
 trusted over the intermediate claims, which two of them turned out to be wrong about.
+**RUN CLEAN - the hook file had 9 duplicated addresses, and it did not matter.** While
+checking why `0x367090` shows 200 hits when no code anywhere branches to it, I found
+the hook file itself had accumulated duplicates - 60 hook lines for 51 distinct
+addresses, nine of them hooked twice or three times:
+
+```
+0x127100 x3    0x363138 x2   0x366348 x2   0x366df8 x2
+0x121128 x2    0x28a744 x2   0x28a850 x2   0x366ea4 x2   0x367090 x2
+```
+
+Duplicated hook lines are a real hazard - they split hit budgets and can double-count -
+so I deduplicated (60 lines -> 50, taking the larger hit limit) and re-ran the whole
+sequence from scratch. **Every number came back identical:**
+
+```
+0x366df8  the deciding test        : 200    0x127100  config init : 200
+0x127d30  host string load         :   0    0x127e40  path load  :   0
+0x366ea4  writes 0x30 = 5          :  50    0x367090  parking    : 200
+0x363138  the dial gate            : 400    0x366348  writer     :   0
+0x356494  state setter             :   9    0xb36fd8  STUN reply : 200
+```
+
+So the earlier measurements stand. That matters, because the last three sessions have each
+had to retract something, and this is the check that says the retractions were wrong
+*conclusions*, not wrong *counts*.
+
+**Still unexplained, and it is a real oddity worth flagging.** `0x367090` is hit 200
+times, yet a whole-image scan finds **no branch, no data reference, and no code that
+computes its address** - `bl`, `b`, all conditional forms, `lis`+`addi` pairs, and a
+raw 4-byte search for the pointer all come back empty. The only branch target in the
+whole `0x366000-0x368000` window that lands near it is `0x3670b0`, which is *inside* the
+function (`0x367090..0x3670c4`), and the preceding function jumps over it entirely with
+`0x367088  b 0xd98a4c`. So the function is real, the hook fires, and nothing in a linear
+scan explains how it is entered. Most likely it is reached through a computed dispatch -
+a table built at runtime, or an offset from a base I have not identified - which is
+exactly the shape of thing a linear scan cannot see. I am not going to guess further
+without evidence; it is recorded as open.
+
+**Where this leaves the project.** The BAP gate is fully mapped and the map is stable:
+`0x94 == 1` permits the dial, `0x30 = 5` parks the client in state 19, and the client
+takes the second branch every time. The whole upstream chain works - title, Cross,
+SSLv3 sign-on 200, manifest, 1,034 packages. Character selection and orbit remain
+unreached because `0x94` is never set, and the writer of `0x94` remains unidentified
+after four attempts, the last three of which I have now documented as wrong turns.
+That is the honest state, and the durable output is the map plus the four corrections.
