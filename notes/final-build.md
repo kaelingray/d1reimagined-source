@@ -153,6 +153,31 @@ the 4-byte probe** and sent only the 29-byte map from then on, while BAP still s
 connection. So a reply is recognised and changes behaviour; it is not yet accepted as
 success. The byte at `0x18` going 0 -> 3 is the visible progress in that run.
 
+**The stage is written by the client, not read from our reply.** At `0xb37168` the
+request path does `li r0, 0xe; stw r0, 0(r30)` - on a failed sub-step it stores **14**
+into the same `0(r3)` word that `0xb3707c` later bounds-checks and `0xb370e0` uses as the
+jump-table index. So the counter is the client's own STUN sub-step number (it reaches
+`0x0e` on failure), and the 1..10 seen under the hook is that counter walking forward
+while it retries. This is why `--reply-index` cannot steer anything: the index is not
+carried by the packet at all. Any legal, self-consistent reply gives the same result.
+
+**Sweep result (two indices, one variable each).** `--reply-index 0` and `1` behave
+identically: the client sends 5 of the 4-byte probe, then **only** the 29-byte map for the
+rest of the run, and the BAP stand-in never logs a connection.
+
+| run | index | probes | replies | 4-byte | 29-byte | BAP |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| t4 | 0 | 21 | 21 | 5 | 16 | no connection |
+| A_STUNIDX1 | 1 | 37 | 37 | 5 | 32 | no connection |
+
+So answering *is* recognised (the short probe stops permanently after ~5 attempts, in both
+runs) but is not accepted as success, and the choice of index makes no difference -
+consistent with the counter being client state. The remaining unknown is the **reply
+body**: what the client expects the parsed map to contain for the stage to advance past
+`0x0e`. The `-1` sentinels in the request are the lead: they are ports the client has not
+bound, and a reply that fills the *right* ones (rather than the first) is the next thing
+to try. `stun_stub.py --reply-index -1` is available as the silent control.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
