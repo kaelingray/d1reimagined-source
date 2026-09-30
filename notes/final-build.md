@@ -2577,3 +2577,49 @@ dumped. That single run says which of the three guards is rejecting the advance,
 `r26` at the same moment gives the value the index *would* have taken - so we learn both
 why it stalls and what it is trying to reach. That is the last structural unknown between
 here and the gate.
+**RUN GUARD - the guards pass, so `0x356120` does execute; the bail is not what stops
+us.** Results:
+
+```
+0x356108  guard 1 (r5 == r28)   :  0    <- not reached at all
+0x356110  guard 2 (r29 == 0)    : 10
+0x356118  guard 3 (r30 == 0)    : 10
+0x356120  stw r26, 0x128(r30)   : 10    <- THE STORE RUNS
+0x356488  the bail target       : 10
+0x356ab0  the copy              : 11
+0x356bc4  the indirect call     : 30
+0x366b24 / 0x366b50 / 0x367090  : 20 / 20 / 20
+0x366df8 / 0x366ea4 / 0x363138  : 20 / 20 / 40
+```
+
+Guard 1 is never reached, which means control always arrives from a path that skips it,
+so the `r5 == r28` test is not what we are up against. Guards 2 and 3 are reached, and
+the store at `0x356120` follows both of them 10 times - **so the guards are passing and
+`0x128` really is being written.** That contradicts the reading in the previous section
+that the advance might be blocked by a failing guard, and I am correcting it: the store
+runs.
+
+`0x356488` also firing 10 times needs care. It is reached from the *earlier* branches in
+the same block (`0x356104`, `0x35610c`, `0x356114`, `0x35611c` all target it), so a
+bail and a legitimate arrival can both land there, and the equal counts do not prove the
+guards failed. I am not going to claim which without evidence.
+
+**A tooling limitation worth recording, because it changes what is measurable.** The
+register dumps at all four addresses are byte-identical (`r5=0x30650150` everywhere,
+`r28`/`r29`/`r30`/`r26` absent). The instrumented RPCS3 build is not honouring the
+per-hook register list in this file - it emits the same fixed set regardless. Earlier
+dumps did vary (`r4=0x367090 r5=0x1c18c50` at the parking spot, and `m28=` memory at the
+dispatcher), so the mechanism works for *some* registers and not others. **Any conclusion
+in this project that depends on a specific register being dumped is currently
+unverifiable**, and the ones I have drawn so far rest on `r28`/`r3`/`r6` which did work.
+
+**Revised understanding.** `0x128` is written 10 times and copied to `0x118` 11 times,
+yet `0x118` only ever reads 1, 2, 3. So the store is running with the *same* value each
+time - `r26` is not advancing. The thing to find is what computes `r26`, which is a
+cleaner target than anything attempted so far: one register, set upstream of `0x356120`,
+inside the same `0x356000` block whose other entries are already mapped.
+
+**Next.** Fix the dump specification first (try `m30:`-style memory dumps on `r30` rather
+than register dumps, since memory dumps have been reliable), then read `r30` at
+`0x356120` and follow where its value at `+0x128` came from. Given the tooling issue, I
+would rather change the measurement than draw another conclusion I cannot back.
