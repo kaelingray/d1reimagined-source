@@ -1927,3 +1927,52 @@ the transport is never asked to upload, and the reason will be upstream of them.
 fires and the ten writers still do not, the failure is inside `0x127100` and the upload
 reply handling is where to look. Either way it is two hooks and the question is closed
 either way - which is why this is worth doing first next session.
+**RUN CALL - correcting the previous section: the upload transport IS invoked.** This
+changes the conclusion above and is worth being precise about.
+
+```
+0x127100  the 2,556-instruction upload function : 100 hits
+0x28a744  its caller 1                          :   1 hit   (from lr=0x28a748)
+0x28a850  its caller 2                          :   0 hits
+all ten 0x94 = 1 writers                        :   0 hits
+0x366df8  the deciding test                     : 200 hits
+```
+
+So the transport *is* entered, 100 times, and mostly from `0x28a854` (the return address
+just past caller 2, so the `0x28a850` hook simply missed the window). It is not skipped.
+I was wrong to say the upload never begins, and the W94B conclusion was overclaimed:
+the ten writers are not silent because their region is skipped, but because they belong
+to **different functions entirely**:
+
+```
+0x121128 .. 0x121a0c  569 insns   <- 0x121168, 0x1217d0, 0x12197c
+0x12bd64 .. 0x12c6c4  600 insns   <- 0x12c5d8, 0x12c610, 0x12c64c
+0x12d160 .. 0x12d1c4   25 insns   <- 0x12d1b0
+```
+
+None of them overlap `0x127100`. The function that gets the upload *requested* is not
+the function that records the upload *succeeding*, so "the transport runs" and "the flag
+is set" are separate facts, and only the first is true here. That is a genuine finding,
+just not the one W94B claimed.
+
+**The corrected picture.** The client asks for the upload repeatedly, the transport
+function runs repeatedly, and the success writers never run. So the request goes out and
+no success ever comes back. That moves the question to the **reply path** rather than the
+request path, and it is the first time in this project that a stand-in could plausibly be
+the cause rather than a bystander: an upload needs an HTTP response, and if nothing is
+listening for it, the success writers are unreachable by construction.
+
+**Next.** Two things, in order, and the second is the one that matters:
+
+1. hook the three writer functions (`0x121128`, `0x12bd64`, `0x12d160`) and see whether
+   they are entered at all with the flag not set, which distinguishes "reply handler never
+   called" from "reply handler called and rejected the reply";
+2. find what the upload expects back. `19bdUploadInterceptor` (`0x014020e8`) and
+   `'Upload complete (%d total bytes, %.2f)'` (`0x01402508`) are the names to work
+   backwards from, and the second one is a log line with a byte count - it tells us the
+   upload has a body and a length, which is what a responder has to agree with.
+
+Note the standing assumption this rests on: that the client is willing to talk to
+`127.1.1.127` for anything. That has held for the STUN and sign-on traffic, and the
+upload host resolves to the same loopback range, so it is reasonable - but it is an
+assumption, and step 1 is cheap enough to confirm before building a responder on it.
