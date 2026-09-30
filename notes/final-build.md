@@ -2249,3 +2249,40 @@ particular `0x3665a4`, `0x3666f0` and `0x366ab8`, which are in the same BAP bloc
 be the ones that would set `0x94`. This is the first lead that is derived from the
 binary's own structure rather than from pattern-matching an offset that turned out to
 have 1,434 writers.
+**The vtable slots write a small, consistent set of offsets - and `0x94` is not among
+them.** Scanning what the sibling BAP slots actually store:
+
+```
+slot 0  0x3665a4  0x14 0x15 0x16 0x17 0x18 0x19 0x1a 0x1b 0x1c 0x1d 0x1e 0x1f 0x20 0x21
+slot 1  0x3666f0  0x14 0x15 0x16 0x17 0x18 0x19 0x1a 0x1b 0x1c 0x1d 0x1e 0x1f 0x20 0x21
+slot 2  0x3668a8  0x30 0x70 0x74 0x80 0x88 0x90 0x190 0x1a0 0x1bc 0x1c0 0x1c4 0x1c8 0x220 0x230
+slot 8  0x366ab8  0x30 0x70 0x80 0x90 0xc0 0x1bc 0x1c0 0x1c4 0x1c8 0x310 0x330 0x340
+slot10  0x366b24  0x30 0x70 0x80 0x90 0xa0 0xa4 0xa8 0xac 0xb0 0xc0 0x310 0x330 0x340
+slot11  0x366b50  0x30 0x80 0x90 0xa0 0xa4 0xa8 0xac 0xb0 0xc0 0x310 0x330 0x340
+
+most common:  0x80 x13   0x30 x9   0x90 x8   0x70 x6   0xa0 x6
+              0x190 x4   0x1a0 x4  0x330 x4  0x340 x4  0xa8 x4
+```
+
+**None of these slots writes `0x94` at all.** So the flag the deciding test at `0x366df8`
+reads is not set by any handler in its own dispatch table. That is a real structural
+result, and it means the vtable is not the place to keep looking for the writer.
+
+Two further readings worth keeping:
+
+- **slots 0 and 1 are a different family.** They store a dense run `0x14` through `0x21`,
+  which is byte-by-byte field filling rather than the sparse `0x30`/`0x80`/`0x90` pattern
+  of the others. Something about the table is grouping two different record layouts
+  together - worth remembering before assuming all 20 slots are the same class.
+- **`0x30`, `0x80` and `0x90` are the working fields.** `0x30` is the one the gate reads,
+  and it is written by nine of the slots. `0x90` is read by the deciding test's
+  neighbourhood and written by eight. These are the live fields of this object; `0x94`
+  may simply have been the wrong offset to fixate on.
+
+**Next, revised in light of this.** Rather than hunting for a writer of `0x94`, read the
+three fields that the dispatch table actually maintains (`0x30`, `0x80`, `0x90`) at the
+moment of a `0x367090` hit, together with the index register. That single dump gives the
+dispatched slot *and* the state of the object the handler is working on, which is enough
+to tell whether the loop is re-entering the same slot with the same inputs forever - and
+if so, which input is supposed to change. That is one hook and one run, and it is the
+cheapest informative experiment left.
