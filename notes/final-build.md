@@ -638,6 +638,41 @@ than a value we failed to guess. The next task is unambiguous: find the writers 
 `8(r3)` and `0xc(r3)` - they are the code that consumes the reply body - and read what
 they require of it.
 
+**The loop is self-sustaining, and that closes the mechanism (reading `0xb35b38`).** The
+bail-out the handler calls when the gate fails is not a passive return - it **resets the
+state it just tested**:
+
+```
+0xb35b64  stw r27(=0), 0(r28)     ; clears the dispatch word
+0xb35b68  stb r27(=0), 4(r28)     ; clears the byte at offset 4
+0xb35b6c  stw r27(=0), 0xc(r28)   ; clears the very field the gate wants to be 3
+```
+
+So each failed call sets `0xc(r3)` back to 0, guaranteeing the next call fails the same
+test, which clears it again. The client cannot escape by retrying - something has to
+write a non-zero `8(r3)` or a 3 at `0xc(r3)` in the first place, and the only writer found
+that does either is **jump-table index 15** (`0xb371e0`):
+
+```
+0xb371ec  stw r0(=1), 8(r3)      ; non-zero 8(r3) -> short-circuits the gate entirely
+0xb371f0  stw r9(=0x11=17), 0(r3)
+```
+
+and our runs enter that branch **zero** times. The whole picture is therefore consistent:
+
+1. the client sends a probe and waits;
+2. our reply arrives and is handed to `0xb36fd8`;
+3. the gate at `0xb37034` fails because the client has not yet accepted an address, so the
+   handler bails at `0xb3704c`;
+4. the bail clears the state, so the next attempt behaves identically;
+5. the branch that would satisfy the gate (index 15) is never reached.
+
+**The single remaining question is narrow and answerable:** what does the client require
+in the reply for it to write index 15, or any `8(r3) != 0`? That is the reply-consumer
+code, upstream of the handler, and the `0xb34ed8` / `0xb35398` hooks already watching that
+path are the instrument. Everything else in this section - the eight reply variants - sat
+downstream of a gate that never opened, which is why none of them could have mattered.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
