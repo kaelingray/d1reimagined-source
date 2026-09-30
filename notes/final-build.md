@@ -1976,3 +1976,71 @@ Note the standing assumption this rests on: that the client is willing to talk t
 `127.1.1.127` for anything. That has held for the STUN and sign-on traffic, and the
 upload host resolves to the same loopback range, so it is reasonable - but it is an
 assumption, and step 1 is cheap enough to confirm before building a responder on it.
+**RUN REPLY - the reply handlers are never called, and one of my three "writers" was
+an initializer, not a reply handler.** Hooking the two real writer functions, their
+callers, and the vtable-dispatched one:
+
+```
+0x11cca0  caller of 0x121128       : 0 hits
+0x121128  writer fn 1 (569 insns)  : 0 hits
+0x12ca0c  caller of 0x12bd64       : 0 hits
+0x12bd64  writer fn 2 (600 insns)  : 0 hits
+0x12d160  writer fn 3 (25 insns)   : 1 hit
+0x127100  the upload function      : 200 hits
+0x366df8  the deciding test        : 200 hits
+```
+
+`0x12d160` is a false lead and should be struck from the notes. It is 25 instructions
+that zero a set of fields:
+
+```
+0x12d174  li    r31, 0
+0x12d1b0  stw   r31, 0x94(r3)     <- stores ZERO, not 1
+0x12d1b4  stw   r30, 0xb0(r3)     <- r30 = -1
+```
+
+It is an object constructor, and it writes to **static** objects at `0x1a2xxxx`, not to
+the BAP connection object. My scan had flagged `0x12d1b0` as an "0x94 = 1 writer" only
+because the nearest preceding `li ... 1` was far above it and belonged to other code. One
+hit at process start is exactly what a constructor does. **It is not a reply handler and
+was never a candidate.**
+
+**Also worth correcting: `0x94` is not a BAP-specific field.** Scanning the whole EBOOT
+for stores to `0x94(r*)` gives **1,434 sites** across the image. It is a common struct
+offset, so "find the code that writes 0x94" is not a tractable question on its own - the
+hooks I chose were guesses at which struct was meant, and two of the three were wrong.
+Any future work on this should identify the *struct* first (from the `0x366df8` object
+dump, which shows the host string at `+0x04` and `/ticket_drop` at `+0x61`) and search
+within it, not pattern-match the offset.
+
+**What is actually established.** The upload function `0x127100` runs 200 times. Nothing
+that could interpret a reply ever runs. And the client never even resolves
+`dm-partnernet.upload.deadorbit.net` - the DNS log for this run has no lookup for it,
+again. So the upload is *attempted* at the transport layer but never reaches a name
+lookup, which means it cannot have produced a request on the wire, and so no responder
+could help. That is the honest summary: this is not a missing-listener problem. The
+failure is before the name is ever resolved.
+
+**On the endpoints, since the policy question was raised.** Checked whether the real
+services still answer:
+
+```
+dm-partnernet.upload.deadorbit.net        -> 205.209.23.65   (resolves)
+www1.signon.deadorbit.net                 -> 172.97.59.1     (resolves)
+panther-ps3-auth3.prod.demonware.net      -> NXDOMAIN
+destiny-stun.us.demonware.net             -> 127.0.0.1       (our own override)
+```
+
+Two of them still resolve in DNS. Whether anything *listens* on them is a different
+question and I did not probe it - sending traffic to Bungie's live infrastructure would
+be of no use to a private server stack even if it answered, because the private stack has
+to be self-hosted by definition, and an answered sign-on from production would not
+produce a session our `bap_server.py` could speak to. So the relaxation does not change
+the plan: the work stays on emulating the endpoints locally. Recording this so the option
+is not re-litigated.
+
+**Next.** The upload dies before DNS resolution, so the next thing to watch is inside
+`0x127100` itself, not around it - specifically what makes it give up rather than
+resolve. A cheap way to find that is to watch the point where it decides to proceed,
+which is likely near where it loads the host string (`0x127d30`). Hooking `0x127d30` with
+a dump would show whether the object it is building is even populated by then.
