@@ -20,6 +20,7 @@ class Args:
     reply_index = 0
     fill = "all"
     shape = "map"
+    mirror_fill = "port"
     reply_type = 15
     reply_version = 2
 
@@ -133,6 +134,29 @@ class ShapeTest(unittest.TestCase):
             args.reply_type, args.reply_version = type_byte, version_byte
             reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
             self.assertEqual((reply[0], reply[1]), (type_byte, version_byte))
+
+    def test_mirror_keeps_the_record_shape_and_replaces_the_unset_markers(self):
+        args = Args()
+        args.shape = "mirror"
+        args.mirror_fill = "port"
+        reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+        # same record the client sent, so length and header are preserved
+        self.assertEqual(len(reply), len(PROBE29))
+        self.assertEqual(reply[0:2], PROBE29[0:2])
+        # the markers are 2-byte fields 2 apart; none may survive as 0xff00
+        self.assertNotIn(b"\xff\x00", reply[18:])
+        # and each became the mapped port, big-endian, as the fields are u16
+        self.assertEqual(int.from_bytes(reply[18:20], "big"), PEER[1])
+        self.assertEqual(int.from_bytes(reply[20:22], "big"), PEER[1])
+
+    def test_mirror_zero_clears_markers_and_keep_echoes(self):
+        args = Args()
+        args.shape = "mirror"
+        args.mirror_fill = "zero"
+        reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+        self.assertNotIn(b"\xff\x00", reply[18:])
+        args.mirror_fill = "keep"
+        self.assertEqual(stun_stub.build_reply(PROBE29, PEER, SERVER, args), PROBE29)
 
 
 class FillTest(unittest.TestCase):

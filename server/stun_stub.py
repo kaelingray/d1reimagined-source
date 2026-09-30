@@ -158,6 +158,27 @@ def build_0124_reply(packet, peer, server, args):
         return (bytes([args.reply_type, args.reply_version, 0])
                 + address_fields(peer[0], peer[1], args.byteorder))
 
+    if args.shape == "mirror":
+        # Echo the request's own fixed record, with its unset 0xff00 markers
+        # replaced. The captured 29-byte request is type 14, version 2, then 16
+        # zero bytes and an 11-byte tail `ff 00 ff 00 00 00 ff 00 ff 00 00`.
+        # The markers sit 2 bytes apart, so they are small fields (ports/flags)
+        # with 0xff meaning "unset" - NOT 6-byte address slots, so an address
+        # cannot be pasted in. --mirror-fill chooses what replaces them, since
+        # their real reply encoding is unknown (notes/final-build.md):
+        #   zero    keep the record but clear the markers
+        #   port    put the mapped port in each marker, as two big-endian bytes
+        #   keep    echo the request unchanged
+        out = bytearray(packet)
+        if args.mirror_fill == "keep":
+            return bytes(out)
+        marker = (b"\x00\x00" if args.mirror_fill == "zero"
+                  else struct.pack(">H", peer[1]))
+        for i in range(18, len(out) - 1):
+            if out[i] == 0xFF and out[i + 1] == 0x00:
+                out[i:i + 2] = marker
+        return bytes(out)
+
     # Mirror the request's keys. The -1 values are the client's unbound port
     # fields; fill them with the address this server saw the probe come from, so
     # the client has a mapped address to report onward.
@@ -220,15 +241,20 @@ def main():
     ap.add_argument("--fill", choices=["all", "one", "none"], default="all",
                     help="how many of the request's unbound (-1) port fields to fill with the "
                          "mapped port in a 01.24 map reply")
-    ap.add_argument("--shape", choices=["map", "binary", "index", "typeversion"], default="map",
+    ap.add_argument("--shape", choices=["map", "binary", "index", "typeversion", "mirror"],
+                    default="map",
                     help="reply layout for 01.24 map probes: mirror the request's keys (map), "
                          "the dispatch index plus a binary address (binary), the index alone "
-                         "(index), or the 01.00 type/version header (typeversion)")
+                         "(index), the 01.00 type/version header (typeversion), or the request's "
+                         "own record with its unset slots filled (mirror)")
     ap.add_argument("--reply-type", type=lambda v: int(v, 0), default=15,
                     help="first header byte of a --shape typeversion reply (the request is "
                          "type 14, so 15 is the usual success/response value)")
     ap.add_argument("--reply-version", type=lambda v: int(v, 0), default=2,
                     help="second header byte of a --shape typeversion reply")
+    ap.add_argument("--mirror-fill", choices=["zero", "port", "keep"], default="port",
+                    help="what replaces the 0xff00 unset markers in a --shape mirror reply: "
+                         "clear them (zero), the mapped port (port), or echo unchanged (keep)")
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")

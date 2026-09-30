@@ -531,6 +531,63 @@ in the `0x0e` request, i.e. the field layout at offsets 2..28 that we have never
 highest-value next task, and the PPU hook on `0xb4695c` with a wider dump is the tool for
 it.
 
+**The `0x0e` body layout, as far as the captured bytes go (RUN BODY).** Hooking
+`0xb4695c` with a 0x60-byte dump shows the packet buffer is **all zeros at function entry**
+(60/60 hits identical) - the type byte, the constant 2 and the body are all written inside
+it, so that address is the builder, not the send site, and it cannot be dumped usefully
+from an entry hook. The bytes that actually went out are however recorded exactly by the
+stub, and they are highly structured:
+
+```
+[0]      0e        type (14)
+[1]      02        version (2)
+[2 ..17] all zero  (16 bytes)
+[18]     ff 00     unset
+[20]     ff 00     unset
+[22]     00 00
+[24]     ff 00     unset
+[26]     ff 00     unset
+[28]     00        (odd byte)
+```
+
+Read as big-endian u16s from offset 2 the body is `0,0,0,0,0,0,0,0, 0xff00, 0xff00, 0,
+0xff00, 0xff00` - a **fixed 26-byte body with four `0xff00` markers**. The pattern says
+these are fields the client has no value for yet (an unbound socket/port, or a
+not-yet-known address), in the same way the earlier `-1` reading was an "unbound"
+sentinel. So the request is a fixed record asking the server to fill in four slots, and
+**the reply is presumably the same record with those slots populated** - a different shape
+from the short 9-byte address record we have been sending, and the most concrete reason
+the seven reply variants all failed.
+
+The four `0xff00` fields sit at offsets 18, 20, 24 and 26, with a plain zero at 22
+between them, so the record is not a simple array - there is structure around them worth
+reading in the client's own writer before the next run.
+
+**Corrected: the markers are 2-byte fields, not address slots (RUN MIRR).** The first
+implementation of `--shape mirror` treated them as 6-byte address slots and a unit test
+caught it immediately - offsets 18 and 20 are only 2 apart, so a 6-byte slot at each
+overlaps. They are small `u16` fields with `0xff` meaning "unset" (ports/flags), and an
+address cannot be pasted in. Implemented as `--mirror-fill zero|port|keep`:
+`port` puts the mapped port (0x0c02) big-endian in each marker, `zero` clears them,
+`keep` echoes unchanged. The reply is otherwise the client's own record, length and
+header preserved:
+
+```
+request  0e 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ff 00 ff 00 00 00 ff 00 ff 00 00
+mirror   0e 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 02 0c 02 00 00 0c 02 0c 02 00
+```
+
+Result: 21 probes, the reply delivered and well-formed, **still no BAP connection and
+still no sign-on request**. So even answering in the record's own shape, with its unset
+fields populated, does not move the client. That is the eighth reply variant ruled out,
+and it strengthens the earlier conclusion rather than overturning it: the STUN reply is
+not the gate, or the fields the client needs are not the ones carrying the `0xff` markers.
+
+I would not spend more of this route on reply shaping. The evidence now says the
+information needed is the *real* exchange - either a capture from the owner's own console,
+or a much deeper read of the client's STUN success path (the `stw` stores in the live
+jump-table branches at `0xb3724c`/`0xb372bc`/`0xb371e0`, none of which we have entered).
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
