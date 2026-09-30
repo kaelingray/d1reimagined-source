@@ -2425,3 +2425,46 @@ dumped, and compare `0x118`/`0x11c`/`0x128`/`0x12c` across hits. If `0x118` is p
 one value while the object stays all-zero, the client never advances its dispatch index
 and the question becomes "what advances `0x118`" - which is a single word, in a single
 structure, and the most tractable target found so far.
+**RUN DISP - the dispatch index reaches 3 and stops. This is the whole stall in one
+number.** Dumping `r28` (the connection state structure) at every dispatcher hit:
+
+```
+step  0:  idx=1  lower(0x11c)=0  gen(0x128)=1  upper(0x12c)=0
+step  1:  idx=2  lower=0           gen=2           upper=0
+step 32:  idx=3  lower=0           gen=3           upper=0     ... and stays
+
+max index reached: 3        distinct indices seen: [1, 2, 3]
+```
+
+`0x128` tracks `0x118` exactly - both go 1, 2, 3 - so the generation counter and the
+dispatch index advance together and then both stop. **`0x12c`, the upper bound, is 0**,
+and `0x11c`, the lower bound, is 0. With both bounds zero the loop never gets past the
+three states it does reach.
+
+That is the first time the stall has been reduced to a **single monotonic quantity that
+fails to advance**. Everything else observed is downstream of it:
+
+- `0x30` stays 0 because slot 10 (`0x366b24`) clears it every cycle;
+- `0x94` stays 0 because the deciding test reads it before the state that would set it;
+- the client parks in state 19 because the long path sees `0x30 != 5` and the gate sees
+  `0x30 != 21`;
+- the 10 -> 11 -> 12 handler cycle repeats because the index never leaves the range that
+  produces it.
+
+**So the question is now precisely: what advances `0x118(r28)` from 3 to 4?** It is one
+word, in one structure, written by code that has not been identified - but unlike `0x94`
+(which had 1,434 candidate writers across unrelated structs) this is a *specific* field
+of a *specific* object, and the search space is far smaller.
+
+Two notes on scope, so this is not over-read. `r26` at `0x356bd0` had **zero** hits, so the
+38-iteration bound from the previous section is real code but is not reached on this
+path - the bound is not what stops us. And `0x12c == 0` may mean "unset" rather than
+"zero-length range"; I have not distinguished those, and treating it as an upper bound of
+0 is the reading that fits but is not proven. Either way the actionable fact is the same:
+the index stops at 3.
+
+**Next.** Writers of `0x118(r*)`, restricted to stores near the other known fields of this
+structure so the search is not swamped the way `0x94` was - i.e. look for code touching
+`0x118`, `0x11c`, `0x128` and `0x12c` together, since they are evidently maintained as a
+set. That gives a small candidate list and, unlike the last four attempts, the candidates
+will be structurally related to the field rather than merely sharing an offset.
