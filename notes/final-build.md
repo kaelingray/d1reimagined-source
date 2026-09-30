@@ -1118,6 +1118,37 @@ stand-in log still shows only its "listening" banner, so nothing has connected t
 `127.1.1.127:12850` yet. That is a real, well-defined blocker and it is where the work
 should go next.
 
+**Confirmed visually (RUN PRESS3).** Screenshots taken during the pressed run settle what
+the client is doing, since the network logs alone could not:
+
+- `13:25:10` - the **BUNGIE logo on black**, i.e. the client is in its boot sequence
+  *after* the title prompt, not sitting on the prompt;
+- `13:27:34` and `13:29:27` - fully **black**, the content-manifest load / next stage.
+
+And the traffic over the whole 660-second pressed run: **one** SSLv3 SignOn, **one**
+content manifest, then nothing - no retry, no BAP connection. So the client completes
+sign-on cleanly, fetches the manifest, and then stops, still without touching
+`127.1.1.127:12850`.
+
+That is a very different picture from a few hours ago and it reframes the remaining work
+precisely:
+
+- the whole STUN investigation is **moot** - it ran before the client was ever started,
+  and the data-driven path it analysed is presumably the one that runs *after* sign-on;
+- sign-on and the content manifest are **solved on 01.24** with the existing stand-ins,
+  including the two patches and the 1,034 update packages;
+- the next gate is the BAP connection, and the black screen plus the complete absence of
+  traffic to 12850 says the client is either still loading the manifest's packages or has
+  stalled before dialling BAP.
+
+**Next session's first task:** run with `-PressSeconds` set past sign-on, watch for the
+first connection to `127.1.1.127:12850`, and if it does not come, hook what decides to
+dial BAP (the session address is already delivered in the SignOn reply, so the stand-in
+is being given the right endpoint). The `PS3_UPDATE` packages and the manifest coverage
+are the obvious suspects now that the client is actually getting this far - if it is
+loading the 1,034 packages on this machine that is a long, silent wait, and the answer may
+simply be more time rather than a new blocker.
+
 **The guard on the dormant path, one level up (`0x8aedc8`, one caller at `0x8aee28`).**
 The tick is not called unconditionally; the caller tests two fields of a module
 descriptor before entering:

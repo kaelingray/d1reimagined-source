@@ -98,9 +98,15 @@ try {
         $df = "$logs\$Name-dns-queries.log"
         if (Test-Path $df) { $dnsNames = @(Get-Content $df -ErrorAction SilentlyContinue).Count }
 
-        # the client leaving the STUN loop is the only thing worth stopping early for
-        if ($signonReqs -gt 0 -or $bapLines -gt 1) {
-            Write-Host "  progress: sign-on requests=$signonReqs bap=$bapLines" -ForegroundColor Green
+        # Only break on real progress, and only when we are not still pressing:
+        # after sign-on the client moves on to more setup screens that also need
+        # Cross, so stopping at the first sign-on request would end the run early.
+        if ($bapLines -gt 1) {
+            Write-Host "  BAP CONNECTED" -ForegroundColor Green
+            break
+        }
+        if (-not $pressUntil -and $signonReqs -gt 0) {
+            Write-Host "  progress: sign-on requests=$signonReqs" -ForegroundColor Green
             break
         }
 
