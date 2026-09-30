@@ -806,6 +806,37 @@ Point 2 is the cheapest test of all and should go first: make the stub's reply l
 distinct and see whether the handler's entry count changes with it. If it does not, the
 handler is on a timer and nothing we send is being parsed at all.
 
+**DONE (RUN LEN7 vs LENBIG): the handler is on a timer, and the reply length is
+irrelevant.** Two runs, identical except for the reply we send - a 7-byte `typeversion`
+reply and a 29-byte `mirror` reply - and every number matched exactly:
+
+| | probes | replies | handler `0xb36fd8` | table `0xb370e0` | `0x69ddb0` | sign-on | BAP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| LEN7 (7-byte reply) | 17 | 17 | 13 | 1 | 400 | 0 | 0 |
+| LENBIG (29-byte reply) | 17 | 17 | 13 | 1 | 400 | 0 | 0 |
+
+The handler is entered **13 times on a fixed cadence regardless of what arrives**. So
+those 13 entries are not "13 replies processed" - they are 13 timer ticks. The client's
+own probe count is 17 and the stub sees 17, so probes do go out, but the reply path is
+never driven by our datagram at all.
+
+That is the sharpest possible statement of where the work is, and it is consistent with
+the consumer never being called: **the client is not reading our replies.** The likely
+causes, in order of how cheaply they can be checked:
+
+1. the client expects the reply from an address other than the one it sent to - the stub
+   answers from `127.0.2.2:3074` (its own bind), while the client's socket is
+   `127.0.0.1:3074`, and a NAT-oriented client may require the reply to appear to come
+   from the server it dialled. This is very likely, and it is a one-line stub change:
+   answer the 4-byte probe from a socket bound to the *peer's* view, or check whether the
+   client discards datagrams whose source address differs from the socket it connected
+   to;
+2. the reply must arrive before some deadline the timer path is already past, so the
+   handler never re-reads the socket;
+3. the client is waiting on a different port entirely.
+
+Cause 1 is the one to test next, and it costs a single run.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
