@@ -957,6 +957,45 @@ faithful reading of the 01.24 binary and every run so far, but it is inference f
 failing configuration, and this last result says the missing piece is not in the reply
 path at all.
 
+**The consumer has a FOURTH caller, and this one is inside the machine that runs.** The
+call sites are `0xb337c8`, `0xb337f0` (both in `0xb3376c`), `0xb33ec0` (in the transport
+machine) - and `0xb33934`, which is in the *same* function as `0xb33ec0` and therefore
+does execute:
+
+```
+0xb33920  nop
+0xb33924  cmpwi  cr7, r3, 0x13     ; the getter's result == 19?
+0xb33928  bne    cr7, 0xb33880     ; no  -> straight back to the shared tail
+0xb3392c  clrldi r3, r29, 0x20
+0xb33930  li     r4, 1
+0xb33934  bl     0xb3376c          ; -> 0xb337a0 sets r4=1 -> the consumer
+0xb33938  b      0xb33880
+```
+
+This closes the loop and explains the whole session. The **real** progress path is:
+
+1. `0x69ddb0` returns **19**;
+2. the transport machine branches on exactly that (`cmpwi r3, 0x13`) to `0xb33934`;
+3. which calls `0xb3376c`, which calls the consumer with `r4 = 1`, which stores the
+   gate field and sets the flag.
+
+So the earlier readings were each right and the overall shape was wrong: 19 is not an
+error state to be avoided, it is **the value that unlocks the consumer**, and 18 is the
+parallel branch of the same test at `0xb339d8`. Our runs never reach either because the
+getter returns 0, and the getter returns 0 because the result record is never built
+(`0xb3e9e0`, zero hits).
+
+The `stw r0, 0x13` at `0xb370b0` that made 19 look like an error was the *same* constant
+reached by a different route - the handler's own out-of-range path - and the two meanings
+coincide numerically. That is why 19 could be read as either. The disassembly of the
+caller is decisive where the store alone was not.
+
+**This does not change the conclusion about the stand-in, but it sharpens it enormously:**
+the gate is the *getter's* value, the getter is fed by a result record that is never
+built, and the record is built by a chain with one caller that never executes. The
+question for the next session is now precisely "what makes `0xb3e9e0` run", and it is a
+much smaller question than "what should the reply contain".
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
