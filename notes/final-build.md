@@ -1592,3 +1592,45 @@ this, because the client is not waiting for input. The correct next move is to s
 BAP dial, not to press more keys - pressing is now provably useless (six presses, no
 change). The DLC entitlement gate at `0x36e92c` and the punch consumer are the two
 candidates to test first.
+**Manifest and packages ruled out as the cause of the spinner (2026-09-30).** Worth
+recording because it is a large class of suspicion eliminated cheaply, by inspecting what
+the client actually got rather than by running more variations.
+
+`manifest-final-smoke.bin` (15,964 bytes) is well formed: a msgpack stream whose entries
+carry 20-byte SHA-1 digests and 22-byte `ps3_<name>_<id>_<n>` package names, 311 in total.
+It includes every package the bootflow needs, not just the disc ones:
+
+```
+ps3_bootstrap_01a3_1                 ps3_investment_globals_012c_4 .. 0131_4
+ps3_client_bootstrap_patchabl_0172_2  ps3_investment_assets_0135_4 .. 0142_3
+ps3_client_startup_globals_018d_4     ps3_globals_0151_4, 0153_en_4, 0154_3 ...
+ps3_client_development_fallba_0180_0 ps3_globals_cinematic_01e3_2
+```
+
+and all 1,034 update packages are installed at the right sizes in the RPCS3 copy, with
+each of these specifically present:
+
+```
+ps3_investment_globals_012f_4        present
+ps3_client_bootstrap_patchabl_0172_2 present
+ps3_globals_0151_4                   present
+ps3_investment_assets_0135_4         present
+ps3_bootstrap_01a3_1                 present
+```
+
+So the content path is genuinely complete: the manifest is well formed, it names the
+bootstrap/investment/globals packages, and every one of them is on disk. That removes
+"the manifest is malformed", "the client is not offered the update packages" and "a
+required package is missing" as explanations, and it is consistent with the client's
+progress: it fetched the manifest with a 200 and moved on rather than erroring.
+
+What is left between the manifest and a menu is the BAP dial, unchanged from the last
+few runs. The DLC entitlement gate at `0x36e92c` calls `0x209340`, then `0x35cd7c` and
+`0x1cb82c` before testing the result, and the client is silent about it in the RPCS3 log
+- the `bootflow:check_media: NPDRM check failed.` / `bootflow:illegal_dlc_media` strings
+are not appearing, which is weak evidence the gate is passing rather than failing.
+
+The productive next step is therefore a hook on the BAP dial decision rather than more
+manifest or input work: find what has to be true for the client to call
+`start_connection` on `127.1.1.127:12850`, given the address is already delivered in the
+SignOn reply.
