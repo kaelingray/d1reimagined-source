@@ -11,11 +11,21 @@
 #
 # -BootSeconds is how long to let the client run before judging it. ~300 s is
 # enough to get past shader compilation and well into the STUN loop.
+#
+# -PressX drives the title screen. 01.24 gets as far as the startup network work
+# on its own, but the title screen is a Taken King / "Press X" prompt and the
+# stand-ins only get contacted *after* Cross, exactly as Invoke-TitanLogin.ps1 does
+# for 01.00. Without it the run measures the client sitting at a prompt. The press
+# loop stops as soon as the BAP stand-in shows sign-in traffic, so it costs nothing
+# once the client is past that point.
 param(
     [Parameter(Mandatory)][string]$Name,
     [string]$StunArgs = '',
     [string]$DnsArgs = '',
     [int]$BootSeconds = 300,
+    [int]$PressSeconds = 0,      # 0 = not used; else keep pressing Cross for this long
+    [int]$PressEverySeconds = 10,
+    [switch]$Shot,               # take a screenshot after the first Cross
     [string]$Local = 'F:\d1\lukespc-import\d1xenia\local',
     [string]$DataRepo = 'F:\d1\d1xenia-data',
     [switch]$KeepRpcs3          # leave the emulator up for interactive poking
@@ -66,8 +76,12 @@ try {
     $deadline = (Get-Date).AddSeconds($BootSeconds)
     $probes = 0; $replies = 0; $signonReqs = 0; $bapLines = 0; $dnsNames = 0
     $lastReport = Get-Date
+    $presses = 0
+    $nextPress = (Get-Date).AddSeconds(45)   # let it boot past shader compilation first
+    $pressUntil = if ($PressSeconds -gt 0) { (Get-Date).AddSeconds($PressSeconds) } else { $null }
+
     while ((Get-Date) -lt $deadline) {
-        Start-Sleep 20
+        Start-Sleep 5
         $sf = "$logs\$Name-stun.log"
         if (Test-Path $sf) {
             $s = @(Get-Content $sf -ErrorAction SilentlyContinue)
@@ -89,6 +103,19 @@ try {
             Write-Host "  progress: sign-on requests=$signonReqs bap=$bapLines" -ForegroundColor Green
             break
         }
+
+        # Cross at the title screen. Stop once the stand-ins see anything, or when
+        # the press window is over.
+        if ($pressUntil -and (Get-Date) -lt $pressUntil -and (Get-Date) -ge $nextPress) {
+            & "$repo\scripts\Send-RpcsKey.ps1" -Keys X -HoldMs 150 | Out-Null
+            $presses++
+            $nextPress = (Get-Date).AddSeconds($PressEverySeconds)
+            Write-Host ("  {0}  Cross #{1}" -f (Get-Date -Format HH:mm:ss), $presses) -ForegroundColor DarkCyan
+            if ($presses -eq 1 -and $Shot) {
+                try { & "$repo\scripts\Invoke-RpcsStep.ps1" -WaitSeconds 1 | Out-Null } catch {}
+            }
+        }
+
         if (((Get-Date) - $lastReport).TotalSeconds -ge 120) {
             Write-Host ("  {0}  probes={1} replies={2} dns={3} signon={4} bap={5}" -f `
                 (Get-Date -Format HH:mm:ss), $probes, $replies, $dnsNames, $signonReqs, $bapLines)

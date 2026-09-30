@@ -1069,6 +1069,55 @@ execution path in the client that our environment never triggers. Two things fol
    rather than on a poll). That is exactly the question a single capture from the owner's
    console answers, and nothing in the stand-in can.
 
+**SUPERSEDED BY RUN PRESS - THE CLIENT WAS AT THE TITLE SCREEN THE WHOLE TIME.** This is
+the answer to all of the above, and it is embarrassingly simple. Every run in this section
+launched the game and then **never pressed Cross**. 01.24 reaches the title screen and
+waits there; the stand-ins are only contacted *after* Cross, exactly as
+`Invoke-TitanLogin.ps1` drives 01.00 ("Cross at the title until the BAP stand-in answers
+sign-in"). So every "no sign-on request" observation was the client sitting at a prompt,
+and every conclusion about the STUN path was drawn from a run that had not started.
+
+RUN PRESS (adding a Cross press to the run wrapper, `-PressSeconds 330 -Shot`) changed
+everything on the second press:
+
+```
+13:24:59  Cross #1
+13:25:27  Cross #2
+progress: sign-on requests=13 bap=1
+```
+
+and the sign-on log shows the full chain completing for the first time on 01.24:
+
+```
+[443#1] ClientHello: SSLv3, 3DES/RC4/DES/export, no SNI, no extensions
+[443#1] SSLv3 established with cert for www8.signon.deadorbit.net: RSA_RC4_128_SHA
+[443#1] HTTP 'POST /SignOn?platform=ps3_ppu&build=51539.16.07.26.1808.v230' host=www8...
+[443#1] replied 200 SignOn success (246 bytes): session 127.1.1.127:12850
+[80#2]   HTTP 'GET /manifest HTTP/1.1' host='content.local.test'
+[80#2]   replied 200 content manifest (15964 bytes, unsigned)
+```
+
+So on 01.24, with the existing stand-ins and **no changes to any of them**: SSLv3
+handshake succeeds, **SignOn returns 200** and hands the client its BAP session, and the
+**content manifest is served**. Note the build string: `51539.16.07.26.1808.v230`, which
+confirms 01.24 (v230) is what is running.
+
+**What this means for the notes above.** Everything in this section about the STUN gate,
+the reply consumer, the module descriptor and the engine tick describes code that
+genuinely was not executing - but the reason it was not executing is that the client had
+not been told to leave the title screen, not that the reply was malformed. The nine reply
+variants are not disproven so much as *irrelevant*: the title screen was in the way. The
+lesson to record is procedural and worth more than any of the reverse engineering: **an
+unattended 01.24 run must press Cross**, and `Invoke-TitanLogin.ps1` already does this
+for 01.00, so the next session should start from `Invoke-Final124Run.ps1 -PressSeconds`
+rather than the bare smoke launcher.
+
+**New state, and the next real blocker.** With sign-on working, the client now has its
+BAP session address and the content manifest, and the next gate is BAP itself - the
+stand-in log still shows only its "listening" banner, so nothing has connected to
+`127.1.1.127:12850` yet. That is a real, well-defined blocker and it is where the work
+should go next.
+
 **The guard on the dormant path, one level up (`0x8aedc8`, one caller at `0x8aee28`).**
 The tick is not called unconditionally; the caller tests two fields of a module
 descriptor before entering:
