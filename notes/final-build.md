@@ -2347,3 +2347,28 @@ dispatch index register at the `0x366b24` hit (it is already dumped as `r5 = 0x1
 which is a pointer, so the real index is likely elsewhere) and hook the dispatch stub
 itself. Finding *where* the index comes from tells us which value would move the client
 off the 10 -> 11 -> 12 cycle, and that value is the whole game.
+**Attempted to delimit the table; the marker is too common, so treat slot indices as
+provisional.** `0x01891798` interleaves with the pointers, which suggested an
+8-byte-stride table of (function, marker) pairs. Walking it in both directions gives a
+32,849-slot span from `0x01849508` to `0x01889790`, which is not a dispatch table for
+anything - it is a general constant region that happens to alternate with pointers
+here. So:
+
+- **do not rely on the "+12" slot number** from the previous section. It is an offset
+  from an arbitrary choice of start, not a real index;
+- what *is* solid, because it came from execution rather than from table-walking: slots
+  `0x366b24`, `0x366b50` and `0x367090` fire 20/20/30 times in a repeating cycle, they
+  are the only handlers firing repeatedly, and slot 10's body provably clears `0x30` -
+  the field the dial gate reads. That part is measured, not inferred, and it stands.
+
+No code anywhere loads the table base directly either (`lis 0x185` + `addi 0x5b40`
+finds nothing), so the dispatch is indirect through an object vtable whose instance we
+have not located. Finding that instance is the real next step, and the cheapest route to
+it is the `r5 = 0x1c18c50` value already visible in the slot-12 dumps: that is a heap
+pointer present at the parking spot, so it is very likely the object holding the vtable.
+Dumping memory around `0x1c18c50` on the next run would show the table pointer itself and
+close the last gap in this line of enquiry.
+
+I want to be explicit that the "slot 12" framing was an over-reach on my part - it came
+from a plausible-looking table walk that turned out to be noise, and I am withdrawing it
+rather than leaving it to be trusted. The measured cycle underneath it is unaffected.
