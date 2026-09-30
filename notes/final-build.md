@@ -1634,3 +1634,27 @@ The productive next step is therefore a hook on the BAP dial decision rather tha
 manifest or input work: find what has to be true for the client to call
 `start_connection` on `127.1.1.127:12850`, given the address is already delivered in the
 SignOn reply.
+**The BAP dial has a concrete precondition (01.24, `0x363138`, read from the disassembly).**
+The string `Primary outbound BAP connection failed during start_connection` is referenced
+from exactly one place, and that function shows the two values the client requires before
+it will even attempt the outbound connection:
+
+```
+0x363148  ori   r31, r3, 0          ; the BAP connection object
+0x36314c  lwz   r3, 0x30(r31)       ; state field
+0x363150  cmpwi r3, 0x15            ; 21
+0x363154  beq   0x363164            ; == 21 -> carry on, otherwise fail out
+0x363164  lwz   r3, 0x34(r31)       ; a second state field
+0x363168  cmpwi r3, 3               ; 3
+0x36316c  beq   0x3632d4            ; == 3 -> carry on
+```
+
+So the dial requires `0x30 == 21` and `0x34 == 3` on the BAP connection object. Neither
+is something a stand-in can set - the client sets them from its own state machine, which
+is fed by the NAT punch (`network_bap_nat_punch_queue`, `waiting_for_bap_refresh`). That
+is the same structural finding as the STUN gate, one level up and now with the exact
+numbers attached, and it is a concrete hook target: watch the BAP connection object and
+see which of the two fields is wrong.
+
+It also explains the punch sweep's flat result without needing the reply shape to matter:
+whatever the reply does, these two fields never reach 21/3 in our environment.
