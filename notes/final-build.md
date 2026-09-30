@@ -2044,3 +2044,47 @@ is not re-litigated.
 resolve. A cheap way to find that is to watch the point where it decides to proceed,
 which is likely near where it loads the host string (`0x127d30`). Hooking `0x127d30` with
 a dump would show whether the object it is building is even populated by then.
+**RUN HOST - a tool bug was masking the real code, and the picture inverts.** Hooking
+where the upload object is built:
+
+```
+0x127d30  where it loads the host string pointer : 0 hits
+0x127e40  where it loads '/ticket_drop'         : 0 hits
+0x127100  the function entry                    : 200 hits
+```
+
+`0x127100` runs 200 times and never reaches the code that builds the upload request. Two
+things were wrong in how I had been reading this, and both had to be fixed before the
+result meant anything.
+
+**First, a real bug in `d1_eboot.py`.** `Eboot.read()` returns short at a page boundary,
+so every scan of `0x127100` was silently truncated at 3,120 bytes - exactly at `0x127d30`.
+The apparent "no early return in `0x127100`" and the truncation were the same fault: the
+host-string load at `0x127d30` sat precisely at the end of the readable window, so it
+looked like the function ended there. Re-reading a page-aligned window shows real
+instructions continuing past it:
+
+```
+0x00127d2c  stw    r25, 0xc50(r6)
+0x00127d30  addic  r10, r3, 0x6598   <- the host string pointer
+0x00127d34  stw    r25, 0xc54(r6)
+```
+
+**Second, and the actual finding: nothing inside `0x127100` branches or calls into
+`0x127d00-0x127d30`.** I scanned every branch in the whole function for a target in that
+range and found none, yet `d1_eboot.py func 0x127d30` reports `0x127100 .. 0x1298f0` with
+2,556 instructions - it believes they are one function. The linear-disassembly heuristic
+is merging two functions that the control flow does not connect. **So `0x127100` is not
+"bailing out early"; the upload-object code is simply not part of it, and `0x127100`
+being hit 200 times says nothing about the upload.**
+
+This retires the "the upload function runs 200 times" finding from the previous section
+as well - it was measuring the wrong function. The honest current state is narrower:
+`0x127d30` and `0x127e40`, which actually reference the upload host and path, are never
+reached, and we do not yet know who calls them.
+
+**Concrete next step, now that this is isolated.** Find the callers of `0x127d00`
+properly, by scanning the whole image for branches to it rather than trusting the merged
+function boundary. That gives the real entry point of the upload builder, and its caller
+is what to hook next. The `d1_eboot.py` truncation is worth fixing at the same time -
+it will silently mislead any other scan that crosses a page.
