@@ -1911,12 +1911,12 @@ changing the input to a stage that this run is not entering. The upload is downs
 the punch in the code, and the run is dying upstream of it.
 
 **Where the evidence lives.** The hook lines from all three runs are kept, trimmed to the
-watched addresses, in `local/RESEARCH/final124-hooks/`:
+watched addresses, in `notes/evidence/`:
 
 ```
-RUN_LOOP-rpcs3.log.hooksonly.txt   the looping-vs-waiting run
-RUN_W94-rpcs3.log.hooksonly.txt    the 0x94 measurement, with the 0x100 byte object dump
-RUN_W94B-rpcs3.log.hooksonly.txt   the ten 0x94 writers, all silent
+RUN_LOOP-hooks.txt               the looping-vs-waiting run
+RUN_W94-hooks.txt                the 0x94 measurement, with the 0x100 byte object dump
+RUN_W94B-hooks.txt               the ten 0x94 writers, all silent
 ```
 
 **Next, precisely.** The question is no longer "what sets 0x94" - it is "what calls the
