@@ -1800,3 +1800,47 @@ the sequence completes successfully, and the sequence's own condition (`0x30 == 
 never satisfied. Nothing in the stand-ins is implicated by any of this: the network
 exchange is complete and correct at every step that has been measured, and the gap is
 entirely inside the client's own BAP connection lifecycle.
+**RUN W5 - which writer sets 0x30 = 5, and the condition that chooses it.** Four
+writers of the value 5 exist; two of them fire in our runs (both at their hit cap):
+
+```
+0x362b98  50 hits      0x365fdc   0 hits
+0x366ea4  50 hits      0x366fc4   0 hits
+```
+
+`0x366ea4` is the one that matters, and the selector immediately before it is three
+branches that all target it:
+
+```
+0x366df8  lwz   r4, 0x94(r3)     ; a field on the same object
+0x366dfc  cmpwi r4, 1
+0x366e00  beq   0x366e2c         ; == 1  -> carry on with the sequence
+0x366e04  cmpwi r4, 0
+0x366e08  bne   0x366ea4         ; != 0 (and not 1) -> park
+0x366e10  ...                   ; == 0 falls through to its own test
+0x366e18  beq   0x366ea4
+0x366e28  bne   0x366ea4
+...
+0x366ea4  li    r3, 5
+0x366ea8  stw   r3, 0x30(r22)    ; the value that makes 0x367090 park in state 19
+0x366eac  b     0x367088
+```
+
+**So the whole 01.24 BAP gate reduces to one word.** The client completes its BAP
+startup sequence and then checks `0x94(r3)`:
+
+- `0x94 == 1` -> it carries on, and eventually the writer at `0x366348` emits 21, which
+  the dial gate at `0x363138` accepts, and BAP is connected;
+- anything else (0, or another value) -> `0x30` is set to 5, `0x367090` parks the client
+  in state 19, and the gate is never satisfied. Which is what every run does.
+
+`0x94` is a *result* field, not a state: it is the outcome of the NAT punch that the
+STUN exchange feeds. The earlier work and this are the same problem seen from both ends -
+the punch result is never 1 because the STUN reply is never accepted - and the punch
+sweep's flat result is now explained rather than mysterious.
+
+**The single highest-value next experiment** is to hook `0x366df8` and read `0x94(r3)` at
+that point, to confirm it is neither 1 nor a value we could influence from the network.
+If it is 0 (rather than an error code), that says the punch is simply incomplete; if it is
+an error, the error value names the failure. Either way it is one hook, and it is the last
+one between "STUN reply" and "BAP connected".
