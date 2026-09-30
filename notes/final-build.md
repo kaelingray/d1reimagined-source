@@ -1478,3 +1478,39 @@ disc manifest generator. Whether the client registers these update-only IDs from
 content manifest or separately from installed patch metadata is **UNKNOWN**. On the first
 run, preserve the sign-on manifest reply and package-registration lines before changing
 the manifest; this count narrows a likely failure if the new content does not load.
+
+**RUN LONG1 - the loop is visible now that sign-on works.** A 25-minute pressed run with
+sign-on reached, the timeline is unambiguous from the log timestamps alone:
+
+    13:42:46  stack up
+    13:43:29  Cross #1        (booted past shader compilation)
+    13:43:34  resolves the 20 STUN names
+    13:43:58  Cross #2
+    13:44:06  resolves www5.signon.deadorbit.net  -> sign-on
+    13:44:07  resolves content.local.test        -> GET /manifest, 200
+    13:44:00 onwards   STUN probes continue, every 15 s
+    13:48:55  30 probes / 29 replies / 13 sign-on / BAP: still just its listening banner
+    13:50:06  the STUN log is still being written
+
+The connect targets over the whole run are `127.0.0.1:53` (23), `192.168.0.1:1900` (9),
+`127.0.1.5:443` (1) and `127.0.0.1:80` (1) - **and never `127.1.1.127:12850`.** The client
+never even attempts BAP.
+
+**So the picture is now complete, and it is a single loop:** sign-on succeeds, the manifest
+is served, and then the client goes back to STUN and stays there - 34 probes, 33 replies,
+BAP never touched - while Cross is pressed throughout (22 presses, no effect, because it
+is not waiting for input). This is `network_bap_nat_punch_queue` never draining:
+Demonware will not open the BAP connection until the punch completes, and the punch is
+exactly what the unaccepted STUN reply prevents.
+
+That finally joins both halves of the session into one causal chain, and it is testable in
+a way the earlier runs were not, because now sign-on and the manifest are out of the way:
+
+> sign-on (solved) -> manifest (solved) -> **STUN reply not accepted** -> NAT punch never
+> completes -> `waiting_for_bap_refresh` never returns -> BAP never dialled.
+
+**The next experiment is narrow and well-posed:** with Cross pressed so the client gets
+past the title screen, re-run the STUN reply variants and look for the first connection to
+`127.1.1.127:12850` rather than for the field values. `bap_server.py`'s framing is
+documented as taken from 01.00, so if a punch does complete, the shello handshake is the
+next thing to verify.
