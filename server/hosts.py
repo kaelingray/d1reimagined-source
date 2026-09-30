@@ -16,6 +16,28 @@ for domain in ("deadorbit.net", "gravityshavings.net"):
     for n in range(1, 9):
         STUN_HOSTS[f"stun{n}.signon.{domain}"] = STUN_IP
 
+# 01.24 walks all 20 of these names, and the STUN dispatch bounds-check accepts
+# 0..0x13 (also 20), indexed by a counter that advances 1,2,3... as the client
+# works through the list. Sharing one address may leave it unable to tell the
+# hosts apart, so distinct_stun_hosts() hands out one loopback address per name
+# in that order; the stub can bind the same range with --bind-count.
+STUN_HOST_ORDER = (
+    [f"destiny-stun.{region}.demonware.net" for region in ("us", "eu", "jp", "au")]
+    + [f"stun{n}.signon.{domain}"
+       for domain in ("deadorbit.net", "gravityshavings.net")
+       for n in range(1, 9)]
+)
+
+
+def distinct_stun_hosts(first_octet=2, start=2):
+    """{name: '127.0.2.<n>'} giving each 01.24 STUN name its own loopback address.
+
+    The stub binds the same range with --bind-count, so the client sees 20
+    different STUN servers instead of one address answering for all of them.
+    """
+    return {name: f"127.0.{first_octet}.{start + i}"
+            for i, name in enumerate(STUN_HOST_ORDER)}
+
 SIGNON_HOSTS = {}
 for n in range(1, 10):
     SIGNON_HOSTS[f"www{n}.signon.deadorbit.net"] = f"127.0.1.{n}"

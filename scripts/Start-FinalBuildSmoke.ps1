@@ -23,6 +23,7 @@ param(
     # second value of a [string[]] parameter to the *next* parameter instead of
     # appending it, so a space-separated list cannot be passed this way.
     [string]$StunArgs = '',
+    [string]$DnsArgs = '',
     [switch]$Run
 )
 $ErrorActionPreference = 'Stop'
@@ -34,6 +35,10 @@ if ($PublicIp -ne '') { $signonArguments += @('--public-ip', $PublicIp) }
 # '-StunArgs' arrives as one semicolon separated token; split it here.
 $stunArguments = @()
 if ($StunArgs) { $stunArguments = @($StunArgs -split ';' | Where-Object { $_ }) }
+
+# '-DnsArgs' likewise (e.g. '--stun-distinct').
+$dnsArguments = @()
+if ($DnsArgs) { $dnsArguments = @($DnsArgs -split ';' | Where-Object { $_ }) }
 
 $data = (Resolve-Path -LiteralPath $DataRepo).Path
 $types = Join-Path $data 'ps3_updates\types_01.24.json'
@@ -72,7 +77,7 @@ $previousUsrdir = $env:D1_USRDIR
 try {
     $env:D1_RPCS3 = $rpcs3
     $env:D1_USRDIR = $usrdir
-    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -BapArgs @(
+    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -DnsArgs $dnsArguments -BapArgs @(
         '--universe-time', 's', '--self-flags', '1;2@B0,C0-1023',
         '--schema', $types, '--services-schema', $services,
         '--activity-schema', $types)

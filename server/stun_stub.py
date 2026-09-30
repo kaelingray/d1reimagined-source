@@ -19,6 +19,7 @@ to 127.0.0.2, because RPCS3 holds the game's own 0.0.0.0:3074.
 import argparse
 import datetime
 import ipaddress
+import select
 import socket
 import struct
 import sys
@@ -131,22 +132,35 @@ def build_0124_reply(packet, peer, server, args):
     pairs = parse_mp_map(packet)
     if pairs is None:
         return None
+    if args.reply_index < 0:
+        return None
 
-    # Mirror the request's own keys. Any value of -1 is a "not bound" port; fill
-    # the first such slot with the address the server saw, so the client has a
-    # mapped address to report onward. This is the minimal informative answer.
-    if args.reply_index >= 0:
-        out = _mp_fixmap_header(len(pairs))
-        first_port = True
-        for key, value in pairs:
-            new_value = value
-            if value == -1 and first_port:
-                new_value = peer[1]
-                first_port = False
-            out += _mp_int(key) + _mp_int(new_value)
-        # the dispatch word: the client reads the first 4 bytes as an index
-        return out
-    return None
+    # Mirror the request's keys. The -1 values are the client's unbound port
+    # fields; fill them with the address this server saw the probe come from, so
+    # the client has a mapped address to report onward.
+    #
+    # --fill all|one|none chooses how many of them to fill. "all" is the default:
+    # the client reports several sockets at once and leaving any of them unbound
+    # leaves it retrying (observed: it stops the 4-byte probe and then repeats the
+    # map forever). "one" is the earlier, minimal behaviour and "none" echoes the
+    # request unchanged.
+    if args.fill == "none":
+        values = [v for _, v in pairs]
+    elif args.fill == "one":
+        values, done = [], False
+        for _, v in pairs:
+            if v == -1 and not done:
+                values.append(peer[1])
+                done = True
+            else:
+                values.append(v)
+    else:
+        values = [peer[1] if v == -1 else v for _, v in pairs]
+
+    out = _mp_fixmap_header(len(pairs))
+    for (key, _), value in zip(pairs, values):
+        out += _mp_int(key) + _mp_int(value)
+    return out
 
 
 def build_reply(packet, peer, server, args):
@@ -168,6 +182,10 @@ def build_reply(packet, peer, server, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bind", default="127.0.0.2")
+    ap.add_argument("--bind-count", type=int, default=0,
+                    help="answer on this many consecutive loopback addresses starting at "
+                         "--bind (01.24 walks a 20-name STUN list and may need each name to "
+                         "look like a separate server)")
     ap.add_argument("--port", type=int, default=3074)
     ap.add_argument("--log-only", action="store_true", help="record probes without answering")
     ap.add_argument("--byteorder", choices=["little", "big"], default="little",
@@ -176,28 +194,51 @@ def main():
     ap.add_argument("--reply-index", type=int, default=0,
                     help="01.24 dispatch index to answer 01.24 probes with (-1 = stay silent); "
                          "the client reads this from the reply's first word and accepts 0..19")
+    ap.add_argument("--fill", choices=["all", "one", "none"], default="all",
+                    help="how many of the request's unbound (-1) port fields to fill with the "
+                         "mapped port in a 01.24 map reply")
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((args.bind, args.port))
-    server = sock.getsockname()
-    mode = "log-only" if args.log_only else f"answering, byteorder={args.byteorder}, echo_version={args.echo_version}"
-    print(f"STUN stub on {server[0]}:{server[1]} ({mode})", flush=True)
+    # 01.24 walks a 20-name STUN list, so it may need each name to look like a
+    # different server; --bind-count answers on that many consecutive loopback
+    # addresses from one process (127.0.2.2, 127.0.2.3, ...). A single address
+    # is the 01.00 behaviour and still the default.
+    addresses = [args.bind]
+    if args.bind_count > 0:
+        first = ipaddress.IPv4Address(args.bind)
+        octets = str(first).rsplit(".", 1)[0]
+        addresses = [f"{octets}.{first.packed[-1] + n}" for n in range(args.bind_count)]
+        for a in addresses:
+            if not ipaddress.ip_address(a).is_loopback:
+                sys.exit(f"refusing to bind a non-loopback address: {a}")
 
+    socks = []
+    for a in addresses:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind((a, args.port))
+        socks.append(s)
+    mode = "log-only" if args.log_only else f"answering, byteorder={args.byteorder}, echo_version={args.echo_version}"
+    print(f"STUN stub on {', '.join(s.getsockname()[0] for s in socks)}:{args.port} ({mode})", flush=True)
+
+    # one select() over every bound socket, so several addresses share the log
+    readable, _, _ = select.select(socks, [], [])
     while True:
-        packet, peer = sock.recvfrom(2048)
-        stamp = datetime.datetime.now().isoformat(timespec="milliseconds")
-        print(f"{stamp} <- {peer[0]}:{peer[1]} len={len(packet)} {packet.hex(' ')}", flush=True)
-        if args.log_only:
-            continue
-        reply = build_reply(packet, peer, server, args)
-        if reply is None:
-            print(f"{stamp}    (no reply: unknown type {packet[:1].hex()})", flush=True)
-            continue
-        sock.sendto(reply, peer)
-        print(f"{stamp} -> {peer[0]}:{peer[1]} len={len(reply)} {reply.hex(' ')}", flush=True)
+        for sock in readable:
+            packet, peer = sock.recvfrom(2048)
+            server = sock.getsockname()
+            stamp = datetime.datetime.now().isoformat(timespec="milliseconds")
+            print(f"{stamp} <- {peer[0]}:{peer[1]} len={len(packet)} {packet.hex(' ')}", flush=True)
+            if args.log_only:
+                continue
+            reply = build_reply(packet, peer, server, args)
+            if reply is None:
+                print(f"{stamp}    (no reply: unknown type {packet[:1].hex()})", flush=True)
+                continue
+            sock.sendto(reply, peer)
+            print(f"{stamp} -> {peer[0]}:{peer[1]} len={len(reply)} {reply.hex(' ')}", flush=True)
+        readable, _, _ = select.select(socks, [], [])
 
 
 if __name__ == "__main__":

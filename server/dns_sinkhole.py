@@ -64,6 +64,9 @@ def main():
                     help="answer NAME with IP instead of --answer (repeatable; IP must be loopback)")
     ap.add_argument("--destiny-hosts", action="store_true",
                     help="apply hosts.ALL_OVERRIDES (STUN, per-host sign-on and Demonware loopback addresses)")
+    ap.add_argument("--stun-distinct", action="store_true",
+                    help="give each 01.24 STUN name its own loopback address instead of sharing "
+                         "one (the client walks a 20-name list; pair with stun_stub --bind-count)")
     ap.add_argument("--log", type=Path, help="append query log to this file as well as stdout")
     args = ap.parse_args()
 
@@ -74,6 +77,10 @@ def main():
     items = list(args.override)
     if args.destiny_hosts:
         items = [f"{k}={v}" for k, v in hosts.ALL_OVERRIDES.items()] + items
+    if args.stun_distinct:
+        # added after ALL_OVERRIDES so these per-name entries win over the shared
+        # STUN_IP the module-level STUN_HOSTS table sets.
+        items += [f"{k}={v}" for k, v in hosts.distinct_stun_hosts().items()]
     for item in items:
         name, _, ip = item.partition("=")
         addr = ipaddress.IPv4Address(ip)

@@ -18,6 +18,7 @@ class Args:
     byteorder = "little"
     echo_version = False
     reply_index = 0
+    fill = "all"
 
 
 PEER = ("127.0.0.1", 3074)
@@ -85,6 +86,37 @@ class ReplyTest(unittest.TestCase):
         self.assertEqual(ip_discovery[:3], bytes([31, 2, 0]))
         nat_discovery = stun_stub.build_reply(bytes([20, 2, 0, 0]), PEER, SERVER, Args())
         self.assertEqual(nat_discovery[:3], bytes([21, 2, 0]))
+
+
+class FillTest(unittest.TestCase):
+    """--fill decides how many of the request's unbound (-1) ports are answered."""
+
+    def sentinels(self, pairs):
+        return [i for i, (_, v) in enumerate(pairs) if v == -1]
+
+    def test_all_fills_every_unbound_port(self):
+        args = Args()
+        args.fill = "all"
+        pairs = stun_stub.parse_mp_map(stun_stub.build_reply(PROBE29, PEER, SERVER, args))
+        holes = self.sentinels(stun_stub.parse_mp_map(PROBE29))
+        self.assertTrue(holes, "the captured probe should contain -1 sentinels")
+        for i in holes:
+            self.assertEqual(pairs[i][1], PEER[1])
+
+    def test_one_fills_only_the_first(self):
+        args = Args()
+        args.fill = "one"
+        pairs = stun_stub.parse_mp_map(stun_stub.build_reply(PROBE29, PEER, SERVER, args))
+        holes = self.sentinels(stun_stub.parse_mp_map(PROBE29))
+        self.assertEqual(pairs[holes[0]][1], PEER[1])
+        for i in holes[1:]:
+            self.assertEqual(pairs[i][1], -1)
+
+    def test_none_echoes_the_request(self):
+        args = Args()
+        args.fill = "none"
+        reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+        self.assertEqual(stun_stub.parse_mp_map(reply), stun_stub.parse_mp_map(PROBE29))
 
 
 def struct_ints(buf):

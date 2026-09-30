@@ -178,6 +178,49 @@ body**: what the client expects the parsed map to contain for the stage to advan
 bound, and a reply that fills the *right* ones (rather than the first) is the next thing
 to try. `stun_stub.py --reply-index -1` is available as the silent control.
 
+**The counter is a STUN *host* index, not a stage (strong correlation, 2026-09-30).**
+Run A01 resolved exactly **20** STUN names - `destiny-stun.{us,eu,jp,au}.demonware.net`
+(4) plus `stun1..8.signon.{deadorbit,gravityshavings}.net` (16) - and the dispatch
+bounds check at `0xb3707c` accepts `0..0x13`, i.e. **exactly 20 values**, indexing the
+20-entry table at `0xb370fc`. Under the hook the counter ran `1,2,3,...10` and never
+reached `0x0e`; with a 400-hit watch cap the failure branch at `0xb37168` (which stores
+`0x0e`) was **never hit**. So the word at `0(r3)` advances per host as the client works
+through its list, and the client is **stuck retrying hosts, not failing a sub-step**.
+
+That reframes the experiment: there is no single "right" index to send, and `--fill` (all
+unbound ports answered) changed nothing either - 47 probes, 5 short + 42 map, BAP still
+silent. The next thing to determine is which host the client is on when it stops making
+progress, and whether it needs replies from *every* host in the list (a single STUN
+server may have to answer as all 20 names, or the DNS sinkhole may need to hand out
+distinct addresses per name so the client sees a consistent mapping).
+
+**Distinct-address experiment (RUN DISTINCT) - negative, and it corrects the host-index
+guess.** `dns_sinkhole.py --stun-distinct` and `stun_stub.py --bind-count 20` were added
+so each of the 20 names resolves to its own address (127.0.2.2 .. 127.0.2.21) and is
+answered by a real separate socket. Verified: all 20 DNS answers were distinct and the
+stub reported all 20 bound. Result:
+
+- **zero** STUN packets reached the stub (1 line in its log: the banner)
+- the handler still ran 88 times, and the counter still only ever took the values
+  `1..10` and then **repeated** - it never went 11..20, and never reached `0x0e`
+- 50 `sys_net_bnet_sendto` calls, 23 connects, no `ENOTCONN`
+
+So the word at `0(r3)` is **not** a host index either: with every host on its own address
+the count still stops at 10 and cycles, where 20 addresses would have allowed 1..20. It
+is a retry/sub-step counter bounded at 10, and the client gives up and restarts rather
+than advancing. The packets that never arrive are `len=47` on socket 26 with
+`addrlen=0` - a different, unconnected send, not either of the two probe shapes, so
+something beyond the STUN probe is being attempted here and nothing is listening for it.
+
+**Where this leaves 01.24.** The startup path to `bootflow:bap_signin` is solid
+(confirmed by three independent capture sets), the content/package path is solved (1,034
+packages installed, preflight green), and STUN is no longer simply ignored - replies are
+parsed and change client behaviour. But the client does not accept the reply as success,
+and the next unknown is the **reply body** (what the parsed map must contain to move the
+stage past its current stop), plus that unconnected 47-byte send. Neither is guessable
+from the notes; both need either more static analysis of the map parser or a lawful
+capture of a real STUN exchange from the owner's console.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the

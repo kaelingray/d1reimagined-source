@@ -8,6 +8,7 @@ param(
     [string[]]$LobbyArgs = @(),
     [string[]]$SignonArgs = @(),
     [string[]]$StunArgs = @(),   # 01.24 answers the MessagePack probes; --reply-index picks the dispatch word
+    [string[]]$DnsArgs = @(),   # e.g. '--stun-distinct' to give each STUN name its own address
     [switch]$NoGame
 )
 . "$PSScriptRoot\Paths.ps1"
@@ -33,7 +34,7 @@ function Start-Service([string]$Tag, [string[]]$ArgList) {
 if (-not (Get-Process rpcn -ErrorAction SilentlyContinue)) {
     Start-Process -FilePath "$root\RPCN_LOCAL\rpcn.exe" -WorkingDirectory "$root\RPCN_LOCAL" -WindowStyle Hidden
 }
-Start-Service dns @('server/dns_sinkhole.py', '--destiny-hosts', '--log', "$logs\$Name-dns-queries.log")
+Start-Service dns (@('server/dns_sinkhole.py', '--destiny-hosts', '--log', "$logs\$Name-dns-queries.log") + $DnsArgs)
 Start-Service stun (@('server/stun_stub.py') + $StunArgs)
 Start-Service signon (@('server/signon_probe.py', '--mode', 'auth3', '--destiny-hosts',
     '--manifest-url', 'http://content.local.test/manifest', '--manifest-packages', "$usrdir\packages") + $SignonArgs)
