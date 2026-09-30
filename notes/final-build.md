@@ -1844,3 +1844,48 @@ that point, to confirm it is neither 1 nor a value we could influence from the n
 If it is 0 (rather than an error code), that says the punch is simply incomplete; if it is
 an error, the error value names the failure. Either way it is one hook, and it is the last
 one between "STUN reply" and "BAP connected".
+**RUN W94 - the deciding word measured: 0x94 == 0, and the object names a host we do
+not sinkhole.** Hooking `0x366df8` (200 hits) and dumping 0x100 bytes of the object:
+
+```
+0x30 = 0        (the gate wants 21)
+0x34 = 0        (the gate wants 3)
+0x94 = 0        (the test wants 1)
+strings in the object: 'dm-partnernet.upload.deadorbit.net' and '/ticket_drop'
+```
+
+Both string constants are real and present in **both** builds (`/ticket_drop` is at
+`0x011bdc01` in 01.00 and `0x012d65c0` in 01.24, `dm-partnernet.upload.deadorbit.net`
+at `0x012d6598` in 01.24), so this is long-standing Demonware plumbing, not something
+01.24 introduced. It is an upload endpoint: the client holds a host and a path it
+intends to POST to, and `0x94` is the success flag for that step. It reads 0, so the step
+never succeeded, and that is the single word standing between the run and BAP.
+
+**A real gap found on the way, though it is not the current blocker.**
+`dm-partnernet.upload.deadorbit.net` is in **none** of the host tables
+(`hosts.py` knows 48 names; 17 contain `deadorbit`, and this one is not among them). If
+the client ever does resolve it, the sinkhole would not answer and the lookup would go to
+the real internet - which the project's data policy forbids. Worth adding to
+`ALL_OVERRIDES` as a precaution even though it is not why this run fails.
+
+It is **not** why this run fails, and it is important not to overclaim here: the DNS log
+for the run lists every lookup the client actually made - the 20 STUN names,
+`www6.signon.deadorbit.net` and `content.local.test` - and `dm-partnernet` is **not** among
+them. So the host is held in the object as configuration, not contacted. The client never
+gets far enough to use it. Adding the override is correct hygiene; it is not a fix.
+
+**State of the 01.24 gate, now fully mapped.** One word decides it:
+
+```
+STUN exchange -> NAT punch -> upload/ticket_drop step -> 0x94 == 1?
+                                                            |
+                                        yes: 0x366348 writes 21 -> 0x363138 dials BAP
+                                        no:  0x366ea4 writes 5  -> 0x367090 parks in state 19
+```
+
+`0x94` is 0, so the client parks. Everything upstream is verified working: the title
+screen, SSLv3 sign-on 200, the manifest, and the 1,034 packages. The next task is to find
+what performs the `/ticket_drop` step and sets `0x94` - and because it is an upload, the
+stand-in may well need to *serve* that endpoint, which would finally be a thing the
+network side can do rather than a thing it can only observe. That is the first lead in
+this project that suggests the fix is on our side of the wire.
