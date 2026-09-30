@@ -1658,3 +1658,52 @@ see which of the two fields is wrong.
 
 It also explains the punch sweep's flat result without needing the reply shape to matter:
 whatever the reply does, these two fields never reach 21/3 in our environment.
+**RUN W21 - the BAP state machine walks to 19 and stops. This is the whole blocker, measured.**
+
+Hooking the writer, both of its arms, the state setter it calls, and the gate:
+
+```
+0x366348  the writer (chooses 21 vs 22)  : 0 hits
+0x366350  the 'send 21' arm               : 0 hits
+0x36635c  the 'send 22' arm               : 0 hits
+0x356494  the state setter                : 9 hits
+0x363138  the dial gate                   : 200 hits
+```
+
+The writer never runs, but its callee does - from nine *other* call sites, and the state
+argument at each one is the client's own BAP connection state:
+
+```
+lr=0x3664b0  r3 = 0x02
+lr=0x3642e8  r3 = 0x03     <- the value the gate wants at 0x34!
+lr=0x365d74  r3 = 0x04
+lr=0x367708  r3 = 0x06
+lr=0x3672d0  r3 = 0x07
+lr=0x365b10  r3 = 0x08
+lr=0x36274c  r3 = 0x0d
+lr=0x364f0c  r3 = 0x12
+lr=0x3670b8  r3 = 0x13     <- where it stops
+```
+
+So the client advances its BAP connection through **2 -> 3 -> 4 -> 6 -> 7 -> 8 -> 13 ->
+18 -> 19** and then stops, with the gate (`0x363138`, 200 entries) checking a field that
+never becomes 21. The `0x34 == 3` half of the gate *is* satisfied during that walk - state 3
+is passed - but the run ends at 19, and the only code that ever writes 21 (`0x366350`) is
+never reached.
+
+**This is the most precise statement of the blocker so far and it is a client-side
+sequence, not a stand-in problem.** The nine transitions are the BAP connection's own
+lifecycle, and the walk stalls two states short of the one that permits the dial. Combined
+with `waiting_for_bap_refresh` and `network_bap_nat_punch_queue` in the same binary, the
+reading is that the sequence is waiting on the NAT punch completing, and the punch is what
+the unaccepted STUN reply prevents - so the STUN work and the BAP gate are the same
+problem, which is where this session ended up after starting on a different theory.
+
+The next session has a single concrete target, and it is the best-defined one in the
+whole project: **find what makes the client move from state 19 to state 21 at
+`0x366350`, or find the transition 19 -> 21 that this hook list has not caught.** The
+`lr` of each setter call above is a vtable slot, so the natural tool is a broader watch on
+`0x356494` with more hits allowed (it hit its 9-hit cap behaviour early) plus the
+callers of the nine sites, and the state-19 handler specifically. Nothing in the
+stand-ins can move this forward; it is a client state machine, and the state numbers are
+now known.
