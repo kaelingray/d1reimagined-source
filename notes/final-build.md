@@ -417,6 +417,55 @@ flag.** The next concrete steps, in order:
 3. the 01.00 twin of this test is the same shape (its types 20/30 answer with 21/31), so
    the 01.00 route's success value is worth reading for the expected encoding.
 
+**Correction to the above: 18 and 19 are both *error* states, not success (static read).**
+`0x69ddb0` is literally `lwz r3, 0(r3); blr` - the field is the same word the handler
+dispatches on, so the value *is* that word. Sweeping the whole handler body for
+`stw rX, 0(r30)` preceded by its `li` shows only two places ever write the two values
+state 4 tests:
+
+```
+; value 19, at 0xb370b0 - immediately AFTER the range check
+0xb3707c  lwz    r0, 0(r3)
+0xb37080  cmplwi r0, 0x13
+0xb37084  ble    0xb370e0        ; in range -> jump table
+   ...falls through...
+0xb370a8  bl     0xb38638        ; log (line 0x1b2 = 434)
+0xb370b0  li     r0, 0x13
+0xb370b8  stw    r0, 0(r30)      ; 19 = "index out of range"
+
+; value 18, at 0xb379e8 - also a log-then-store pair
+0xb379cc  li     r8, 0x10c       ; log line 268
+0xb379e0  bl     0xb38638
+0xb379e8  li     r0, 0x12
+0xb379ec  stw    r0, 0(r30)      ; 18 = another logged error state
+```
+
+So state 4's exit test is `result == 18 || result == 19`, and **both of those are
+diagnostic error states the handler writes after logging**. The client therefore leaves
+the probe state only on a failure. Since neither ever occurs in our runs (193/200 getter
+calls returned 0), the field is sitting in a normal intermediate state and the client is
+waiting for a transition that the handler never takes for us.
+
+Two consequences, and they are the useful part:
+
+1. the "success" value we should be looking for is **not** 18 or 19 - it is whatever the
+   handler writes on the *non-error* path, i.e. one of the `stw` stores belonging to a
+   live jump-table branch (indices 7, 8, 14, 15 write 2, 3, 3, 1 respectively; the rest
+   branch onward before storing). Which of those means "STUN complete" is what to
+   determine next;
+2. the reply-table index **is** what selects that path - the index decides which branch
+   runs and therefore which value lands in the field. So the earlier sweeps were testing
+   the right thing after all; they just never guessed the index whose branch is the
+   success path, and `--reply-index` cannot be used to aim at it because the index is
+   read from the client-side field rather than from our packet.
+
+That last point is the real obstacle and worth being explicit about: the branch is chosen
+by a word the client computes, so the way to reach the success path is to satisfy the
+condition that makes the client compute that word - not to choose a reply. The hook on
+`0x69ddb0` is the instrument for it: watch the field across a run whose replies differ in
+one field at a time, and the value that first appears as 18-or-anything-else is the
+success encoding.
+
 **The `ENOTCONN` noise is a red herring, now confirmed twice.** RUN SHAPEBIN logged 227
 `Socket error ENOTCONN` and 614 `sys_net_infoctl` lines. The `infoctl` calls are
 RPCS3's own socket polling (`cmd=53`, `cmd=9`) on its UDP socket, not our traffic, which
