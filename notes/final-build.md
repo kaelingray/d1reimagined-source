@@ -2518,3 +2518,62 @@ singleton initialised from a failed call, would explain a stall that never advan
 
 I will hook `0x356ab0`, `0x116dbc` and `0x106618` with `r28` and the two globals dumped.
 That is three hooks and answers both remaining questions at once.
+**RUN W128 - the writer of `0x128` is `0x356120`, guarded by three conditions.** Of the
+seven candidate sites across the whole BAP region, exactly one recurs:
+
+```
+0x3561a4  read 0x118(r30)              :  0
+0x356120  STORE 0x128(r30)             : 10   <== the only recurring writer
+0x35692c  fill 0x118(r3)               :  1
+0x356938  STORE 0x128(r3)              :  1
+0x3569d8  fill 0x118(r31)              :  0
+0x3569e0  STORE 0x128(r31)             :  0
+0x356ab0  THE COPY 0x118 <- 0x128      : 11
+0x356ab4  reads global 0x1a1d670        : 11
+0x356b14  reads global 0x1acd3a0        : 11
+0x106618  the one-time setup           : 20
+0x116dbc  the lazy singleton           : 20
+```
+
+The two fill sites at `0x35692c`/`0x356938` fire exactly once - they are the constructor,
+setting up the structure before the loop - and `0x356120` is the only thing that ever
+writes `0x128` during the run. So the chain is closed end to end:
+
+```
+0x356120  writes 0x128 = r26        (10 times)
+0x356ab0  copies 0x128 -> 0x118     (11 times)
+0x356ba4  indexes the handler by 0x118
+```
+
+**And it is gated by three tests before it stores anything:**
+
+```
+0x00356108  cmpw  r5, r28
+0x0035610c  beq   0x356488      <- bail if r5 == r28
+0x00356110  cmpwi r29, 0
+0x00356114  beq   0x356488      <- bail if r29 == 0
+0x00356118  cmpwi r30, 0
+0x0035611c  beq   0x356488      <- bail if r30 == 0
+0x00356120  stw   r26, 0x128(r30)
+```
+
+All three bail to the same `0x356488`. So the advance happens only when `r5 != r28`,
+`r29 != 0` and `r30 != 0` simultaneously. **Any one of those three failing stops the
+index from moving, and all three lead to the same place.** Given the index reaches 3 and
+stops, the useful next measurement is which of `r5`, `r29`, `r30` is the one that goes
+bad - that is a register-level question answerable in a single hook, with no further
+static guessing.
+
+Also worth recording: `0x116dbc` and `0x106618` each hit 20 times against 11 loop
+iterations, so they are being re-entered more often than the copy site - the "once" in
+my earlier description of the lazy singleton is not literally once in practice. The flag
+guard is read 11 times, consistent with the loop, but the initialiser itself runs more
+than the guard suggests it should. That may be normal (a different call site sharing the
+function) or may be a second bug; I have not distinguished those and am not going to
+guess from a hit count.
+
+**Next.** Hook `0x356108`/`0x356110`/`0x356118` with `r5`, `r28`, `r29`, `r30`, `r26`
+dumped. That single run says which of the three guards is rejecting the advance, and
+`r26` at the same moment gives the value the index *would* have taken - so we learn both
+why it stalls and what it is trying to reach. That is the last structural unknown between
+here and the gate.
