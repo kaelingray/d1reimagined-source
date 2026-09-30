@@ -19,6 +19,7 @@ class Args:
     echo_version = False
     reply_index = 0
     fill = "all"
+    shape = "map"
 
 
 PEER = ("127.0.0.1", 3074)
@@ -86,6 +87,31 @@ class ReplyTest(unittest.TestCase):
         self.assertEqual(ip_discovery[:3], bytes([31, 2, 0]))
         nat_discovery = stun_stub.build_reply(bytes([20, 2, 0, 0]), PEER, SERVER, Args())
         self.assertEqual(nat_discovery[:3], bytes([21, 2, 0]))
+
+
+class ShapeTest(unittest.TestCase):
+    """--shape picks the reply layout for the 01.24 map probe; all start with the index."""
+
+    def test_binary_shape_is_index_then_mapped_address(self):
+        args = Args()
+        args.shape = "binary"
+        reply = stun_stub.build_reply(PROBE29, PEER, SERVER, args)
+        self.assertEqual(reply[0], args.reply_index)
+        self.assertEqual(reply[1:5], bytes([127, 0, 0, 1]))
+        self.assertEqual(int.from_bytes(reply[5:7], "little"), PEER[1])
+
+    def test_index_shape_is_the_index_alone(self):
+        args = Args()
+        args.shape = "index"
+        for index in (0, 1, 19):
+            args.reply_index = index
+            self.assertEqual(stun_stub.build_reply(PROBE29, PEER, SERVER, args), bytes([index]))
+
+    def test_map_shape_still_round_trips(self):
+        args = Args()
+        args.shape = "map"
+        self.assertIsNotNone(stun_stub.parse_mp_map(
+            stun_stub.build_reply(PROBE29, PEER, SERVER, args)))
 
 
 class FillTest(unittest.TestCase):

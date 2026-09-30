@@ -135,6 +135,17 @@ def build_0124_reply(packet, peer, server, args):
     if args.reply_index < 0:
         return None
 
+    # --shape selects what comes back. All three keep the same leading dispatch
+    # index; they differ in whether the address is a binary tail or a map, which is
+    # the one thing the captures cannot settle on their own:
+    #   map     (default) mirror the request's keys, filling unbound ports
+    #   binary  dispatch index + mapped IPv4/port, the 01.00-style layout
+    #   index   the dispatch index alone, nothing else
+    if args.shape == "index":
+        return _mp_int(args.reply_index)
+    if args.shape == "binary":
+        return _mp_int(args.reply_index) + address_fields(peer[0], peer[1], args.byteorder)
+
     # Mirror the request's keys. The -1 values are the client's unbound port
     # fields; fill them with the address this server saw the probe come from, so
     # the client has a mapped address to report onward.
@@ -197,6 +208,9 @@ def main():
     ap.add_argument("--fill", choices=["all", "one", "none"], default="all",
                     help="how many of the request's unbound (-1) port fields to fill with the "
                          "mapped port in a 01.24 map reply")
+    ap.add_argument("--shape", choices=["map", "binary", "index"], default="map",
+                    help="reply layout for 01.24 map probes: mirror the request's keys (map), "
+                         "the 01.00-style binary address (binary), or the dispatch index alone")
     args = ap.parse_args()
     if not ipaddress.ip_address(args.bind).is_loopback:
         sys.exit("refusing to bind a non-loopback address")

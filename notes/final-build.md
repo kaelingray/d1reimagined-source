@@ -243,6 +243,25 @@ stand-ins, the RPCS3 copy and the emulator are all in the state the 01.00 route 
 the remaining difference is that 01.24's first request is one we do not yet answer
 correctly.
 
+**Reply-shape sweep (RUN SHAPEBIN) - also negative.** `--shape map|binary|index` varies
+only the reply layout, keeping the same leading dispatch index. `binary` (dispatch index
+then the 01.00-style mapped IPv4/port) behaves exactly like `map`: 20 probes, the 4-byte
+probe stopping after 5, no BAP connection, and still **zero** sign-on requests. So the
+layout of what we send back is not the variable that matters either. Three independent
+variables have now been ruled out by experiment - the dispatch index, how many of the
+unbound ports we fill, and the reply layout.
+
+That is a useful result rather than a dead end: it says the missing piece is not a knob
+on the reply we are already sending, but something we are not sending at all. The
+strongest remaining candidates, in order:
+
+1. **the 47-byte unconnected send** on socket 26 (`addrlen=0`) seen in every run - a
+   message that is neither probe shape and that nothing is listening for;
+2. the **reply key semantics** - we mirror the request's integer keys, but the client
+   may expect specific keys (a string key naming the field), and msgpack maps with
+   integer keys are unusual enough that this is worth ruling in or out;
+3. a **second exchange** the client expects before it will leave the loop.
+
 **Toolchain note.** `scripts/d1_eboot.py disasm` had never worked: it requested
 capstone `CS_ARCH_PPC` + `CS_MODE_64`, which capstone does not support and which
 silently yields zero instructions. Fixed to `CS_MODE_32 | CS_MODE_BIG_ENDIAN`, and the
