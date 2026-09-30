@@ -1757,3 +1757,46 @@ sequence* like everything above it. What is worth trying next, in order:
 required values are known, the state sequence is enumerated, and the writer of the
 required value is a single 14-instruction function. What is not known is why the 322-
 instruction path does not complete, and that is one hook on `0x126648` away.
+**RUN LOOP - it is looping, not waiting, and the sequence runs exactly once.** The
+question from the previous section, answered:
+
+```
+0x367090  the parking spot (14 insns) : 200 hits   (capped)
+0x366b88  the long path  (322 insns)   : 200 hits   (capped)
+0x126648  first insn of the long path : 100 hits   (capped)
+0x1269f8  the '0x30 == 0' attempt    : 100 hits   (capped)
+0x366348  the writer of 21/22         :   0 hits
+0x356494  the state setter            :   9 hits
+0x363138  the dial gate               : 400 hits   (capped)
+```
+
+and the nine transitions, in order, once:
+
+```
+0x02 (from 0x3664b0)   0x03 (from 0x3642e8)   0x04 (from 0x365d74)
+0x06 (from 0x367708)   0x07 (from 0x3672d0)   0x08 (from 0x365b10)
+0x0d (from 0x36274c)   0x12 (from 0x364f0c)   0x13 (from 0x3670b8)
+```
+
+So the client runs the BAP startup sequence **once**, arrives at 19, and then spins:
+the parking spot, the long path, its first two calls and the dial gate are all entered
+hundreds of times while the state setter is not called again. It is not waiting for a
+timeout and it is not retrying the sequence - it is re-entering a loop whose only exit,
+`0x366348` writing 21, is never taken.
+
+That reframes the remaining question usefully. The state machine completed its startup
+and parked; the gate is a **consequence** of the parking, not a second failure. So
+`0x30 == 5` at `0x36709c` is the thing to understand: the client parks in 19 when that
+field reads 5, and in every run it reads 5. Whatever sets `0x30` to 5 is the last
+untouched link, and it is not a stand-in concern - it is client code reacting to
+something. `0x1d(r31)`, the byte that selects 21 versus 22 in the writer, is the natural
+companion: 21 is "the sequence finished properly", 22 is "it did not", and 0x1d would say
+which the client believes.
+
+**Summary of the 01.24 gate, end to end.** Title -> Cross -> SSLv3 sign-on 200 ->
+manifest 200 -> package registration (1,034 packages installed and named) -> BAP startup
+sequence 2,3,4,6,7,8,13,18,19 -> park. The dial needs state 21, which is written only when
+the sequence completes successfully, and the sequence's own condition (`0x30 == 5`) is
+never satisfied. Nothing in the stand-ins is implicated by any of this: the network
+exchange is complete and correct at every step that has been measured, and the gap is
+entirely inside the client's own BAP connection lifecycle.
