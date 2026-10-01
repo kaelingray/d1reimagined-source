@@ -427,3 +427,36 @@ the 01.00 mission recipe (`Invoke-MissionRun.ps1`: `act_cosmo_m0_highway`, check
 bubbles, zone, roster, sim player, game mode, baselines, heartbeat) is the template; its
 01.00-specific values need 01.24 equivalents. `FINAL124_MM6` tries the highway map with world
 230.
+
+`FINAL124_MM6` (map `act_cosmo_m0_highway`, world 230): still **lime**, but after about 4 s
+instead of 1 (the client also sent host type 14, 20 bytes, before leaving). 01.24 makes no
+Demonware lobby connection at all (the lobby probe stayed silent). A read-only scan of the
+emulator's memory for `*:scenario_client` registry keys (scratch helper) lists the 01.24
+scenarios: `act_cosmo_m0_highway`, `act_cosmo_m0_5_hangar`, the other story missions,
+`orbit`, `cine_*`, patrols and PvP maps, so the highway scenario name is unchanged.
+
+On 01.00, the activity state's "world" had to be the **activity index** of the mission (126 for
+`act_cosmo_m0_highway`), while service 105 carried the current one (125). By analogy
+`FINAL124_MM7` used **world 231** (with the 01.00 checksum `0x79130968` and 22 bubbles):
+past lime, the bootflow sat in 30 `setup:activity_host_setup` and the client stayed on the
+proxy for 75 s, then showed **banana** ("You must have the required content in order to play
+this activity"), the content/unlock gate 01.00 passed with `--self-flags 2` and
+`--universe-flag-values 215=1`. `FINAL124_MM8` adds both.
+
+`FINAL124_MM8` (MM7 plus BAP `--self-flags 2 --universe-flag-values 215=1`): past banana; the
+direct sample names **31 `setup:prologue_intro_loading`**, then the client left the proxy
+after host types 37/14/21 and showed **urchin** ("You do not have access to this activity"),
+the 01.24 counterpart of 01.00's "World-transition requires permissions." (0x18, 0x17). On 01.00
+that came from the activity's first unlock expression `NOT flag[215]` (universe flags,
+overridden through the universe +0x3c list). 01.24 has more flags, so the index (or the
+activity) probably differs. Next: read activity 231's unlock expression at run time (the
+01.00 path was `0x40ddc4` -> `0xb4f494` -> checks `0xb51c64`, `0xb51894`, `0xb51698`; the
+expression format is u32 count, u32 offset, 4-byte ops from +offset+0x14: u8 opcode, u8, i16
+index; opcode 1 = flag == 2, 2 = NOT) and confirm 231 is the highway activity.
+
+The whole cycle is now `scripts/Invoke-Final124Join.ps1` (boot, login, matchmaking, proxy, join,
+bootflow samples every second, screenshot; `-Stop` closes the stack and the proxy). Its
+defaults are the MM8 recipe; `-World`, `-Map`, `-BapExtra` and `-ProxyExtra` vary it.
+`FINAL124_JOIN1` validated the script: the same path to 30/31 and **urchin**; `-Stop` closed the
+owned stack and the proxy. (The launcher job's output pipe can stay open while the kept stack
+runs, so the script waits for it at most 60 s.)

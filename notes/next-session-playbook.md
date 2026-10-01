@@ -7,9 +7,11 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-The current milestone is stage `setup:activity_session_creation` after the prologue
-(FINAL124_MM1): setup answers persist through service 701, the universe object comes from
-service 205, and `mm req` gets an empty `mm rsp`; next is the `mm rsp` content. The setup-menu
+The current milestone is stage 31 `setup:prologue_intro_loading` (FINAL124_MM8): setup answers
+persist through service 701, the universe object comes from service 205, matchmaking gets a
+match (`mm rsp` field 4), the activity host proxy join is accepted, and the intro activity
+(`act_cosmo_m0_highway`, world 231) passes the content check; it stops at **urchin** (activity
+access / unlock expression). Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
 magenta blocks are fixed by `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
