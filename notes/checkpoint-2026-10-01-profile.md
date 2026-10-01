@@ -993,3 +993,28 @@ object - world state at +8 (0x5038 bytes; host +0xe08), host records at +0x5040.
 size 0x658), 2 (8), 4 (0x1a8), 5 (`0x276300`), 7 (`0x271360`, per entity), 10/18 (0x2cc), 11
 (`0x271618` -> world state `0x271494`), 23, 24, 27/29 (4), 38 (`0x276390`), 39 (0x110,
 `0x808009a6`), 42 (2), 43 (0xa4). Which one carries the +0x5080 record is still open.
+
+## JOIN35: natural cinematic end, and where the 113 -> 112 switch stops
+
+`FINAL124_JOIN35` = JOIN34 with a director that only **starts** the cinematics (no
+`playing = false` steps; scratch copy of the script). Both starts run (`0x580928` at +60/+130 s).
+The revival plays as in JOIN34; the first-person part fades in (23:56:23) and then **fades to full
+black** and stays black (23:56:32 on, identical frames) - the end of the cinematic, waiting for
+the host to move the player; still slice 113. (JOIN34's forced stop froze on the last frame.)
+
+Poking the request record again (sim+0x5080 = {1, 0, 112, empty hash}, 23:59:14) with hooks:
+the request machine latches it (copy state 1 -> 2), the pending path sets target 112 (setter
+state 6, lr `0x353764`), posts request slot **1** (`0x1268d4` r4=1, lr `0x354fe8`), slot 1
+de-instantiates 113 (`0x333658`), and the zone component loads 112 (`0x14cbb4` r4=0x70, lr
+`0x354f10`). 112 reaches the loaded set, but **slot 2 ("Change slice-set") is never posted**:
+afterwards the engine sits in state 6 (+0x88 = 4) with current -1 / target 112, the zone-state
+object `*(0x1abc8c4)` has byte0 4 and target 112, the table has 112 loaded and nothing active.
+No session drop this time within 5 minutes. Live hooks: the engine top update `0x353c7c` still
+runs, but the simulation tick (`0x1d6e84` -> `0x3adf8c`) and the zone component (`0x355258` ->
+the zone machine **`0x354144`** / `0x354e38`) no longer run. `0x354144` is the 01.24 zone machine
+(01.00 `0x31eaf8`): for a target with status 2/3 and zone byte 2..4 (table `0x12f6f10`) it posts
+slot 2 {0xc, index, hash} through `0x1268d4` when slot 2 is free (`0x126a40(table, 2)`) and
+`0x154f98()` is 0; status 4..6 sets engine state 8. Next: why the zone component and simulation
+stop ticking once 113 is de-instantiated (they are reached from `0x340130` / `0x3325b8`, a
+component update list), and which host message fills sim+0x5080 so the stand-in can send it
+itself (types 2/4/10/18/23/24/27/29/38/39/42 are candidates; 01.00 left the same question open).
