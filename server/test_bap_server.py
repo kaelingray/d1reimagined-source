@@ -6,6 +6,21 @@ from pathlib import Path
 import bap_server as bap
 
 
+class ClientZoneRequest(unittest.TestCase):
+    def test_cleared_target_does_not_request_skywatch(self):
+        self.assertIsNone(bap.requested_client_zone({"target": (0, 0)}))
+        self.assertEqual(bap.requested_client_zone({"target": (0, 0),
+                                                   "current": (112, 0x811C9DC5)}), 112)
+
+    def test_actual_zone_zero_and_named_target_are_preserved(self):
+        self.assertEqual(bap.requested_client_zone({"target": (0, 0x811C9DC5)}), 0)
+        self.assertEqual(bap.requested_client_zone({"current": (112, 0x811C9DC5),
+                                                   "target": (24, 0x68935472)}), 24)
+        for record in ({}, {"state": 4}, {"target": (-1, 0x811C9DC5)},
+                       {"target": (None, 0x811C9DC5)}):
+            self.assertIsNone(bap.requested_client_zone(record))
+
+
 class ShelloReply(unittest.TestCase):
     key, mac_key = b"k" * 16, b"m" * 16
 
@@ -68,6 +83,14 @@ class CharacterGear(unittest.TestCase):
         self.assertEqual(gear[1]["id"], 0x101)
         with self.assertRaises(ValueError):
             bap.gear_spec("starter:guardian")
+
+    def test_final_starter_kit_uses_final_indexes(self):
+        gear = bap.gear_spec("starter:01.24:titan,6=123")
+        self.assertEqual({slot: entry["item"] for slot, entry in gear.items()},
+                         {0: 710, 1: 204, 2: 198, 3: 200, 4: 206, 5: 202, 11: 862, 6: 123})
+        self.assertEqual(bap.gear_spec("starter:titan")[0]["item"], 776)
+        self.assertEqual(bap.gear_spec("starter:01.24:hunter")[0]["item"], 709)
+        self.assertEqual(bap.gear_spec("starter:01.24:warlock")[0]["item"], 713)
 
     def test_gear_objects_fill_all_three_character_objects(self):
         extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},

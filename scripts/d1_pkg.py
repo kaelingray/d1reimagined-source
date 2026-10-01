@@ -540,7 +540,12 @@ STRING_INDEX_CLASS = 0x8080035A
 
 def string_table(index, table):
     count = struct.unpack_from(">I", index, 4)[0]
-    hashes = struct.unpack_from(f">{count}I", index, index.find(struct.pack(">II", 0x80800184, count)) + 0x14)
+    if not count:
+        return {}
+    hash_header = index.find(struct.pack(">II", 0x80800184, count))
+    if hash_header < 0:
+        raise ValueError("localized string index has no hash array")
+    hashes = struct.unpack_from(f">{count}I", index, hash_header + 0x14)
     n, off, _ = dyn_array(table, 0x4)
     texts = []
     for i in range(n):
@@ -548,11 +553,34 @@ def string_table(index, table):
         _, rel, _, blen, _, shift, _ = struct.unpack_from(">IIIHHHH", table, base)
         raw = table[base + 4 + rel:base + 4 + rel + blen]
         texts.append(bytes((c + shift) & 0xff for c in raw).decode("utf-8", "replace"))
-    return dict(zip(hashes, texts))
+    # A localized string can contain several parts. The +24 array names each
+    # string's first part by a signed relative pointer, followed by part count.
+    # Zipping hashes with parts shifts all later names after the first split.
+    try:
+        string_count, strings, element_class = dyn_array(table, 0x24)
+    except (ValueError, struct.error):
+        if n != count:
+            raise ValueError("localized string parts need a supported string mapping")
+        return dict(zip(hashes, texts))
+    if string_count != count or element_class != 0x8080033E:
+        raise ValueError("localized string mapping has an unexpected count or class")
+    combined = []
+    for i in range(count):
+        entry = strings + 8 * i
+        relative, length = struct.unpack_from(">iI", table, entry)
+        if not length:
+            combined.append("")
+            continue
+        first = entry + relative
+        if first < off or (first - off) % 0x14 or (first - off) // 0x14 + length > n:
+            raise ValueError("localized string mapping refers outside the part array")
+        part = (first - off) // 0x14
+        combined.append("".join(texts[part:part + length]))
+    return dict(zip(hashes, combined))
 
 
-def all_strings(ps):
-    """{hash: text} from every localized string index in the package set."""
+def all_string_libraries(ps):
+    """{index tag: {hash: English text}}, preserving each library's hash scope."""
     found = {}
     for p in ps.by_id.values():
         for e in p.entries:
@@ -562,10 +590,21 @@ def all_strings(ps):
                 index = p.entry_data(e["index"], ps.oodle)
                 table = ps.tag(struct.unpack_from(">I", index, 0xc)[0])
                 if table:
-                    for h, text in string_table(index, table).items():
-                        found.setdefault(h, text)
+                    found[tag_hash(p.pkg_id, e["index"])] = string_table(index, table)
             except (ValueError, struct.error, RuntimeError):
                 continue
+    return found
+
+
+def all_strings(ps):
+    """Search-only {hash: text}; repeated hashes in different libraries lose their scope.
+
+    Investment references must use investment_strings(), not this flattened index.
+    """
+    found = {}
+    for library in all_string_libraries(ps).values():
+        for h, text in library.items():
+            found.setdefault(h, text)
     return found
 
 
@@ -589,33 +628,83 @@ INVESTMENT_ROOT_NAME = "investment_globals"
 ITEM_NAME_REFS = (0x28, 0x30, 0x38)
 
 
+def investment_strings(ps, root, final=False):
+    """Resolve {i16 library, u16 padding, u32 hash} references in their own library.
+
+    The library array has 12-byte elements; +8 names a localized string index.
+    Hashes repeat across libraries (e.g. class-specific starter armour names).
+    Return the resolver and its lazily populated, scoped library dictionaries.
+    """
+    library_tag = struct.unpack_from(">I", root, 0x1a0 if final else 0x170)[0]
+    libraries = ps.tag(library_tag)
+    count, first, kind = dyn_array(libraries, 4)
+    if kind != 0x80803473 or first + 12 * count > len(libraries):
+        raise ValueError("investment string libraries have an unsupported class or size")
+    cache = {}
+
+    def text(data, off):
+        scope, hash_value = struct.unpack_from(">h2xI", data, off)
+        if scope < 0:
+            return ""
+        if scope >= count:
+            raise ValueError(f"investment string library {scope} outside {count} libraries")
+        if scope not in cache:
+            tag = struct.unpack_from(">I", libraries, first + scope * 12 + 8)[0]
+            index = ps.tag(tag)
+            if index is None:
+                raise ValueError(f"investment string library {scope} index is missing")
+            language = ps.tag(struct.unpack_from(">I", index, 0xc)[0])
+            if language is None:
+                raise ValueError(f"investment string library {scope} English table is missing")
+            cache[scope] = string_table(index, language)
+        return cache[scope].get(hash_value, "")
+
+    return text, cache
+
+
 def investment_items(ps):
     """(buckets, items) of the investment globals: buckets = [(hash, name)] in equippable order,
     items = [{"index", "tag", "slot", "bucket", "type", "name", "description"}] in item index
     order; "slot" is the item's position in the equippable bucket list (None: not equippable
     through a bucket hash, e.g. subclasses, class items, emblems, shaders)."""
-    root_hash = next((n["hash"] for p in ps.by_id.values() for n in p.named
+    root_info = next((n for p in ps.by_id.values() for n in p.named
                       if n["name"] == INVESTMENT_ROOT_NAME), None)
+    root_hash = root_info["hash"] if root_info else None
     root = ps.tag(root_hash) if root_hash else None
     if root is None:
         raise ValueError("investment_globals root tag not found (ps3_investment_globals_012c)")
-    strings = all_strings(ps)
-    text = lambda data, off: strings.get(struct.unpack_from(">I", data, off)[0], "")
-    bucket_list = ps.tag(struct.unpack_from(">I", root, 0xb0)[0])
-    n, first, _ = dyn_array(bucket_list, 4)
+    # 01.24 keeps the globals class but moves its item-list reference from
+    # +d8 to +e8. Validate the element class, not the globals handle or size.
+    for item_offset in (0xd8, 0xe8):
+        try:
+            item_list = ps.tag(struct.unpack_from(">I", root, item_offset)[0])
+            n, first, element_class = dyn_array(item_list, 4)
+            if element_class == 0x808033E8 and first + 8 * n <= len(item_list):
+                break
+        except (ValueError, TypeError, struct.error):
+            pass
+    else:
+        raise ValueError("investment item list is not a supported 01.00/01.24 array")
+    item_count, item_first = n, first
+    final = item_offset == 0xe8
+    text, _ = investment_strings(ps, root, final)
+    bucket_list = ps.tag(struct.unpack_from(">I", root, 0xc0 if final else 0xb0)[0])
+    n, first, bucket_class = dyn_array(bucket_list, 4)
+    if bucket_class != 0x80803495 or first + 0x1c * n > len(bucket_list):
+        raise ValueError("investment bucket list has an unsupported element class or size")
     buckets = []
     for i in range(n):
         entry = first + 0x1c * i
-        buckets.append((struct.unpack_from(">I", bucket_list, entry)[0], text(bucket_list, entry + 8)))
+        buckets.append((struct.unpack_from(">I", bucket_list, entry)[0], text(bucket_list, entry + 4)))
     bucket_slot = {h: i for i, (h, _) in enumerate(buckets)}
-    item_list = ps.tag(struct.unpack_from(">I", root, 0xd8)[0])
-    n, first, _ = dyn_array(item_list, 4)
+    name_refs = (0x34, 0x3c, 0x44) if final else (0x24, 0x2c, 0x34)
+    bucket_refs = (0x54, 0x58) if final else (0x44, 0x48)
     items = []
-    for i in range(n):
-        tag = struct.unpack_from(">I", item_list, first + 8 * i + 4)[0]
+    for i in range(item_count):
+        tag = struct.unpack_from(">I", item_list, item_first + 8 * i + 4)[0]
         d = ps.tag(tag) or b""
-        name, kind, desc = (text(d, o) if len(d) >= o + 4 else "" for o in ITEM_NAME_REFS)
-        slot = next((bucket_slot[v] for o in (0x44, 0x48) if len(d) >= o + 4
+        name, kind, desc = (text(d, o) if len(d) >= o + 8 else "" for o in name_refs)
+        slot = next((bucket_slot[v] for o in bucket_refs if len(d) >= o + 4
                      for v in [struct.unpack_from(">I", d, o)[0]] if v in bucket_slot), None)
         items.append({"index": i, "tag": tag, "slot": slot, "bucket": buckets[slot][1] if slot is not None else "",
                       "type": kind.strip(), "name": name.strip(), "description": desc})

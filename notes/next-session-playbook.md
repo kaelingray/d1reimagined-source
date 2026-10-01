@@ -7,10 +7,13 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-The current milestone is stage **36 `activity:in_world`**, briefly reached in FINAL124_JOIN12.
+The current milestone is stage **36 `activity:in_world`**, sustained in FINAL124_JOIN16/17
+with an urgent-message dialog over a black scene. No visible Guardian is verified yet.
 Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`.
-Activity 231 is level 25; activity 230 has no scenario. The next gate is **lobster**,
-reason `0x10c`, after the client requests slice 24 during the scripted intro.
+Activity 231 is level 25; activity 230 reports no active activity. The next gate is **lobster**,
+reason `0x10c`, after the client requests slice 24. Advertising all bubble states as zero
+avoids immediate failure but leaves engine state 6 and a black scene. The request also
+occurs without the mission director, so the scripted cinematic is not its established cause.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
 magenta blocks and distorted character lighting are fixed together by
 `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Mission visuals,
@@ -20,6 +23,13 @@ the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
 setup input sequence and the next service boundary. The later 01.00 mission
 experiments in this file remain historical.
+
+For 01.24, add `-BapExtra '--peer-family;--character-gear;starter:01.24:titan'`
+to the join wrapper. This equips Striker, Lightmail, Mark of the Risen and the Generalist
+Shell using final-build item indexes. The original `starter:titan` shorthand belongs to
+01.00. Use `hunter` or `warlock` after `starter:01.24:` for those classes. Equipment
+metadata is verified against scoped package string libraries; visible mission gear still
+needs verification. Movement waits for engine state **0**, not just stage 36.
 
 Use the imported runtime explicitly on this PC:
 
@@ -91,13 +101,27 @@ $proxyOptions = '--ah-bubble-states;-1,14=0,3=0;--ah-zone;112:0x811c9dc5;--ah-wo
 
 The 01.24 highway baseline file has **158** records, not the historical 138.
 Current schemas come from `$data/ps3_updates/types_01.24.json` and
-`services_01.24.json`. Starter gear indices still need 01.24 confirmation.
+`services_01.24.json`. Use `starter:01.24:titan` for final gear (Generalist Shell
+862, Striker 710); the original shorthand has the 01.00 indexes.
+
+JOIN16's control recipe changes `--ah-bubble-states` to `0`, supplies the
+2,311-record `baselines_highway_0124_all.txt` superset, adds
+`--ah-follow-client-zone`, and omits `--ah-mission`. JOIN17 tests the follow fix
+that ignores a cleared target {index=0, hash=0}. Read the profile checkpoint before
+making this the default: the stable bootflow has not yet produced a playable scene.
+
+The short automatic walking check is state-gated and owns no new emulator:
+
+```powershell
+& scripts/Invoke-Final124Movement.ps1 -Name FINAL124_MISSION_NEXT -Local $runtime
+```
 
 ```powershell
 python scripts/dump_mission_catalog.py `
   "$runtime/01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages" `
   "$runtime/RESEARCH/ps3_updates/final/packages" `
   --oodle 'F:/d1/lukespc-import/d1xenia/oo2core_3_win64_x86-64/oo2core_3_win64.dll' `
+  --all-named-tags --investment-items `
   --out "$runtime/RESEARCH/ps3_updates/mission-catalog-0124"
 python scripts/rpcs3_final124_activities.py `
   --process-manifest "$runtime/SIGNON_LOCAL/logs/FINAL124_MISSION_NEXT-processes.json" `

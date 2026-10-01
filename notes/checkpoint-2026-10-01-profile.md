@@ -532,15 +532,16 @@ content provider's vtable +0x188 points to `0x1cbb68`; its +0x1c accessor return
 the activity table through cache `0x1a2082c` (raw root +4). The table has 338
 entries. Each entry is at `table + offset + 0x14 + 8 * index`; its +4 relative
 pointer resolves to `entry + relative +4`. Definition +0x48 is the required level,
-and +0x40 holds the scenario reference:
+and +0x44 holds a tag reference (confirmed by the JOIN14 catalog export;
+its meaning is not established by this read):
 
-| Activity | Hash | Required level | Scenario reference |
+| Activity | Hash | Required level | Tag at +0x44 |
 | --- | --- | --- | --- |
 | 229 | `0xd03ec63d` | 1 | `0x80a585cc` |
 | 230 | `0x5a6705db` | 1 | `0xffffffff` (none) |
 | 231 | `0x8d389a14` | 25 | `0x80a585cc` |
 
-Activity **229** is the next intro candidate: it shares 231's scenario and accepts
+Activity **229** is the next intro candidate: it shares 231's +0x44 reference and accepts
 a level-1 character. The earlier analogy that service 105's 230 implies mission
 231 was not established for this build. No character level or client permission
 code has been changed to evade the rejection. The constants accessor's +0xda
@@ -611,6 +612,100 @@ array header; named tags can redirect into another package. Both cases are
 handled. Missing patch blocks can be found across input folders only with exact
 length/SHA-1 verification; package files are memory mapped to keep the scan's
 memory use bounded. `rpcs3_final124_activities.py` preserves the 338-definition
-live activity table once initialized, including index, hash, level and scenario
-reference. All output is private game data and the exporters reject tracked
+live activity table once initialized, including index, hash, level and unresolved
+tag reference at +0x44. All output is private game data and the exporters reject tracked
 repository destinations outside ignored `local/`.
+
+## Area transitions, catalog verification and movement (JOIN13–17)
+
+JOIN13 sends the 2,311-record Cosmodrome baseline superset but inadvertently
+omits `--peer-family`; it reaches physics join and briefly in-world, then reason
+`0x10c`. It is not a controlled comparison with JOIN12's appearance data.
+JOIN14 restores the peer family but forces activity arrival record 24/hash
+`0x68935472` with only the 158 highway baselines; it stays in initial-slice loading
+through the 240-second observation. Forcing that record changes the starting
+area, rather than registering an additional available area.
+
+JOIN15 starts at 112 again, includes peer family and the 2,311-record superset,
+and follows client zone requests. The direct 250-ms engine timeline establishes
+in-world at **18:53:35 local**, engine state 3, target
+record 24/hash `0x68935472` at engine +0x130. At **18:53:38** engine state becomes
+13 and the target record is zeroed. This is **before** the mission director's
+scheduled +20-second revival state; the cinematic is not the cause of this
+particular failure. Getter `0x14b560` returns scenario-table wrapper
+`0x1a1dc7c`. `0x14db90` looks up its +4 table pointer and the scenario record for
+the requested slice; absent/invalid records produce status 5, which the engine
+maps to state 13 in `0x351074`.
+
+JOIN16 advertises default state **0 for every bubble**, retains the baseline
+superset, and omits the mission director as a control. It reaches stage 36 at
+**19:05:17** and remains there through **19:08:45**, engine state 6. The visible
+screen shows the **Urgent Message** dialog over a black scene. The peer's slice
+delta reports target 24, then **target 0/hash 0** while clearing the transition.
+The host's follow option incorrectly changes its world-state group to zone zero
+at 19:05:29. After 19:07:02 network/frame progress stops; the proxy times out at
+19:09:02. Dismissing the dialog did not yield a new screenshot. This is durable
+bootflow progress, not a verified visible Guardian or successful rendering test.
+JOIN17 tests a fix to that follow behavior with the same control recipe. The host
+correctly stays on requested record 24 after the cleared target. The urgent dialog
+dismisses and a completed screenshot at 19:19:59 is entirely black. A short walking
+trial produces black screenshots, without visible movement. The movement gate now
+requires engine state **0**, rather than permitting an unfinished state 6 swap.
+A thread snapshot catches PPU thread 8 waiting at `0x60238c`, in the credit/ring
+wait function `0x6021a8`; identifying its stalled producer remains pending. No
+visible Guardian, Ghost cinematic or mission lighting verification is established.
+
+`requested_client_zone()` now ignores a zero-hash cleared record. A valid
+empty-name slice uses hash `0x811c9dc5`; a genuine index-zero request with that
+hash is retained. Regression tests cover clearing, fallback to the current
+record, named targets and legitimate zone zero. The walking wrapper
+`Invoke-Final124Movement.ps1` checks exact process ownership and stable stage 36
+before every input, waits beyond the cinematic schedule by default, records
+screenshots/input labels, and stops if loading or cleanup returns. This
+automates a short walking/camera check; it does not establish successful walking
+until its screenshot sequence shows it.
+
+The live catalog and static package activity table agree on **all 338 indices,
+hashes and required levels**. The named `investment_globals` tag is an outer
+wrapper: +8 names content root `0x80a58001`; that root's +0x24 names the actual
+definition table `0x80a60d9f`. The wrapper's own +0x20 table also has 338 entries
+but is a different table. Definition +0x44 is preserved as **`tag_44`**, not
+called a scenario reference: its consumer still needs identification. The
+earlier +0x40 description was wrong; that field reads zero in these examples.
+`--all-named-tags` has now privately preserved all **921** named tags, in addition
+to the 183 scenarios and 1,339 groups, with zero extraction errors.
+
+The 01.24 item list moved from globals +0xd8 to **+0xe8**, buckets from +0xb0
+to **+0xc0**, item name/type/description hashes to **+0x38/+0x40/+0x48**, and
+bucket references to **+0x54/+0x58**. The reader verifies item-list element
+class `0x808033e8` and bucket class `0x80803495`. The private decoded inventory
+has **6,557 items, 17 buckets**, and **22,689** localized hash/text entries.
+Localized strings can have several fragments; the language table's +0x24
+mapping (element `0x8080033e`) links each hash to its first part and part count.
+The reader now joins them instead of shifting later strings by zipping parts
+directly with hashes. The flattened hash/text index is for search only: repeated
+hashes in different string libraries have different text. Item text references
+are `{i16 library, u16 padding, u32 hash}` at **+0x34/+0x3c/+0x44**. The globals
+library table is at **+0x1a0** in 01.24 and **+0x170** in 01.00, with class
+`0x80803473`, stride 12 and localized index tag at +8. The reader now resolves in
+the referenced library and caches it. This corrects Titan armour previously
+labelled as Hunter gear. The private export preserves all **1,001** localized
+index libraries in `string-libraries.json` with scoped text.
+
+Final starter kits now have explicit `--character-gear starter:01.24:CLASS`
+syntax. Titan slots 0/1/2/3/4/5/11 use **710/204/198/200/206/202/862**:
+Striker, Lightmail, Mark of the Risen and Generalist Shell. Hunter uses
+709/16/10/12/18/14/862 (Gunslinger, Prototype, Makeshift Scarf); Warlock uses
+713/392/386/388/394/390/862 (Voidwalker, Born Spark, Potential Bond). These
+are decoded package identities, not yet a verified mission appearance. Index 711
+is **Defender**, not another copy of Striker. The old kit's 892 is a Public Event
+reward in this build and 776 is a Heavy Weapon Upgrade. The 01.00 shorthand is
+preserved. Real disc-only extraction verifies the old library layout too.
+
+JOIN18 failed before emulator launch because native `pwsh -File` interpreted a
+leading `--` option string as another parameter. The runner now attaches these
+strings to `-BapExtra:`, `-StunArgs:` and `-DnsArgs:`; the join job invokes its
+script directly and reports an early completed/failed job instead of waiting
+eight minutes for a sign-in that cannot happen. JOIN19 is the first controlled
+mission run with final Titan gear. 96 server tests and 79 script tests pass;
+the three changed PowerShell wrappers parse successfully.

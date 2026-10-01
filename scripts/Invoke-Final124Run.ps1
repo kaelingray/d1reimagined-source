@@ -85,9 +85,11 @@ try {
         '-DataRepo', $DataRepo, '-Rpcs3Dir', $Rpcs3Dir, '-GameUsrdir', $GameUsrdir,
         '-Name', $Name, '-Run', '-PreserveExistingProcesses', '-ProcessManifest', $processManifest
     )
-    if ($StunArgs) { $arguments += @('-StunArgs', $StunArgs) }
-    if ($DnsArgs) { $arguments += @('-DnsArgs', $DnsArgs) }
-    if ($BapExtra) { $arguments += @('-BapExtra', $BapExtra) }
+    # A leading -- value otherwise binds as another pwsh -File parameter.
+    # Attach option strings to their named parameter before Windows argv quoting.
+    if ($StunArgs) { $arguments += "-StunArgs:$StunArgs" }
+    if ($DnsArgs) { $arguments += "-DnsArgs:$DnsArgs" }
+    if ($BapExtra) { $arguments += "-BapExtra:$BapExtra" }
     if ($PpuHash) { $arguments += @('-PpuHash', $PpuHash) }
     if ($ManifestFile) { $arguments += @('-ManifestFile', (Resolve-Path -LiteralPath $ManifestFile).Path) }
     $quotedArguments = @($arguments | ForEach-Object { ConvertTo-D1ProcessArgument $_ })

@@ -71,13 +71,14 @@ $proxyArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower(), '--ah-j
 
 $launch = Start-Job -ScriptBlock { param($script, $n, $l, $d, $b)
     $env:D1_LOCAL = $l
-    & pwsh -NoProfile -File $script -Name $n -Local $l -DataRepo $d -BootSeconds 250 -PressSeconds 110 `
+    $ErrorActionPreference = 'Stop'
+    & $script -Name $n -Local $l -DataRepo $d -BootSeconds 250 -PressSeconds 110 `
         -ContinueAfterBap -KeepRpcs3 -BapExtra $b 2>&1 | Select-Object -Last 5
 } -ArgumentList (Join-Path $PSScriptRoot 'Invoke-Final124Run.ps1'), $Name, $D1Local, $DataRepo, $bapArgs
 $bap = Join-Path $logs "$Name-bap.log"
 $deadline = (Get-Date).AddMinutes(8)
 while (-not ((Test-Path $bap) -and (Select-String -Path $bap -Pattern 'upo rsp' -Quiet))) {
-    if ((Get-Date) -gt $deadline -or $launch.State -eq 'Failed') {
+    if ((Get-Date) -gt $deadline -or $launch.State -in @('Failed', 'Completed', 'Stopped')) {
         Receive-Job $launch -Wait -AutoRemoveJob
         throw 'no sign-in within 8 minutes'
     }
@@ -112,14 +113,14 @@ while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
 }
 $start = Get-Date
 for ($i = 1; ((Get-Date) - $start).TotalSeconds -lt $AfterMatchSeconds; $i++) {
-    Start-Sleep ($i -le 6 ? 1 : 8)   # the join outcome arrives within seconds
+    Start-Sleep ($i -le 30 ? 1 : 8)   # keep short in-world transitions in the timeline
     Get-JoinEmulatorId | Out-Null
     $line = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" --world --process-manifest (Join-Path $logs "$Name-processes.json") `
         --out (Join-Path $research "$Name-bootflow-$i.json") 2>&1 |
         Select-Object -Last 1
     "$(Get-Date -Format HH:mm:ss) $line"
     if ($CaptureTimeline) {
-        $shot = & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0 |
+        $shot = & "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0 |
             Select-Object -Last 1
         [pscustomobject]@{ time = (Get-Date).ToUniversalTime().ToString('o'); sample = "$Name-bootflow-$i.json"; screenshot = $shot } |
             ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $logs "$Name-screenshots.jsonl")

@@ -163,6 +163,13 @@ STARTER_GEAR = {
     "hunter": {0: 774, 1: 12, 2: 6, 3: 8, 4: 14, 5: 10, 11: 892},
     "warlock": {0: 778, 1: 388, 2: 382, 3: 384, 4: 390, 5: 386, 11: 892},
 }
+# Confirmed against the 01.24 investment library references and bucket hashes.
+# These indexes are build-specific; keep the existing 01.00 shorthand intact.
+STARTER_GEAR_0124 = {
+    "titan": {0: 710, 1: 204, 2: 198, 3: 200, 4: 206, 5: 202, 11: 862},
+    "hunter": {0: 709, 1: 16, 2: 10, 3: 12, 4: 18, 5: 14, 11: 862},
+    "warlock": {0: 713, 1: 392, 2: 386, 3: 388, 4: 394, 5: 390, 11: 862},
+}
 PROGRESSION_ITEMS = 0x138
 PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
 SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
@@ -212,14 +219,18 @@ def character_layout(schema=None):
 
 def gear_spec(value):
     """Parse --character-gear: "SLOT=ITEM[/DYECH:DYE...],..." (item indexes of the investment
-    globals item list), "starter:CLASS[,SLOT=ITEM...]" (a STARTER_GEAR kit, then overrides) or
+    globals item list), "starter:CLASS[,SLOT=ITEM...]" (01.00),
+    "starter:01.24:CLASS[,SLOT=ITEM...]" (01.24), or
     @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
     Returns {slot: {"item", "id", "dyes"}}; instance ids default to 0x100 + slot."""
     if value.startswith("starter:"):
         kit, _, rest = value[len("starter:"):].partition(",")
-        if kit not in STARTER_GEAR:
-            raise ValueError(f"unknown starter kit {kit!r} (one of {', '.join(STARTER_GEAR)})")
-        base = {slot: {"item": item, "id": 0x100 + slot, "dyes": []} for slot, item in STARTER_GEAR[kit].items()}
+        kits = STARTER_GEAR
+        if kit.startswith("01.24:"):
+            kits, kit = STARTER_GEAR_0124, kit[len("01.24:"):]
+        if kit not in kits:
+            raise ValueError(f"unknown starter kit {kit!r} (one of {', '.join(kits)})")
+        base = {slot: {"item": item, "id": 0x100 + slot, "dyes": []} for slot, item in kits[kit].items()}
         return {**base, **(gear_spec(rest) if rest else {})}
     if value.startswith("@"):
         raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))
@@ -635,6 +646,21 @@ def client_slice_state(schema, body):
     if "state" in record:
         parts.append(f"state {record['state']}")
     return ", ".join(parts)
+
+
+def requested_client_zone(record):
+    """Choose an actual slice request; a cleared zero record is not zone zero.
+
+    The client sends target {index=0, hash=0} when clearing a transition.
+    Empty names use FNV 0x811c9dc5, including a valid zone-zero request.
+    Treating the cleared record as Skywatch makes the stand-in initiate an
+    unrelated load while the client is completing its previous transition.
+    """
+    for name in ("target", "current"):
+        index, name_hash = record.get(name, (None, None))
+        if index is not None and index >= 0 and name_hash:
+            return index
+    return None
 
 
 def machine_list(schema, machine_ids):
@@ -1496,9 +1522,7 @@ def handle(conn, peer, args):
                         log(f"[{tag}] client slice set: {client_slice_state(args.activity_schema, body)}")
                         # Mirror the client's switch in the world state's group record, as the
                         # host that tracks the fireteam's slice set would (opt-in experiment)
-                        wanted = record.get("target", (-1, 0))[0]
-                        if wanted is None or wanted < 0:
-                            wanted = record.get("current", (-1, 0))[0]
+                        wanted = requested_client_zone(record)
                         if (args.ah_follow_client_zone and world_params and wanted is not None
                                 and wanted >= 0 and wanted != zone_now):
                             zone_now = wanted
@@ -1800,9 +1824,10 @@ def parse_args(argv=None):
     ap.add_argument("--peer-family", action="store_true",
                     help="fill the peer family (0) subscription with the local account and character "
                          "summaries (the player's appearance and blueprint in activities come from it)")
-    ap.add_argument("--character-gear", type=gear_spec, metavar="starter:CLASS|SLOT=ITEM,...|@FILE",
+    ap.add_argument("--character-gear", type=gear_spec, metavar="starter:[01.24:]CLASS|SLOT=ITEM,...|@FILE",
                     help="equip the stored character (peer/select summaries and self inventory): "
-                         "starter:titan|hunter|warlock, or item indexes of the investment globals "
+                         "starter:titan|hunter|warlock for 01.00; starter:01.24:CLASS for 01.24; "
+                         "or item indexes of the investment globals "
                          "item list per equipment slot 0-19 (scripts/d1_pkg.py items); without gear "
                          "the guardian renders as the see-through placeholder")
     ap.add_argument("--character-overlay", type=overlay_spec,
