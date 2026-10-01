@@ -1167,6 +1167,29 @@ USER_MSG_REQ, USER_MSG_RSP = 0x20, 0x21
 # has only optional fields (1 int32, 2 int64, 3-6 strings), so an empty body decodes. Left
 # unanswered, the client closed with weasel right after the roster push (FINAL124_UNIVERSE2).
 MM_REQ, MM_RSP = 0x2A, 0x2B
+# The poll (request field 2 = 4) is consumed by 0x490a30 (manager 0x5b5358, kind 4): with field 4
+# present it copies that string (<= 0x418 bytes) to the poll object +0x34, sets +0x30 ("match
+# found", status 2 from 0x490b08) and stops polling; without it the poll repeats (state 5).
+# A non-submessage field 4 fails decoding: weasel (FINAL124_MM2).
+
+
+def mm_rsp_body(spec):
+    """mm rsp from "N=VALUE,..." - fields 1-2 are integers, 3-6 submessages given as hex (empty
+    for a present but empty submessage). In this nanopb build type 6 is a submessage: the
+    descriptor (0x01306900) nests 3 = {1: repeated {1: {84-byte blob}, 2: char[32], 3, 5:
+    fixed32}, 2: int}, 4 = {1: 11 ints, 2: {1: 7 ints, 2: repeated 7 ints}}, 5 = {1: u64},
+    6 = {1: char[32], 2: 8 ints}. Commas separate fields (-BapExtra splits on semicolons)."""
+    out = b""
+    for part in filter(None, spec.split(",")):
+        number, _, value = part.partition("=")
+        number = int(number)
+        if number in (1, 2):
+            out += signon_proto.field(number, signon_proto.VARINT, int(value, 0) & (1 << 64) - 1)
+        elif 3 <= number <= 6:
+            out += signon_proto.field(number, signon_proto.BYTES, bytes.fromhex(value))
+        else:
+            raise ValueError(f"mm rsp has no field {number}")
+    return out
 EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP,
                  UNSUB_REQ: UNSUB_RSP, UPO_REQ: UPO_RSP, MM_REQ: MM_RSP}
 PROTO_REPLIES = {USER_MSG_REQ: (USER_MSG_RSP, signon_proto.field(4, signon_proto.VARINT, 0))}
@@ -1681,6 +1704,8 @@ def handle(conn, peer, args):
             if kind == 1 and (msg_type in EMPTY_REPLIES or msg_type in PROTO_REPLIES):
                 reply_type, reply_body = (PROTO_REPLIES[msg_type] if msg_type in PROTO_REPLIES
                                           else (EMPTY_REPLIES[msg_type], b""))
+                if msg_type == MM_REQ and args.mm_rsp:
+                    reply_body = mm_rsp_body(args.mm_rsp)
                 reply = encrypted_frame(tx, reply_type, msg_id, 200, reply_body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-{reply_type:02x}.bin").write_bytes(reply)
@@ -1740,6 +1765,9 @@ def parse_args(argv=None):
     ap.add_argument("--start-rsp-body", type=bytes.fromhex, default=None, metavar="HEX",
                     help="body of the 01.24 start rsp (0x1f) answering start req (0x1e); default: echo "
                     "the 128-byte request payload (the client decodes exactly 0x80 bytes)")
+    ap.add_argument("--mm-rsp", default="", metavar="N=VALUE,...",
+                    help="01.24 mm rsp fields (1-2 integers, 3-6 submessages as hex); default: empty, which the "
+                    "client treats as 'no match yet'")
     ap.add_argument("--ws-signin", action="store_true",
                     help="answer service 503 with a typed sign-in response carrying the request's account id")
     ap.add_argument("--ws-no-optional", action="store_true",

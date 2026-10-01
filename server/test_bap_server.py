@@ -448,3 +448,9 @@ class AccountUserData(unittest.TestCase):
     def test_mm_req_gets_an_empty_mm_rsp(self):
         # 01.24 mm rsp (descriptor 0x01306900) has only optional fields
         self.assertEqual(bap.EMPTY_REPLIES[bap.MM_REQ], bap.MM_RSP)
+
+    def test_mm_rsp_fields(self):
+        self.assertEqual(bap.mm_rsp_body("1=0,4="), bytes.fromhex("0800") + bytes.fromhex("2200"))
+        self.assertEqual(bap.mm_rsp_body("4=0801"), bytes.fromhex("22020801"))
+        with self.assertRaises(ValueError):
+            bap.mm_rsp_body("7=x")

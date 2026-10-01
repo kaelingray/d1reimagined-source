@@ -367,3 +367,35 @@ slot `0x2c` at `0x47a430` consumes it; chain `0x47a5a0 0x47be80 0x928774 0x930c7
 resolve that slot-0x2c consumer (the matchmaking request object created by `0x4906d8`) and
 the `mm rsp` fields it needs for "match found", then the activity host connection it leads to.
 The watch list was restored afterwards.
+
+## Matchmaking reply: field 4 is the match; then the activity host proxy (01.00's ahp req)
+
+The poll consumer is **`0x490a30`** (the manager's reply dispatcher `0x5b5358` switches on
+the request kind: 4 = poll -> `0x490a30`, 1 -> `0x4912dc`, 2/3 -> `0x48f8dc`; the manager
+object, 0x59c0 bytes, vtable `0x13edc38`, is created by `0x48eb9c` and its poll object sits at
+`+0x5088`). When the reply has field 4 (has-flag at struct +0x1b80) it copies that 1048-byte
+field to poll `+0x34`, sets `+0x30` ("match found") and stops polling; otherwise it sets state
+5 and polls again. The bootflow step `0x36da20` reads the status (vtable slot 14 -> `0x490b08`:
+1 busy, 2 found, 3 idle) and returns 2 on a match; otherwise it restarts the poll (slot 16)
+with the activity id from `0x34d288`.
+
+In this nanopb build the type nibble 6 is a **submessage** (5 string, 4 bytes, 2 fixed32): the
+"string defaults" are nested descriptors. Full `mm rsp` (`0x01306900`): 1 int32, 2 int64,
+3 = {1: repeated {1: {84-byte blob}, 2: char[32], 3: fixed32, 5: fixed32}, 2: int},
+4 = {1: {9 ints, 2 fixed32}, 2: {1: {6 ints, 1 fixed32}, 2: repeated same}}, 5 = {1: u64},
+6 = {1: char[32], 2: {8 ints/fixed32}}. `mm req` (`0x01306496`): 1-6 ints (seen: 1 = 2,
+2 = 4 poll, 3 = random u64), 7 = {1: {u64, ints, repeated int, {fixed32 x3, 3 x char[32]},
+u64 x2}, 2, 3: {bool}}, 8 = {1: u64, 2: {that 336-byte struct, {84-byte blob}, char[33]}, 3},
+9 = {u64}, 10/11 = {u32, u32} (the poll sends 11 = {1846390409, 1686739444}).
+
+- `FINAL124_MM2`, field 4 sent as a marker string: not a valid submessage -> decode failure ->
+  **weasel**; the consumer never ran.
+- `FINAL124_MM3`, `--mm-rsp 4=` (present, empty submessage): the consumer ran (`0x490a30`,
+  chain `0x5b53f0 0x5b3004 0x47a434`), and 0.45 s later the client sent **`ahp req`** (0x10,
+  8 zero bytes): the activity host proxy request that 01.00 sent at this point. The stand-in had
+  no `--ahp-reply`, answered the next request instead, and the client closed.
+
+`bap_server.py --mm-rsp "N=VALUE,..."` sets mm rsp fields (1-2 integers, 3-6 submessages as
+hex). Next, `FINAL124_MM4`: `--ahp-reply 00000000000000007f01018000003233` (proxy
+127.1.1.128:12851, as in 01.00) and a proxy stand-in with `--ah-mgr-reply` (02 | host id 1 |
+char[128] "d1local-host").
