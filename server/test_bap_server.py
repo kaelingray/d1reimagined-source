@@ -259,3 +259,37 @@ class ReactiveObjects(unittest.TestCase):
         self.assertEqual(bap.replace_object(objects, spec), (1, 3, 0))
         self.assertEqual(len(objects), 2)
         self.assertEqual(objects[-1], spec)
+
+
+class StartRequest(unittest.TestCase):
+    """01.24 opens the BAP session with start req (0x1e, plaintext); FINAL124_ALL_CHAINS."""
+
+    def test_start_req_gets_a_plain_status_200_start_rsp(self):
+        import socket
+        import tempfile
+        import threading
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        logs = []
+        self.addCleanup(setattr, bap, "log", bap.log)
+        bap.log = logs.append
+        args = bap.parse_args(["--bind", "127.0.0.1", "--capture-dir", tmp.name,
+                               "--schema", str(Path(tmp.name) / "none.json"), "--start-rsp-body", "00000000"])
+        server, client = socket.socketpair()
+        thread = threading.Thread(target=bap.handle, args=(server, ("127.0.0.1", 0), args), daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 2)
+        self.addCleanup(client.close)
+        payload = b"DESTINY\x01" + bytes(range(120))
+        inner = struct.pack(">HI", bap.START_REQ, 0) + payload
+        client.sendall(struct.pack(">BBI", 1, 2, len(inner)) + inner)
+        client.settimeout(2)
+        expected = bap.plain_frame(bap.START_RSP, 0, 200, b"\0\0\0\0")
+        reply = b""
+        while len(reply) < len(expected):
+            chunk = client.recv(len(expected) - len(reply))
+            if not chunk:
+                break
+            reply += chunk
+        self.assertEqual(reply, expected)
+        self.assertTrue(any("start req magic" in line and "DESTINY" in line for line in logs), logs)

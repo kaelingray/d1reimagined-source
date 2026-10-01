@@ -409,6 +409,10 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
 
 CAPTURE_DIR = SIGNON / "captures" / "bap"
 SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
+# 01.24 opens with "c->b start req" (0x1e): plaintext, payload "DESTINY" 0x01 + 120 bytes of
+# LCG output (builder 0x8c74e4). The reply dispatcher 0x8c7c94 expects "start rsp" (0x1f) for
+# request kind 1, checks status 200 and decodes the payload into a discarded 0x800-byte buffer.
+START_REQ, START_RSP = 0x1E, 0x1F
 QZ_REG_REQ, QZ_REG_RSP = 0x79, 0x7A
 ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
 WS_REQ, WS_RSP = 0x0A, 0x0B
@@ -1069,7 +1073,8 @@ NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08
          0x0E: "unsubscribe req", 0x0F: "unsubscribe rsp", 0x10: "ahp req", 0x11: "ahp rsp",
          0x12: "client config req", 0x13: "client config rsp", 0x14: "shutdown not",
          0x15: "upo req", 0x16: "upo rsp", 0x17: "acct id trans req", 0x18: "acct id trans rsp",
-         SHELLO_REQ: "shello req", SHELLO_RSP: "shello rsp", QZ_REG_REQ: "qz_reg req",
+         SHELLO_REQ: "shello req", SHELLO_RSP: "shello rsp", START_REQ: "start req",
+         START_RSP: "start rsp", QZ_REG_REQ: "qz_reg req",
          QZ_REG_RSP: "qz_reg rsp", 0x7B: "qz->c update not", 0x7C: "qz->c sub lost not",
          ECHO_REQ: "echo req", ECHO_RSP: "echo rsp", 0x12C: "c->b irc not", 0x12D: "b->c rrc not",
          RRC_REQ: "rrc req", RRC_RSP: "rrc rsp"}
@@ -1580,6 +1585,13 @@ def handle(conn, peer, args):
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
                         f"({len(push)} bytes, root object {'yes' if args.schema and family_type in ROOT_OBJECTS else 'no'})")
+            if msg_type == START_REQ and kind == 2:
+                magic = payload[:8]
+                reply = plain_frame(START_RSP, msg_id, 200, args.start_rsp_body)
+                log(f"[{tag}] start req magic {magic!r} ({len(payload)} bytes); sending start rsp "
+                    f"({len(args.start_rsp_body)}-byte body)")
+                folder.joinpath(f"{number:03}-server-start-rsp.bin").write_bytes(reply)
+                conn.sendall(reply)
             if msg_type == SHELLO_REQ:
                 fields = [(n, w, v if w == 0 else len(v)) for n, w, v in signon_proto.decode(payload)]
                 log(f"[{tag}] shello req fields {fields}")
@@ -1609,6 +1621,8 @@ def parse_args(argv=None):
     ap.add_argument("--timeout", type=float, default=120)
     ap.add_argument("--ws-zero-bytes", type=int, default=1024,
                     help="answer c->ws requests with the service id and this many zero bytes (0: no reply)")
+    ap.add_argument("--start-rsp-body", type=bytes.fromhex, default=b"", metavar="HEX",
+                    help="body of the 01.24 start rsp (0x1f) answering start req (0x1e); default empty")
     ap.add_argument("--ws-signin", action="store_true",
                     help="answer service 503 with a typed sign-in response carrying the request's account id")
     ap.add_argument("--ws-no-optional", action="store_true",
