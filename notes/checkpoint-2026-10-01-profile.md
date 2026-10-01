@@ -943,3 +943,15 @@ their states are dropped. At +180 s the objective/sequence/trigger step produces
 MISSION - THE TAKEN KING: PRELUDE"** banner (23:06:11): the incoming sequence plays. No
 objective text or waypoint follows (23:06:30). Next: arrive in 113 with the director (cinematic
 instances present), and trace the objective handler `0x3a68c0` for objective 3.
+
+`FINAL124_JOIN32` arrives in the intro slice set **113** (`--ah-zone 113:0x811c9dc5 --ah-world-state
+113:1`, otherwise JOIN31): current 113 at 23:13:35, dialogs dismissed, and the cinematic handler now
+runs for a different instance (`r3=0x607b8d20`, the 113 cinematic). When the director's revival
+state arrives (+60 s, 23:14:17) the client **crashes**: `VM: Access violation reading location
+0x110` at `0x2160b4` (in `0x2160ac`, the "player inside the area" test the cinematic start calls
+for state +0xc). Cause: +0xc (`0x808004b1`) is not optional, and the stand-in encoded every unset
+field as zero, i.e. a real reference {group 0, kind 0, index 0} that resolves to nothing. The
+client's reset state holds the null reference {`0x811c9dc5`, -1, -1}. **Fix:**
+`null_object_refs()` fills every unset, non-optional object reference of an explicitly encoded
+state with the null reference (recursively); `sim_packet` applies it to all object states
+(cinematics, objectives, game mode +0x4dc, ...). Regression test added (99 server tests pass).

@@ -97,6 +97,21 @@ class UpdatedBuildLayouts(unittest.TestCase):
         self.assertEqual((decoded[0x4D8], decoded[0x4E4]), (-1, 0x811C9DC5))
 
 
+class NullObjectRefs(unittest.TestCase):
+    def test_unset_references_are_null_not_zero(self):
+        schema = {"0x8080254d": {"fields": [prim(4, 9, 32), nested(0xC, b.OBJECT_ID_TYPE),
+                                            nested(0x18, 0x80804C23)]},
+                  "0x80804c23": {"fields": [nested(0, b.OBJECT_ID_TYPE), prim(8, 9, 32)]},
+                  f"{b.OBJECT_ID_TYPE:#x}": {"fields": [prim(0, 9, 32), prim(4, 3, 7, 1),
+                                                        prim(6, 4, 16, 0x8000)]}}
+        state = b.null_object_refs(schema, 0x8080254D, {4: 1, 0x18: {8: 2}})
+        decoded = investment.decode(schema, 0x8080254D, investment.encode(schema, 0x8080254D, state))
+        null = {0: 0x811C9DC5, 4: -1, 6: -1}
+        self.assertEqual((decoded[4], decoded[0xC], decoded[0x18][0], decoded[0x18][8]), (1, null, null, 2))
+        given = {0: 7, 4: 6, 6: 1}
+        self.assertEqual(b.null_object_refs(schema, 0x8080254D, {0xC: given})[0xC], given)
+
+
 class EntityIndices(unittest.TestCase):
     def test_bitmap_words(self):
         schema = {

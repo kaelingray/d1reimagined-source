@@ -700,7 +700,7 @@ def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=(
         body.put(1, 1)
         body.put(0 if state_type is None else 1, 1)
         if state_type is not None:
-            investment.encode_into(body, schema, state_type, state)
+            investment.encode_into(body, schema, state_type, null_object_refs(schema, state_type, state))
         if has_b:
             body.put(0, 1)
         w.put(len(body.bits), 32)
@@ -708,6 +708,28 @@ def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=(
     if objects:
         w.put(0, 1)
     return w.data()
+
+
+NULL_OBJECT_REF = {0: 0x811C9DC5, 4: -1, 6: -1}
+
+
+def null_object_refs(schema, handle, values):
+    """`values` with every unset, non-optional object reference (type 0x808004b1) set to the
+    null reference {empty-name group, kind -1, index -1}, recursively. Unset fields are otherwise
+    encoded as zeros, and {group 0, kind 0, index 0} is a real reference to the client: JOIN32's
+    revival cinematic (state +0xc, the area the player must be inside) resolved it to nothing and
+    crashed in 0x2160ac (read of 0x110). The client's own reset state holds the null reference."""
+    out = dict(values or {})
+    for field in schema[f"{handle:#x}"]["fields"]:
+        if field["kind"] != 1 or field["arr"] == 1:
+            continue
+        off, nested = field["off"], field["nested"]
+        if nested == OBJECT_ID_TYPE:
+            if off not in out and not field["opt"]:
+                out[off] = dict(NULL_OBJECT_REF)
+        elif off in out or not field["opt"]:
+            out[off] = null_object_refs(schema, nested, out.get(off))
+    return out
 
 
 def sim_player(schema, group, index, machine_id, spawn=None):
