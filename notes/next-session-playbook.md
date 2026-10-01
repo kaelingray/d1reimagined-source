@@ -7,9 +7,10 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-Claude's latest milestone is stage 21, `profile_setup`, after BAP and investment
-sign-in. The September 30 stage-19 waits were resolved by package-chain
-registration and the updated qz object type hashes. Continue with
+The current milestone is stage 24, `character:prologue`, after real character
+creation/selection and the account active-character offset correction. The
+September 30 stage-19 waits were resolved by package-chain registration and
+the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
 setup input sequence and the next service boundary. The later 01.00 mission
 experiments in this file remain historical.

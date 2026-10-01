@@ -342,6 +342,43 @@ class ProfileRequests(unittest.TestCase):
             self.assertEqual(rx.open(reply), struct.pack(">HIH", msg_type, msg_id, 200) + body)
 
 
+class ActiveCharacter(unittest.TestCase):
+    def test_self_family_keeps_full_soid_for_both_account_layouts(self):
+        def field(off, kind, width=0, nested=-1, arr=0):
+            return {"off": off, "kind": kind, "width": width, "nested": nested,
+                    "arr": arr, "opt": 1, "min": 0}
+
+        character = 0x123456789ABCDEF0
+        for active_offset in (0x60, 0x68):
+            with self.subTest(active_offset=active_offset):
+                account = [field(0, 6, 64), field(8, 1, nested=0x80804621)]
+                if active_offset == 0x68:
+                    account.append(field(0x60, 9, 32))
+                account.append(field(active_offset, 6, 64))
+                schema = {
+                    "0x80801803": {"fields": [field(0, 1, nested=0x808018C7)]},
+                    "0x808018c7": {"fields": account},
+                    "0x80804621": {"fields": [field(0, 5, 32),
+                                              field(8, 1, nested=0x80804620, arr=1)]},
+                    "0x80804620": {"fields": [field(0, 6, 64)]},
+                }
+                payload = bap.family_blob(schema, 4, 7, character_id=character,
+                                          active_id=character)
+                # One family, one root object. Decode its real wire payload:
+                # the new +0x60 u32 must not truncate the active SOID.
+                self.assertEqual(struct.unpack_from(">I", payload, 21)[0], 1)
+                length = struct.unpack_from(">I", payload, 37)[0]
+                decoded = bap.investment.decode(schema, 0x80801803, payload[41:41 + length])[0]
+                self.assertEqual(decoded[active_offset], character)
+                self.assertEqual(decoded[8][8], [character])
+                if active_offset == 0x68:
+                    self.assertNotIn(0x60, decoded)
+
+    def test_unknown_account_layout_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "active-character layout"):
+            bap.active_character_offset({"0x808018c7": {"fields": [{"kind": 9}]}})
+
+
 class ObjectHashes(unittest.TestCase):
     """qz object type hashes follow the schema's build (type size); 01.24 grew four types."""
 

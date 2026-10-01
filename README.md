@@ -4,7 +4,7 @@ This repository tracks an attempt to run a personally owned copy of Destiny 1 wi
 
 ## Current target: 01.24 (2026-10-01)
 
-01.24 accepts the local SignOn reply, registers the final package patch chains, completes the BAP handshake, and passes investment sign-in with the updated qz object hashes. Correct user-message and UPO replies now let it finish first-run screen settings and reach the class/appearance screens. A real 01.24 character-creation request is saved; completing that flow and reaching orbit still need live validation. Menu rendering flicker is also under investigation. The [current checkpoint](notes/checkpoint-2026-10-01-profile.md) records this continuation; the 01.00 milestones below remain historical.
+01.24 accepts the local SignOn reply, registers the final package patch chains, completes the BAP handshake, and passes investment sign-in with the updated qz object hashes. Correct user-message and UPO replies let it finish first-run screen settings and create a character in its separate store. The active-character SOID moved from account offset +0x60 to +0x68; selecting that field from the build's schema now lets character selection reach stage 24, the prologue cinematic. Orbit still needs live validation. Rendering flicker is under investigation; disabling colour-buffer reads was rejected because it breaks character lighting. The [current checkpoint](notes/checkpoint-2026-10-01-profile.md) records the evidence; the 01.00 milestones below remain historical.
 
 The earlier stage-19 waits were resolved by registering the full package chains, including the shared manifests. The default launcher now builds the 837-entry manifest with `--chains`.
 

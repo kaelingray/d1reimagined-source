@@ -24,7 +24,7 @@ screenshots, direct bootflow samples, and matching service traffic are needed.
 The isolated Windows regression test verifies a frame that arrives after the
 initial BAP connection is included in continuation mode. All ownership,
 interruption, log-capture, and environment-restoration fixtures still pass.
-The current Python suites pass 85 server tests and 65 script tests (150 total).
+The current Python suites pass 87 server tests and 65 script tests (152 total).
 
 Fresh run `FINAL124_PROFILE1` uses the default all-chain manifest, current
 01.24 schemas and separate store, `-BootSeconds 360 -PressSeconds 260
@@ -106,3 +106,90 @@ intermittent black rectangle in the character preview. All required color/depth
 read/write and tiling settings are already enabled. A one-frame surface dump
 and a short RSX trace are saved privately; investigation continues separately
 from the now-passing post-setup protocol gate.
+
+## Account active-character field migration
+
+The creation wait has a concrete layout error: the self account (0x808018c7)
+contains its roster at +0x08. 01.00 then has a u64 active-character SOID at
++0x60. Both 01.13 and 01.24 insert a u32 at +0x60 and move the SOID to +0x68.
+`family_blob()` still wrote the old offset, silently truncating the SOID and
+leaving the actual active field absent. It now selects the verified scalar
+layout following the roster in the selected schema. Unknown populated layouts
+fail explicitly. A wire round-trip regression covers both layouts, preserving
+all 64 bits and the roster, and ensuring the new u32 is not populated with the
+character ID. Render3 subsequently validated this live, as recorded below.
+
+## Rendering experiments
+
+`FINAL124_RENDER1` changed only Strict Rendering Mode to true. Four sampled
+Brightness frames were clean, but the fifth (11:46:03) again has a magenta lower
+rectangle (21.29% of the full image) and missing text. Strict mode is **not a
+fix**. It was restored before the next trial. This run also completed setup
+using the stored 01.24 character; it did not contain the active-ID correction,
+which was made after its server had started.
+
+`FINAL124_RENDER2` was stopped immediately: its trial shader-mode string did
+not match this RPCS3 build's enum. It is not a valid comparison. The actual enum
+is `Legacy Recompiler (single-threaded)`, confirmed in `system_config_types.cpp`.
+`FINAL124_RENDER3` uses that value, baseline strict mode, and the corrected
+active-character field. It reproduced the same magenta bottom rectangle on
+Brightness at 11:52:12, so synchronous compilation is **not a fix** either.
+
+Selecting the stored Titan in Render3 sent service 504 at 11:57:51. The corrected
+self v2 push then let the client proceed through services 701/702 into the
+prologue cinematic. The direct sample at 11:58:43 confirms stage 24,
+`character:prologue`. This validates the +0x68 active-character migration live;
+the prior creation wait was not a missing 501 reply.
+
+Six short render dumps on Brightness include pink data in early passes (0xce8e0000
+ARGB8 / 0xceb60000 FP16), without NaN/Inf. The rendering trial therefore also
+tests CPU fallback image copies: NV0039 already performs a post-copy write
+barrier, whereas NV3089's CPU image-copy path does not. A private diagnostic
+build adds the barrier and write-generation notification after the copy, behind
+`d1cpuwritefix.on`, to test this hypothesis. It is **not a verified fix** and is
+not yet added to the tracked emulator patches.
+
+Render3 stopped presenting frames/sending BAP traffic during the prologue,
+after its last keep-alive at 12:00:22. A direct sample still reports stage 24.
+Its owned stack was closed and final evidence indexed (971 package opens).
+The CPU-copy trial built successfully on this PC (MSBuild exit 0); the private
+binary hash is `84624c770f0d46a6b3dc39f27dd2c1f4fe7583ab5edde3523dbc5a8a1a8233ff`.
+The baseline executable is retained as `rpcs3.before-cpuwrite.exe`. Fresh run
+`FINAL124_CPUWRITE1` uses baseline graphics settings and the trial marker;
+it reproduced severe magenta/white blocks on Screen Bounds at 12:09:04.
+The trial is **not a fix**. Its owned stack was stopped, indexed (971 package
+opens), and the baseline executable and NV3089 source restored. The trial marker
+was renamed to an inert run-specific `.off` file.
+
+The second PC **does** now have MSVC/MSBuild at `F:\VS\BuildTools`; the later
+October 1 audit append/README supersede the original handoff's toolchain warning.
+The deployed emulator has been restored to the verified main-PC d1p3 build.
+
+`FINAL124_NOREADCOLOR1` changes only Read Color Buffers to false, retaining
+Read/Write Depth, Write Color and tiling. The September 27 test log places the
+first setup-menu flicker after buffer reads were enabled (before custom builds).
+This tests that connection; disabling color reads is not yet a verified solution
+and must not be generalized to the 01.00 mission lighting, which needed reads.
+
+That trial had eleven clean Brightness and eleven clean Subtitles samples
+(0% magenta), but Choose Your Class rendered the Titan in rainbow colours
+(12:16:17–12:16:24). **Rejected: it breaks character lighting.** Color reads
+were restored before further testing. No launcher default or tracked emulator
+patch was changed to disable them. The user also explicitly requires both
+menus and character/gameplay rendering to be correct.
+
+`FINAL124_NOREADDEPTH1` retains color reads and disables only depth reads.
+Brightness still flickered: multiple captures at 12:19:48–12:20:27 show the
+same 21.3% magenta lower rectangle. Rejected; depth reads restored. A short
+non-dumping trace shows the HDR buffer reloaded once each frame, rather than
+an absence of reloads. `FINAL124_ACCURATEDMA1` retains all baseline buffer
+settings and enables Accurate SPU DMA to test CPU/GPU transfer synchronization.
+
+Accurate DMA also reproduced the lower magenta rectangle at 12:24:56 and was
+restored. The next run, `FINAL124_LABELSTRICT1`, combines Strict Rendering Mode
+with Allow Host GPU Labels, retaining all buffer reads/writes. Strict mode alone
+failed earlier. RPCS3 maintainer discussion in
+[issue 17413](https://github.com/RPCS3/rpcs3/issues/17413#issuecomment-3152820679)
+describes delayed texture-read semaphore releases and host labels as complementary
+controls for SPU/GPU output races in another game. That is a hypothesis for this
+test, not evidence that Destiny has the same cause or that this setting fixes it.

@@ -377,9 +377,25 @@ def account_flags(schema, spec, layout=None, values=None):
             layout["B"]["wrapper_offset"]: {layout["B"]["offset"]: slots("B")}}
 
 
+def active_character_offset(schema):
+    """Account's active character SOID: 01.00 +0x60; updates insert a u32 before it."""
+    fields = (schema.get("0x808018c7") or {}).get("fields", [])
+    if not fields:
+        return 0x60  # historical/minimal schemas
+    roster = next((i for i, field in enumerate(fields)
+                   if field.get("nested") == 0x80804621), None)
+    if roster is not None:
+        tail = fields[roster + 1:]
+        if tail and tail[0]["kind"] == 9:
+            tail = tail[1:]
+        if tail and tail[0]["kind"] == 6:
+            return tail[0]["off"]
+    raise ValueError("unsupported account active-character layout")
+
+
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
                 version=1, flags=1, active_id=None, self_flags=None, peer=False, extras=None):
-    """qz payload for one family. For self (4), `active_id` fills root +0x60, the active
+    """qz payload for one family. For self (4), `active_id` fills the account's active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
     (0x32f748 via 0x325350) proceeds only when it is set."""
@@ -398,7 +414,7 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
             else:
                 fields[0][8] = character_list
                 if active_id is not None:
-                    fields[0][0x60] = active_id
+                    fields[0][active_character_offset(schema)] = active_id
         if family_type == 4 and self_flags is not None:
             fields[0].update(account_flags(schema, self_flags, flags_layout, flag_values))
         objects.append(investment.obj(object_hash(schema, type_hash, handle), root, investment.encode(schema, handle, fields)))
