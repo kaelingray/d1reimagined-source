@@ -189,7 +189,163 @@ Accurate DMA also reproduced the lower magenta rectangle at 12:24:56 and was
 restored. The next run, `FINAL124_LABELSTRICT1`, combines Strict Rendering Mode
 with Allow Host GPU Labels, retaining all buffer reads/writes. Strict mode alone
 failed earlier. RPCS3 maintainer discussion in
-[issue 17413](https://github.com/RPCS3/rpcs3/issues/17413#issuecomment-3152820679)
+[issue 17413](https://github.com/RPCS3/rpcs3/issues/17413)
 describes delayed texture-read semaphore releases and host labels as complementary
 controls for SPU/GPU output races in another game. That is a hypothesis for this
 test, not evidence that Destiny has the same cause or that this setting fixes it.
+
+The label/strict trial exited at 12:29:25. Windows Application Error identifies
+`nvoglv64.dll` and exception `0xc0000005`, rather than an RSX verification fatal.
+This is not a validated synchronization fix; both settings were restored.
+`FINAL124_NOWRITECOLOR1` disables only Write Color Buffers with reads retained.
+It removes the textured menu background (12:34:00 and 12:34:22), then stops
+presenting frames. Rejected; writes restored.
+
+`FINAL124_GRID1` retains baseline settings and uses a private build with 33
+surface-memory samples (the existing SPU generation check is retained). Build
+exit 0, hash `0da465694d7ad6cbedaf33196054fdbb5cf065e5b8235dce133612261110b7d8`.
+Seven of eleven Brightness samples at 12:41:12–12:41:28 have the same ~21.3%
+magenta rectangle. Rejected; the source header has been restored. No failed
+graphics experiment is in the tracked emulator patches.
+
+Grid1 also selected the saved character (504 at 12:45:32) and **played the
+prologue video**: 12:46:41 shows the astronaut on Mars, and the direct sample
+confirms `character:prologue`. This is stronger evidence than merely entering
+stage 24; it does not establish orbit yet. The video finishes at 12:48:49,
+then the client requests services 105/205 and account-ID translation before
+closing BAP at 12:48:54 with error **PIG**. The next protocol boundary is
+therefore after the prologue, not a successful orbit transition. Type `0xab`
+is `c->x not` in the 01.24 name table (`0x8c7f48`, table `0x134f3d0`), so
+its presence does not justify inventing a request/reply pair.
+
+A subsequent private diagnostic build captures guest HDR memory immediately
+before `load_memory`, without a forced GPU writeback. It also traces SPU write
+notifications in the HDR range. The prior render dumps forced writebacks and
+could change the very cache state being investigated. Diagnostic output remains
+private; this change is not a rendering fix.
+
+
+`FINAL124_PRELOAD1` captures the guest HDR buffer without forcing writebacks.
+Seventeen initial captures are finite RGBA16F: R/G/B are equal, alpha is zero,
+and the RGB range is approximately 0.007–0.027. The existing generation check
+notices the SPU writes and reloads the buffer each traced frame. Heavy per-PUT
+tracing slows rendering substantially and suppresses the flicker; after tracing
+is disabled, five of six Brightness samples at 13:03:31–13:03:40 are magenta.
+The clean traced data is timing-dependent evidence, not proof that the source
+is always correct. The diagnostic source changes have been rolled back.
+
+The next controlled trial, `FINAL124_SNAPSHOT1`, retains every baseline buffer
+read/write. It takes upload-heap snapshots for local render-target reloads,
+using the existing CPU conversion path (`source_is_userptr`), behind the private
+`d1snapshot.on` marker. The ordinary zero-copy upload uses a shared DMA block;
+`VKDMA::dma_block::load` copies host bytes into that reusable block while GPU
+reads are queued. Snapshotting tests that lifetime/race hypothesis without
+removing the color data that character lighting needs. Build exit 0. This is
+still a trial until menus and characters pass with tracing disabled.
+
+
+Snapshot1 logged the candidate path at HDR and other local targets but still
+produced magenta in seven of thirteen Brightness samples at 13:07:39–13:07:59.
+Rejected; marker renamed inert, source restored. `FINAL124_ALIAS1` instead
+cleared deferred GPU inheritance when the SPU write generation changed. Five
+of eleven Brightness samples at 13:15:15–13:15:39 are magenta. Rejected; marker
+and source restored. The source has no combination of these failed candidates.
+
+The next private trial waits for the Vulkan queue at back-end semaphore release
+before writing the CPU-visible label. The existing fallback calls `thread::sync`,
+which flushes memory and pending occlusion reports, but does not unconditionally
+wait for the graphics queue. `d1backendwait.on` tests full completion explicitly
+without enabling imported host labels (the previous host-label/strict trial
+crashed the NVIDIA driver). All baseline rendering options remain enabled.
+
+
+`FINAL124_BACKENDWAIT1` built successfully and logged real queue completion at
+back-end labels, with Host GPU Labels false and all buffer reads/writes true.
+Brightness still flickered at 13:20:49–13:20:54. Rejected; marker and source
+restored. The trial does not establish delayed back-end completion as the
+cause. The next trial compares per-page SPU generations at GPU readback request
+and host flush, and preserves CPU-written pages when a pending writeback is
+older. These experiments remain private until a combined rendering check passes.
+
+
+`FINAL124_FLUSHGUARD1` built successfully and entered the per-page guard path.
+The first twenty sampled transfers report no newer SPU pages; that limited
+sample is not proof that none occur later. Five of nine Brightness captures at
+13:29:13–13:29:34 still have the magenta rectangle. Rejected; marker renamed,
+source restored. `FINAL124_CPUREADS1` tests local color initialization only for
+ranges with recorded SPU writes, including HDR/exposure buffers, while retaining
+the baseline configuration. This tests whether loading untouched color ranges
+causes the menu artifact without discarding the CPU lighting needed by avatars.
+It is not yet a supported configuration or a verified fix.
+
+## CPU-reads trial passes; tracked as a patch (Claude, 2026-10-01 afternoon)
+
+Codex reached its usage limit with `FINAL124_CPUREADS1` running; Claude took over the
+emulator and finished that observation before closing the owned stack (final log/index
+saved privately). With `d1cpureads.on`, colour targets in video memory were loaded from guest
+memory only when the per-page SPU write generation (`rsx::local_mem_write_gen`) was non-zero.
+A pixel count (R, B > 150 and G < 90) reproduces the earlier failures exactly (the 21.29-21.30%
+lower rectangle in about half of each baseline run's Brightness frames: Grid1 7/11,
+BackendWait1, FlushGuard1 5/9). CPUREADS1 had **0 of 51** magenta frames: 4 Screen Bounds,
+11 Brightness, 9 Subtitles, character select, and 7 Choose Your Class frames, with the Titan
+lit normally (no rainbow, unlike NoReadColor1). The trial log shows the HDR ARGB8 target
+`0xce8e0000` initialised without a load (read=0) and the FP16 `0xceb60000` / `0xcf880000`
+targets SPU writes reach still loaded (read=1).
+
+The behaviour is now `patches/rpcs3-destiny-spu-color-reads.patch`, applied on top of
+`rpcs3-destiny-main-memory-blit.patch`: no marker file or logging, and it only narrows Read
+Color Buffers (off stays off; targets in main memory keep the plain setting). Built on this
+PC (MSBuild exit 0), deployed **only** to `RPCS3_FINAL124_SMOKE001`; the trial build is kept
+there as `rpcs3.cpureads-trial.exe` and its marker renamed `FINAL124_CPUREADS1-cpureads.off`.
+`RPCS3_TEST048_SETUP` (01.00) is unchanged until a 01.00 mission run confirms that mission
+lighting, which needed colour reads, is unaffected.
+
+## PIG after the prologue: the universe object moved to service 205
+
+01.00's service 104 returns the universe object (type `0x80801941` at reply +8); without its
+root `0x7fffffffffffffff` the client raised **pig** (0x18, 0xa2,
+`error.investment_server_object_family_record_not_found`; 01.24 has stripped the failure name
+strings). In 01.24, 104's reply is a bool and **205's reply (`0x80801827`) carries the same
+universe type** (grown from 200 to 944 bytes; root, time, flags and values keep their offsets).
+The client calls 205 right after the prologue's service 105 (world 230). The stand-in now picks
+the universe service from the schema (`universe_service()`; 104 on 01.00, 205 on 01.24) and
+leaves 01.24's 104 bool unset; `d1_build_preflight.py` checks both.
+
+`FINAL124_UNIVERSE2` (tracked-patch emulator): 26 of 26 setup frames free of magenta; select
+stored Titan -> prologue video -> 105, 205 (universe) -> acct id trans -> **client config,
+104, then peer (0) and roster (2) subscriptions**, the same sequence 01.00 used before `ahp
+req`. PIG is gone. The client then closed with **weasel** 0.12 s after the roster push.
+Before the subscriptions it had sent `c->b mm req` (0x2a, 29-byte protobuf: 1=2, 2=4, 3=a
+64-bit id, 11={timestamp, ...}), which the stand-in left unanswered; replies must follow
+request order. The `mm rsp` codec (0x2b) live-read from the codec table is `0x477d9c`, whose
+nanopb descriptor `0x01306900` (19-byte entries: u32 tag, type byte, sizes, default pointer)
+has only optional fields: 1 int32, 2 int64, 3-6 strings (7012/1048/16/104 bytes). The stand-in
+now answers with an empty `mm rsp`; `FINAL124_MM1` tests it.
+
+## Profile setup on every launch: the settings live in the account, saved by service 701
+
+The game makes no PS3 save-data calls at all (the emulator log records every HLE call, e.g.
+46 module loads, trophy and cellGame calls; both `savedata` folders are empty). The setup
+answers are server-side: service 701's request (`0x808016dd` -> `0x80801716`, 1088 bytes) is
+the **account user data**, the same type as the self account `0x808018c7` field **+0x80**. Its
+`+0x410/+0x10` struct `0x808017f0` (21 bytes of bools and small enums) holds the setup choices
+(captured: 0=true, 3=2, 5=1, 7=3, 12=8, 13=6, 18=true, 20=3). The client sends 701 about every
+30 s; the stand-in acknowledged and discarded it, so each sign-in pushed an account without
++0x80 and the client ran Screen Bounds/Brightness/Subtitles again.
+
+The stand-in now stores the latest 701 body per account in the character store
+(`account_data`, next to the character) and writes it into the self account's +0x80
+(`account_data_offset()` matches the 701 request type in the schema). The local 01.24 store was
+seeded from `FINAL124_UNIVERSE2`'s last 701 (backup `characters-0124.before-account-data.json`).
+`FINAL124_SETTINGS1`: sign-in restored it, the self push grew to 3062 bytes, and the client
+sent user msg/UPO immediately (previously only after Subtitles) and showed **character select
+directly, with no setup screens**.
+
+`FINAL124_MM1` (empty `mm rsp`): sign-in -> character select without setup -> stored Titan ->
+prologue -> 105/205 -> client config, 104, acct id trans -> `mm req` answered -> 702 -> peer and
+roster subscriptions. **No weasel**: the session stays up, and the client repeats `mm req` every
+10 s (field 3, a 64-bit id, changes each time) and 702 every 30 s, showing the black loading
+screen with the spinner. The direct sample names stage **`setup:activity_session_creation`**,
+the step after the 01.00 subscriptions (01.00 asked for `ahp req` here). Next: what `mm rsp`
+must carry for the session to be created (its consumer, and fields 1-6), then the activity
+host route on 01.24.

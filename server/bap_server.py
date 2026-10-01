@@ -300,8 +300,37 @@ def load_store(path):
 def save_character(path, account_id, character_id, request_payload):
     """Remember one created character per local account (JSON; kept outside Git)."""
     store = load_store(path)
-    store[f"{account_id:#x}"] = {"id": character_id, "request": request_payload.hex()}
+    store.setdefault(f"{account_id:#x}", {}).update(id=character_id, request=request_payload.hex())
     path.write_text(json.dumps(store, indent=1), encoding="utf-8")
+
+
+def save_account_data(path, account_id, request_payload):
+    """Remember the account's user data from its latest service 701 request (see
+    account_data_offset), next to its character."""
+    store = load_store(path)
+    store.setdefault(f"{account_id:#x}", {})["account_data"] = request_payload.hex()
+    path.write_text(json.dumps(store, indent=1), encoding="utf-8")
+
+
+def account_data_offset(schema):
+    """Offset of the account user data in the self account (0x808018c7): the field of the type
+    service 701 uploads (01.24: 0x80801716 at +0x80, 1088 bytes, holding the profile-setup
+    settings 0x808017f0 at +0x410/+0x10). The client sends 701 every ~30 s and at sign-in reads
+    its settings back from this field; while it is absent every launch runs the first-run
+    profile setup (Screen Bounds, Brightness, Subtitles). None when the schema has no match."""
+    entry = (schema or {}).get("services", {}).get("701")
+    request = schema.get(entry[0]) if entry else None
+    data_type = next((f["nested"] for f in request["fields"] if f["off"] == 0 and f["kind"] == 1),
+                     None) if request else None
+    account = (schema or {}).get("0x808018c7", {}).get("fields", [])
+    return next((f["off"] for f in account if f["kind"] == 1 and f["nested"] == data_type),
+                None) if data_type is not None else None
+
+
+def account_data_values(schema, request_payload):
+    """Decoded account user data from a stored 701 request body (without the wire ID)."""
+    reader = investment.BitReader(request_payload)
+    return investment.decode_from(reader, schema, int(schema["services"]["701"][0], 16))[0]
 
 
 def parse_flag_spec(spec, counts=None):
@@ -394,7 +423,8 @@ def active_character_offset(schema):
 
 
 def family_blob(schema, family_type, root, character_id=None, character_profile=None,
-                version=1, flags=1, active_id=None, self_flags=None, peer=False, extras=None):
+                version=1, flags=1, active_id=None, self_flags=None, peer=False, extras=None,
+                account_data=None):
     """qz payload for one family. For self (4), `active_id` fills the account's active
     character: the user manager copies it to its entry +0x20 (0x2942fc) once a self
     character object with that id exists (0x29305c), and the bootflow's character step
@@ -417,6 +447,8 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                     fields[0][active_character_offset(schema)] = active_id
         if family_type == 4 and self_flags is not None:
             fields[0].update(account_flags(schema, self_flags, flags_layout, flag_values))
+        if family_type == 4 and account_data is not None and account_data_offset(schema) is not None:
+            fields[0][account_data_offset(schema)] = account_data
         objects.append(investment.obj(object_hash(schema, type_hash, handle), root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
@@ -953,14 +985,32 @@ UNIVERSE_TIME_UNITS = {"one": lambda t: 1, "s": lambda t: int(t), "ms": lambda t
                        "filetime": lambda t: int((t + 11644473600) * 1e7)}
 
 
-def universe_reply(args, schema=None):
-    """Service 104's universe object on 01.00; 01.24 has a bool instead."""
-    if schema:
-        entry = schema.get("services", {}).get("104")
+def universe_service(schema=None):
+    """The service whose reply carries the universe object (type 0x80801941 at +8): 104 on 01.00.
+    01.24's 104 returns a bool and 205 returns the universe; the client fetches it after the
+    prologue and fails with pig (family record not found) when its root is absent
+    (FINAL124_GRID1, 2026-10-01)."""
+    if not schema:
+        return 104
+    for wire in ("104", "205"):
+        entry = schema.get("services", {}).get(wire)
         response = schema.get(entry[1]) if entry else None
         field = next((f for f in response["fields"] if f["off"] == 8), None) if response else None
-        if field is None or field["kind"] != 1:
-            return None  # 01.24's service 104 returns a bool instead of the universe object
+        if field is not None and field["kind"] == 1 and field["nested"] == UNIVERSE_TYPE:
+            return int(wire)
+    return None
+
+
+def ws_reply_values(args, wire):
+    """Field values for a default service reply: the universe object for the universe service;
+    nothing for 01.24's 104, whose +8 is a bool rather than the 01.00 universe."""
+    if wire == universe_service(args.schema):
+        return universe_reply(args, args.schema)
+    return None if wire == 104 else WS_REPLY_VALUES.get(wire)
+
+
+def universe_reply(args, schema=None):
+    """The universe object for the service universe_service() names."""
     universe = {0: UNIVERSE_SOID, 8: universe_time(args.universe_time)}
     if args.universe_flags:
         universe[0x10] = {0: len(args.universe_flags), 4: list(args.universe_flags)}
@@ -990,6 +1040,7 @@ def acct_id_trans_reply(request, account_ids):
         raise ValueError("unexpected acct id trans request")
     return request + b"".join(struct.pack(">Q", a) for a in account_ids)
 UNIVERSE_SOID = 0x7FFFFFFFFFFFFFFF
+UNIVERSE_TYPE = 0x80801941
 FAMILY_TYPES = {"peer": 0, "inspection": 1, "roster": 2, "select_character": 3, "self": 4,
                 "universe": 5, "party_details": 6, "party_network_details": 7}  # 0xb6068c
 
@@ -1111,8 +1162,13 @@ USER_MSG_REQ, USER_MSG_RSP = 0x20, 0x21
 # entries, so an empty body is valid. User-msg has optional strings plus REQUIRED
 # integer field 4; omitting it failed decoding in FINAL124_PROFILE2 (weasel).
 # Answer both in order before later WS replies.
+# 01.24 also sends "c->b mm req" (0x2a, protobuf) after the prologue, before subscribing to the
+# peer and roster families. Its reply "mm rsp" (0x2b, decoder 0x477d9c, descriptor 0x01306900)
+# has only optional fields (1 int32, 2 int64, 3-6 strings), so an empty body decodes. Left
+# unanswered, the client closed with weasel right after the roster push (FINAL124_UNIVERSE2).
+MM_REQ, MM_RSP = 0x2A, 0x2B
 EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP,
-                 UNSUB_REQ: UNSUB_RSP, UPO_REQ: UPO_RSP}
+                 UNSUB_REQ: UNSUB_RSP, UPO_REQ: UPO_RSP, MM_REQ: MM_RSP}
 PROTO_REPLIES = {USER_MSG_REQ: (USER_MSG_RSP, signon_proto.field(4, signon_proto.VARINT, 0))}
 NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08: "c->ah not",
          0x09: "b->c not", 0x0A: "c->ws req", 0x0B: "c->ws rsp", 0x0C: "sub req", 0x0D: "sub rsp",
@@ -1121,7 +1177,7 @@ NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08
          0x15: "upo req", 0x16: "upo rsp", 0x17: "acct id trans req", 0x18: "acct id trans rsp",
          SHELLO_REQ: "shello req", SHELLO_RSP: "shello rsp", START_REQ: "start req",
          START_RSP: "start rsp", QZ_REG_REQ: "qz_reg req",
-         USER_MSG_REQ: "user msg req", USER_MSG_RSP: "user msg rsp",
+         USER_MSG_REQ: "user msg req", USER_MSG_RSP: "user msg rsp", MM_REQ: "mm req", MM_RSP: "mm rsp",
          QZ_REG_RSP: "qz_reg rsp", 0x7B: "qz->c update not", 0x7C: "qz->c sub lost not",
          ECHO_REQ: "echo req", ECHO_RSP: "echo rsp", 0x12C: "c->b irc not", 0x12D: "b->c rrc not",
          RRC_REQ: "rrc req", RRC_RSP: "rrc rsp"}
@@ -1241,7 +1297,7 @@ def handle(conn, peer, args):
     conn.settimeout(args.timeout)
     log(f"[{tag}] connection from {peer[0]}:{peer[1]}")
     rx = tx = None
-    account_id = character_id = character_profile = active_id = None
+    account_id = character_id = character_profile = active_id = account_data = None
     self_version = 1
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
@@ -1271,7 +1327,7 @@ def handle(conn, peer, args):
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
             version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags,
-            extras=args.character_extras))
+            extras=args.character_extras, account_data=account_data))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
@@ -1313,11 +1369,14 @@ def handle(conn, peer, args):
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent sign-in rsp (account id {account_id:#x})")
                 saved = load_store(args.store).get(f"{account_id:#x}") if args.store else None
-                if saved and args.schema:
+                if saved and args.schema and "id" in saved:
                     character_id = saved["id"]
                     character_profile = character_from_request(args.schema, character_id,
                                                                bytes.fromhex(saved["request"]))
                     log(f"[{tag}] restored stored character {character_id:#x}")
+                if saved and args.schema and "account_data" in saved and account_data_offset(args.schema):
+                    account_data = account_data_values(args.schema, bytes.fromhex(saved["account_data"]))
+                    log(f"[{tag}] restored stored account user data (701)")
             elif kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f5") and args.ws_signin:
                 # Service 501 creates a character; its response carries the new character soid.
                 # Keep the id stable for this local account during this connection.
@@ -1362,11 +1421,16 @@ def handle(conn, peer, args):
                   and default_ws_response(args.schema, int.from_bytes(payload[:2], "big"))):
                 wire = int.from_bytes(payload[:2], "big")
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, default_ws_response(
-                    args.schema, wire, universe_reply(args, args.schema) if wire == 104
-                    else WS_REPLY_VALUES.get(wire)))
+                    args.schema, wire, ws_reply_values(args, wire)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
+                if wire == 701 and args.store and account_id is not None and account_data_offset(args.schema):
+                    # Keep the latest account user data (settings) for the next sign-in.
+                    if payload[2:].hex() != (load_store(args.store).get(f"{account_id:#x}") or {}).get("account_data"):
+                        save_account_data(args.store, account_id, payload[2:])
+                        log(f"[{tag}] stored account user data from service 701")
+                    account_data = account_data_values(args.schema, payload[2:])
             elif kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_zero_bytes:
                 body = bytearray(args.ws_zero_bytes)
                 body[0] = (args.ws_result & 0xF) << 4  # u4 result code, MSB-first (0 = error_none)
@@ -1630,7 +1694,8 @@ def handle(conn, peer, args):
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
                                                             self_flags=args.self_flags, peer=args.peer_family,
-                                                            extras=args.character_extras))
+                                                            extras=args.character_extras,
+                                                            account_data=account_data))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "

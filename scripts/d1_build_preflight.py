@@ -114,24 +114,30 @@ def service_checks(schema):
         check(expected, actual, "service 503 sign-in")
         if reader.get(1):
             raise ValueError("service 503: unexpected response blob")
-    if "104" in schema["services"]:
-        args = argparse.Namespace(universe_time="one", universe_flags=(1, 2),
-                                  universe_values=((3, 1),))
-        values = bap_server.universe_reply(args, schema)
-        payload = bap_server.default_ws_response(schema, 104, values)
+    # The universe object is service 104's reply on 01.00 and 205's on 01.24, where 104 is a bool.
+    universe_wire = bap_server.universe_service(schema)
+    if universe_wire is None:
+        raise ValueError("no service replies with the universe object")
+    args = argparse.Namespace(schema=schema, universe_time="one", universe_flags=(1, 2),
+                              universe_values=((3, 1),))
+    for wire in sorted({104, universe_wire}):
+        if str(wire) not in schema["services"]:
+            continue
+        values = bap_server.ws_reply_values(args, wire)
+        payload = bap_server.default_ws_response(schema, wire, values)
         reader = investment.BitReader(payload)
-        if reader.get(16) != 104:
-            raise ValueError("service 104: response wire ID changed")
-        actual = investment.decode_from(reader, schema, int(schema["services"]["104"][1], 16))
+        if reader.get(16) != wire:
+            raise ValueError(f"service {wire}: response wire ID changed")
+        actual = investment.decode_from(reader, schema, int(schema["services"][str(wire)][1], 16))
         if values is not None:
-            check(values, actual, "service 104 universe")
+            check(values, actual, f"service {wire} universe")
         else:
-            fields = schema[schema["services"]["104"][1]]["fields"]
+            fields = schema[schema["services"][str(wire)][1]]["fields"]
             has_bool = any(field["off"] == 8 and field["kind"] == 2 for field in fields)
             if (has_bool and actual.get(8) is not False) or (not has_bool and 8 in actual):
-                raise ValueError("service 104: unexpected response field")
+                raise ValueError(f"service {wire}: unexpected response field")
         if reader.get(1):
-            raise ValueError("service 104: unexpected response blob")
+            raise ValueError(f"service {wire}: unexpected response blob")
     return len(schema["services"])
 
 

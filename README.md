@@ -120,7 +120,7 @@ Rebuilding RPCS3 on the second PC (MATILDASPC, done 2026-10-01; source, Qt and V
 
 1. Install Visual Studio 2026 Build Tools with the C++ workload (MSVC 14.51, Windows SDK 10.0.26100; about 3.5 GB on F:, a few GB on C:):
    `winget install -e --id Microsoft.VisualStudio.BuildTools --override "--quiet --wait --norestart --installPath F:\VS\BuildTools --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`
-2. Apply the diagnostic patch to a clean tree at `b5a174e93`: `git reset --hard`, `git apply --check` then `git apply patches\rpcs3-destiny-main-memory-blit.patch`, then `git add -N rpcs3/Emu/RSX/Common/local_mem_writes.h rpcs3/Emu/RSX/d1diag.h`.
+2. Apply the diagnostic patch to a clean tree at `b5a174e93`: `git reset --hard`, `git apply --check` then `git apply patches\rpcs3-destiny-main-memory-blit.patch`, then `git add -N rpcs3/Emu/RSX/Common/local_mem_writes.h rpcs3/Emu/RSX/d1diag.h`. For 01.24 also apply `patchespcs3-destiny-spu-color-reads.patch` on top (the setup-menu magenta fix; deployed only to `RPCS3_FINAL124_SMOKE001` until 01.00 mission lighting is rechecked with it).
 3. Move aside any copied CMake build folders under `build\tmp` whose `CMakeCache.txt` names another PC's path (here `glslang`, `libcurl`, `openal-soft`, `protobuf_build`, kept as `*.from-lukespc`). Their third-party libraries then reconfigure; everything else builds incrementally.
 4. Build from PowerShell, with the VS Installer folder on `PATH` (the third-party CMake steps call `vsdevcmd.bat`, which needs `vswhere.exe`):
    ```powershell
@@ -137,7 +137,7 @@ Rebuilding RPCS3 on the second PC (MATILDASPC, done 2026-10-01; source, Qt and V
 - `server/`: loopback service stand-ins (DNS, STUN, SignOn/auth3, Demonware lobby, BAP session server and activity-host proxy, investment/bit-stream encoder) and their tests. See [`server/README.md`](server/README.md).
 - `scripts/`: stack control, unattended input, the GDB tracing daemon, guest-memory readers and pollers, and the Xbox/Xenia helper scripts.
 - `notes/`: research notes. [`ps3-route.md`](notes/ps3-route.md) covers setup, the dated checkpoints ([character](notes/checkpoint-2026-09-24-character.md), [orbit and activity](notes/checkpoint-2026-09-25-orbit.md)) record findings and addresses, and [`test-log.md`](notes/test-log.md) holds per-run results.
-- `patches/`: RPCS3 source patches for the PS3 route (`rpcs3-destiny-fix.patch`: the rendering fix; `rpcs3-destiny-main-memory-blit.patch`: the fix plus the `D1T`/`D1DIAG` tracing and one-frame surface dump used to find it) and Xenia patches from the Xbox 360 route.
+- `patches/`: RPCS3 source patches for the PS3 route (`rpcs3-destiny-fix.patch`: the rendering fix; `rpcs3-destiny-main-memory-blit.patch`: the fix plus the `D1T`/`D1DIAG` tracing and one-frame surface dump used to find it; `rpcs3-destiny-spu-color-reads.patch`, applied on top: colour targets in video memory are loaded from guest memory only where SPU DMA wrote, which removes the 01.24 setup-menu magenta blocks) and Xenia patches from the Xbox 360 route.
 
 ## Xbox 360 / Xenia route (paused)
 

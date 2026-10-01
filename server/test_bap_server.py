@@ -391,3 +391,60 @@ class ObjectHashes(unittest.TestCase):
         self.assertEqual(bap.object_hash(new, 0xA2AC2C74, 0x80801951), 0xA2AC2C74)   # unchanged type
         self.assertEqual(bap.object_hash(None, 0x88190FE1, 0x80801803), 0x88190FE1)
         self.assertEqual(bap.object_hash({"0x80801803": {"size": 1}}, 0x88190FE1, 0x80801803), 0x88190FE1)
+
+
+class UniverseService(unittest.TestCase):
+    """01.00 replies to 104 with the universe object; 01.24's 104 is a bool and 205 has it."""
+
+    @staticmethod
+    def schema(universe_wire):
+        other = "205" if universe_wire == "104" else "104"
+        return {"services": {universe_wire: ["0x1", "0x10"], other: ["0x2", "0x20"]},
+                "0x10": {"size": 952, "fields": [{"off": 0, "kind": 3}, {"off": 8, "kind": 1,
+                                                                          "nested": bap.UNIVERSE_TYPE}]},
+                "0x20": {"size": 12, "fields": [{"off": 0, "kind": 1}, {"off": 8, "kind": 2}]}}
+
+    def args(self, schema):
+        return type("Args", (), {"schema": schema, "universe_time": "s", "universe_flags": [],
+                                 "universe_values": []})()
+
+    def test_0100_layout_answers_104(self):
+        args = self.args(self.schema("104"))
+        self.assertEqual(bap.universe_service(args.schema), 104)
+        self.assertEqual(bap.ws_reply_values(args, 104)[8][0], bap.UNIVERSE_SOID)
+        self.assertIsNone(bap.ws_reply_values(args, 205))
+
+    def test_0124_layout_answers_205_and_leaves_the_104_bool_unset(self):
+        args = self.args(self.schema("205"))
+        self.assertEqual(bap.universe_service(args.schema), 205)
+        self.assertEqual(bap.ws_reply_values(args, 205)[8][0], bap.UNIVERSE_SOID)
+        self.assertIsNone(bap.ws_reply_values(args, 104))
+        self.assertEqual(bap.universe_service(None), 104)
+
+
+class AccountUserData(unittest.TestCase):
+    """Service 701 uploads the account user data (settings) that the self account carries."""
+
+    schema = {"services": {"701": ["0x1", "0x2"]},
+              "0x1": {"size": 1088, "fields": [{"off": 0, "kind": 1, "nested": 0x80801716}]},
+              "0x808018c7": {"size": 28752, "fields": [
+                  {"off": 8, "kind": 1, "nested": 0x80804621},
+                  {"off": 0x80, "kind": 1, "nested": 0x80801716}]}}
+
+    def test_offset_follows_the_701_request_type(self):
+        self.assertEqual(bap.account_data_offset(self.schema), 0x80)
+        self.assertIsNone(bap.account_data_offset({"services": {}}))
+        self.assertIsNone(bap.account_data_offset(None))
+
+    def test_store_keeps_character_and_account_data_side_by_side(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "store.json"
+            bap.save_account_data(path, 0x10, b"\x01\x02")
+            bap.save_character(path, 0x10, 0x11, b"\xaa")
+            bap.save_account_data(path, 0x10, b"\x03")
+            self.assertEqual(bap.load_store(path)["0x10"], {"id": 0x11, "request": "aa", "account_data": "03"})
+
+    def test_mm_req_gets_an_empty_mm_rsp(self):
+        # 01.24 mm rsp (descriptor 0x01306900) has only optional fields
+        self.assertEqual(bap.EMPTY_REPLIES[bap.MM_REQ], bap.MM_RSP)

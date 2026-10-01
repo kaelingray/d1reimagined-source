@@ -7,8 +7,10 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-The current milestone is stage 24, `character:prologue`, after real character
-creation/selection and the account active-character offset correction. The
+The current milestone is stage `setup:activity_session_creation` after the prologue
+(FINAL124_MM1): setup answers persist through service 701, the universe object comes from
+service 205, and `mm req` gets an empty `mm rsp`; next is the `mm rsp` content. The setup-menu
+magenta blocks are fixed by `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
