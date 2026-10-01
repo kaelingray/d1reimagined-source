@@ -297,3 +297,17 @@ PASS --after 0:01:20` lists 3 blocks only in the stuck run and 746 only in the p
   `0xffff`. Lead: in the stuck run that entry stays empty. Next, read the `0x19c6520` table live
   in a stuck run and identify what fills +0x30, and which caller (`0xe6d28` or `0xe7f40`) passes
   the index.
+
+**Correction (FINAL124_SLOTS_STUCK, live, same session):** `0x19c6520` is not a stream table. Its
+three real 0x44-byte entries are **memory arenas**: base `0xc0000000` (RSX local memory, size
+0x0d91f000, used 0x1f7900), `0x30aa1d80` (0x6ff000, used 0) and `0x311a1e00` (0x4ff000, used
+0x44100). +0x20 is the granularity, +0x30 the u16 head of an allocation list (`0xffff` in all
+three while stuck). Past entry 2 is unrelated data. `0xef20c` returns size minus used, so
+**`0xf12a8` is an arena allocator** (fallback arena via its 9th argument; errors -0x46, -0x4e,
+-0x51). The passing-only `0xf13d8` path walks an existing allocation list, which differs because
+the loaded data differs. **Like the SHA-1 padding branch, this is data-driven, not shown to be
+causal.** Nothing in the stuck run is out of memory. First-call coverage cannot isolate the
+blocker, because the stuck run has no unique error path. Next approach: trace the lifecycle of the
+kind-3 request `0x01fa0002`, i.e. which code writes request status byte +7 and what the scheduler
+does with the active request each tick, using d1p3 hooks with register dumps on the status
+writers.
