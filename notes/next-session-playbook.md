@@ -7,7 +7,7 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-The current milestone is stage **36 `activity:in_world`**, sustained in FINAL124_JOIN16/17
+The current milestone is stage **36 `activity:in_world`**, sustained in FINAL124_JOIN16–20
 with an urgent-message dialog over a black scene. No visible Guardian is verified yet.
 Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`.
 Activity 231 is level 25; activity 230 reports no active activity. The next gate is **lobster**,
@@ -109,6 +109,16 @@ JOIN16's control recipe changes `--ah-bubble-states` to `0`, supplies the
 `--ah-follow-client-zone`, and omits `--ah-mission`. JOIN17 tests the follow fix
 that ignores a cleared target {index=0, hash=0}. Read the profile checkpoint before
 making this the default: the stable bootflow has not yet produced a playable scene.
+
+JOIN20 narrows the advertised states to `-1,0=0,3=0,14=0`, retains final Titan
+gear/follow/superset, and still reaches stage 36/engine 6. It has much lower
+memory use and frames/input remain responsive beyond JOIN19's earlier freeze;
+the scene stays black. Prefer this controlled recipe for the next spawn test.
+`rpcs3_final124_frames.py` reads frame credits and FIFO status. Its explicit
+mapping for these runs is `--fifo-mapping 0x04000000 0x34000000 0x01000000`;
+samples outside that mapping are not hangs. `rpcs3_final124_records.py` takes
+the observed r3 argument at native watch `1df644` as `--sim`, and checks the
+real occupancy bitmap. Do not use the old contiguous-count helper for 01.24.
 
 The short automatic walking check is state-gated and owns no new emulator:
 

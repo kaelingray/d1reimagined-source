@@ -709,3 +709,57 @@ script directly and reports an early completed/failed job instead of waiting
 eight minutes for a sign-in that cannot happen. JOIN19 is the first controlled
 mission run with final Titan gear. 96 server tests and 79 script tests pass;
 the three changed PowerShell wrappers parse successfully.
+
+## Frame completion and occupied replication records (JOIN19–20)
+
+JOIN19 uses final Titan gear, all bubble states zero, full baseline superset,
+and no mission director. It reaches stage 36 at **19:44:27**, then engine 6.
+The urgent dialog still overlays a black scene. Frame/network progress later
+stops; an owned input attempt cannot save a screenshot. The thread snapshot
+again catches thread 8 at `0x60238c`. Direct samples show frame index 0,
+label `0x2f1e0106` at `0x50300430`, credit index 1, ring distance 2, unchanged
+across three samples. Native GCM control is `0x50100040`; PUT `0x0400723c`,
+GET `0x04073c80`. The explicit IO mapping `0x04000000 -> 0x34000000` shows
+command **`0x24073c80`**, an old RSX jump to itself, at GET. This identifies
+an unfinished command link/producer wait, not a proven cause in the colour
+read fix. No commands or label values were changed to bypass the wait.
+
+`rpcs3_final124_frames.py` verifies the loaded native GCM getter's instruction
+signature and follows its descriptor/TOC to the control pointer. It observes
+PUT, GET, reference and the frame-credit wait in read-only owned memory. FIFO
+translation requires an explicit mapping; it does not guess one. A single
+jump-to-self/credit wait can be transient; repeated unchanged values establish
+the persistent wait in JOIN19. Other IO ranges exist during normal frames, so
+an out-of-mapping sample is not itself a hang.
+
+Normalized instruction comparison locates the old `0x1ce4a4` receiver at
+**`0x1df644`** in 01.24 (98.65% normalized match), `0x1ce1b8` baseline readiness
+at **`0x1df358`** (99.47%), and `0x1c85e0` simulation envelope at **`0x1d9440`**
+(96.77%). Their disassembly and live native watches verify the call chain.
+The observed simulation argument in JOIN19/20 is `0x6023e798`; do not reuse
+that address in another run without observing its native watch.
+
+The legacy `rpcs3_replicated_objects.py` assumes pool +0x14 is a live count and
+reads that many contiguous slots. In these runs +0x14 is 139 while the actual
+occupancy bitmap is entirely zero; it would decode unused slot data as objects.
+Use `rpcs3_final124_records.py --process-manifest ... --sim OBSERVED --out ...`.
+It follows sim -> pool -> pool+0 -> +8 bitmap descriptor, whose header is
+{byte count, bit capacity, data pointer}. Bit numbering is LSB first within
+each big-endian u32, as in `0x1df358`. Occupied slots have stride 0x48 and a
+metadata trailer at +0x44. Bounds, record headers and unchanged bitmap/header
+are checked. The raw +0x14 word stays unlabeled. The late JOIN19/20 pools have
+**zero occupied records**; this does not establish earlier baseline coverage.
+
+JOIN20 changes only the advertised bubbles from all zero to
+**`-1,0=0,3=0,14=0`**; gear, follow behavior and baseline superset remain the
+same. It also sustains stage 36/engine 6, with no visible scene. An owned Cross
+press dismisses the urgent dialog and saves an all-black screenshot at
+**20:07:36**, more than three minutes after join. Network/frame progress is
+still present beyond that point, unlike JOIN19's earlier freeze. Working set
+is about **4.5 GB**, versus JOIN19's roughly 15.6 GB. This is one controlled
+comparison, not proof that all hangs are resolved. Adding bubble zero is
+sufficient to avoid the immediate failure of the earlier 3/14-only recipe.
+The first fast observer incorrectly stopped at the normal prologue cleanup
+before matchmaking; its private continuation now stops at cleanup only after
+seeing a mission loading stage. Its live record samples start after the area
+switch, so initial occupancy still needs capture. 84 script tests now pass.
