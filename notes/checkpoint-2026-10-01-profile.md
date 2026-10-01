@@ -919,3 +919,27 @@ Circle; the automated Cross presses do not dismiss it, so no matchmaking/join fo
 user-message reply drives a character-select message (empty strings show none, as in every
 earlier run), and the in-world **Urgent Message / Message of the Day are not from it**. New
 `bap_server.py --user-msg 'N=VALUE|...'` (fields 1-3 text, 4 integer; default unchanged `20 00`).
+
+## Mission director on 01.24 (JOIN29-31)
+
+`missions/a_guardian_rises.json` applies unchanged to 01.24: every scripted object exists in
+`0x992bb471` with the same kind, index and name (catalog `groups/80cb8165.json`), and the cinematic
+(`0x8080254d`), trigger (`0x80800463`) layouts are identical; the objective (`0x80802a1b`, now
+0x2f0 bytes) and sequence (`0x808029a1`, 0x20) keep the scripted fields (+0, +0x2c0; +0, +4). The
+01.24 apply handlers: objective **`0x3a68c0`** (copies 0x2f0 to +0x110), cinematic **`0x581000`**
+-> `0x580a98` (copies 0xd4 to +0x108; play counter +0x10c, playing +0x110, area ref +0x114,
+filter +0x11c, roster count +0x120 < 16, start **`0x580928`**), game mode `0xc0f740`.
+
+`FINAL124_JOIN29` stalled at character select (frames stopped after 22:37:22, emulator alive; the
+proxy had not started) - an intermittent setup stall, not the director. `FINAL124_JOIN30` (JOIN27
++ `--ah-mission`): in world as before, director steps sent at +20/+90/+135/+140 s, the Urgent
+Message is up from the first visible frame (22:51:34) and covered the whole cinematic window; no
+cinematic, no objective visible. `FINAL124_JOIN31` shifts the timeline by +40 s and dismisses both
+dialogs 8 s after arrival. Hooks: the cinematic handler runs on every simulation resend for
+**one** cinematic object only (definition tag `0x80cb9110`, all-default state); `0x580928` never
+runs. The revival cinematics `6:1`/`6:2` (`cosmo_m0_phase00_highway_intro.pf_104_res[_fp]`) have
+no instance in slice 112 - they belong to the intro slice set **113** (as 01.00's TEST350 saw), so
+their states are dropped. At +180 s the objective/sequence/trigger step produces the **"NEW
+MISSION - THE TAKEN KING: PRELUDE"** banner (23:06:11): the incoming sequence plays. No
+objective text or waypoint follows (23:06:30). Next: arrive in 113 with the director (cinematic
+instances present), and trace the objective handler `0x3a68c0` for objective 3.
