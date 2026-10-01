@@ -1115,7 +1115,7 @@ From the decrypted EBOOT (`local\RESEARCH\ps3_decrypt\EBOOT.elf`; code addresses
 - **Bubble map of act_cosmo_m0_highway (TEST260-342)**: 0 Skywatch (night), 1 no name (sky), 2 The
   Blast, 3 The Breach, 4 crashes RSX on load (fixed build untested there), 5 unnamed corridor, 6
   Mothyards, 13 Dock 13 (mission end, extra slice set 105), **14 highway start outside the Wall**
-  (extra slice set 113), 7 The Steppes, 8 Lunar Complex, 9 Terrestrial Complex, 21 The Devils' Lair; 10-12 and 15-20 still to map. Mission start = zone
+  (extra slice set 113), 7 The Steppes, 8 Lunar Complex, 9 Terrestrial Complex, 10 Jovian Complex, 11 Forgotten Shore, 12 fails to load (3/3), 15/16/18 unnamed, 17 Seraphim Vault, 19 Refinery, 20 Rocketyard, 21 The Devils' Lair. Mission start = zone
   set 112 (`--ah-bubble-states -1,14=0 --ah-zone 112:0x811c9dc5 --ah-world-state 112:1`).
 
 ## Intro cinematic and slice-set transitions (TEST350-366)

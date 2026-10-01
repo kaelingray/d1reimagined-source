@@ -614,3 +614,11 @@ What this establishes: with DNS, STUN (NAT discovery) and PSN sign-in served loc
   (`local\01_WORKING\ps3_destiny\PS3_UPDATE` is still empty). Next step is
   `scripts\Invoke-FinalBuildExport.ps1 -Packages` (about 10 GB) to populate them, then the
   A/B on SignOn field 14 from the 01.24 checkpoint.
+- 354-364 (second PC, 2026-09-27, reported 2026-10-01): rest of the bubble map of
+  act_cosmo_m0_highway (01.00). **10 JOVIAN COMPLEX, 11 FORGOTTEN SHORE, 17 SERAPHIM VAULT,
+  19 REFINERY, 20 ROCKETYARD**; 15 and 18 no name visible (an "(X) OK" dialog covered the nav;
+  15 outdoor snowy rocks, 18 rusty interior); 16 no name shown (teal interior with yellow-chevron
+  barriers); **12 failed 3/3** (TEST356-358, "RPCS3 did not save a complete screenshot within 20
+  seconds" - like bubble 4, probably an emulator stop while loading; logs on the second PC).
+  TEST368 (traced type-11 transition) was never run and is dropped (mid-session type-11
+  transitions are a dead end, see HANDOFF-2026-10-01.md).
