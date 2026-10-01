@@ -275,8 +275,12 @@ def sample(read=memory, include_request=False, package_ids=()):
         "subcurrent": subcurrent, "target": target, "subtarget": subtarget,
         "stage_object": f"0x{stage_object:08x}",
         "stage_fields_30_3f": stage_fields.hex(),
-        "stage_state_30": struct.unpack_from(">I", stage_fields)[0] if stage_fields else None,
-        "stage_state_34": struct.unpack_from(">I", stage_fields, 4)[0] if stage_fields else None,
+        "stage_word_30": struct.unpack_from(">I", stage_fields)[0] if stage_fields else None,
+        "stage_word_34": struct.unpack_from(">I", stage_fields, 4)[0] if stage_fields else None,
+        # These state offsets are verified for bap_signin only. Profile setup
+        # has a different layout: +0x30 contains a pointer, not a substate.
+        "stage_state_30": struct.unpack_from(">I", stage_fields)[0] if stage_fields and current == 19 else None,
+        "stage_state_34": struct.unpack_from(">I", stage_fields, 4)[0] if stage_fields and current == 19 else None,
         "resources": resources,
         "resource_pending_count": u32(RESOURCE_STATES + 0x60),
         "asset_readiness": readiness_snapshot(read),
@@ -306,7 +310,8 @@ def main():
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(output, encoding="utf-8")
-        print(f"wrote {args.out}: {result['name']}, substate {result['stage_state_30']}, "
+        detail = f", substate {result['stage_state_30']}" if result['stage_state_30'] is not None else ""
+        print(f"wrote {args.out}: {result['name']}{detail}, "
               f"bootstrap resource {result['resources'][3]['state']}")
     else:
         print(output, end="")

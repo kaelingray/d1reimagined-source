@@ -1088,8 +1088,16 @@ def qz_update(families):
 # rsp, qz_reg rsp and rrc rsp. The last three decode with 0xa62a0, which ignores the
 # payload, so an empty status-200 reply satisfies them. Request -> reply type.
 UNSUB_REQ, UNSUB_RSP = 0x0E, 0x0F
+UPO_REQ, UPO_RSP = 0x15, 0x16
+USER_MSG_REQ, USER_MSG_RSP = 0x20, 0x21
+# 01.24 sends user-msg then UPO when profile setup completes. Their response
+# codecs (0x47bf9c / 0x477ad8) decode protobuf. UPO has only repeated result
+# entries, so an empty body is valid. User-msg has optional strings plus REQUIRED
+# integer field 4; omitting it failed decoding in FINAL124_PROFILE2 (weasel).
+# Answer both in order before later WS replies.
 EMPTY_REPLIES = {QZ_REG_REQ: QZ_REG_RSP, ECHO_REQ: ECHO_RSP, RRC_REQ: RRC_RSP, SUB_REQ: SUB_RSP,
-                 UNSUB_REQ: UNSUB_RSP}
+                 UNSUB_REQ: UNSUB_RSP, UPO_REQ: UPO_RSP}
+PROTO_REPLIES = {USER_MSG_REQ: (USER_MSG_RSP, signon_proto.field(4, signon_proto.VARINT, 0))}
 NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08: "c->ah not",
          0x09: "b->c not", 0x0A: "c->ws req", 0x0B: "c->ws rsp", 0x0C: "sub req", 0x0D: "sub rsp",
          0x0E: "unsubscribe req", 0x0F: "unsubscribe rsp", 0x10: "ahp req", 0x11: "ahp rsp",
@@ -1097,6 +1105,7 @@ NAMES = {0x03: "goodbye not", 0x06: "c->ah mgr req", 0x07: "c->ah mgr rsp", 0x08
          0x15: "upo req", 0x16: "upo rsp", 0x17: "acct id trans req", 0x18: "acct id trans rsp",
          SHELLO_REQ: "shello req", SHELLO_RSP: "shello rsp", START_REQ: "start req",
          START_RSP: "start rsp", QZ_REG_REQ: "qz_reg req",
+         USER_MSG_REQ: "user msg req", USER_MSG_RSP: "user msg rsp",
          QZ_REG_RSP: "qz_reg rsp", 0x7B: "qz->c update not", 0x7C: "qz->c sub lost not",
          ECHO_REQ: "echo req", ECHO_RSP: "echo rsp", 0x12C: "c->b irc not", 0x12D: "b->c rrc not",
          RRC_REQ: "rrc req", RRC_RSP: "rrc rsp"}
@@ -1589,11 +1598,14 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-13.bin").write_bytes(reply)
                 log(f"[{tag}] sent client config rsp (request {payload.hex()})")
-            if kind == 1 and msg_type in EMPTY_REPLIES:
-                reply = encrypted_frame(tx, EMPTY_REPLIES[msg_type], msg_id, 200, b"")
+            if kind == 1 and (msg_type in EMPTY_REPLIES or msg_type in PROTO_REPLIES):
+                reply_type, reply_body = (PROTO_REPLIES[msg_type] if msg_type in PROTO_REPLIES
+                                          else (EMPTY_REPLIES[msg_type], b""))
+                reply = encrypted_frame(tx, reply_type, msg_id, 200, reply_body)
                 conn.sendall(reply)
-                folder.joinpath(f"{number:03}-server-{EMPTY_REPLIES[msg_type]:02x}.bin").write_bytes(reply)
-                log(f"[{tag}] sent {NAMES[EMPTY_REPLIES[msg_type]]} (empty, status 200)")
+                folder.joinpath(f"{number:03}-server-{reply_type:02x}.bin").write_bytes(reply)
+                detail = f"{len(reply_body)}-byte body" if reply_body else "empty"
+                log(f"[{tag}] sent {NAMES[reply_type]} ({detail}, status 200)")
                 if msg_type == SUB_REQ and len(payload) >= 9 and args.ws_signin and not args.no_sub_push:
                     # sub req payload: u8 family type, u64 root soid. Answer with that family
                     # (version 1, no objects) as a queuez update push.

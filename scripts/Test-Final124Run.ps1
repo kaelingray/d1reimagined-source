@@ -142,6 +142,12 @@ try {
 } finally { $stream.Dispose() }
 '@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'FixtureLockedLog.ps1')
     @'
+param([string]$Path)
+Start-Sleep -Seconds 7
+Add-Content -LiteralPath $Path '2026-09-30T12:00:09 [fixture] frame 2 (kind 1): profile id=2 payload=10 bytes'
+Start-Sleep -Seconds 90
+'@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'FixtureLateFrame.ps1')
+    @'
 param([string]$DataRepo, [string]$Rpcs3Dir, [string]$GameUsrdir, [string]$Name,
     [switch]$Run, [switch]$PreserveExistingProcesses, [string]$ProcessManifest)
 $ErrorActionPreference = 'Stop'
@@ -159,6 +165,10 @@ if ($env:D1_TEST_LAUNCH_MODE -eq 'retained-exclusive') {
         ForEach-Object { ConvertTo-D1ProcessArgument $_ })
     $child = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -WindowStyle Hidden -PassThru
     Start-Sleep -Seconds 1
+} elseif ($env:D1_TEST_LAUNCH_MODE -eq 'continue-bap') {
+    $arguments = @('-NoProfile', '-File', "$PSScriptRoot\FixtureLateFrame.ps1", '-Path', (Join-Path $D1Logs "$Name-bap.log") |
+        ForEach-Object { ConvertTo-D1ProcessArgument $_ })
+    $child = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -WindowStyle Hidden -PassThru
 } else {
     $child = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 90') -WindowStyle Hidden -PassThru
 }
@@ -190,16 +200,16 @@ if ($state -eq 'failed') { throw 'synthetic stack failure' }
 '@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'Start-FinalBuildSmoke.ps1')
     $env:D1_RPCS3 = $null
     $env:D1_USRDIR = $null
-    foreach ($mode in @('success', 'preflight-failure', 'stack-failure',
+    foreach ($mode in @('success', 'continue-bap', 'preflight-failure', 'stack-failure',
         'interrupted-registration', 'interrupted-hung', 'retained-exclusive')) {
         $env:D1_TEST_LAUNCH_MODE = $mode
         $runName = $mode.Replace('-', '_')
-        $successful = $mode -in @('success', 'retained-exclusive')
+        $successful = $mode -in @('success', 'continue-bap', 'retained-exclusive')
         $keep = $mode -eq 'retained-exclusive'
-        $bootSeconds = if ($mode -like 'interrupted-*') { 1 } else { 15 }
+        $bootSeconds = if ($mode -like 'interrupted-*') { 1 } elseif ($mode -eq 'continue-bap') { 12 } else { 15 }
         $caught = $null
         try {
-            & (Join-Path $fixtureScripts 'Invoke-Final124Run.ps1') -Name $runName -Local $fixtureLocal -DataRepo $fixtureData -BootSeconds $bootSeconds -KeepRpcs3:($mode -ne 'success')
+            & (Join-Path $fixtureScripts 'Invoke-Final124Run.ps1') -Name $runName -Local $fixtureLocal -DataRepo $fixtureData -BootSeconds $bootSeconds -KeepRpcs3:($mode -notin @('success', 'continue-bap')) -ContinueAfterBap:($mode -eq 'continue-bap')
         } catch { $caught = $_.Exception.Message }
         $report = Get-Content -LiteralPath (Join-Path $fixtureLogs "$runName-summary.json") -Raw | ConvertFrom-Json
         Assert-Equal $report.completed $successful "$mode completed status"
@@ -207,6 +217,10 @@ if ($state -eq 'failed') { throw 'synthetic stack failure' }
         Assert-Equal $report.keptStack $keep "$mode retention status"
         if ($successful) {
             Assert-Equal $report.verdict 'REACHED BAP (protocol frame received)' 'wrapper BAP verdict'
+        }
+        Assert-Equal $report.continuedAfterBap ($mode -eq 'continue-bap') "$mode continuation mode recorded"
+        if ($mode -eq 'continue-bap') {
+            Assert-Equal $report.progress.BapFrames 2 'continued observation includes a frame received after initial BAP connection'
         }
         $captureStatus = if ($mode -eq 'retained-exclusive') { 'deferred' }
             elseif ($mode -in @('preflight-failure', 'interrupted-hung')) { 'not_started' }

@@ -39,6 +39,13 @@ class BootflowTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected"):
             reader.sample(self.fixture(current=38))
 
+    def test_other_stage_layout_is_preserved_without_calling_a_pointer_a_substate(self):
+        result = reader.sample(self.fixture(current=21, stage=0x013E8B74))
+        self.assertEqual(result["stage_word_30"], 0x013E8B74)
+        self.assertTrue(result["stage_fields_30_3f"].startswith("013e8b74"))
+        self.assertIsNone(result["stage_state_30"])
+        self.assertIsNone(result["stage_state_34"])
+
     def test_reports_stage_changed_during_read(self):
         fixture = self.fixture()
         count = 0

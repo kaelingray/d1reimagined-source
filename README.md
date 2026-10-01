@@ -2,11 +2,11 @@
 
 This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active target is now the final PS3 build, **BLES01857 01.24 (Destiny 2.3.1 / The Taken King)**, in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay out of Git in the ignored `local\` folder (see [Data policy](#data-policy)).
 
-## Current target: 01.24 (2026-09-30)
+## Current target: 01.24 (2026-10-01)
 
-01.24 accepts the local SignOn reply, fetches the diagnostic content manifest, and reaches bootflow stage 19, `bootflow:bap_signin`. It has not yet connected to the BAP stand-in or reached character select/orbit. The 01.00 milestones below are historical and are not evidence that 01.24 is playable.
+01.24 accepts the local SignOn reply, registers the final package patch chains, completes the BAP handshake, and passes investment sign-in with the updated qz object hashes. Correct user-message and UPO replies now let it finish first-run screen settings and reach the class/appearance screens. A real 01.24 character-creation request is saved; completing that flow and reaching orbit still need live validation. Menu rendering flicker is also under investigation. The [current checkpoint](notes/checkpoint-2026-10-01-profile.md) records this continuation; the 01.00 milestones below remain historical.
 
-Fresh direct samples reproduce two waits: substate 12 with the final manifest's bootstrap resource pending, and substate 16 with a disc-manifest comparison's bootstrap complete but an asset-readiness mask pending. The checkpoint records the inputs and evidence for each.
+The earlier stage-19 waits were resolved by registering the full package chains, including the shared manifests. The default launcher now builds the 837-entry manifest with `--chains`.
 
 The latest gate diagnosis needed correction: `crorc` was interpreted backwards, and the emulator's PPU hook logged before its scheduler status check, allowing retries to consume an entire watch budget. The repaired diagnostic patch and direct bootflow reader are described in the [01.24 audit checkpoint](notes/checkpoint-2026-09-30-final124-audit.md). Read that checkpoint before acting on the older STUN/gate theories in `final-build.md`.
 

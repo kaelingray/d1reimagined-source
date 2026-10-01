@@ -295,6 +295,53 @@ class StartRequest(unittest.TestCase):
         self.assertTrue(any("start req magic" in line and "DESTINY" in line for line in logs), logs)
 
 
+class ProfileRequests(unittest.TestCase):
+    def test_profile_replies_preserve_ids_order_and_encrypted_channel(self):
+        import socket
+        import tempfile
+        import threading
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        logs = []
+        self.addCleanup(setattr, bap, "log", bap.log)
+        bap.log = logs.append
+        args = bap.parse_args(["--capture-dir", tmp.name,
+                               "--schema", str(Path(tmp.name) / "none.json")])
+        server, client = socket.socketpair()
+        client.settimeout(2)
+        thread = threading.Thread(target=bap.handle, args=(server, ("127.0.0.1", 0), args), daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 2)
+        self.addCleanup(client.close)
+
+        def receive():
+            version, kind, length = struct.unpack(">BBI", bap.exact(client, 6))
+            self.assertEqual(version, 1)
+            return kind, bap.exact(client, length)
+
+        hello = struct.pack(">HI", bap.SHELLO_REQ, 0)
+        client.sendall(struct.pack(">BBI", 1, 2, len(hello)) + hello)
+        kind, reply = receive()
+        self.assertEqual(kind, 2)
+        plaintext = bap.unseal(args.key, args.mac_key, reply[8:])
+        nonce, key = plaintext[:12], plaintext[12:]
+        tx = bap.GcmChannel(key, nonce[:11] + bytes([nonce[11] ^ 1]))
+        rx = bap.GcmChannel(key, nonce)
+        requests = [(bap.USER_MSG_REQ, 17, b""), (bap.UPO_REQ, 18, b"\x08\x01"),
+                    (bap.ECHO_REQ, 19, b"")]
+        frames = []
+        for msg_type, msg_id, body in requests:
+            encrypted = tx.seal(struct.pack(">HI", msg_type, msg_id) + body)
+            frames.append(struct.pack(">BBI", 1, 1, len(encrypted)) + encrypted)
+        client.sendall(b"".join(frames))
+        for msg_type, msg_id, body in [(bap.USER_MSG_RSP, 17, b"\x20\x00"),
+                                       (bap.UPO_RSP, 18, b""), (bap.ECHO_RSP, 19, b"")]:
+            kind, reply = receive()
+            self.assertEqual(kind, 1)
+            self.assertEqual(rx.open(reply), struct.pack(">HIH", msg_type, msg_id, 200) + body)
+
+
 class ObjectHashes(unittest.TestCase):
     """qz object type hashes follow the schema's build (type size); 01.24 grew four types."""
 

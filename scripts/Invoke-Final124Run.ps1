@@ -9,6 +9,8 @@
 # always clean up. Shared RPCN and existing sessions are left running.
 # -PressSeconds enables Cross after 45 seconds and continues until BAP or the
 # press deadline. SignOn alone does not end the experiment: BAP is the next gate.
+# -ContinueAfterBap observes the full BootSeconds and keeps scheduled input
+# active through profile setup; the default stops at the first BAP connection.
 param(
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$Name,
     [string]$StunArgs = '',
@@ -21,6 +23,7 @@ param(
     [string]$Local,
     [string]$DataRepo,
     [switch]$KeepRpcs3,
+    [switch]$ContinueAfterBap,
     [string]$Rpcs3Dir,
     [string]$GameUsrdir,
     [string]$PpuHash,
@@ -40,6 +43,7 @@ $runFailure = $null
 $progress = $null
 $presses = 0
 $launcherCompleted = $false
+$bapReported = $false
 $logCapture = [ordered]@{ status = 'not_started'; source = $null; destination = $null; bytes = $null; error = $null }
 
 function Get-LaunchFailureDetail {
@@ -126,8 +130,11 @@ try {
         }
         $progress = Read-Final124Progress -LogRoot $logs -Name $Name
         if ($launcherCompleted -and $progress.BapConnections -gt 0) {
-            Write-Host '  BAP TCP connection observed' -ForegroundColor Green
-            break
+            if (-not $bapReported) {
+                Write-Host '  BAP TCP connection observed' -ForegroundColor Green
+                $bapReported = $true
+            }
+            if (-not $ContinueAfterBap) { break }
         }
         if ($PressSeconds -gt 0 -and (Get-Date) -lt $pressUntil -and (Get-Date) -ge $nextPress -and $manifest) {
             $emulatorIdentity = @($manifest.processes | Where-Object tag -EQ 'rpcs3') | Select-Object -First 1
@@ -226,6 +233,7 @@ try {
                 verdict = if ($progress) { Get-Final124Verdict $progress } else { 'no protocol evidence collected' }
                 local = $Local; dataRepo = $DataRepo; rpcs3Dir = $Rpcs3Dir; gameUsrdir = $GameUsrdir
                 presses = $presses; progress = $progress; keptStack = [bool]($KeepRpcs3 -and $completed)
+                continuedAfterBap = [bool]$ContinueAfterBap
                 logCapture = $logCapture
                 finishedAt = (Get-Date).ToString('o')
             } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $summaryPath -Encoding utf8
