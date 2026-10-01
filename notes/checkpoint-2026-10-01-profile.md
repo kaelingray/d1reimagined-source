@@ -955,3 +955,24 @@ client's reset state holds the null reference {`0x811c9dc5`, -1, -1}. **Fix:**
 `null_object_refs()` fills every unset, non-optional object reference of an explicitly encoded
 state with the null reference (recursively); `sim_packet` applies it to all object states
 (cinematics, objectives, game mode +0x4dc, ...). Regression test added (99 server tests pass).
+
+## JOIN33-34: the Ghost revival cinematics play on 01.24
+
+`FINAL124_JOIN33` (JOIN32 + the null-reference fix) lost the GPU 5 s after arriving in 113
+(`Vulkan API call failed ... Device lost`, RSX thread, 23:23; black scene behind the Urgent
+Message), before any director step - first occurrence, not reproduced. `FINAL124_JOIN34`
+(identical) arrives in 113 at 23:34:36, the dialogs are dismissed, and at +60 s (23:35:06) the
+revival state reaches the 113 cinematic: hooks show the start **`0x580928`** (lr `0x580c14`) for
+object `0x607b8d20` (play counter 1, playing). Screenshots: the letterboxed **`pf_104_res`**
+revival cinematic (dusk over the car graveyard 23:35:37, broken overpasses 23:35:47 - with a
+stale strip in the top letterbox band - the rusted car interior 23:36:15). At +130 s the director
+starts **`pf_104_res_fp`** (second start, object `0x607b8f20`): the first-person eyes-opening
+fade (23:36:42 dark, 23:36:51 blurred) and then a sharp first-person view of the car graveyard and
+the Wall (23:37:40). The camera then stays on that view without HUD; the stick does not move it
+and the client stays in slice 113 (no slice-set report after arrival).
+
+What the real host does next is move the player from the cinematic slice set to the gameplay set
+(112). The simulation tick (`0x1d6e84` -> `0x1da1d4` -> slot 33 `0x57c4b0` -> **`0x3adf8c`**, the
+01.00 `0x35bfec` request machine) reads a request record at **sim+0x5080** {u8 state, u8 +4, i32
+index +8, u32 hash +0xc} against its copy at sim+0x20 (sim = `0x60240a80` in JOIN34); it is all
+zeros. Finding the host message that fills it is the next step.
