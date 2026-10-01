@@ -185,3 +185,60 @@ Windows C++ build environment before trace-hit counts can be trusted again.
 
 All raw logs, requests, guest memory, screenshots, and generated manifests remain
 under the ignored runtime. Only code, tests, and research summaries are committed.
+
+## 2026-10-01: MATILDASPC, d1p3 build (Claude session)
+
+**Toolchain.** The second PC now builds RPCS3 (see the README's "Moving to another PC"). The
+d1p3 binary built here (`6d0217aa...`) and the main PC's staged one (`6a79e3e7...`) both
+contain `kusa-d1p3`. The staged one is the one in use: swapped in as `rpcs3.exe` in
+`RPCS3_FINAL124_SMOKE001` and `RPCS3_TEST048_SETUP`, with the old exe kept as `rpcs3.d1p2.exe`.
+
+**FINAL124_D1P3_WARMUP / WARMUP2.** First boot on d1p3. WARMUP aborted at its first Cross
+(45 s): `Send-RpcsKey` found no game window during the PPU recompile, so warm-up boots must
+use `-PressSeconds 0`. WARMUP2 (no presses): the PPU recompile took about 3 minutes, not the
+expected 20-40. At emulator time 3:12 the game was drawing (D1MEM surface 3M, Bungie logo).
+The run was then closed through its ownership manifest. The wrapper's `.stop` file only
+interrupts the launcher, not the observation loop.
+
+**FINAL124_NEXT.** Died at 57 s: `dns_sinkhole.py` raised `ConnectionResetError [WinError
+10054]` from `recvfrom` (Windows reports ICMP port-unreachable for an earlier reply that way),
+and the wrapper aborted because an owned process had exited. Fixed in `e8df00c`: the DNS, STUN
+and session-listener receive loops ignore it.
+
+**FINAL124_NEXT2** (final manifest `manifest-final-smoke.bin`, d1p3, 300 s, Cross for 150 s,
+`-KeepRpcs3`). SignOn 1/1, manifest reply 1, 24 STUN probes (15 answered), 0 BAP. The
+`--request` snapshot (`RESEARCH/ps3_updates/FINAL124_NEXT2-bootflow.json`) reproduces stage 19
+`bap_signin`, substate **12**, slot 3 `client_bootstrap_patchable` state 1, handle
+`0x01878002`, extra `0x80ae4000`, pending 1. The kind-2 request has status 1 and parent
+`0x01fa0002`; that kind-3 parent is status 1, with the child handle at +0xc and
+`0003 0003 00000001` at +0x10. The scheduler's active handle is `0x01fa0002`, and its retry
+slot is `0x06fa0001`. **Expected = actual**: the wait reproduces on the corrected build.
+
+**What slot 3 loads (static, 01.24 EBOOT).** `0x531fe0(mgr, slot)` reads the slot name from
+`0x01315588[slot]` and resolves it with `0xe659c` -> `0xecc6c`. That function is a named-tag
+search over the loaded packages' named-tag tables (68-byte entries: tag, class, char[60]
+name), keeping the match from the package with the highest u64 at record +0x10. If the
+lookup returns -1, the slot gets status 5. Otherwise it creates a request with
+`0x15216c(..., 7, 2, 0)` and stores the handle at +4 and the tag at +8, which is the
+snapshot's "extra". So **`client_bootstrap_patchable` = tag `0x80ae4000` = package
+`0x0172`, entry 0** (by `d1_pkg.tag_hash`).
+- The request handles `0x01878002` / `0x01fa0002` / `0x06fa0001` are **request-pool
+  handles**, not tag handles: group = (h >> 13) & 0x3ff (0x3c, 0x3d0), item = h & 0x1fff, pool
+  stride 0x48, descriptor table `*(*0x01896d50)`. The handoff's "handle >> 13 = package index"
+  applies to tags, not to these handles. The records hold no tag. The tag lives only in the
+  slot's +8.
+
+**Package 0172 in FINAL124_NEXT2's RPCS3.log.** Both `_1` (01.13, 12.5 MB) and `_2` (01.20,
+38 KB overlay) are `stat`ed at 1:56; `_1` is **never opened**. `_2` is opened at 2:39 on
+async_job (644 bytes read, closed), then reopened at 2:47 on `fios mediathread 2` (fd 3) and
+`fstat`ed, with no close before the 4:54 snapshot. Right after it the same thread opens the
+**disc** `ps3_shared_manifest_0430_0.pkg`. This RPCS3 build aggregates `sys_fs_read` (`⁂
+sys_fs_read [944]`), so the log cannot show whether `_2` was read after 2:47. The 09-29
+checkpoint's run 022 (explicit `_0`+`_1`+`_2` chain, all three opened) also stopped at
+substate 12, so chain registration alone is not the answer.
+
+**Next, smallest first.** (1) Read the `0x80ae4000` load state live, meaning the tag's
+resolution in the package registry for 0172, to see whether the overlay `_2` resolves entry 0
+into `_1`'s data and whether FIOS has a pending read on fd 3. (2) Compare against run 020
+(substate 16, slot 3 done): which 0172 package that manifest served, and whether it used the
+disc 0430/0431 shared manifests.
