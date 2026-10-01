@@ -804,3 +804,15 @@ record 0 holds machine `e0d55e272f90` and character `0x0a3d4a2c8fbea6ba`) to res
 `*(*0x1abc7d4) + 0xc`, live 0) to be 0. The player record's +0x50 is **-1**: no player entity
 exists, so initial slice loading waits for the spawn. JOIN12 used spawn grant 1;
 `FINAL124_JOIN23` repeats JOIN22 with `--ah-sim-player ...:1`.
+
+`FINAL124_JOIN23` (JOIN22 with spawn grant **1**): still stage 34 for 240 s; the client reports
+current slice 24 / state 0 at 20:42:32, but the player record's +0x50 stays -1 and stage-34
+tasks 9-10 stay pending. The proxy sent the simulation packet (roster slot 0, sim player
+`0x4786c0e0:5` owned by `0x0a3d4a2c8fbea6ba`, game mode, baselines). In Codex's catalog the
+highway scenario's own entity group is `0x992bb471` (93 objects, 43 baselines), while
+`0x4786c0e0` is the shared 21-object group present in every activity, so the sim player's
+group is right; arriving in slice 24 itself prevents the binding. Recipes so far: JOIN12
+(arrive 112, spawn 1) bound the player and reached stage 36 before lobster at slice 24
+(bubble 3 unregistered); JOIN16-21 registered bubble 3 but used spawn grant **0** and stayed
+black (no player entity, so plausibly no camera). `FINAL124_JOIN24` combines them: arrive
+112, spawn 1, bubbles `-1,0=0,3=0,14=0`.
