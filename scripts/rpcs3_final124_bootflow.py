@@ -23,6 +23,16 @@ RESOURCE_SCHEDULER = 0x01A1DCE8
 BATCH_REQUEST_TABLE = 0x019A3F80
 AUXILIARY_PTR = 0x01ABC8B8
 READINESS_TABLE = 0x01B558F0
+# Package registry (static 01.24 analysis, live-checked 2026-10-01 FINAL124_NEXT2): a record pool
+# (header: records offset, links offset, stride), a u16 package-id -> record-index map, and the
+# list head/count. Record fields: +0x04 s16 id, +0x10 u64 package build time (the named-tag search
+# 0xecc6c prefers the newest), +0xb4 entry count, +0xec named-tag count, +0x140 path,
+# +0x178 tag-table offset in the header block, +0x17c resident header-block handle (0 = none).
+PACKAGE_POOL_PTR = 0x01896510
+PACKAGE_INDEX_BY_ID = 0x019C2C60
+PACKAGE_LIST_HEAD = 0x019BAC30
+PACKAGE_LIST_COUNT = 0x019BAC34
+BOOTSTRAP_PATCHABLE_PACKAGE = 0x0172
 
 
 def memory(address, size):
@@ -201,7 +211,37 @@ def readiness_snapshot(read=memory):
     }
 
 
-def sample(read=memory, include_request=False):
+def package_records(package_ids, read=memory):
+    """Registered record for each package id, via the id -> index map (one record per id)."""
+    def u32(address):
+        return struct.unpack(">I", read(address, 4))[0]
+
+    pool = u32(PACKAGE_POOL_PTR)
+    records_offset, _, stride = struct.unpack(">III", read(pool, 12))
+    result = {"pool": f"0x{pool:08x}", "stride": stride,
+              "head": struct.unpack(">H", read(PACKAGE_LIST_HEAD, 2))[0],
+              "count": u32(PACKAGE_LIST_COUNT), "packages": []}
+    for package_id in package_ids:
+        index = struct.unpack(">H", read(PACKAGE_INDEX_BY_ID + package_id * 2, 2))[0]
+        entry = {"id": f"0x{package_id:04x}", "index": index if index != 0xFFFF else None}
+        if index != 0xFFFF:
+            address = (pool + records_offset + index * stride) & 0xFFFFFFFF
+            raw = read(address, 0x180)
+            entry.update({
+                "record": f"0x{address:08x}",
+                "record_id": f"0x{struct.unpack_from('>H', raw, 4)[0]:04x}",
+                "build_time_10": f"0x{struct.unpack_from('>Q', raw, 0x10)[0]:016x}",
+                "entry_count_b4": struct.unpack_from(">I", raw, 0xB4)[0],
+                "named_count_ec": struct.unpack_from(">I", raw, 0xEC)[0],
+                "path_140": raw[0x140:0x178].split(b"\0", 1)[0].decode("ascii", "replace"),
+                "named_offset_178": f"0x{struct.unpack_from('>I', raw, 0x178)[0]:x}",
+                "header_block_17c": f"0x{struct.unpack_from('>I', raw, 0x17C)[0]:08x}",
+            })
+        result["packages"].append(entry)
+    return result
+
+
+def sample(read=memory, include_request=False, package_ids=()):
     def u32(address):
         return struct.unpack(">I", read(address, 4))[0]
 
@@ -244,6 +284,8 @@ def sample(read=memory, include_request=False):
     if include_request:
         result["bootstrap_request_chain"] = request_chain(int(resources[3]["handle"], 16), read)
         result["resource_scheduler"] = scheduler_snapshot(read)
+    if package_ids:
+        result["package_registry"] = package_records(package_ids, read)
     result["stage_unchanged_during_sample"] = (u32(BOOTFLOW_PTR) == bootflow and
                                                 read(bootflow + 0x118, 0x1C) == fields)
     result["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -254,8 +296,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--request", action="store_true", help="also resolve the bootstrap request and pending parents")
+    parser.add_argument("--package", action="append", type=lambda v: int(v, 16), default=[],
+                        metavar="HEXID", help="also dump the registered package record for this id "
+                        "(repeatable; --request adds 0172, client_bootstrap_patchable)")
     args = parser.parse_args()
-    result = sample(include_request=args.request)
+    package_ids = list(dict.fromkeys(args.package + ([BOOTSTRAP_PATCHABLE_PACKAGE] if args.request else [])))
+    result = sample(include_request=args.request, package_ids=package_ids)
     output = json.dumps(result, indent=2) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

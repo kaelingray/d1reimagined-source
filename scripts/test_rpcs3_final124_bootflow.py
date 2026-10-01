@@ -248,6 +248,37 @@ class ReadinessTest(unittest.TestCase):
                 patch.object(reader, "scheduler_snapshot", side_effect=scheduler):
             self.assertFalse(reader.sample(read, include_request=True)["stage_unchanged_during_sample"])
 
+    def test_package_records_use_id_map_pool_stride_and_report_unregistered(self):
+        # Shape seen live in FINAL124_NEXT2: pool 0x316a1e80, records at +0x20, stride 0x1a8,
+        # package 0x0172 at index 0x49 (only the _2 overlay registered).
+        pool, index = 0x316A1E80, 0x49
+        record = bytearray(0x180)
+        struct.pack_into(">H", record, 4, 0x0172)
+        struct.pack_into(">Q", record, 0x10, 0x56FCAA7C)
+        struct.pack_into(">I", record, 0xB4, 0x3B5)
+        struct.pack_into(">I", record, 0xEC, 1)
+        record[0x140:0x140 + 48] = b"packages/ps3_client_bootstrap_patchabl_0172_2.pkg"
+        struct.pack_into(">II", record, 0x178, 0x560, 0x019BAD40)
+        values = {
+            (reader.PACKAGE_POOL_PTR, 4): struct.pack(">I", pool),
+            (pool, 12): struct.pack(">III", 0x20, 0x892A4, 0x1A8),
+            (reader.PACKAGE_LIST_HEAD, 2): struct.pack(">H", 3),
+            (reader.PACKAGE_LIST_COUNT, 4): struct.pack(">I", 314),
+            (reader.PACKAGE_INDEX_BY_ID + 0x172 * 2, 2): struct.pack(">H", index),
+            (reader.PACKAGE_INDEX_BY_ID + 0x999 * 2, 2): struct.pack(">H", 0xFFFF),
+            (pool + 0x20 + index * 0x1A8, 0x180): bytes(record),
+        }
+        result = reader.package_records([0x172, 0x999], lambda addr, size: values[(addr, size)])
+        self.assertEqual(result["count"], 314)
+        found, missing = result["packages"]
+        self.assertEqual(found["record"], "0x316a9788")
+        self.assertEqual(found["record_id"], "0x0172")
+        self.assertEqual(found["build_time_10"], "0x0000000056fcaa7c")
+        self.assertEqual(found["path_140"], "packages/ps3_client_bootstrap_patchabl_0172_2.pkg")
+        self.assertEqual(found["header_block_17c"], "0x019bad40")
+        self.assertIsNone(missing["index"])
+        self.assertNotIn("record", missing)
+
 
 if __name__ == "__main__":
     unittest.main()
