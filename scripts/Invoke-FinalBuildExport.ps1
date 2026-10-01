@@ -67,7 +67,7 @@ $typeArgs = @()
 if ((Test-Path $DiscPackages) -and (Test-Path $Oodle)) { $typeArgs = @('--packages', $DiscPackages, '--oodle', $Oodle) }
 if (Test-Path $BaseElf) {
     & $py "$PSScriptRoot\d1_types.py" --elf $BaseElf @typeArgs schema (Join-Path $Out 'types_01.00.json')
-} else { Write-Warning "no decrypted 01.00 EBOOT at $BaseElf: the diffs against 01.00 are skipped" }
+} else { Write-Warning "no decrypted 01.00 EBOOT at ${BaseElf}: the diffs against 01.00 are skipped" }
 foreach ($v in $elves.Keys) {
     & $py "$PSScriptRoot\d1_types.py" --elf $elves[$v] schema (Join-Path $Out "types_$v.json")
 }
