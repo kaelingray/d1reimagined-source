@@ -455,3 +455,33 @@ config request, acct id trans...).
 
 Run automation: `Start-FinalBuildSmoke.ps1` now builds its default manifest with `--chains`
 (`manifest-final-chains.bin`).
+
+### 2026-10-01 (cont.): "pigeon" fixed (01.24 qz object type hashes); the client reaches profile_setup
+
+- **What closes the session.** d1p3 hooks on the BAP client (FINAL124_PIGEON): at 1:45.788
+  `0x476550` -> `0x8c6bc8` sets BAP error `0x20` and state 9. That is a deliberate teardown
+  (`0x476550` closes any active session); the chain runs through the bootflow stage tick
+  (`0x36ab3c` -> `0xe4fc38`) after the bootflow had already switched to cleanup. The BAP error
+  field was still 0, so the decision comes from stage 20 `investment_signin`. Bootflow stage
+  names: table at `0x012f7f00` (19 bap_signin, 20 investment_signin, 21 profile_setup, 22
+  prepare_for_orbit, 23 character:signin, 25 cleanup, ...).
+- **Not the stored character.** 01.24 runs now use their own store `characters-0124.json` (the
+  shared store holds a 01.00 creation request). FINAL124_NEWSTORE2 (no character) failed the
+  same way.
+- **The family push is the trigger.** FINAL124_NOPUSH (`--no-sub-push`, passed with the new
+  `Invoke-Final124Run.ps1 -BapExtra`): the session stays up, the bootflow waits in
+  `investment_signin` substate 7, and the client re-subscribes. With the push it quits 150 ms
+  later.
+- **Cause: the qz object type hashes.** Each qz object header carries a type hash that is a
+  layout fingerprint. 01.24 changed the hash of every type that grew. 01.24 values from the type
+  descriptors `{..., 0xf4, hash, 0, wrapper handle, size}`, found by wrapper handle + new size;
+  the method returns the unchanged hashes of the two types that did not grow:
+  self root `0x80801803` `0x88190FE1` -> `0xB5DF2907`; select character `0x80801954`
+  `0xF65ABD52` -> `0x7D473C17`; self character `0x80801743` `0x242B2F61` -> `0xEB4B8439`; peer
+  character `0x808017FD` `0xA0A1BC80` -> `0x30D274D2`; unchanged `0xA2AC2C74` (`0x80801951`)
+  and `0x1D7BB8F6` (`0x80801921`). `bap_server.object_hash()` picks the hash by the schema's type
+  size (01.00 behaviour unchanged).
+- **FINAL124_HASH1:** push accepted, session kept, **bootflow stage 21 `profile_setup`**,
+  screen **"SET SCREEN BOUNDS"** (the first-run profile setup: press X). Next: press through
+  profile setup (the wrapper's Cross presses stop at the first BAP connection; add a phase that
+  keeps pressing), then prepare_for_orbit -> character:signin -> character creation on 01.24.

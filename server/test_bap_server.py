@@ -293,3 +293,17 @@ class StartRequest(unittest.TestCase):
             reply += chunk
         self.assertEqual(reply, expected)
         self.assertTrue(any("start req magic" in line and "DESTINY" in line for line in logs), logs)
+
+
+class ObjectHashes(unittest.TestCase):
+    """qz object type hashes follow the schema's build (type size); 01.24 grew four types."""
+
+    def test_hash_follows_the_type_size_and_falls_back_to_0100(self):
+        old = {"0x80801803": {"size": 8184}, "0x80801743": {"size": 21936}}
+        new = {"0x80801803": {"size": 28752}, "0x80801743": {"size": 28088}, "0x80801951": {"size": 160}}
+        self.assertEqual(bap.object_hash(old, 0x88190FE1, 0x80801803), 0x88190FE1)
+        self.assertEqual(bap.object_hash(new, 0x88190FE1, 0x80801803), 0xB5DF2907)
+        self.assertEqual(bap.object_hash(new, 0x242B2F61, 0x80801743), 0xEB4B8439)
+        self.assertEqual(bap.object_hash(new, 0xA2AC2C74, 0x80801951), 0xA2AC2C74)   # unchanged type
+        self.assertEqual(bap.object_hash(None, 0x88190FE1, 0x80801803), 0x88190FE1)
+        self.assertEqual(bap.object_hash({"0x80801803": {"size": 1}}, 0x88190FE1, 0x80801803), 0x88190FE1)

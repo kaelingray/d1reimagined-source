@@ -22,6 +22,9 @@ param(
     # second value of a [string[]] parameter to the *next* parameter instead of
     # appending it, so a space-separated list cannot be passed this way.
     [string]$StunArgs = '',
+    # Extra BAP stand-in arguments, semicolon separated like -StunArgs, appended last
+    # (e.g. -BapExtra '--no-sub-push').
+    [string]$BapExtra = '',
     [string]$DnsArgs = '',
     [switch]$Run,
     [switch]$PreserveExistingProcesses,
@@ -36,6 +39,8 @@ if ($PublicIp -ne '') { $signonArguments += @('--public-ip', $PublicIp) }
 # '-StunArgs' arrives as one semicolon separated token; split it here.
 $stunArguments = @()
 if ($StunArgs) { $stunArguments = @($StunArgs -split ';' | Where-Object { $_ }) }
+$bapExtraArguments = @()
+if ($BapExtra) { $bapExtraArguments = @($BapExtra -split ';' | Where-Object { $_ }) }
 
 # '-DnsArgs' likewise (e.g. '--stun-distinct').
 $dnsArguments = @()
@@ -82,10 +87,13 @@ try {
     $env:D1_RPCS3 = $rpcs3
     $env:D1_USRDIR = $usrdir
     & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -PreserveExistingProcesses:$PreserveExistingProcesses `
-        -ProcessManifest $ProcessManifest -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -DnsArgs $dnsArguments -BapArgs @(
+        -ProcessManifest $ProcessManifest -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -DnsArgs $dnsArguments -BapArgs (@(
         '--universe-time', 's', '--self-flags', '1;2@B0,C0-1023',
+        # 01.24 keeps its own character store: the shared characters.json holds 01.00 creation
+        # requests, which the 01.24 schemas misread (FINAL124_START2 "pigeon", 2026-10-01)
+        '--store', (Join-Path $D1Local 'SIGNON_LOCAL\characters-0124.json'),
         '--schema', $types, '--services-schema', $services,
-        '--activity-schema', $types)
+        '--activity-schema', $types) + $bapExtraArguments)
 } finally {
     $env:D1_RPCS3 = $previousRpcs3
     $env:D1_USRDIR = $previousUsrdir

@@ -13,6 +13,7 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$Name,
     [string]$StunArgs = '',
     [string]$DnsArgs = '',
+    [string]$BapExtra = '',
     [ValidateRange(1, 86400)][int]$BootSeconds = 300,
     [ValidateRange(0, 86400)][int]$PressSeconds = 0,
     [ValidateRange(1, 3600)][int]$PressEverySeconds = 10,
@@ -82,6 +83,7 @@ try {
     )
     if ($StunArgs) { $arguments += @('-StunArgs', $StunArgs) }
     if ($DnsArgs) { $arguments += @('-DnsArgs', $DnsArgs) }
+    if ($BapExtra) { $arguments += @('-BapExtra', $BapExtra) }
     if ($PpuHash) { $arguments += @('-PpuHash', $PpuHash) }
     if ($ManifestFile) { $arguments += @('-ManifestFile', (Resolve-Path -LiteralPath $ManifestFile).Path) }
     $quotedArguments = @($arguments | ForEach-Object { ConvertTo-D1ProcessArgument $_ })

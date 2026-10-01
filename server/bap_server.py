@@ -76,6 +76,27 @@ SELF_CHARACTER_OBJECT = (0x242B2F61, 0x80801743)
 # (player record +0x8b0 / +0x1428, needed to spawn) from these two objects.
 PEER_ACCOUNT_OBJECT = (0x1D7BB8F6, 0x80801921)
 PEER_CHARACTER_OBJECT = (0xA0A1BC80, 0x808017FD)
+# The object type hash in each qz object header is a layout fingerprint of the type: the title
+# updates that grow a type change its hash, and the client rejects an object with an unknown hash
+# (01.24 FINAL124_START2/NOPUSH: the 01.00 hashes for the grown root and character types end the
+# session with "pigeon"). Keyed by (handle, the schema's size of that type) -> hash. 01.24 values
+# from the EBOOT's type descriptors ({..., 0xf4, hash, 0, wrapper handle, size}; the method returns
+# the unchanged 0xA2AC2C74 and 0x1D7BB8F6 for the two types whose size did not change).
+OBJECT_HASHES = {
+    (0x80801803, 8184): 0x88190FE1, (0x80801803, 28752): 0xB5DF2907,   # self account root
+    (0x80801951, 160): 0xA2AC2C74,                                     # account root (family 3)
+    (0x80801954, 2024): 0xF65ABD52, (0x80801954, 2368): 0x7D473C17,    # select character
+    (0x80801743, 21936): 0x242B2F61, (0x80801743, 28088): 0xEB4B8439,  # self character
+    (0x80801921, 80): 0x1D7BB8F6,                                      # peer account
+    (0x808017FD, 1968): 0xA0A1BC80, (0x808017FD, 2312): 0x30D274D2,    # peer character
+}
+
+
+def object_hash(schema, default, handle):
+    """The qz object type hash for `handle` in the schema's build (`default`, the 01.00 value,
+    without a schema or for an unknown size)."""
+    size = ((schema or {}).get(f"{handle:#x}") or {}).get("size")
+    return OBJECT_HASHES.get((handle, size), default)
 
 
 def default_ws_response(schema, wire, values=None):
@@ -380,10 +401,10 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                     fields[0][0x60] = active_id
         if family_type == 4 and self_flags is not None:
             fields[0].update(account_flags(schema, self_flags, flags_layout, flag_values))
-        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, fields)))
+        objects.append(investment.obj(object_hash(schema, type_hash, handle), root, investment.encode(schema, handle, fields)))
         if family_type == 3 and character_id is not None and character_profile is not None:
             type_hash, handle = SELECT_CHARACTER_OBJECT
-            objects.append(investment.obj(type_hash, character_id, investment.encode(
+            objects.append(investment.obj(object_hash(schema, type_hash, handle), character_id, investment.encode(
                 schema, handle, deep_merge(character_profile, extras.get("select")))))
         if family_type == 4 and character_id is not None and character_profile is not None:
             type_hash, handle = SELF_CHARACTER_OBJECT
@@ -393,15 +414,15 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                 profile[flags_layout["C"]["offset"]] = {
                     f["off"]: chosen[i] for i, f in enumerate(flags_layout["C"]["fields"])
                     if i in chosen}
-            objects.append(investment.obj(type_hash, character_id,
+            objects.append(investment.obj(object_hash(schema, type_hash, handle), character_id,
                                           investment.encode(schema, handle, {0: profile})))
     if peer and schema and family_type == 0 and character_id is not None and character_profile is not None:
         type_hash, handle = PEER_ACCOUNT_OBJECT
-        objects.append(investment.obj(type_hash, root, investment.encode(schema, handle, {0: root, 8: character_id})))
+        objects.append(investment.obj(object_hash(schema, type_hash, handle), root, investment.encode(schema, handle, {0: root, 8: character_id})))
         type_hash, handle = PEER_CHARACTER_OBJECT
         summary = deep_merge({off: character_profile[off] for off in (0, 8, 12) if off in character_profile},
                              extras.get("peer"))
-        objects.append(investment.obj(type_hash, character_id, investment.encode(schema, handle, summary)))
+        objects.append(investment.obj(object_hash(schema, type_hash, handle), character_id, investment.encode(schema, handle, summary)))
     # flags bit 0 = full snapshot: required for a new subscription (0x41b75c, slot state 2).
     # Updates to an existing subscription use a delta and the next family version.
     return investment.qz_payload([investment.family(family_type, root, objects,
@@ -1573,7 +1594,7 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-{EMPTY_REPLIES[msg_type]:02x}.bin").write_bytes(reply)
                 log(f"[{tag}] sent {NAMES[EMPTY_REPLIES[msg_type]]} (empty, status 200)")
-                if msg_type == SUB_REQ and len(payload) >= 9 and args.ws_signin:
+                if msg_type == SUB_REQ and len(payload) >= 9 and args.ws_signin and not args.no_sub_push:
                     # sub req payload: u8 family type, u64 root soid. Answer with that family
                     # (version 1, no objects) as a queuez update push.
                     family_type, root = payload[0], int.from_bytes(payload[1:9], "big")
@@ -1632,6 +1653,9 @@ def parse_args(argv=None):
                     help="with --ws-signin, leave the optional u64 fields of the sign-in reply absent")
     ap.add_argument("--ws-markers", action="store_true",
                     help="with --ws-signin, fill the reply with distinct marker values to find copies in memory")
+    ap.add_argument("--no-sub-push", action="store_true",
+                    help="with --ws-signin, answer sub req without pushing the subscribed family "
+                    "(experiment: does the client reject the push?)")
     ap.add_argument("--qz-push", nargs="*", default=[],
                     help="after the ws reply, push families as name[:version[:flags]] with no objects")
     ap.add_argument("--qz-root", type=lambda v: int(v, 0), default=0, help="root soid for pushed families")
