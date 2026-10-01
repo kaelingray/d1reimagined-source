@@ -403,3 +403,24 @@ the block tables would add 514 entries (825 in total, no files missing). The 800
 main PC's `--chain` variant has no recorded source; test it live. Add an automatic block-table
 `--chains` mode to `build_manifest_probe.py` (patch 0 from the disc, others from the inventory's
 non-stale update files; marker-0 shared manifests included). Then re-check substate 16.
+
+### 2026-10-01 (cont.): FIRST 01.24 BAP CONNECTION, with every patch chain registered
+
+`build_manifest_probe.py --chains` (`887fd9e`): the final manifest plus every package's
+block-table patch chain plus the shared manifests, **837 entries** (`manifest-final-chains.bin`).
+The client accepts them all (registry count 840; the "800 maximum" does not apply).
+
+**FINAL124_ALL_CHAINS: stage 19 reaches substate 21**, with slots 3 (`client_bootstrap_patchable`)
+and 7 (`investment_globals`) at state 2 and pending 0. Asset readiness: mode 3, mask 26, three
+descriptors (content handles `0x80814000`, `0x808a0000`, `0x80822000`). **The client opens its
+first BAP connection** (wrapper: `REACHED BAP (protocol frame received)`, 1 connection, 1
+frame) at 09:33:02, 1:46 after launch. The stage-19 blocker was package registration,
+not STUN: patch chains are mandatory for 01.24 content.
+
+First 01.24 BAP frame (`FINAL124_ALL_CHAINS-bap.log`): outer kind 2 (plaintext), **type
+`0x1e`**, id 0, **128-byte payload starting with the ASCII magic `DESTINY` and byte 0x01**,
+then 120 bytes that look random (key material or a nonce?). 01.00 opened with type `0x19`
+"shello req" (protobuf with the SignOn token). The stand-in has no handler for `0x1e`, sends
+nothing, and the client closes the connection after 10 s ("closed with 0/6 bytes"). **Next:
+identify the 01.24 BAP handshake** (message-name table and the `0x1e` codec in the 01.24
+EBOOT), then answer it in `bap_server.py`.
