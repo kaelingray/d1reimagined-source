@@ -887,3 +887,27 @@ world emptied (JOIN16-26). **Fix:** `game_mode()` now finds the {i32, `0x808004b
 hash} triple in the schema and sends bubble **-1** with the empty-name hash (no quarantine);
 01.00's game-mode layout has no such triple and is unchanged. A regression test covers the
 encoding. `FINAL124_JOIN27` repeats JOIN24/25 with the fix.
+
+## JOIN27: first visible, controllable 01.24 mission world
+
+`FINAL124_JOIN27` = JOIN24's recipe with the quarantine fix (`game_mode()` bubble -1). The
+game-mode apply handler now calls the quarantine **clear** (slot 17, lr `0xc0f984`) every update
+and never the set. The client arrives in 112 (target 112 at 21:57:54, current 112 at 21:58:04)
+and **stays there**: no {0, 0} request, no move to 24 within the 240-s window (in JOIN25 the
+follow-player move to 24 came 11 s after arrival; why the Guardian was inside bubble 3's volume
+there is not yet explained). Stage 36 `activity:in_world` throughout. Screenshots (private,
+`RPCS3_FINAL124_SMOKE001/screenshots`): at 22:00:21 the **Cosmodrome is rendered** (the Wall,
+the car graveyard, sky and fog) behind the **Urgent Message** and a Level Up toast; Cross
+dismisses it and shows a second dialog, **ATTENTION / Message of the Day** ("Please visit
+http://help.bungie.net for an important message.", string `0x0a92c9d7` / `0xb57b5899`); a
+second Cross leaves the clean first-person view with the **HUD radar** (22:01:57). Holding the
+left stick forward for 2.5 s moves the view forward (22:02:40): the Guardian walks. This is
+the first in-world, controllable session on 01.24 (01.00 parity for spawning at the mission
+start). Not yet seen: the Ghost cinematic, objectives, enemies.
+
+Open: the two dialogs. Their texts are data-driven UI strings (no code constants). The
+user-message response (`0x21`, descriptor `0x013c4080`, decoded by `0x47bf9c` into 0x288 bytes:
+strings 1-3, required int 4) is the likely source; the stand-in still answers `20 00`.
+`investment_user_message_manager` is registered at `0x48ba0c`. Also unexplained: the earlier
+runs' move to 24. Note for `Invoke-RpcsStep.ps1`: without `-Local`/`D1_LOCAL` it watches the
+default runtime's screenshot folder and reports a timeout although RPCS3 saved the screenshot.
