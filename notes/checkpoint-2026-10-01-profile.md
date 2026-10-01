@@ -976,3 +976,20 @@ What the real host does next is move the player from the cinematic slice set to 
 01.00 `0x35bfec` request machine) reads a request record at **sim+0x5080** {u8 state, u8 +4, i32
 index +8, u32 hash +0xc} against its copy at sim+0x20 (sim = `0x60240a80` in JOIN34); it is all
 zeros. Finding the host message that fills it is the next step.
+
+Live test on JOIN34 (owned process, scratch writer): writing the request record at sim+0x5080 =
+{state 1, u8 0, index **112**, hash `0x811c9dc5`} at 23:42:06 makes the client latch it (copy at
+sim+0x20 -> state 2, index 112), request target 112 (23:42:35; the proxy follows with zone set
+112), unload 113 and stream **112 into the loaded set** - but 112 never becomes active: the engine
+ends with state -1, +0x88 = 0, no current/target, group records -1, and at 23:44:06 the client
+sends a new `ahp` request and drops the activity-host connection (black screen with the loading
+glyph). The record itself reads zero again shortly after the write. So sim+0x5080 is the
+host-driven slice-set request (state 1 starts it; per `0x3adf8c` the copy then waits for the
+engine to reach the index (state 2 -> 3) and for record state 3 before `0x391068`/`0x72932c`),
+but this bare poke breaks the session. Layout found on the way: the "simulation" is the activity
+object - world state at +8 (0x5038 bytes; host +0xe08), host records at +0x5040..0x50b0
+(+0x5078 8-byte record for slot 31, +0x5080 16-byte record for slot 33), activity state at
+**+0x50b0**. 01.24 host message table (`0x272ca4`, 17 entries at `0x18980e0`): types 0, 1 (desc
+size 0x658), 2 (8), 4 (0x1a8), 5 (`0x276300`), 7 (`0x271360`, per entity), 10/18 (0x2cc), 11
+(`0x271618` -> world state `0x271494`), 23, 24, 27/29 (4), 38 (`0x276390`), 39 (0x110,
+`0x808009a6`), 42 (2), 43 (0xa4). Which one carries the +0x5080 record is still open.
