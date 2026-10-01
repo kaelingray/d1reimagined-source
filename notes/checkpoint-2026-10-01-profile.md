@@ -816,3 +816,20 @@ group is right; arriving in slice 24 itself prevents the binding. Recipes so far
 (bubble 3 unregistered); JOIN16-21 registered bubble 3 but used spawn grant **0** and stayed
 black (no player entity, so plausibly no camera). `FINAL124_JOIN24` combines them: arrive
 112, spawn 1, bubbles `-1,0=0,3=0,14=0`.
+
+`FINAL124_JOIN24` (arrive 112, spawn grant **1**, bubbles `-1,0=0,3=0,14=0`, follow client zone,
+superset baselines, final Titan gear, sim clock): stage 36 from about 20:53:55 through the
+240-s window. Proxy timeline: client target 112 state 4 (20:53:41) -> current 112 state 0
+(20:53:54) -> **target 24 / `0x68935472` state 2 (20:54:08)** -> host world state "zone set ->
+24" 22 ms later -> client target `0:0x00000000` (20:54:09.8) -> current -1 (20:54:09.9) ->
+state 3 (20:54:22) -> state 4 (20:54:35). The **Urgent Message** dialog is already up while
+the client is in slice 112 (20:53:59, 20:54:05), over black. Afterwards (live): engine state
+6, current {-1, `0x811c9dc5`}, target {0, 0}, slice table active -1 / loading -1, and the
+player record's +0x50 is -1 again (unbound once 112 unloaded). The world-state group record
+(`0x80800c6f`, same layout in 01.00 and 01.24: +0 i32 zone, +4 2-bit state, +8
+`0x80800e4a`, +0x20 20-bit field, +0x28 `0x80800c9f`) has no slice-name hash, so the host
+cannot be sending a wrong hash; `{0, 0}` is the client's own "transition cleared" record, as
+`requested_client_zone()` already assumes. Open: why the client's move from 112 to 24
+unloads 112 and never activates 24 (what the 01.24 client expects from the host after its
+slice request), and what raises the Urgent Message (possibly a server message: the user-msg
+reply's required field 4 is sent as 0).
