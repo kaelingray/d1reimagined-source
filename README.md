@@ -116,6 +116,22 @@ For a full build check covering join, world, player, game mode, gear, unlock fla
 
 Copy the whole repository folder, including `local\` (about 80 GB), to the other PC. There, install PowerShell 7 (`winget install Microsoft.PowerShell`; the scripts use .NET APIs that Windows PowerShell 5.1 lacks, and must run under `pwsh`), Python 3.14 with `pip install -r requirements.txt`, and the GPU's Vulkan driver. Then set the Vulkan adapter name in both RPCS3 configs (`config.yml` and `custom_configs\config_BLES01857.yml`, `Adapter:`) to the new GPU, and fix the one absolute path in `local\RPCS3_TEST048_SETUP\config\games.yml` to the new `local\01_WORKING\ps3_destiny\` location. Leave out (or rename) the Vulkan pipeline cache, `local\RPCS3_TEST048_SETUP\cache\BLES01857\ppu-*\shaders_cache`: on a different GPU RPCS3 rebuilds all of it (about 445k pipelines) at boot, which froze the second PC's desktop. The PPU LLVM objects there are built for the source CPU, so a different CPU recompiles them once (20-40 minutes, black game window); do one warm-up boot before running unattended scripts, whose login step gives up after 15 minutes. The RPCS3 build in `local\` runs as is. The source tree and toolchain (`C:\dev\rpcs3`, Qt, Vulkan SDK; see the orbit checkpoint) are only needed to rebuild it.
 
+Rebuilding RPCS3 on the second PC (MATILDASPC, done 2026-10-01; source, Qt and Vulkan SDK copied to `F:\d1\lukespc-import\dev`):
+
+1. Install Visual Studio 2026 Build Tools with the C++ workload (MSVC 14.51, Windows SDK 10.0.26100; about 3.5 GB on F:, a few GB on C:):
+   `winget install -e --id Microsoft.VisualStudio.BuildTools --override "--quiet --wait --norestart --installPath F:\VS\BuildTools --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`
+2. Apply the diagnostic patch to a clean tree at `b5a174e93`: `git reset --hard`, `git apply --check` then `git apply patches\rpcs3-destiny-main-memory-blit.patch`, then `git add -N rpcs3/Emu/RSX/Common/local_mem_writes.h rpcs3/Emu/RSX/d1diag.h`.
+3. Move aside any copied CMake build folders under `build\tmp` whose `CMakeCache.txt` names another PC's path (here `glslang`, `libcurl`, `openal-soft`, `protobuf_build`, kept as `*.from-lukespc`). Their third-party libraries then reconfigure; everything else builds incrementally.
+4. Build from PowerShell, with the VS Installer folder on `PATH` (the third-party CMake steps call `vsdevcmd.bat`, which needs `vswhere.exe`):
+   ```powershell
+   $env:PATH = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer;' + $env:PATH
+   $env:VULKAN_SDK = 'F:\d1\lukespc-import\dev\vulkansdk'
+   $env:QTDIR = 'F:\d1\lukespc-import\dev\qt\6.11.2\msvc2022_64'
+   cd F:\d1\lukespc-import\dev\rpcs3
+   & F:\VS\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe rpcs3.sln /t:rpcs3 /p:Configuration=Release /p:Platform=x64 /m:4 /nr:false
+   ```
+   The result is `bin\rpcs3.exe` (about 25 minutes the first time). Check that it contains `kusa-d1p3`; a local build won't byte-match one from the other PC.
+
 ## Repository layout
 
 - `server/`: loopback service stand-ins (DNS, STUN, SignOn/auth3, Demonware lobby, BAP session server and activity-host proxy, investment/bit-stream encoder) and their tests. See [`server/README.md`](server/README.md).
