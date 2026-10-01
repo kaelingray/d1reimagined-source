@@ -21,6 +21,17 @@ class ClientZoneRequest(unittest.TestCase):
             self.assertIsNone(bap.requested_client_zone(record))
 
 
+class UserMessageReply(unittest.TestCase):
+    def test_default_is_required_field_four_only(self):
+        self.assertEqual(bap.user_msg_body(""), bytes.fromhex("2000"))
+
+    def test_text_fields_and_integer(self):
+        body = bap.user_msg_body("1=BODY|2=TITLE|4=1")
+        self.assertEqual(body, bytes.fromhex("0a04424f445912055449544c452001"))
+        with self.assertRaises(ValueError):
+            bap.user_msg_body("5=x")
+
+
 class ShelloReply(unittest.TestCase):
     key, mac_key = b"k" * 16, b"m" * 16
 

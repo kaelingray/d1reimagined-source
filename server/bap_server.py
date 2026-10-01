@@ -1740,6 +1740,8 @@ def handle(conn, peer, args):
                                           else (EMPTY_REPLIES[msg_type], b""))
                 if msg_type == MM_REQ and args.mm_rsp:
                     reply_body = mm_rsp_body(args.mm_rsp)
+                if msg_type == USER_MSG_REQ and args.user_msg:
+                    reply_body = user_msg_body(args.user_msg)
                 reply = encrypted_frame(tx, reply_type, msg_id, 200, reply_body)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-{reply_type:02x}.bin").write_bytes(reply)
@@ -1787,6 +1789,24 @@ def handle(conn, peer, args):
         sink.close()
 
 
+def user_msg_body(spec):
+    """User msg rsp (0x21) from "N=VALUE|...": fields 1-3 are strings, field 4 (required by the
+    decoder 0x47bf9c / 0xbfbe0c) an integer that defaults to 0."""
+    values = {4: "0"}
+    for part in filter(None, spec.split("|")):
+        number, _, value = part.partition("=")
+        if int(number) not in (1, 2, 3, 4):
+            raise ValueError(f"user msg has fields 1-4, not {number}")
+        values[int(number)] = value
+    body = b""
+    for number in sorted(values):
+        if number == 4:
+            body += signon_proto.field(4, signon_proto.VARINT, int(values[4], 0))
+        else:
+            body += signon_proto.field(number, signon_proto.BYTES, values[number].encode("utf-8"))
+    return body
+
+
 def parse_args(argv=None):
     """Command-line arguments, with the schemas loaded and the SignOn test keys set (also used
     by the end-to-end tests, which call handle() with them)."""
@@ -1799,6 +1819,9 @@ def parse_args(argv=None):
     ap.add_argument("--start-rsp-body", type=bytes.fromhex, default=None, metavar="HEX",
                     help="body of the 01.24 start rsp (0x1f) answering start req (0x1e); default: echo "
                     "the 128-byte request payload (the client decodes exactly 0x80 bytes)")
+    ap.add_argument("--user-msg", default="", metavar="N=VALUE|...",
+                    help="01.24 user msg rsp fields: 1-3 text (descriptor 0x013c4080: 0x200/0x40/0x40 "
+                    "bytes), 4 the required integer; default: field 4 = 0 only")
     ap.add_argument("--mm-rsp", default="", metavar="N=VALUE,...",
                     help="01.24 mm rsp fields (1-2 integers, 3-6 submessages as hex); default: empty, which the "
                     "client treats as 'no match yet'")

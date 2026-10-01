@@ -911,3 +911,11 @@ strings 1-3, required int 4) is the likely source; the stand-in still answers `2
 `investment_user_message_manager` is registered at `0x48ba0c`. Also unexplained: the earlier
 runs' move to 24. Note for `Invoke-RpcsStep.ps1`: without `-Local`/`D1_LOCAL` it watches the
 default runtime's screenshot folder and reports a timeout although RPCS3 saved the screenshot.
+
+`FINAL124_JOIN28` (JOIN27 + `--user-msg '1=D1L_ONE|2=D1L_TWO|3=D1L_THREE'`, field 4 still 0): the
+client accepts the 31-byte reply (UPO and 701 follow) and then shows, **at character select**, a
+red-icon dialog with title `D1L_TWO` (field 2) and body `D1L_ONE` (field 1), dismissed with
+Circle; the automated Cross presses do not dismiss it, so no matchmaking/join followed. So the
+user-message reply drives a character-select message (empty strings show none, as in every
+earlier run), and the in-world **Urgent Message / Message of the Day are not from it**. New
+`bap_server.py --user-msg 'N=VALUE|...'` (fields 1-3 text, 4 integer; default unchanged `20 00`).
