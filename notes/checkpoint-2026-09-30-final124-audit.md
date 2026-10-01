@@ -275,3 +275,25 @@ crashed in run 021. The next question is what the kind-3 request `0x01fa0002` wa
 `_2` is registered. Next test: hook-trace the request poller `0x14e864` and the status writer, or
 diff first-call coverage between FINAL124_NEXT2 and FINAL124_DISC0172_D1P3 around the load.
 `01a3` also differs (`_1` vs `_0`) between the two manifests.
+
+### 2026-10-01 (cont.): first-call coverage, stuck vs passing (d1p3)
+
+FINAL124_COV_FINAL (final manifest; substate 12) against FINAL124_COV_DISC0172 (run 020
+manifest; substate 16), each 420 s with `coverage` in `RPCS3_FINAL124_SMOKE001\d1\d1ppu.txt`
+(restored afterwards). About 82k first calls each, 81,838 shared. `scripts/d1_coverage_diff.py STUCK
+PASS --after 0:01:20` lists 3 blocks only in the stuck run and 746 only in the passing run.
+
+- **Stuck run only:** `0x103b68/0x103b90/0x103ba4` (job #1, 114.8 s), the retry arm of a
+  lock-free CAS loop (`lwarx`/`stwcx.`, up to 10,000 tries) in `0x103828`. Contention: a symptom,
+  not a cause.
+- **Passing run only, from 112.29 s:** partitions inside `0xb7134c` called from `0xed458`, a
+  20-byte digest check (`sha1(data, len) == expected`, called by the header loaders `0xeaf6c`
+  and `0xebd68`). Its padding branch depends on data length, and `_0`'s tables differ in size
+  from `_2`'s, so this difference is probably not causal.
+- **Passing run only, from 119.46 s:** the completion path, starting at `0xf13d8` inside
+  **`0xf12a8`** (called from `0xe6d28` and `0xe7f40`), which both runs call. Then the stage-19
+  tick advances (`0x362e74`...). The partition at `0xf13d8` is reached only when the u16 at +0x30
+  of the entry `0x19c6520 + idx*0x44` (idx = `0xf12a8`'s 8th argument, r8/r20) is **not**
+  `0xffff`. Lead: in the stuck run that entry stays empty. Next, read the `0x19c6520` table live
+  in a stuck run and identify what fills +0x30, and which caller (`0xe6d28` or `0xe7f40`) passes
+  the index.
