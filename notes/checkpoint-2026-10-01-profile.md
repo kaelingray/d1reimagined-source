@@ -349,3 +349,21 @@ screen with the spinner. The direct sample names stage **`setup:activity_session
 the step after the 01.00 subscriptions (01.00 asked for `ahp req` here). Next: what `mm rsp`
 must carry for the session to be created (its consumer, and fields 1-6), then the activity
 host route on 01.24.
+
+After about 90 s of empty replies the client gives up: service 505, unsubscribes peer and
+roster, re-fetches the select-character family and shows **"Unable to find a match for your
+Fireteam" (newt)**. So `mm req` is the orbit/fireteam matchmaking poll, and an empty `mm rsp`
+means "nothing found yet". Relevant 01.24 strings sit beside the descriptor: "Bungie
+matchmaking interface" (`0x01306b90`, referenced from `0x48ebc8` in `0x48eb9c`),
+`send_message_via_bap`, `/ah_type:%s`, `/ah_package:`, `/ah_slice_set_names:`; elsewhere
+`matchmaking-host-selected`, `orbit_matchmaking`, `setup:matchmaking`.
+
+D1P hooks on the mm codec (dismissing newt makes the client retry): the encoder (`0x477d44`,
+codec vtable `0x13e9d98` slot 2) is reached from the sender **`0x4906d8`** (call at
+`0x490984` -> `0x47676c`; it fills field 1 = 2 and field 2 = 4 and keeps a state at
+`this+0x2c`: 1, 6, 7, 3). The decoder (`0x477d9c`, vtable `0x13e9dc0` slot 3) is called from the
+generic reply path `0x47a340` (decode into a stack buffer, then the request object's vtable
+slot `0x2c` at `0x47a430` consumes it; chain `0x47a5a0 0x47be80 0x928774 0x930c78`). Next:
+resolve that slot-0x2c consumer (the matchmaking request object created by `0x4906d8`) and
+the `mm rsp` fields it needs for "match found", then the activity host connection it leads to.
+The watch list was restored afterwards.
