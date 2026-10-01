@@ -77,8 +77,12 @@ class UpdatedBuildLayouts(unittest.TestCase):
                                                             prim(0xC, 5, 32, 0x80000000),
                                                             nested(0x10, 0x8080533D),
                                                             prim(0x4C4, 5, 32, 0x80000000),
-                                                            prim(0x4C8, 5, 10, 1), prim(0x4CC, 9, 32)]},
-                  "0x8080533d": {"fields": []}}
+                                                            prim(0x4C8, 5, 10, 1), prim(0x4CC, 9, 32),
+                                                            prim(0x4D8, 5, 32, 0x80000000),
+                                                            nested(0x4DC, b.OBJECT_ID_TYPE),
+                                                            prim(0x4E4, 9, 32)]},
+                  "0x8080533d": {"fields": []},
+                  f"{b.OBJECT_ID_TYPE:#x}": {"fields": [prim(0, 9, 32)]}}
         player = b.sim_player(schema, 1, 5, 0x1234, True)[2]
         decoded = investment.decode(schema, b.SIM_PLAYER_TYPE,
                                     investment.encode(schema, b.SIM_PLAYER_TYPE, player))
@@ -89,6 +93,8 @@ class UpdatedBuildLayouts(unittest.TestCase):
         decoded = investment.decode(schema, b.GAME_MODE_TYPE,
                                     investment.encode(schema, b.GAME_MODE_TYPE, mode))
         self.assertEqual((decoded[0], decoded[0x4C8], decoded[0x4CC]), (3, -1, 0x811C9DC5))
+        # no activity quarantine: bubble -1 with the empty-name hash (0 would mean bubble 0)
+        self.assertEqual((decoded[0x4D8], decoded[0x4E4]), (-1, 0x811C9DC5))
 
 
 class EntityIndices(unittest.TestCase):

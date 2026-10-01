@@ -754,6 +754,16 @@ def game_mode(schema, group, index, state):
     hash_field = hashes[0][1]["off"]
     values = {0: state, 8: 0x811C9DC5, 0xC: -1, index_field: -1,
               hash_field: 0x811C9DC5}
+    # Activity quarantine (01.24: i32 bubble @0x4d8, object id @0x4dc, u32 hash @0x4e4). The
+    # apply handler 0xc0f740 sets `activity_quarantine` for a bubble in 0..127 and clears it
+    # otherwise; once set, the watchdog 0x39bce8 sends a player who stays outside that bubble
+    # back to its base slice set. A zero default meant "bubble 0": JOIN25/26 lost the world to
+    # a {0, 0} slice request as soon as the Guardian walked from 112 into bubble 3.
+    for i in range(len(fields) - 2):
+        bubble, area, name = fields[i:i + 3]
+        if (bubble["kind"] == 5 and bubble["width"] == 32 and area["kind"] == 1
+                and area["nested"] == OBJECT_ID_TYPE and name["kind"] == 9 and name["width"] == 32):
+            values[bubble["off"]], values[name["off"]] = -1, 0x811C9DC5
     return {0: group, 4: 0x10, 6: index}, GAME_MODE_TYPE, values, False
 
 

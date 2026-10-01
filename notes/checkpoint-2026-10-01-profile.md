@@ -833,3 +833,57 @@ cannot be sending a wrong hash; `{0, 0}` is the client's own "transition cleared
 unloads 112 and never activates 24 (what the 01.24 client expects from the host after its
 slice request), and what raises the Urgent Message (possibly a server message: the user-msg
 reply's required field 4 is sent as 0).
+
+## The 112 -> 24 switch is the activity quarantine, not the host (Claude, JOIN25)
+
+Static 01.24 map of the slice-set machinery (engine object `*0x1abc8ac`, the 01.00 world-controller
+"slice" with the same +0x89 state / +0x90 current / +0x130 target): the target setter is
+**`0x352138(engine, state, index, &hash)`** (01.00 `0x31d358`). Its callers: arrival `0x3525f0`
+(state 2; index/hash from engine +0x368 if present, else `e3_hack_state` `*(0x1c1774c)` +8/+0xc,
+else the host activity state @0x54/@0x58), follow-player `0x352968` (state 3), `0x353248` (state 4,
+current index with the empty hash), the pending request `0x3536f8` (state 6, from engine
++0x3a4/+0x3a8, written only by `0x35097c`, 01.00 `0x31bcd0`) and the re-apply in `0x353a94`. The
+engine's top update is `0x353c7c`; when engine +0x88 (0x168 bytes) differs from its last-sent copy
++0x1f0 it posts event **0x4f** (`0x92c5b8` -> `0x27d744`). Engine requests: registrar `0x333280`
+(`0x1267c4`), post `0x1268d4`; slot 1 "De-instantiate CURRENT slice-set" handler `0x333658`, slot 2
+"Change slice-set" handler `0x3336dc`, which calls the scenario-table switch **`0x14d738`**: index
+-1 de-instantiates, the active index succeeds at once, otherwise the index must already be in the
+loaded set (+0x1114) or the switch fails; instantiation failure sets the +0x1194 flag. Loads are
+requested by `0x14cbb4` (sets +0x1110), from the zone machine `0x354e38` (zone state
+`*(0x1abc8c4)`, target +0xa8) and from `0x532b20`.
+
+`FINAL124_JOIN25` repeats JOIN24 exactly (command recovered from the previous transcript) with PPU
+hooks on these. Trace (emulator seconds): 174376.8 arrival sets target **112** (state 2, empty
+hash), the zone machine loads 112 and the switch succeeds (`0x14d738` r5=0x70, `0x32f470`,
+`0x3961b0`). At +11.4 s **follow-player** sets target **24 / `0x68935472`** (state 3: the Guardian
+stands in bubble 3's volume) and the zone machine requests the load of 24 (`0x14cbb4` r4=0x18):
+correct so far. At +2.5 s the **pending-request path** overwrites the target with **{index 0,
+hash 0}** (state 6; chain `0x353af0` <- `0x353cdc`); slot 1 de-instantiates 112 and the loader then
+asks for slice 0 repeatedly. That is the empty engine of JOIN21/24 (the proxy's decoded "state 2/3/4"
+is the record's u3 at +0x142, not the engine state).
+
+The {0, 0} request comes from **`activity_quarantine`** (typed global `*(0x1acc0a0)`, 0x18 bytes,
+registered by `0x39ba40`): {+0 enabled, +4 bubble, +8 hash, +0xc area {u32, u8, u16}, +0x14
+timer}. Its per-frame watchdog `0x39bce8` compares the current bubble with +4 (and the area); after
+the threshold (5.0, or an override through `0x213e58`) it posts the pending request for slice
+`8 * bubble` (`0x158d9c`) with hash +8 via `0x35097c`. Set: `0x39bfd0(bubble, &hash, &area)`, only
+from `0x57c288`; clear: `0x39bab8` / `0x39bb38` (from `0x57c2c8`). Both are slots 16/17 of the
+41-slot secondary vtable `0x13eca48` of the static receiver at `0x1acc25c` (installed by
+`0x3addf0`, exposed in the interface table `0x1899ea0` slot 1 by `0x391d08`). In this run the
+quarantine held {bubble 0, hash 0}. Next (`FINAL124_JOIN26`): hook the set/clear from boot to find
+who enables it with zeros.
+
+`FINAL124_JOIN26` (same recipe, hooks on the quarantine set/clear from boot): the clear
+(`0x39bab8`/`0x39bb38`) runs during orbit/setup; in the activity the set `0x57c288` ->
+`0x39bfd0` runs about once a second with **bubble 0, hash 0, area 0**, chain `0xc0f968` <-
+`0x2906b0` <- `0x27a3f4` <- `0x1e0b9c` <- `0x1e0bd0` <- `0x1dfd94` <- `0x1d9688` (simulation
+envelope `0x1d9440`): the **replicated state of the game-mode object** (`0x4786c0e0:3`, type
+`0x808008a3`, 0x504 bytes, apply handler `0xc0f740`). The handler copies the state to object
++0x108 and then, for state +0x4d8 (i32) in 0..127, calls receiver slot 16 = quarantine set
+(bubble +0x4d8, area object id +0x4dc, hash +0x4e4); otherwise slot 17 = clear. `game_mode()`
+filled only the 4-bit state and the +0x4c8/+0x4cc index/hash pair, so the zero default
+quarantined the player to bubble 0: after 112 -> 24 the watchdog requested slice 0 and the
+world emptied (JOIN16-26). **Fix:** `game_mode()` now finds the {i32, `0x808004b1` object id, u32
+hash} triple in the schema and sends bubble **-1** with the empty-name hash (no quarantine);
+01.00's game-mode layout has no such triple and is unchanged. A regression test covers the
+encoding. `FINAL124_JOIN27` repeats JOIN24/25 with the fix.
