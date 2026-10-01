@@ -23,12 +23,12 @@ def replacement_entry(path):
     if len(header) != 16:
         raise ValueError(f"short package header: {path}")
     magic, version, package_id, marker, value = struct.unpack(">4HQ", header)
-    if (magic, version, package_id, marker) != (0x18, 4, int(match.group(1), 16), 1):
+    if (magic, version, package_id) != (0x18, 4, int(match.group(1), 16)) or marker not in (0, 1):
         raise ValueError(f"unexpected package header: {path}")
     return package_id, path.stem.encode("ascii"), value
 
 
-def build(disc_packages, replacements, guid, update_packages_dir=None):
+def build(disc_packages, replacements, guid, update_packages_dir=None, chain=()):
     original = signon_proto.disc_packages(disc_packages)
     by_id = {entry[0]: entry for entry in original}
     if len(by_id) != len(original):
@@ -52,7 +52,20 @@ def build(disc_packages, replacements, guid, update_packages_dir=None):
         if not update_packages_dir and entry[0] not in by_id:
             raise ValueError(f"replacement ID {entry[0]:04x} is absent from disc manifest")
         by_id[entry[0]] = entry
-    entries = [by_id[package_id] for package_id in sorted(by_id)]
+    chain_by_id = {}
+    for path in chain:
+        entry = replacement_entry(path)
+        if entry[0] not in by_id:
+            raise ValueError(f"chain ID {entry[0]:04x} is absent from manifest")
+        if entry[1] == by_id[entry[0]][1]:
+            raise ValueError(f"chain entry duplicates selected package: {path}")
+        chain_by_id.setdefault(entry[0], []).append(entry)
+    entries = []
+    for package_id in sorted(by_id):
+        entries.extend(chain_by_id.get(package_id, ()))
+        entries.append(by_id[package_id])
+    if len(entries) > 800:
+        raise ValueError(f"manifest has {len(entries)} packages; maximum is 800")
     return signon_proto.content_manifest(guid.encode("ascii"), entries), entries
 
 
@@ -60,18 +73,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--disc-packages", type=Path, required=True)
     parser.add_argument("--replace", type=Path, action="append", default=[])
+    parser.add_argument("--chain", type=Path, action="append", default=[],
+                        help="add an earlier package of the same ID before the selected one")
     parser.add_argument("--update-packages-dir", type=Path,
                         help="include the highest numbered English or neutral update file per package ID")
     parser.add_argument("--guid", default="00000000-0000-0000-0000-000000000001")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    payload, entries = build(args.disc_packages, args.replace, args.guid, args.update_packages_dir)
+    payload, entries = build(args.disc_packages, args.replace, args.guid,
+                             args.update_packages_dir, args.chain)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_bytes(payload)
     print(f"wrote {args.out}: {len(payload)} bytes, {len(entries)} entries")
     for path in args.replace:
         package_id, name, value = replacement_entry(path)
         print(f"replacement {package_id:04x} {name.decode()} header=0x{value:016x}")
+    for path in args.chain:
+        package_id, name, value = replacement_entry(path)
+        print(f"chain {package_id:04x} {name.decode()} header=0x{value:016x}")
 
 
 if __name__ == "__main__":

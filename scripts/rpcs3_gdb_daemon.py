@@ -11,6 +11,7 @@ accepts one-line commands on a loopback control port (default 127.0.0.1:2346):
                                   bytes at *r4, for 0x41c0e0 the soid at *r6, and LEN bytes
                                   at each listed register (e.g. r5:512; rN:0 prints the register value)
   mem ADDR LEN                    hex dump of guest memory (big-endian guest addresses)
+  snapshot                        PC, LR and stack chain for every emulator thread
   raw PACKET                      send one GDB packet while paused and print the reply
   ping                            liveness check
 
@@ -72,7 +73,12 @@ class Session:
     def threads(self):
         out, r = [], self.cmd("qfThreadInfo")
         while r and r[0] == "m":
-            out += r[1:].split(",")
+            # RPCS3 appends `l` to its one-page `m...` reply. Querying
+            # qsThreadInfo anyway can time out and leave a trace unarmed.
+            terminal = r.endswith("l")
+            out += r[1:-1].split(",") if terminal else r[1:].split(",")
+            if terminal:
+                break
             r = self.cmd("qsThreadInfo")
         return out
 
@@ -95,8 +101,9 @@ class Session:
     def hits(self, limit, seconds, addrs, dumps=(), watches=()):
         lines = []
         self.pause()
+        tids = self.threads()
         for a in addrs:
-            self.cmd(f"Z0,{a:x},4")
+            lines.append(f"Z0 {a:#x}: {self.cmd(f'Z0,{a:x},4')!r}")
         for a in watches:  # write watchpoints; the stub's reply is logged in case it refuses them
             lines.append(f"Z2 {a:#x}: {self.cmd(f'Z2,{a:x},4')!r}")
         end = time.time() + seconds
@@ -112,7 +119,7 @@ class Session:
                     break
                 self.running = False
                 self.g.s.settimeout(10)
-                for tid in self.threads():
+                for tid in tids:
                     self.cmd(f"Hg{tid}")
                     pc = self.reg(64)
                     if pc not in addrs and not (watches and "watch" in stop):
@@ -155,6 +162,25 @@ class Session:
         finally:
             self.resume()
 
+    def snapshot(self):
+        self.pause()
+        try:
+            tids = self.threads()
+            lines = []
+            for tid in tids:
+                try:
+                    self.cmd(f"Hg{tid}")
+                    pc, lr, sp = self.reg(64), self.reg(67), self.reg(1)
+                    if pc is None:
+                        continue
+                    chain = self.chain(sp, depth=5) if sp else []
+                    lines.append(f"thread={tid} pc={pc:#x} lr={lr:#x} sp={sp:#x} chain={chain}")
+                except (OSError, ValueError, TypeError) as exc:
+                    lines.append(f"thread={tid} error={exc!r}")
+            return lines
+        finally:
+            self.resume()
+
 
 def serve():
     session = Session()
@@ -182,6 +208,8 @@ def serve():
                             session.resume()
                     elif line[:1] == ["mem"]:
                         out = session.mem(int(line[1], 16), int(line[2], 0))
+                    elif line[:1] == ["snapshot"]:
+                        out = session.snapshot()
                     else:
                         out = ["pong"]
                 except Exception as exc:  # report and keep the stub session alive
