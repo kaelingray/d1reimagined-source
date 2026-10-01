@@ -360,3 +360,46 @@ change the stall. With 01.20's `0172_2` registered, the FIOS operation that read
 collapses `sys_fs_read` lines (`⁂ sys_fs_read [N]`), so raise sys_fs logging, or hook the
 game's FIOS read submission, to capture the fd, offset, size and result of the reads on fd 4
 after 1:37.97.
+
+### 2026-10-01 (cont.): ROOT CAUSE of the substate-12 wait, fixed by registering patch chains
+
+**What the stalled read is.** With `sys_fs: Trace` added to the per-game config's `Log:`
+section (the per-game file overrides the global one; restored afterwards), FINAL124_FSTRACE2
+shows the last FIOS work on disc `0430_0`: tables (`lseek 0x1000`, read 0x20000 + 0x180), then
+`lseek 0x22570`, read 0x10c, then nothing. That is **entry 14 = tag `0x8106000e`**, the `ref`
+of 0172's root entry `0x80ae4000` (the same in `_0`, `_1` and `_2`). Its 268 bytes (class
+0x80800341, naming tag `0x80ae4000` and package `0x0172`) end in a 30-word bitmask. The two
+versions differ in one word only:
+
+| Copy of tag `0x8106000e` | Last mask word | Bits = entries |
+| --- | --- | --- |
+| disc `0430_0` (2014) | `0x00007fff` | 29*32 + 15 = **943** = `0172_0`'s entry count |
+| updates `0430_1`..`_4` (01.13+; data in a **patch-1 block**, i.e. in the `0430_1` file) | `0x001fffff` | 29*32 + 21 = **949** = `0172_2`'s entry count |
+
+`0172_2`'s entries 943-948 were added in 01.13 (patch-1 blocks). Entry 948 (862 KB, type 8) is
+referenced by entry 188, so the 01.20 root needs it. With the old 943-entry mask the load can
+never complete. That is the substate-12 wait: no error, the loader just goes idle.
+
+**Why every earlier manifest failed.** The content manifest must register each package's
+**patch chain** (all patch files its blocks live in), not just the newest file:
+- final / `_2` only: neither `0172_0`/`_1` nor the updated 0430 mask is reachable;
+- run 022 (0172 chain + shared `_4`): `0430_4` keeps entry 14 in patch 1 (`0430_1`, not
+  registered), so it is unreachable;
+- FINAL124_SHARED_CHAIN (shared chains only): FIOS opens `0430_4`..`_0` and reads entry 14 **from
+  `0430_1`** (fd 10, offset 0x21ea0, 268 bytes: the 949 mask), then needs `0172_0`/`_1` blocks
+  that are not registered;
+- run 020 / disc `0172_0`: the old 943 mask matches the old package, so slot 3 completes.
+
+**The fix, verified live: FINAL124_BOTH_CHAINS** (`manifest-final-Dboth-chains.bin`, 325
+entries: the final manifest, plus the `0172` chain `_0` (disc), `_1`, `_2`, plus the shared-manifest
+chains `0430_0`..`_4`, `0431_0`..`_4`, `0432_1`..`_4`, chain entries listed before the newest):
+**stage 19, substate 16, slot 3 `client_bootstrap_patchable` state 2, pending 0**, with
+01.24's final content. FIOS goes on to the globals packages (`0156_4`, `0157_4`, `0161_3`,
+`0169_2`, `072b_3`, `0735_1`...). Still 0 BAP connections: the next wait is substate 16's
+asset-readiness descriptor (mode 2, content handle `0x80814000`), as in run 020.
+
+**Next.** 284 of the final manifest's 311 packages are overlays. Registering every chain from
+the block tables would add 514 entries (825 in total, no files missing). The 800-entry cap in the
+main PC's `--chain` variant has no recorded source; test it live. Add an automatic block-table
+`--chains` mode to `build_manifest_probe.py` (patch 0 from the disc, others from the inventory's
+non-stale update files; marker-0 shared manifests included). Then re-check substate 16.
