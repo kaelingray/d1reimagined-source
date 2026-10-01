@@ -274,7 +274,7 @@ class StartRequest(unittest.TestCase):
         self.addCleanup(setattr, bap, "log", bap.log)
         bap.log = logs.append
         args = bap.parse_args(["--bind", "127.0.0.1", "--capture-dir", tmp.name,
-                               "--schema", str(Path(tmp.name) / "none.json"), "--start-rsp-body", "00000000"])
+                               "--schema", str(Path(tmp.name) / "none.json")])
         server, client = socket.socketpair()
         thread = threading.Thread(target=bap.handle, args=(server, ("127.0.0.1", 0), args), daemon=True)
         thread.start()
@@ -284,7 +284,7 @@ class StartRequest(unittest.TestCase):
         inner = struct.pack(">HI", bap.START_REQ, 0) + payload
         client.sendall(struct.pack(">BBI", 1, 2, len(inner)) + inner)
         client.settimeout(2)
-        expected = bap.plain_frame(bap.START_RSP, 0, 200, b"\0\0\0\0")
+        expected = bap.plain_frame(bap.START_RSP, 0, 200, payload)  # echo: the decoder takes exactly 0x80 bytes
         reply = b""
         while len(reply) < len(expected):
             chunk = client.recv(len(expected) - len(reply))

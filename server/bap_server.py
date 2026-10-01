@@ -411,7 +411,8 @@ CAPTURE_DIR = SIGNON / "captures" / "bap"
 SHELLO_REQ, SHELLO_RSP = 0x19, 0x1A
 # 01.24 opens with "c->b start req" (0x1e): plaintext, payload "DESTINY" 0x01 + 120 bytes of
 # LCG output (builder 0x8c74e4). The reply dispatcher 0x8c7c94 expects "start rsp" (0x1f) for
-# request kind 1, checks status 200 and decodes the payload into a discarded 0x800-byte buffer.
+# request kind 1, checks status 200 and decodes the payload into a discarded 0x800-byte buffer;
+# the start rsp decoder (codec vtable slot 3, 0x478764) accepts exactly 0x80 bytes.
 START_REQ, START_RSP = 0x1E, 0x1F
 QZ_REG_REQ, QZ_REG_RSP = 0x79, 0x7A
 ECHO_REQ, ECHO_RSP, RRC_REQ, RRC_RSP = 0xFA, 0xFB, 0x12E, 0x12F
@@ -1587,9 +1588,10 @@ def handle(conn, peer, args):
                         f"({len(push)} bytes, root object {'yes' if args.schema and family_type in ROOT_OBJECTS else 'no'})")
             if msg_type == START_REQ and kind == 2:
                 magic = payload[:8]
-                reply = plain_frame(START_RSP, msg_id, 200, args.start_rsp_body)
+                body = payload if args.start_rsp_body is None else args.start_rsp_body
+                reply = plain_frame(START_RSP, msg_id, 200, body)
                 log(f"[{tag}] start req magic {magic!r} ({len(payload)} bytes); sending start rsp "
-                    f"({len(args.start_rsp_body)}-byte body)")
+                    f"({len(body)}-byte body{', echo' if args.start_rsp_body is None else ''})")
                 folder.joinpath(f"{number:03}-server-start-rsp.bin").write_bytes(reply)
                 conn.sendall(reply)
             if msg_type == SHELLO_REQ:
@@ -1621,8 +1623,9 @@ def parse_args(argv=None):
     ap.add_argument("--timeout", type=float, default=120)
     ap.add_argument("--ws-zero-bytes", type=int, default=1024,
                     help="answer c->ws requests with the service id and this many zero bytes (0: no reply)")
-    ap.add_argument("--start-rsp-body", type=bytes.fromhex, default=b"", metavar="HEX",
-                    help="body of the 01.24 start rsp (0x1f) answering start req (0x1e); default empty")
+    ap.add_argument("--start-rsp-body", type=bytes.fromhex, default=None, metavar="HEX",
+                    help="body of the 01.24 start rsp (0x1f) answering start req (0x1e); default: echo "
+                    "the 128-byte request payload (the client decodes exactly 0x80 bytes)")
     ap.add_argument("--ws-signin", action="store_true",
                     help="answer service 503 with a typed sign-in response carrying the request's account id")
     ap.add_argument("--ws-no-optional", action="store_true",

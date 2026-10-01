@@ -65,11 +65,13 @@ if ($ManifestFile) {
     $manifestArgument = @('--manifest-file', (Resolve-Path -LiteralPath $ManifestFile).Path)
 } elseif ($signonArguments -notcontains '--manifest-file') {
     $updatePackages = Join-Path $rpcs3 'dev_hdd0\game\BLES01857\USRDIR\a0000001\packages'
-    $manifest = Join-Path $D1Local 'RESEARCH\ps3_updates\manifest-final-smoke.bin'
+    # --chains: 01.24 overlays and the shared manifests' entry masks need every patch file their
+    # blocks live in registered (FINAL124_BOTH_CHAINS / FINAL124_ALL_CHAINS, 2026-10-01)
+    $manifest = Join-Path $D1Local 'RESEARCH\ps3_updates\manifest-final-chains.bin'
     & $D1Python "$PSScriptRoot\build_manifest_probe.py" `
         --disc-packages (Join-Path $usrdir 'packages') `
         --update-packages-dir $updatePackages `
-        --inventory-file (Join-Path $data 'ps3_updates\package_inventory_01.24.json') --out $manifest
+        --inventory-file (Join-Path $data 'ps3_updates\package_inventory_01.24.json') --chains --out $manifest
     if ($LASTEXITCODE) { throw 'Final-build diagnostic manifest generation failed.' }
     $manifestArgument = @('--manifest-file', $manifest)
 }

@@ -424,3 +424,34 @@ then 120 bytes that look random (key material or a nonce?). 01.00 opened with ty
 nothing, and the client closes the connection after 10 s ("closed with 0/6 bytes"). **Next:
 identify the 01.24 BAP handshake** (message-name table and the `0x1e` codec in the 01.24
 EBOOT), then answer it in `bap_server.py`.
+
+### 2026-10-01 (cont.): 01.24 BAP session: start req answered, sign-in through family push, then "pigeon"
+
+**01.24 BAP message types** (jump table `0x134f3d0` in the name function `0x8c7f48`, 0x130
+entries): the same numbers as 01.00 for shello (0x19/0x1a), c->ws (0x0a/0x0b), sub (0x0c/0x0d),
+client config (0x12/0x13), qz_reg (0x79/0x7a) and rrc (0x12e/0x12f). New in use: **0x1e "c->b
+start req" / 0x1f "c->b start rsp"**, plus 0xab "c->x not" and 0xfa/0xfb echo.
+
+**start req / start rsp.** Builder `0x8c74e4`: memcpy of `"DESTINY\x01"` (data at `0x134f270`),
+then 60 u16 values from an LCG (x*0x19660d + 0x3c6ef35f, seed from `0xbf1d58`): 128 bytes, sent
+plaintext. Reply dispatcher `0x8c7c94`: pending request kind 1 -> expects 0x1f, kind 2 -> 0x1a,
+3 -> 0xfb, 4 -> 0x7a, 5 -> 0x12f. Status must be 200, then the codec decodes the body (vtable
+slot 3 of `*(0x189a548 + 4*type)`, live). The **start rsp decoder `0x478764` accepts exactly
+0x80 bytes** and the dispatcher discards them; qz_reg/rrc rsp decode with `0xa6220` (ignored).
+FINAL124_START1 with an empty body: the client closed after 10 s. **FINAL124_START2 echoing the
+128-byte request** (`bap_server.py` default now): accepted.
+
+**FINAL124_START2 session** (`manifest-final-chains.bin`, d1p3), on the existing 01.00 stand-in
+logic with the 01.24 schemas: start req -> start rsp (echo) -> **shello req -> shello rsp** ->
+qz_reg -> rrc -> **c->ws 503 sign-in** (account `0xa3d4a2c8fbea6b9`) -> frame 6 type 0xab
+"c->x not" (86 bytes, protobuf-like, no reply expected?) -> c->ws `0x00ce` family fetch -> sub req
+-> pushed family type 4 (1,972 bytes, root object) -> **the client shuts the socket down 50 ms
+later** (`sys_net_bnet_shutdown(s=80)` at emu 1:46.05). Screen: **ERROR "Your connection to
+Destiny character servers has been lost. ... error code: pigeon"**. Bootflow state **25
+"cleanup"**: stage 19 `bap_signin` was passed. Next: find why the client drops the session after
+the family push (01.24 family/character object layout vs the 01.00-derived push, the 0xab
+notification, or a missing push or reply), and compare with the 01.00 session order (client
+config request, acct id trans...).
+
+Run automation: `Start-FinalBuildSmoke.ps1` now builds its default manifest with `--chains`
+(`manifest-final-chains.bin`).
