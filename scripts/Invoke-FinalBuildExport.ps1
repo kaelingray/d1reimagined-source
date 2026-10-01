@@ -103,7 +103,7 @@ if ($Packages) {
                 catch { Copy-Item $_.FullName $target }
             }
         }
-    } else { Write-Warning "disc packages not found at $DiscPackages: patch files cannot be read alone" }
+    } else { Write-Warning "disc packages not found at ${DiscPackages}: patch files cannot be read alone" }
     $stale = Join-Path $Out 'final\stale.txt'
     if (Test-Path $stale) {
         # files an older update numbered higher than their replacement (01.20 restarted the numbering)
@@ -119,7 +119,7 @@ if ($Packages) {
         & $py "$PSScriptRoot\d1_pkg.py" items $final --oodle $Oodle | Set-Content (Join-Path $Out 'final_items.txt')
         & $py "$PSScriptRoot\d1_types.py" --elf $elves[($elves.Keys | Sort-Object)[-1]] --packages $final --oodle $Oodle services |
             Set-Content (Join-Path $Out 'final_services.txt')
-    } else { Write-Warning "no Oodle DLL at $Oodle: skipped the final package listings" }
+    } else { Write-Warning "no Oodle DLL at ${Oodle}: skipped the final package listings" }
 }
 
 Step 'done'
