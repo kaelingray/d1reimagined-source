@@ -94,7 +94,12 @@ def main():
     print(f"DNS sinkhole on {args.bind}:{args.port}, answering A with {args.answer}; {len(overrides)} overrides", flush=True)
 
     while True:
-        query, peer = sock.recvfrom(4096)
+        try:
+            query, peer = sock.recvfrom(4096)
+        except ConnectionResetError:
+            # Windows reports an ICMP port-unreachable for an earlier reply as
+            # WSAECONNRESET on the next recvfrom (the client closed its port).
+            continue
         try:
             reply, name, qtype, answered_ip = build_reply(query, answer_ip, args.ttl, overrides)
         except (ValueError, IndexError, struct.error) as exc:

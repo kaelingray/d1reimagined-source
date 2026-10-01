@@ -284,7 +284,11 @@ def main():
     readable, _, _ = select.select(socks, [], [])
     while True:
         for sock in readable:
-            packet, peer = sock.recvfrom(2048)
+            try:
+                packet, peer = sock.recvfrom(2048)
+            except ConnectionResetError:
+                # Windows: ICMP port-unreachable for an earlier reply (see dns_sinkhole)
+                continue
             server = sock.getsockname()
             stamp = datetime.datetime.now().isoformat(timespec="milliseconds")
             print(f"{stamp} <- {peer[0]}:{peer[1]} len={len(packet)} {packet.hex(' ')}", flush=True)

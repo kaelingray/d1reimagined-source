@@ -70,7 +70,11 @@ def serve_udp(args):
     sock.bind((args.bind, args.port))
     log(f"UDP listening on {args.bind}:{args.port}")
     while True:
-        data, peer = sock.recvfrom(65536)
+        try:
+            data, peer = sock.recvfrom(65536)
+        except ConnectionResetError:
+            # Windows: ICMP port-unreachable for an earlier reply (see dns_sinkhole)
+            continue
         log(f"[udp {peer[0]}:{peer[1]}] {len(data)} bytes: {data[:96].hex(' ')}")
         save(args, f"udp_{peer[1]}", data)
 
