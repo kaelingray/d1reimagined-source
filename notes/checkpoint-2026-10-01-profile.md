@@ -399,3 +399,31 @@ u64 x2}, 2, 3: {bool}}, 8 = {1: u64, 2: {that 336-byte struct, {84-byte blob}, c
 hex). Next, `FINAL124_MM4`: `--ahp-reply 00000000000000007f01018000003233` (proxy
 127.1.1.128:12851, as in 01.00) and a proxy stand-in with `--ah-mgr-reply` (02 | host id 1 |
 char[128] "d1local-host").
+
+`FINAL124_MM4B` (`--mm-rsp 4= --ahp-reply 00000000000000007f01018000003233`, proxy stand-in on
+127.1.1.128:12851 with `--ah-mgr-reply` = 02 | host id 1 | char[128] "d1local-host"; the proxy
+must start after `Invoke-Final124Run`, which refuses to launch while any `bap_server` runs):
+`ahp req` -> `ahp rsp`; the client opened the proxy connection (start req echo, shello field
+2 = 2), sent **`c->ah mgr req`** (4111 bytes in 01.24; 3103 in 01.00) -> 137-byte `mgr rsp`,
+then **`c->ah not` host 1 type 3, 238 bytes** (the host join request, 232 bytes in 01.00). With
+no join response it waited about 20 s, then sent 505, unsubscribed and returned to character
+select. This is the 01.00 activity join path. Next, `FINAL124_MM5`: the proxy answers with the
+01.00 orbit recipe on the 01.24 schemas (`--ah-join --ah-entities 8192:12288 --ah-state
+--ah-map orbit --ah-world 230`, world 230 being 01.24's service 105 request).
+
+`FINAL124_MM5` (proxy adds `--ah-join --ah-entities 8192:12288 --ah-state --ah-map orbit
+--ah-world 230` on the 01.24 schemas): the **join response was accepted** - the client sent
+host types 17 (8 bytes), 37 (1311 bytes), 21 (163 and 10 bytes) and the steady type 15, the same
+pattern as an established 01.00 client - then about 1 s later service 505 and **lime**
+("loading activity resources"). The 01.24 bootflow names (table `0x012f7f00`) explain the
+route: 24 `character:prologue` -> 28 `setup:activity_session_creation` -> 29 `setup:matchmaking`
+-> 30 `setup:activity_host_setup` -> **31 `setup:prologue_intro_loading`** -> 33
+`setup:activity_world_transition` -> 34 `activity:initial_slice_set_loading` -> 35
+`activity:physics_join` -> 36 `activity:in_world`. A new character goes from the prologue
+straight into the intro activity (the first Cosmodrome mission), not to orbit (26/27
+`setup:orbit_loading`/`setup:orbit`); world 230 is that activity in 01.24's numbering. 01.00
+reached orbit directly after login (test 062) and joined activities only for missions, so
+the 01.00 mission recipe (`Invoke-MissionRun.ps1`: `act_cosmo_m0_highway`, checksum, 22
+bubbles, zone, roster, sim player, game mode, baselines, heartbeat) is the template; its
+01.00-specific values need 01.24 equivalents. `FINAL124_MM6` tries the highway map with world
+230.
