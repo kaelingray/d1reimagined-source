@@ -7,11 +7,12 @@
 param(
     [string[]]$Keys = @(),
     [int]$HoldMs = 150,
-    [int]$WaitSeconds = 4
+    [int]$WaitSeconds = 4,
+    [int]$ProcessId = 0
 )
 . "$PSScriptRoot\Paths.ps1"
 $shots = $D1Shots
-if ($Keys) { & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys $Keys -HoldMs $HoldMs | Out-Null }
+if ($Keys) { & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys $Keys -HoldMs $HoldMs -ProcessId $ProcessId | Out-Null }
 Start-Sleep $WaitSeconds
 $before = (Get-ChildItem $shots -File -ErrorAction SilentlyContinue | Where-Object Length -gt 0 | Measure-Object).Count
 function Wait-Shot {
@@ -28,7 +29,7 @@ $trigger = (Join-Path $D1Control 'd1shot.on')
 Wait-Shot
 if ($valid.Count -le $before) {
     if (Test-Path $trigger) { [IO.File]::Delete($trigger) }
-    & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys F12 | Out-Null
+    & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys F12 -ProcessId $ProcessId | Out-Null
     Wait-Shot
 }
 if ($valid.Count -le $before) { throw 'RPCS3 did not save a complete screenshot within 20 seconds' }

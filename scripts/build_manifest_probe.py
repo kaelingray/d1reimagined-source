@@ -5,6 +5,7 @@ Use this to compare final-build registration against the disc-only manifest.
 """
 
 import argparse
+import json
 import re
 import struct
 import sys
@@ -28,7 +29,20 @@ def replacement_entry(path):
     return package_id, path.stem.encode("ascii"), value
 
 
-def build(disc_packages, replacements, guid, update_packages_dir=None):
+def build(disc_packages, replacements, guid, update_packages_dir=None, inventory_file=None):
+    if inventory_file is not None and update_packages_dir is None:
+        raise ValueError("an update package inventory requires an update packages directory")
+    if update_packages_dir is not None and not update_packages_dir.is_dir():
+        raise ValueError(f"update packages directory does not exist: {update_packages_dir}")
+    allowed_updates = None
+    if inventory_file is not None:
+        inventory = json.loads(inventory_file.read_text(encoding="utf-8"))
+        packages, stale = inventory["packages"], set(inventory["stale"])
+        if not isinstance(packages, dict) or not stale <= packages.keys():
+            raise ValueError("update inventory has invalid packages or stale names")
+        # Patch numbering restarted in 01.20. Old _5 files can coexist with the
+        # final _4, so filenames alone cannot distinguish superseded chains.
+        allowed_updates = packages.keys() - stale
     original = signon_proto.disc_packages(disc_packages)
     by_id = {entry[0]: entry for entry in original}
     if len(by_id) != len(original):
@@ -37,6 +51,8 @@ def build(disc_packages, replacements, guid, update_packages_dir=None):
         latest = {}
         pattern = re.compile(r"^ps3_.+?_([0-9a-f]{4})(?:_([a-z]{2,3}))?_(\d+)\.pkg$")
         for path in sorted(update_packages_dir.glob("*.pkg")):
+            if allowed_updates is not None and path.name not in allowed_updates:
+                continue
             match = pattern.fullmatch(path.name)
             if match and match.group(2) in (None, "en"):
                 with path.open("rb") as stream:
@@ -62,10 +78,13 @@ def main():
     parser.add_argument("--replace", type=Path, action="append", default=[])
     parser.add_argument("--update-packages-dir", type=Path,
                         help="include the highest numbered English or neutral update file per package ID")
+    parser.add_argument("--inventory-file", type=Path,
+                        help="final ps3_update inventory JSON; excludes stale and unlisted update files")
     parser.add_argument("--guid", default="00000000-0000-0000-0000-000000000001")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    payload, entries = build(args.disc_packages, args.replace, args.guid, args.update_packages_dir)
+    payload, entries = build(args.disc_packages, args.replace, args.guid,
+                             args.update_packages_dir, args.inventory_file)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_bytes(payload)
     print(f"wrote {args.out}: {len(payload)} bytes, {len(entries)} entries")

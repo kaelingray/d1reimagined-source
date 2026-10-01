@@ -136,7 +136,9 @@ class Eboot:
                 reg = int(rd[i])
                 for j in range(i + 1, min(i + 1 + window, len(self.words))):
                     o, a, d, v = int(op[j]), int(ra[j]), int(rd[j]), int(imm[j])
-                    if kind != "ori" and o in self.BASE_OPS and a == reg and \
+                    valid_base = o in self.BASE_OPS and not (
+                        (o == 58 and (v & 3) == 3) or (o == 62 and (v & 3) >= 2))
+                    if kind != "ori" and valid_base and a == reg and \
                             (v & 0xfffc if o in (58, 62) else v) == lo:
                         out.append((self.pc(j), self.pc(i)))
                         break
@@ -152,6 +154,7 @@ class Eboot:
     def toc_refs(self, target):
         """Loads through r2 of a TOC slot holding target: (pc, slot)."""
         op, rd, ra, imm = self.fields
+        ds_load = (op == 58) & ((imm & 3) != 3)  # ld/ldu/lwa; subtype 3 is reserved
         out = []
         for vaddr, off, filesz, flags in self.segments:
             words = np.frombuffer(self.data, dtype=">u4", count=filesz // 4, offset=off)
@@ -159,7 +162,9 @@ class Eboot:
                 slot = vaddr + 4 * int(k)
                 delta = slot - self.toc
                 if -0x8000 <= delta < 0x8000:
-                    hits = np.nonzero(((op == 32) | (op == 58)) & (ra == 2) & (imm == (delta & 0xffff)))[0]
+                    encoded = delta & 0xffff
+                    loads = ((op == 32) & (imm == encoded)) | (ds_load & ((imm & 0xfffc) == encoded))
+                    hits = np.nonzero(loads & (ra == 2))[0]
                     out += [(self.pc(i), slot) for i in hits]
         return out
 
@@ -232,11 +237,8 @@ class Eboot:
             import capstone
         except ImportError:
             sys.exit("disasm needs capstone: pip install capstone")
-        # PowerPC in capstone is 32-bit only; CS_MODE_64 is a PPC64 mode that
-        # capstone does not support and silently decodes nothing. The PS3's PPU
-        # is a 64-bit PowerPC but its instructions are the 32-bit big-endian set,
-        # so PPC32+BE is the correct mode here.
-        md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_32 | capstone.CS_MODE_BIG_ENDIAN)
+        # The PS3's PPU is big-endian PPC64 with fixed-width 32-bit instructions.
+        md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_64 | capstone.CS_MODE_BIG_ENDIAN)
         raw = self.read(va, 4 * count) or b""
         for i in md.disasm(raw, va):
             note = ""

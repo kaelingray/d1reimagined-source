@@ -137,7 +137,7 @@ index 595e34a51..069418743 100644
  
  			// Write version, hash, CPU, settings
 -			fmt::append(obj_name, "v8-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
-+			fmt::append(obj_name, "v8-kusa-d1p2-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
++			fmt::append(obj_name, "v8-kusa-d1p3-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
  		}
  
  		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
@@ -153,12 +153,14 @@ index 864eb63d6..cd472d85a 100644
  #include "PPUTranslator.h"
  #include "PPUThread.h"
  #include "SPUThread.h"
-@@ -238,6 +239,21 @@ Function* PPUTranslator::Translate(const ppu_function& info)
- 	m_gpr[1] = m_function->getArg(5);
- 	m_gpr[2] = m_function->getArg(6);
+@@ -266,6 +267,23 @@ Function* PPUTranslator::Translate(const ppu_function& info)
  
-+	// Destiny diagnostics: call hook at function entry, armed per address at run time through the
-+	// byte table d1diag::g_ppu_mask (one entry per 4-byte PPU address below 0x2000000, see d1diag.h).
+ 	m_ir->SetInsertPoint(body);
+ 
++	// Destiny diagnostics: log only after the status check admits execution of the guest block.
++	// Logging before __check counts scheduler retries and can exhaust a watch budget without
++	// executing a single guest instruction. Keep this before the first guest instruction below.
++	// The byte table d1diag::g_ppu_mask arms entries below 0x2000000 (see d1diag.h).
 +	if (!m_reloc && info.addr < 0x2000000)
 +	{
 +		const auto slot = m_ir->CreateIntToPtr(m_ir->getInt64(d1diag::ppu_mask_addr + (info.addr >> 2)), m_ir->getPtrTy());
@@ -172,9 +174,9 @@ index 864eb63d6..cd472d85a 100644
 +		m_ir->SetInsertPoint(cont);
 +	}
 +
- 	const auto body = BasicBlock::Create(m_context, "__body", m_function);
- 
- 	//Call(GetType<void>(), "__trace", GetAddr());
+ 	// Process blocks
+ 	const auto block = std::make_pair(info.addr, info.size);
+ 	{
 diff --git a/rpcs3/Emu/Cell/SPUThread.cpp b/rpcs3/Emu/Cell/SPUThread.cpp
 index fb9483d88..a23cd93f3 100644
 --- a/rpcs3/Emu/Cell/SPUThread.cpp

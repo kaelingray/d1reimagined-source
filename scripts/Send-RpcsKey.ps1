@@ -9,7 +9,8 @@ param(
     [int]$Vk = 0,
     [int]$Count = 1,
     [int]$HoldMs = 150,
-    [int]$GapMs = 600
+    [int]$GapMs = 600,
+    [int]$ProcessId = 0          # 0 = all matching RPCS3 windows (legacy behavior)
 )
 Add-Type @"
 using System; using System.Runtime.InteropServices; using System.Text;
@@ -36,7 +37,11 @@ foreach ($k in $Keys) {
 }
 if (-not $vks) { $vks = @(0x58) }
 
-$ids = @((Get-Process rpcs3 -ErrorAction SilentlyContinue).Id)
+$ids = if ($ProcessId) {
+    $process = Get-Process -Id $ProcessId -ErrorAction Stop
+    if ($process.ProcessName -ne 'rpcs3') { throw "Process $ProcessId is not RPCS3" }
+    @($ProcessId)
+} else { @((Get-Process rpcs3 -ErrorAction SilentlyContinue).Id) }
 $script:game = @()
 [RpcsKeys]::EnumWindows({ param($h, $l) $p = 0; [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$p)
     if ($ids -contains $p -and [RpcsKeys]::IsWindowVisible($h)) {

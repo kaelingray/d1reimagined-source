@@ -1,8 +1,18 @@
 # Destiny 1 preservation research (PS3 / RPCS3, Xbox 360 / Xenia)
 
-This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active route is now the PS3 build (BLES01857 01.00) in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay out of Git in the ignored `local\` folder (see [Data policy](#data-policy)).
+This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active target is now the final PS3 build, **BLES01857 01.24 (Destiny 2.3.1 / The Taken King)**, in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay out of Git in the ignored `local\` folder (see [Data policy](#data-policy)).
 
-## Current status (2026-09-27)
+## Current target: 01.24 (2026-09-30)
+
+01.24 accepts the local SignOn reply, fetches the diagnostic content manifest, and reaches bootflow stage 19, `bootflow:bap_signin`. It has not yet connected to the BAP stand-in or reached character select/orbit. The 01.00 milestones below are historical and are not evidence that 01.24 is playable.
+
+Fresh direct samples reproduce two waits: substate 12 with the final manifest's bootstrap resource pending, and substate 16 with a disc-manifest comparison's bootstrap complete but an asset-readiness mask pending. The checkpoint records the inputs and evidence for each.
+
+The latest gate diagnosis needed correction: `crorc` was interpreted backwards, and the emulator's PPU hook logged before its scheduler status check, allowing retries to consume an entire watch budget. The repaired diagnostic patch and direct bootflow reader are described in the [01.24 audit checkpoint](notes/checkpoint-2026-09-30-final124-audit.md). Read that checkpoint before acting on the older STUN/gate theories in `final-build.md`.
+
+`Invoke-Final124Run.ps1` now uses explicit/runtime-relative paths, records the processes it starts, sends input only to its own emulator, and reports protocol evidence instead of counting listener banners as progress. An imported runtime must be selected with `-Local`; the repeatable commands are in the [runbook](notes/next-session-playbook.md).
+
+## Historical 01.00 milestone (2026-09-27)
 
 **The PS3 client signs in, reaches orbit, launches the first story mission (A Guardian Rises, `act_cosmo_m0_highway`), loads it, and spawns the guardian in the mission world.** Every service is a local stand-in; nothing contacts Sony, Demonware or Bungie.
 
@@ -25,7 +35,7 @@ What a real host still has to provide there, from analysis of the executable (de
 
 **What is still missing** (see-through guardian = no equipped gear, mission scripts, loot, XP, item services, other activities) and the data wanted for it: [`notes/feature-gaps.md`](notes/feature-gaps.md).
 
-The long-term target is the final PS3 build, 01.24 (Destiny 2.3.1 with The Taken King): [`notes/preservation-plan.md`](notes/preservation-plan.md). A static comparison with 01.00 ([`notes/final-build.md`](notes/final-build.md)) found stable type handles and web services, an unchanged sign-on reply, and no Demonware lobby step. It also records the RPCS3 patch addresses for that build.
+Work has moved to the final PS3 build, 01.24: [`notes/preservation-plan.md`](notes/preservation-plan.md). A static comparison with 01.00 ([`notes/final-build.md`](notes/final-build.md)) found stable type handles and web services, an unchanged sign-on reply, and no Demonware lobby step. It also records the RPCS3 patch addresses for that build.
 
 The mission start is scripted from the stand-in (`--ah-mission`, [`notes/mission-director.md`](notes/mission-director.md)): revival cinematic, objectives with dialogue, trigger-driven steps and Fallen squads, still to be run.
 

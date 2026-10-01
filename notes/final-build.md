@@ -1,5 +1,13 @@
 # The final PS3 build (01.24) against 01.00: static findings
 
+**Current authority (2026-09-30):** read the [01.24 audit checkpoint](checkpoint-2026-09-30-final124-audit.md)
+before using the accumulated live-run theories below. The latest claim that stage-object
+`+0x30 == 0` is a dead end is withdrawn: the `crorc` guard initializes zero to one.
+The claimed Boolean result of `0x332d24` is inverted too. Earlier D1P hit counts can
+include scheduler retries before any guest instruction runs; they do not establish
+independent observations throughout a session. The historical notes remain as an
+experiment trail, with the last section corrected below.
+
 Sources are the EBOOTs of updates 01.13 and 01.24, decrypted on the PC by
 `scripts/Invoke-FinalBuildExport.ps1` (SHA-256 in the data repo's `ps3_updates/EXPORT_VALIDATION.md`). The final
 investment globals chains 012c and 012f were read over HTTP ranges with `ps3_update.py fetch`.
@@ -2783,111 +2791,34 @@ Concretely: locate the function that owns the dispatch table at `0x356ba4`, dump
 object it dispatches on at the **entry** of `0x356ba4`'s function, and walk its `+0x30`
 across the whole run. If it is 0 from the first call, the writer is never invoked at all
 and the search moves upstream to whatever constructs the object.
-## The gate chain, traced to its root. `+0x30 == 0` is a dead end.
+## Gate-chain correction (2026-09-30)
 
-The `+0x30` field is not written by the code I assumed. Working backwards from the gate,
-using the fact that watches only work at function entries, the whole chain is now static
-except for the last link:
+The state-zero diagnosis in commit `73c4f47` is withdrawn. The saved 01.24 ELF
+has `crorc cr0eq, cr1eq, cr0eq` (word `4c461342`) at `0x362a0c`. The operation
+is BA OR NOT BB, as defined by [IBM's instruction reference](https://www.ibm.com/docs/en/aix/7.2.0?topic=set-crorc-condition-register-complement-instruction).
+For the preceding comparisons, this is `(state == 1) OR (state != 0)`,
+which reduces to `state != 0`. Therefore zero falls through to the store
+of one at `0x362a1c`; nonzero states skip that initialization. State zero
+is not a terminal no-op, and a separate initializer is not the next target.
 
-```
-0x363138  gate entry          requires obj+0x30 == 21 AND obj+0x34 == 3
-0x3629f4  advance-fn entry    the ONLY function that stores 21, at 0x363120
-0x332d24  gate on that store  returns ((0x126a40(...) != 0) ? 1 : 0)
-0x126648  base provider       returns *(0x1a1d258) == 0x30751b80
-0x126a40  the decider         returns 1 only if *(base+0x80) != 0 AND *(base+0x11c) == 2
-```
+The Boolean wrapper at `0x332d24` was inverted too: `cntlzw` followed by
+`rlwinm ...,27,31,31` returns one for a zero result, zero for nonzero.
+`0x126a40` also indexes fields by `4*r4`; samples from other caller LRs
+and indexes cannot establish the relevant return value.
 
-`0x126a40` is a `cntlzw`/`rlwinm` non-zero test, so `0x332d24` returning 1 is exactly
-"that function returned non-zero".
+The `RUN_GATE2`, `RUN_S21`, and `RUN_CHAIN` hook files remain valid records
+of what the logger emitted, but do not prove that the guest body executed
+on every hit. The hook was emitted before RPCS3's status check; scheduler
+retries could spend the entire budget on an unchanged pre-execution state.
+For example, the 60 gate records in `RUN_GATE2` span only 12,625 microseconds.
+The diagnostic patch now emits after status admission and uses PPU cache
+prefix `d1p3`. A rebuilt executable is required; the transferred emulator
+still uses the earlier hook. The full patch passes an application check
+against the imported RPCS3 baseline `b5a174e93`, but has not been compiled
+on this PC, which lacks the Windows C++ build toolchain.
 
-### The decider is passing, not failing
-
-RUN CHAIN dumped the base struct at `0x126a40` entry. Both of its conditions hold:
-
-```
-r3 = 0x30751b80 (the base, dereferenced from 0x1a1d258)
-  +0x80  = 0x185ac58  non-zero   OK
-  +0x11c = 2                     OK      x29 of 30 calls
-  +0x11c = 0                     FAIL    x1 call
-```
-
-So the decider returns 1 in 29 of 30 calls. **The blocker is not here.** This also
-retro-explains `+0x11c`: it is the same offset measured as 0 in every dispatcher dump,
-and it is reached because `0x126a40` is precisely what makes it 2.
-
-### The advance function is a linear one-step state machine
-
-`0x3629f4` reads `r4 = obj+0x30` and dispatches a long chain of comparisons, each block
-testing the CR field set by the previous block (`crorc`/`crorc`/`crand`/`crnand` plus
-alternating `bne cr1` / `bne cr6`). Each block writes the next state and returns:
-
-```
-0x362a1c -> 1    0x362cd0 -> 2    0x362b1c -> 3    0x362a94/0x362b5c -> 4
-0x362ba0 -> 5    0x362bdc -> 6    0x362c18 -> 7    0x362c54 -> 8    0x362c90 -> 9
-0x362d94 -> 0xb  0x362dd0 -> 0xc  0x362e88 -> 0xd  0x362ed4 -> 0xe  0x362f10 -> 0xf
-0x362f48 -> 0x10 0x362f8c -> 0x11 0x362fd8 -> 0x12 0x3630a4 -> 0x13 0x3630e0 -> 0x14
-0x363120 -> 0x15 (21)
-```
-
-That is 22 writes, walking 1..21. This is the real "+0x30 state machine", and it is a
-completely different thing from the `r28+0x118/+0x128` dispatcher index (1..19) I had
-been chasing. **Two independent state machines, different objects, different offsets.**
-
-### Why `+0x30 == 0` never moves - the actual blocker
-
-The first write, to state 1, is guarded:
-
-```
-0x362a04  cmpwi  cr1, r4, 1
-0x362a08  cmpwi  r4, 0
-0x362a0c  crorc  cr0eq, cr1eq, cr0eq     ; cr0eq = (r4==1) OR (r4==0)
-0x362a10  beq    0x362a30                 ; if r4 is 0 or 1, SKIP the store
-0x362a14  li     r4, 1
-0x362a1c  stw    r4, 0x30(r31)
-```
-
-So the store to 1 happens only when `r4` is **neither 0 nor 1**. For `r4 == 1` that is
-correct - state 1 has its own block further down. But for `r4 == 0` the function falls
-to `0x362a30`, where every subsequent comparison in the chain is against a nonzero
-value, so every `bne` is taken and control walks the entire chain to the epilogue at
-`0x363130` **without writing anything**.
-
-**`+0x30 == 0` is a terminal no-op state for this function.** It cannot advance, ever. The
-value it needs, 1, it will not write from 0 - it only writes 1 as a *reset* for out-of-
-range values (>= 2).
-
-This matches the measurement exactly: RUN S21 saw `+0x30 = 0` at all 60 entries to
-`0x3629f4` and all 30 entries to the gate, and the object is the same one throughout
-(`r3 = 0x1abdca0` at both, 60x and 30x).
-
-### The consequence
-
-The object is born at `+0x30 == 0`, and the one function that drives that field refuses
-to move it out of 0. So `+0x30` never becomes 21, the gate at `0x363150` never passes,
-and the BAP dial never happens. **Nothing is stuck partway; the connection sequence never
-starts.** The failure is that state 0 is never initialised into state 1.
-
-### Not established
-
-RUN REACH tried to prove the store at `0x363120` executes, by hooking `0x3324c8` and
-`0x2bb60` (only reachable from that path). Both fired, but they hit their 40-hit cap and
-they have other callers - `0x332d24` fired more often than `0x3629f4` did - so that run
-is **inconclusive**, not proof. It is not needed anyway: the static guard analysis above
-already shows state 0 cannot reach the 21-store.
-
-### Next
-
-Find what writes 1 into `obj+0x30` for object `0x1abdca0`, i.e. who *initialises* the
-state. `0x3629f4` provably will not. Concretely:
-
-- Hook the constructor / the function that allocates `0x1abdca0` and dump its `+0x30`
-  from creation onward, to confirm it is 0 from birth rather than zeroed later.
-- Search for `stw`/`stwu` to `0x30(rN)` in the BAP region where the value is 1 and
-  `rN` is the object register - candidates already visible at `0x36d1bc` and
-  `0x36eaec`, both of which need checking for whether they are this object's struct.
-- The other half of the gate is still untouched: `+0x34` must be 3 and is also 0. It is
-  written at `0x363198` inside the gate itself, so it may be set only once `+0x30`
-  passes. Fix `+0x30` first and re-read both.
-
-Once `+0x30` reaches 1, the chain is fully understood and should walk 1..21 on successive
-ticks, at which point `0x366348` (the dial) becomes reachable for the first time.
+The [audit checkpoint](checkpoint-2026-09-30-final124-audit.md) contains the
+current live observations and next experiment. Direct bootflow/resource
+samples are preferable until the corrected emulator is built. The older
+claims in the preceding sections are retained as an experiment history,
+not as established causes of the stall.

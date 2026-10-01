@@ -1,5 +1,59 @@
 # Next session on the PC: ordered runbook (written 2026-09-27)
 
+## Active work: 01.24 (updated 2026-09-30)
+
+The ordered 01.00 mission experiments later in this file are historical. Continue
+with [the 01.24 audit checkpoint](checkpoint-2026-09-30-final124-audit.md).
+The current client reaches `bootflow:bap_signin` (stage 19) without a BAP connection.
+The last diagnosis of a terminal state zero was based on an inverted `crorc`
+interpretation and unreliable pre-status diagnostic hook counts.
+
+Use the imported runtime explicitly on this PC; do not edit the older checkout:
+
+```powershell
+$runtime = 'F:\d1\lukespc-import\d1xenia\local'
+$data = 'F:\d1\d1xenia-data'
+scripts\Invoke-Final124Run.ps1 -Name FINAL124_NEXT -Local $runtime -DataRepo $data `
+  -BootSeconds 300 -PressSeconds 150 -KeepRpcs3
+python scripts\rpcs3_final124_bootflow.py `
+  --request --out "$runtime/RESEARCH/ps3_updates/FINAL124_NEXT-bootflow.json"
+```
+
+Use a fresh run name. `-KeepRpcs3` retains the successful stack so the read-only
+snapshot can run; launch failures always clean up. Without it, the wrapper closes
+only the processes in its per-run ownership manifest. For a retained stack, clean
+up using that manifest after preserving evidence:
+
+```powershell
+. scripts\Final124RunHelpers.ps1
+$owned = Read-D1ProcessManifest "$runtime/SIGNON_LOCAL/logs/FINAL124_NEXT-processes.json"
+foreach ($process in ($owned.processes | Sort-Object { $_.tag -ne 'gdbd' })) {
+  Stop-D1OwnedProcess $process
+}
+Copy-D1SharedFileSnapshot `
+  -Source "$runtime/RPCS3_FINAL124_SMOKE001/log/RPCS3.log" `
+  -Destination "$runtime/SIGNON_LOCAL/logs/FINAL124_NEXT-rpcs3.log"
+```
+
+The wrapper refuses occupied debugger ports and failed listeners without stopping
+an existing run. Its `*-summary.json` counts SignOn requests/success replies,
+manifest replies, BAP connections, and BAP protocol frames separately. Preserve
+the final emulator log and screenshots, then index the run with
+`summarize_final_smoke.py`. All runtime data stays outside Git.
+
+Interpret stage 19 using its substate and prerequisites. The verified final
+manifest currently waits at substate 12 with bootstrap resource status 1. The
+disc-manifest comparison reaches substate 16 with bootstrap status 2 and waits
+on a separate readiness mask. Neither result confirms a BAP connection. Keep
+the comparison profile separate from the final manifest; it changes many package
+selections and cannot isolate a single package's effect.
+
+For corrected D1P tracing, rebuild RPCS3 with the current diagnostic patch. It moves
+the hook after status admission and changes the PPU object cache prefix to `d1p3`,
+which forces recompilation. The transferred `rpcs3.exe` still contains `d1p2`;
+applying a source patch does not update it. The current PC lacks the Windows C++
+build toolchain, so use direct bootflow/resource memory samples in the meantime.
+
 The cloud sessions of 2026-09-27 could not run the game (no `local\` there). They prepared the
 experiments below and the offline tools they need. In order of cost: the offline checks take
 minutes and need no emulator; each mission run takes 8-10 minutes. Background and predictions:

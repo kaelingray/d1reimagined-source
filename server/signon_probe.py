@@ -318,6 +318,18 @@ def serve(addr, port, args, certs, bound_host=None):
         threading.Thread(target=handle, args=(conn, peer, port, args, certs, bound_host), daemon=True).start()
 
 
+def listener_bindings(bind, ports, destiny_hosts=False):
+    """One listener per address/port; aliases retain the first host's certificate fallback."""
+    listeners = [(bind, None)]
+    if destiny_hosts:
+        listeners += [(ip, name) for name, ip in hosts.HTTPS_HOSTS.items()]
+    bindings = {}
+    for addr, name in listeners:
+        for port in ports:
+            bindings.setdefault((addr, port), name)
+    return [(addr, port, name) for (addr, port), name in bindings.items()]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bind", default="127.0.0.1")
@@ -361,11 +373,8 @@ def main():
 
     certs = CertStore(args.ca_dir, args.digest, args.default_host)
     ports = [args.tls_port] + ([args.plain_port] if args.plain_port else [])
-    listeners = [(args.bind, None)]
-    if args.destiny_hosts:
-        listeners += [(ip, name) for name, ip in hosts.HTTPS_HOSTS.items()]
     threads = [threading.Thread(target=serve, args=(addr, port, args, certs, name), daemon=True)
-               for addr, name in listeners for port in ports]
+               for addr, port, name in listener_bindings(args.bind, ports, args.destiny_hosts)]
     for t in threads:
         t.start()
     for t in threads:

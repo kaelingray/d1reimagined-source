@@ -3,18 +3,20 @@
 Several reverse-engineering questions come down to "what else touches this field?": the
 SignOn response field 13 lands in the sign-on singleton at +0x47cc and, as of the 01.24
 notes, its only other known use is a reset. A plain string search cannot answer that,
-because the field is reached by a displacement inside an `lwz`/`stw`/`ldz`/`std`, not by
+because the field is reached by a displacement inside an `lwz`/`stw`/`ld`/`std`, not by
 a pointer to it.
 
-This scans the code segment for PowerPC load/store instructions whose 16-bit displacement
-is the wanted offset and prints them with capstone, so each hit can be checked:
+This scans the code segment for PowerPC D-form and DS-form load/store instructions whose
+displacement is the wanted offset and prints them with capstone, so each hit can be checked:
 
   python scripts/d1_offset_scan.py --elf <EBOOT.elf> --offset 0x47cc
-  python scripts/d1_offset_scan.py --elf <EBOOT.elf> --offset 0x47cc --func   # group by function
+  python scripts/d1_offset_scan.py --elf <EBOOT.elf> --offset 0x47cc --func   # show containing function
 
-Only displacements are matched; the base register is reported so you can tell which
-register holds the object. Several false positives are expected (the same 16 bits used by
-an unrelated instruction form), so verify each hit with `d1_eboot.py disasm`.
+Only displacements are matched; the disassembly reports the base register so you can tell
+which register holds the object. Signed offsets (such as -8) and their 16-bit encodings
+(0xfff8) are equivalent. Indexed instructions have no displacement and are excluded.
+Hits may access an unrelated object, or be data in the executable segment; verify each
+hit with `d1_eboot.py disasm`.
 """
 
 import argparse
@@ -26,59 +28,46 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from d1_eboot import Eboot  # noqa: E402
 
-# The D-form load/store family. In 64-bit PowerPC these share the extended opcode, which
-# does NOT land in bits 0-5: `stb`/`stw`/`std` are 0b0111110 0 (bits 21-30) so bits 0-5 read
-# as 12, while `lbz`/`lwz`/`ld` read as 18. A hand-written bits-0-5 table therefore misses
-# every store, so forms are identified by disassembling instead.
-DS_FORM = frozenset({
-    "lbz", "lbzu", "lhz", "lhzu", "lhax", "lwa", "lwz", "lwzu", "stb", "stbu",
-    "sth", "sthu", "stwx", "stw", "std", "stdu", "lmw", "stmw", "ldarx", "stdcx",
-})
+def _check_offset(offset):
+    if not -0x8000 <= offset <= 0xFFFF:
+        raise ValueError("offset must be signed 16-bit or a 16-bit encoding (-0x8000..0xffff)")
+    return offset & 0xFFFF
 
 
-def is_ds_form(mnemonic):
-    return mnemonic in DS_FORM
-
-
-def _disassembler():
+def _offset_arg(text):
     try:
-        import capstone
-    except ImportError:  # pragma: no cover - requirements.txt lists capstone
-        sys.exit("needs capstone for the instruction check: pip install capstone")
-    return capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_64 | capstone.CS_MODE_BIG_ENDIAN)
+        value = int(text, 0)
+        _check_offset(value)
+        return value
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def scan(eb, offset, lo=None, hi=None):
-    """Addresses of D-form load/stores whose displacement field equals `offset`."""
+    """Addresses of D-/DS-form loads/stores with this signed or encoded displacement."""
     words, base = eb.words, eb.code_va
     lo = base if lo is None else lo
     hi = base + 4 * len(words) if hi is None else hi
-    target = np.uint32(offset & 0xFFFF)
-    candidates = [base + 4 * int(i) for i in np.nonzero((words & np.uint32(0xFFFF)) == target)[0]]
-    candidates = [pc for pc in candidates if lo <= pc < hi]
-    if not candidates:
-        return []
-
-    # Disassemble one instruction per candidate instead of a span: a candidate may sit
-    # inside another instruction's operand field, and a linear sweep would then decode it
-    # as the middle of that instruction and report a bogus mnemonic.
-    md = _disassembler()
-    hits = []
-    for pc in candidates:
-        raw = eb.read(pc, 4)
-        if not raw:
-            continue
-        ins = next(md.disasm(raw, pc), None)
-        if ins is not None and is_ds_form(ins.mnemonic):
-            hits.append(pc)
-    return hits
+    target = np.uint32(_check_offset(offset))
+    op = words >> 26
+    # The primary opcode is the top six bits of a big-endian instruction word.
+    # 32..55 are D-form integer/floating loads/stores, including lmw/stmw.
+    d_form = (op >= 32) & (op <= 55)
+    # DS-form has a signed 14-bit field multiplied by four; the bottom two bits
+    # select ld/ldu/lwa (58: 0/1/2) or std/stdu (62: 0/1). Other subtypes are reserved.
+    subtype = words & np.uint32(3)
+    ds_form = ((op == 58) & (subtype <= 2)) | ((op == 62) & (subtype <= 1))
+    matches = ((d_form & ((words & np.uint32(0xFFFF)) == target)) |
+               (ds_form & ((words & np.uint32(0xFFFC)) == target)))
+    return [base + 4 * int(i) for i in np.nonzero(matches)[0]
+            if lo <= base + 4 * int(i) < hi]
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--elf", required=True, help="decrypted EBOOT")
-    ap.add_argument("--offset", required=True, type=lambda v: int(v, 0),
-                    help="struct offset whose accesses to find, e.g. 0x47cc")
+    ap.add_argument("--offset", required=True, type=_offset_arg,
+                    help="signed or encoded 16-bit struct offset, e.g. 0x47cc or -8")
     ap.add_argument("--lo", type=lambda v: int(v, 0))
     ap.add_argument("--hi", type=lambda v: int(v, 0))
     ap.add_argument("--func", action="store_true", help="also show the containing function")

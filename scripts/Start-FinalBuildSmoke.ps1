@@ -14,17 +14,18 @@ param(
     # then stalled before BAP, so it is the first thing to A/B. -PublicIp '' omits the field
     # entirely, which is the control run; its byte order is still unconfirmed.
     [AllowEmptyString()][string]$PublicIp = '127.0.0.1',
-    # STUN stub extras. 01.24 answers the MessagePack probes; --reply-index is the
-    # dispatch word the client reads from the reply's first word (0..19 valid,
-    # bounds-checked against 0x13 at 0xb3707c). Vary one index per run to find which
-    # branch of the jump table at 0xb370fc the client needs.
+    # STUN stub extras for experimental 01.24 reply shapes. The wire layout and
+    # meaning of --reply-index are unconfirmed; a sent reply does not prove that
+    # the client accepted it or completed NAT setup.
     #
     # Semicolon separated, e.g. -StunArgs '--reply-index;0'. `pwsh -File` binds a
     # second value of a [string[]] parameter to the *next* parameter instead of
     # appending it, so a space-separated list cannot be passed this way.
     [string]$StunArgs = '',
     [string]$DnsArgs = '',
-    [switch]$Run
+    [switch]$Run,
+    [switch]$PreserveExistingProcesses,
+    [string]$ProcessManifest
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\Paths.ps1"
@@ -67,7 +68,8 @@ if ($ManifestFile) {
     $manifest = Join-Path $D1Local 'RESEARCH\ps3_updates\manifest-final-smoke.bin'
     & $D1Python "$PSScriptRoot\build_manifest_probe.py" `
         --disc-packages (Join-Path $usrdir 'packages') `
-        --update-packages-dir $updatePackages --out $manifest
+        --update-packages-dir $updatePackages `
+        --inventory-file (Join-Path $data 'ps3_updates\package_inventory_01.24.json') --out $manifest
     if ($LASTEXITCODE) { throw 'Final-build diagnostic manifest generation failed.' }
     $manifestArgument = @('--manifest-file', $manifest)
 }
@@ -77,7 +79,8 @@ $previousUsrdir = $env:D1_USRDIR
 try {
     $env:D1_RPCS3 = $rpcs3
     $env:D1_USRDIR = $usrdir
-    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -DnsArgs $dnsArguments -BapArgs @(
+    & "$PSScriptRoot\Start-LocalStack.ps1" -Name $Name -PreserveExistingProcesses:$PreserveExistingProcesses `
+        -ProcessManifest $ProcessManifest -SignonArgs ($signonArguments + $manifestArgument) -StunArgs $stunArguments -DnsArgs $dnsArguments -BapArgs @(
         '--universe-time', 's', '--self-flags', '1;2@B0,C0-1023',
         '--schema', $types, '--services-schema', $services,
         '--activity-schema', $types)
