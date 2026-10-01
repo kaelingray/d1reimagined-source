@@ -7,12 +7,14 @@
 
 ## Active work: 01.24 (updated 2026-10-01)
 
-The current milestone is stage 31 `setup:prologue_intro_loading` (FINAL124_MM8): setup answers
-persist through service 701, the universe object comes from service 205, matchmaking gets a
-match (`mm rsp` field 4), the activity host proxy join is accepted, and the intro activity
-(`act_cosmo_m0_highway`, world 231) passes the content check; it stops at **urchin** (activity
-access / unlock expression). Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
-magenta blocks are fixed by `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). The
+The current milestone is stage **36 `activity:in_world`**, briefly reached in FINAL124_JOIN12.
+Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`.
+Activity 231 is level 25; activity 230 has no scenario. The next gate is **lobster**,
+reason `0x10c`, after the client requests slice 24 during the scripted intro.
+Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
+magenta blocks and distorted character lighting are fixed together by
+`patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Mission visuals,
+the Ghost cinematic and movement still need screenshots and live verification. The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
@@ -26,7 +28,8 @@ $runtime = 'F:\d1\lukespc-import\d1xenia\local'
 $data = 'F:\d1\d1xenia-data'
 scripts\Invoke-Final124Run.ps1 -Name FINAL124_NEXT -Local $runtime -DataRepo $data `
   -BootSeconds 360 -PressSeconds 150 -ContinueAfterBap -KeepRpcs3
-python scripts\rpcs3_final124_bootflow.py `
+python scripts\rpcs3_final124_bootflow.py --world `
+  --process-manifest "$runtime/SIGNON_LOCAL/logs/FINAL124_NEXT-processes.json" `
   --out "$runtime/RESEARCH/ps3_updates/FINAL124_NEXT-bootflow.json"
 ```
 
@@ -66,8 +69,46 @@ Copy-D1SharedFileSnapshot `
 
 Index the run with `summarize_final_smoke.py`; keep raw evidence under private
 `local/`. The wrapper's protocol verdict confirms traffic, not orbit or a
-completed login. Direct samples are sequential and briefly pause/resume the
-guest. Only stage 19's `+0x30/+0x34` layout is interpreted as substates.
+completed login. Samples are sequential and not atomic. `--process-manifest`
+checks executable and creation time and uses read-only Windows memory reads without
+pausing; the legacy GDB path still pauses/resumes. Only stage 19's `+0x30/+0x34`
+layout is interpreted as substates.
+
+### 01.24 mission join recipe and private catalog
+
+Use PowerShell's script invocation (`&`) for the semicolon-separated extra options.
+Passing a value starting with `--` through `pwsh -File` can be parsed as another
+parameter rather than as the value. Add `-CaptureTimeline` to preserve private
+screenshots alongside the state samples.
+
+```powershell
+$proxyOptions = '--ah-bubble-states;-1,14=0,3=0;--ah-zone;112:0x811c9dc5;--ah-world-state;112:1;--ah-roster;0;--ah-sim-player;0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1;--ah-game-mode;0x4786c0e0:3:3;--ah-baselines;@' + "$runtime/SIGNON_LOCAL/baselines_highway_0124_z112.txt" + ';--ah-heartbeat;1;--ah-sim-clock;30;--ah-mission;' + (Resolve-Path missions/a_guardian_rises.json).Path
+& scripts/Invoke-Final124Join.ps1 -Name FINAL124_MISSION_NEXT -Local $runtime `
+  -DataRepo $data -BapExtra '--peer-family' -ProxyExtra $proxyOptions `
+  -AfterMatchSeconds 180 -CaptureTimeline
+& scripts/Invoke-Final124Join.ps1 -Name FINAL124_MISSION_NEXT -Local $runtime -Stop
+```
+
+The 01.24 highway baseline file has **158** records, not the historical 138.
+Current schemas come from `$data/ps3_updates/types_01.24.json` and
+`services_01.24.json`. Starter gear indices still need 01.24 confirmation.
+
+```powershell
+python scripts/dump_mission_catalog.py `
+  "$runtime/01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages" `
+  "$runtime/RESEARCH/ps3_updates/final/packages" `
+  --oodle 'F:/d1/lukespc-import/d1xenia/oo2core_3_win64_x86-64/oo2core_3_win64.dll' `
+  --out "$runtime/RESEARCH/ps3_updates/mission-catalog-0124"
+python scripts/rpcs3_final124_activities.py `
+  --process-manifest "$runtime/SIGNON_LOCAL/logs/FINAL124_MISSION_NEXT-processes.json" `
+  --out "$runtime/RESEARCH/ps3_updates/mission-catalog-0124/activities.json"
+```
+
+Run the live activity export after the activity cache initializes. The package
+catalog is static data across planets and activities, including cinematics and
+shared groups; it does not establish playable mission coverage. Latest-patch
+blocks missing from an update folder are resolved from the disc folder only when
+length and SHA-1 match. Raw tags, captures and catalog JSON stay private.
 
 The d1p3 executable is now deployed from the main PC's build. It logs after
 scheduler admission; its hash and evidence are in the handoff/profile checkpoint.

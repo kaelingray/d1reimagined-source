@@ -6,24 +6,27 @@
 # including the proxy, whose full process identity is saved separately.
 #
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Local <runtime> -DataRepo <data>
-#   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN2 -World 231 -ProxyExtra '--ah-zone;112:0x811c9dc5'
+#   & scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN2 -ProxyExtra '--ah-zone;112:0x811c9dc5'
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Stop
 #
-# Defaults are the furthest recipe so far (FINAL124_MM8, notes/checkpoint-2026-10-01-profile.md):
+# Defaults use the level-1 intro activity and the final-build scenario checksum
+# (FINAL124_JOIN10/11, notes/checkpoint-2026-10-01-profile.md):
 # empty mm rsp field 4, ahp rsp to the proxy, all unlock flags, universe flags 3390 and 309 = 1 (the
 # intro activity's access rules NOT flag[3390] and NOT flag[309], FINAL124_JOIN3/5; 01.00 used 215), and a
 # proxy that joins, grants entity indices and sends the activity state for
-# act_cosmo_m0_highway, world (activity) 231. -BapExtra / -ProxyExtra are semicolon
+# act_cosmo_m0_highway, world (activity) 229. -BapExtra / -ProxyExtra are semicolon
 # separated and appended last, so single-value options override the defaults.
 param(
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$Name,
     [string]$Local,
     [string]$DataRepo,
     [string]$Map = 'act_cosmo_m0_highway',
-    [int]$World = 231,
+    [int]$World = 229,
+    [ValidatePattern('^0x[0-9a-fA-F]{1,8}$')][string]$Checksum = '0x8fe07299',
     [string]$BapExtra = '',
     [string]$ProxyExtra = '',
     [ValidateRange(5, 3600)][int]$AfterMatchSeconds = 60,
+    [switch]$CaptureTimeline,
     [switch]$Stop
 )
 $ErrorActionPreference = 'Stop'
@@ -40,11 +43,17 @@ $proxyManifest = Join-Path $logs "$Name-proxy-process.json"
 
 if ($Stop) {
     $owned = Read-D1ProcessManifest (Join-Path $logs "$Name-processes.json")
+    $ownedEmulator = $owned.processes | Where-Object tag -EQ 'rpcs3'
+    $captureFinal = $ownedEmulator -and (Get-D1OwnedProcess $ownedEmulator)
     foreach ($process in ($owned.processes | Sort-Object { $_.tag -ne 'gdbd' })) { Stop-D1OwnedProcess $process }
     if (Test-Path -LiteralPath $proxyManifest) {
         Stop-D1OwnedProcess (Get-Content -LiteralPath $proxyManifest -Raw | ConvertFrom-Json)
     }
-    Copy-D1SharedFileSnapshot -Source (Join-Path $D1Rpcs3 'log\RPCS3.log') -Destination (Join-Path $logs "$Name-rpcs3-final.log") | Out-Null
+    # The emulator log is shared across runs. An already stopped run must not
+    # capture a later run's log under its own name.
+    if ($captureFinal) {
+        Copy-D1SharedFileSnapshot -Source (Join-Path $D1Rpcs3 'log\RPCS3.log') -Destination (Join-Path $logs "$Name-rpcs3-final.log") | Out-Null
+    }
     "stopped $Name"
     return
 }
@@ -56,7 +65,7 @@ if ($BapExtra) { $bapArgs += ";$BapExtra" }
 # c->ah mgr rsp: 02 | u64 host id 1 | char[128] host name (137 bytes, decoder 0x415be4 in 01.00)
 $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes('d1local-host') + (,0 * 116))
 $proxyArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower(), '--ah-join', '--ah-entities', '8192:12288',
-    '--ah-state', '--ah-map', $Map, '--ah-world', "$World", '--ah-checksum', '0x79130968', '--ah-bubbles', '22',
+    '--ah-state', '--ah-map', $Map, '--ah-world', "$World", '--ah-checksum', $Checksum, '--ah-bubbles', '22',
     '--activity-schema', $types, '--schema', $types, '--services-schema', $services) +
     @($ProxyExtra -split ';' | Where-Object { $_ })
 
@@ -86,11 +95,16 @@ Get-D1ProcessIdentity -Process $proxy -Tag 'proxy' -Executable $D1Python |
 "proxy pid $($proxy.Id)"
 
 $owned = Read-D1ProcessManifest (Join-Path $logs "$Name-processes.json")
-$emulator = (Get-D1OwnedProcess ($owned.processes | Where-Object tag -EQ 'rpcs3')).Id
+$emulatorIdentity = $owned.processes | Where-Object tag -EQ 'rpcs3'
+function Get-JoinEmulatorId {
+    $process = Get-D1OwnedProcess $emulatorIdentity
+    if (-not $process) { throw "Owned emulator for $Name has exited." }
+    $process.Id
+}
 # Character select uses a free cursor: right and up onto the stored character, then Log In.
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId $emulator -Keys D -HoldMs 500 -WaitSeconds 0 | Out-Null
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId $emulator -Keys W -HoldMs 250 -WaitSeconds 1
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId $emulator -Keys X -WaitSeconds 3
+& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys D -HoldMs 500 -WaitSeconds 0 | Out-Null
+& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys W -HoldMs 250 -WaitSeconds 1
+& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys X -WaitSeconds 3
 $deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
 while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
     if ((Get-Date) -gt $deadline) { 'no mm req within 7 minutes'; break }
@@ -99,11 +113,19 @@ while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
 $start = Get-Date
 for ($i = 1; ((Get-Date) - $start).TotalSeconds -lt $AfterMatchSeconds; $i++) {
     Start-Sleep ($i -le 6 ? 1 : 8)   # the join outcome arrives within seconds
-    $line = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" --out (Join-Path $research "$Name-bootflow-$i.json") 2>&1 |
+    Get-JoinEmulatorId | Out-Null
+    $line = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" --world --process-manifest (Join-Path $logs "$Name-processes.json") `
+        --out (Join-Path $research "$Name-bootflow-$i.json") 2>&1 |
         Select-Object -Last 1
     "$(Get-Date -Format HH:mm:ss) $line"
+    if ($CaptureTimeline) {
+        $shot = & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0 |
+            Select-Object -Last 1
+        [pscustomobject]@{ time = (Get-Date).ToUniversalTime().ToString('o'); sample = "$Name-bootflow-$i.json"; screenshot = $shot } |
+            ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $logs "$Name-screenshots.jsonl")
+    }
 }
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId $emulator -WaitSeconds 0
+& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0
 # The kept stack can hold the launcher job's output pipe open; do not wait on it indefinitely.
 Wait-Job $launch -Timeout 60 | Out-Null
 Remove-Job $launch -Force

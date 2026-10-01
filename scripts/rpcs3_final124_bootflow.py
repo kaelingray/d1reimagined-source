@@ -1,7 +1,8 @@
-"""Read the BLES01857 01.24 bootflow and resource states through the GDB daemon.
+"""Read the BLES01857 01.24 bootflow and resource states.
 
 This promotes the reader from the imported 2026-09-29 session. Each memory
-request pauses and resumes the emulator; the resulting sample is not atomic.
+GDB requests pause and resume the emulator; --process-manifest instead uses
+read-only Windows memory reads without pausing. Neither sample is atomic.
 No guest registers or memory are written. Save samples under private local/.
 """
 
@@ -296,16 +297,56 @@ def sample(read=memory, include_request=False, package_ids=()):
     return result
 
 
+def world_snapshot(read):
+    """Observe the engine leave state and double-buffered world controllers.
+
+    Layout follows 01.24 getters 0x340230, 0x350648 and 0x349634. The
+    controller status is a different state machine from the engine byte.
+    """
+    def u32(address):
+        return struct.unpack(">I", read(address, 4))[0]
+    engine = u32(0x01ABC8AC)
+    base = u32(0x01ABCA14)
+    result = {"engine": f"0x{engine:08x}", "engine_state_89": None,
+              "controllers": []}
+    if engine:
+        result["engine_state_89"] = struct.unpack(">b", read(engine + 0x89, 1))[0]
+    if base and read(base, 1) != b"\0":
+        for index in (1, 2):
+            record = base + index * 0x12208
+            selector = u32(record + 8)
+            if selector not in (0, 1):
+                raise ValueError("unexpected world-controller buffer selector")
+            controller = record + selector * 0x9100 + 0x10
+            result["controllers"].append({"index": index, "selector": selector,
+                "address": f"0x{controller:08x}",
+                "status_8fec": u32(controller + 0x8FEC)})
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--process-manifest", type=Path,
+                        help="read the identified Windows emulator directly, without pausing it")
     parser.add_argument("--request", action="store_true", help="also resolve the bootstrap request and pending parents")
+    parser.add_argument("--world", action="store_true", help="also read engine and world-controller states")
     parser.add_argument("--package", action="append", type=lambda v: int(v, 16), default=[],
                         metavar="HEXID", help="also dump the registered package record for this id "
                         "(repeatable; --request adds 0172, client_bootstrap_patchable)")
     args = parser.parse_args()
     package_ids = list(dict.fromkeys(args.package + ([BOOTSTRAP_PATCHABLE_PACKAGE] if args.request else [])))
-    result = sample(include_request=args.request, package_ids=package_ids)
+    if args.process_manifest:
+        from rpcs3_owned_memory import OwnedMemory
+        with OwnedMemory(args.process_manifest) as process:
+            result = sample(read=process.read, include_request=args.request, package_ids=package_ids)
+            if args.world:
+                result["world"] = world_snapshot(process.read)
+        result["reader"] = "owned Windows process (no pause)"
+    else:
+        result = sample(include_request=args.request, package_ids=package_ids)
+        if args.world:
+            result["world"] = world_snapshot(memory)
     output = json.dumps(result, indent=2) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

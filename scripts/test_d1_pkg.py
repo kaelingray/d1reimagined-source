@@ -56,6 +56,14 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(p.named[0]["name"], "act_cosmo_m0_highway")
         self.assertEqual((p.entries[1]["type"], p.entries[1]["subtype"]), (8, 21))
 
+    def test_mapped_package_matches_normal_extraction(self):
+        p = d1_pkg.Package(self.path, mapped=True)
+        try:
+            self.assertEqual(p.entry_data(1), d1_pkg.Package(self.path).entry_data(1))
+            self.assertTrue(p.table_hash_ok("entries"))
+        finally:
+            p.data.close()
+
     def test_entry_within_and_across_blocks(self):
         p = d1_pkg.Package(self.path)
         self.assertEqual(p.entry_data(0), bytes(range(0x20, 0x60)))
@@ -94,6 +102,23 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(d1_pkg.parse_int("12"), 12)
         self.assertEqual(d1_pkg.parse_int("80800000"), 0x80800000)
         self.assertEqual(d1_pkg.parse_int("0x1f"), 0x1f)
+
+    def test_empty_entity_group_has_no_array_header(self):
+        data = bytearray(40)
+        struct.pack_into(">I", data, 8, 0x96E0A5E5)
+        self.assertEqual(d1_pkg.entity_group(data), (0x96E0A5E5, []))
+
+    def test_split_patch_chain_uses_verified_block(self):
+        p = d1_pkg.Package(self.path)
+        p.path = Path(self.dir.name) / "update" / "ps3_test_0123_1.pkg"
+        p.patch_id = 1
+        wrong = Path(self.dir.name) / "wrong.pkg"
+        wrong.write_bytes(bytes(len(self.path.read_bytes())))
+        p.patch_sources = {self.path.name: [wrong, self.path]}
+        self.assertEqual(p.entry_data(0), bytes(range(0x20, 0x60)))
+        p.patch_sources = {self.path.name: [wrong]}
+        with self.assertRaises(FileNotFoundError):
+            p.entry_data(0)
 
 
 class InvestmentItems(unittest.TestCase):

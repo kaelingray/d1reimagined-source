@@ -42,6 +42,7 @@ Usage:
 import argparse
 import ctypes
 import hashlib
+import mmap
 import struct
 import subprocess
 import sys
@@ -87,9 +88,13 @@ def parse_int(text):
 
 
 class Package:
-    def __init__(self, path):
+    def __init__(self, path, mapped=False):
         self.path = Path(path)
-        self.data = self.path.read_bytes()
+        if mapped:
+            with self.path.open("rb") as file:
+                self.data = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+        else:
+            self.data = self.path.read_bytes()
         d = self.data
         (self.version, self.platform, self.pkg_id, self.unk6, self.reg_value, self.build_time,
          self.build_id, self.unk1c, self.patch_id, self.language) = struct.unpack_from(">HHHHQQIIHH", d, 0)
@@ -137,6 +142,16 @@ class Package:
             return self.data[block["offset"]:block["offset"] + block["size"]]
         stem = self.path.name.rsplit("_", 1)[0]
         other = self.path.with_name(f"{stem}_{block['patch']}.pkg")
+        # Disc and title-update patch chains often live in separate folders.
+        # A caller can supply all candidates; accept only the block whose
+        # stored SHA-1 matches this patch's table, rather than guessing a base.
+        if not other.exists():
+            for candidate in getattr(self, "patch_sources", {}).get(other.name, []):
+                with open(candidate, "rb") as f:
+                    f.seek(block["offset"])
+                    data = f.read(block["size"])
+                if len(data) == block["size"] and hashlib.sha1(data).digest() == block["sha1"]:
+                    return data
         with open(other, "rb") as f:
             f.seek(block["offset"])
             return f.read(block["size"])
@@ -381,9 +396,14 @@ class PackageSet:
 
     def __init__(self, paths, oodle=None):
         self.oodle, self.by_id = oodle, {}
-        for path in packages(paths):
+        candidates = list(packages(paths))
+        sources = {}
+        for path in candidates:
+            sources.setdefault(path.name, []).append(path)
+        for path in candidates:
             try:
-                p = Package(path)
+                p = Package(path, mapped=True)
+                p.patch_sources = sources
             except (ValueError, struct.error):
                 continue
             have = self.by_id.get(p.pkg_id)
@@ -441,6 +461,8 @@ GROUP_CLASS = 0x8080076E
 
 def entity_group(data):
     key = struct.unpack_from(">I", data, 8)[0]
+    if struct.unpack_from(">II", data, 0x10) == (0, 0):
+        return key, []  # empty groups have no dynamic-array header
     count, off, _ = dyn_array(data, 0x10)
     kinds = [data[off + 8 * i] for i in range(count)]
     names = [m.group(1).decode("latin-1")

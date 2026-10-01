@@ -6,6 +6,22 @@ import rpcs3_final124_bootflow as reader
 
 
 class BootflowTest(unittest.TestCase):
+    def test_engine_and_double_buffered_controller_states(self):
+        values = {(0x1ABC8AC, 4): struct.pack(">I", 0x2000),
+                  (0x2089, 1): bytes([13]),
+                  (0x1ABCA14, 4): struct.pack(">I", 0x3000),
+                  (0x3000, 1): bytes([1])}
+        for index, selector in ((1, 0), (2, 1)):
+            record = 0x3000 + index * 0x12208
+            values[record + 8, 4] = struct.pack(">I", selector)
+            values[record + selector * 0x9100 + 0x10 + 0x8FEC, 4] = struct.pack(">I", index + 2)
+        result = reader.world_snapshot(lambda address, size: values[address, size])
+        self.assertEqual(result["engine_state_89"], 13)
+        self.assertEqual([c["status_8fec"] for c in result["controllers"]], [3, 4])
+        values[0x3000 + 0x12208 + 8, 4] = struct.pack(">I", 2)
+        with self.assertRaisesRegex(ValueError, "selector"):
+            reader.world_snapshot(lambda address, size: values[address, size])
+
     def fixture(self, current=19, stage=12):
         fields = struct.pack(">7I", current, 0, 0, 0, current, 0, 0)
         values = {

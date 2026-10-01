@@ -553,3 +553,64 @@ also use the existing Windows argument quoting helper. The script parses cleanly
 93 server tests and 65 script tests pass. The updated main-memory patch applies
 cleanly against RPCS3 base `b5a174e93`; its stack diagnostics were rebuilt and used
 in the live evidence above. Raw memory, logs and screenshots remain private.
+
+## Loading the 01.24 intro (FINAL124_JOIN10–12)
+
+JOIN10 uses activity 229. Its three access results are `01 01 01`, but the
+01.00 checksum `0x79130968` still produces **lime**. Extracting named tag
+`act_cosmo_m0_highway:scenario_client`, tag `0x80cb800d`, from latest package
+`ps3_cosmo_activities_activity_025c_2.pkg` gives the final-build checksum
+**`0x8fe07299`** at +8 and **22** bubbles at +0x34. JOIN11 uses those values,
+clears scenario loading and reaches stage 34 initial-slice loading, then leaves
+with **lobster**, reason `0x10c`.
+
+JOIN12 adds the full simulation recipe: zone 112/hash `0x811c9dc5`, world state
+112:1, roster machine 0, simulation player `0x4786c0e0:5` owned by
+`0xa3d4a2c8fbea6ba` with spawn grant 1, game mode `0x4786c0e0:3` state 3,
+158 final-build baselines, heartbeat, simulation clock and the existing
+`missions/a_guardian_rises.json` director. BAP includes `--peer-family`.
+At 18:13:20 the client requests slice 112, state 4; at 18:13:27 it reports
+current slice 112, state 0. A fast sample at **18:13:39** reads stage **36,
+`activity:in_world`**. The mission director sent the revival state at +20 s
+(18:13:37); at 18:13:43 the client requests slice **24**, hash **`0x68935472`**,
+state 2. At 18:13:47 it leaves with **lobster** and reason `0x10c`.
+This establishes a cleared loading/physics join, not a visible Guardian or
+successful Ghost cinematic. Neither was captured during the short in-world window.
+
+Static leave analysis narrows that reason: `0x35ead4` calls engine-state getter
+`0x350648` at `0x35f75c`. Getter `0x340230` returns the object stored at
+`0x1abc8ac`; its signed byte +0x89 is the engine state. Jump table
+`0x12f9a90` maps **engine state 13** to `0x35f82c`, which writes reason `0x10c`.
+This is separate from the world-controller +0x8fec status mapping.
+
+The join defaults are now world 229 and checksum `0x8fe07299`. Optional
+`-CaptureTimeline` records screenshots for each sample. Every input checks the
+run's emulator executable and creation time. Cleanup only snapshots the shared
+log if that run's owned emulator was active; stopping an already ended older run
+does not relabel the next run's log. JOIN9-stop while JOIN10 was active confirmed
+the older snapshot remained unchanged and JOIN10 stayed alive.
+
+## Fast reads and all-package inventory
+
+`rpcs3_owned_memory.py` opens a read-only Windows handle only after matching the
+manifest's PID, executable and creation ticks. It validates the 01.24 EBOOT
+using two marker strings at the 4-GiB-aligned guest base. Reads cannot write
+memory or pause execution. `rpcs3_final124_bootflow.py --process-manifest`
+uses it; `--world` additionally reads engine and world-controller status.
+Samples remain non-atomic. The GDB path is retained for environments without
+direct Windows process reads. Its multi-read pause overhead was long enough to
+disturb the timing of prior join experiments.
+
+`dump_mission_catalog.py` has exported the latest local disc/update package
+chains into private `RESEARCH/ps3_updates/mission-catalog-0124`: **315 packages,
+921 named tags, 183 scenarios, 1,339 entity groups, zero errors**. It saves raw
+scenario/root tags, scenario checksum/bubble headers, entity-group data, named
+objects and default replication baseline lists. These counts include shared
+content and aliases, not 183 playable missions. Empty entity groups have no
+array header; named tags can redirect into another package. Both cases are
+handled. Missing patch blocks can be found across input folders only with exact
+length/SHA-1 verification; package files are memory mapped to keep the scan's
+memory use bounded. `rpcs3_final124_activities.py` preserves the 338-definition
+live activity table once initialized, including index, hash, level and scenario
+reference. All output is private game data and the exporters reject tracked
+repository destinations outside ignored `local/`.
