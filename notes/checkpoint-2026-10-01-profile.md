@@ -763,3 +763,29 @@ The first fast observer incorrectly stopped at the normal prologue cleanup
 before matchmaking; its private continuation now stops at cleanup only after
 seeing a mission loading stage. Its live record samples start after the area
 switch, so initial occupancy still needs capture. 84 script tests now pass.
+
+## Takeover after Codex's usage limit (Claude, 20:12): JOIN21 and the empty engine target
+
+Codex hit its usage limit at 20:12 (local log: HTTP 429, "try again at 10:15 PM") during
+`FINAL124_JOIN21`, which its runner completed: JOIN20's recipe plus `--ah-sim-clock 30` and
+`-CaptureTimeline`. Stage 36 `activity:in_world` from the 6th sample (about 20:15) through the
+last at 20:19:56; screenshots show the **Urgent Message** ("Destiny servers will go offline
+temporarily...") and a **Level Up** toast over black; after Cross dismisses the dialog the
+scene stays black (20:20:44). The simulation clock does not change the outcome.
+
+Read-only owned-memory reads of the live JOIN21 process (20:22) explain "engine state 6":
+the engine object (`*0x1abc8ac` = `0x3073e780`) has state +0x89 = 6, +0x88 = 4, and both its
+current slice record (+0x90) and target record (+0x130) are **empty** (index -1, hash
+`0x811c9dc5`), unchanged over 10 s. The scenario slice table (`*(0x1a1dc7c + 4)`) has
+active slice (+0x110c) -1, loading slice (+0x1110) -1, loaded set (+0x1114 bitset) {0}, both
+flag sets (+0x1154, +0x1194) empty, and records for slices 0, 24, 105, 112, 113 and 176+.
+`0x14db90` statuses: 5 = record absent (entry +8 + 8*s is -1), 6/7 = flag sets, 4 = active,
+2 = loading, 3 = loaded, 1 = otherwise. The state-6 update (`0x351a20`, test at
+`0x351cd4`) compares current with target (`0x158e1c`) and only looks a slice up when the
+target index is not -1. So after the client's move toward slice 24 was cleared, nothing is
+current and nothing is targeted: the black scene has no active area to show. (Engine-state
+table `0x12f9a90` maps leave reasons for states 8-15 only; states 0-6 share `0x35f3f0`.)
+
+Next, `FINAL124_JOIN22`: arrive directly in slice 24 (`--ah-zone 24:0x68935472
+--ah-world-state 24:1`, bubbles `-1,3=0`) with the full 2,311-record baseline superset;
+JOIN14 forced 24 with only the 158 highway baselines.
