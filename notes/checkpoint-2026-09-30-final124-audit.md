@@ -311,3 +311,52 @@ blocker, because the stuck run has no unique error path. Next approach: trace th
 kind-3 request `0x01fa0002`, i.e. which code writes request status byte +7 and what the scheduler
 does with the active request each tick, using d1p3 hooks with register dumps on the status
 writers.
+
+### 2026-10-01 (cont.): request lifecycle trace, the loader goes idle after shared manifest 0430
+
+**Status writers (static, 01.24).** A capstone sweep for `stb rX, 7(rY)` in functions that
+use the request-pool table finds the lifecycle. **`0x1523c4(manager, handle)` submits** a
+request (status 1). **`0x14eca0(record)` completes** it: status 3 if the error byte +9 is set,
+status 4 if a flag in +8 or a pending kind-3 parent says so, otherwise 2. Its callers are the
+workers `0x14f690`, `0x14ffb4`, `0x150470`, `0x150584` and `0x150d9c`.
+
+**FINAL124_REQTRACE** (final manifest, d1p3 hooks on those 7 functions with `r3+0:16`, watch
+file restored afterwards). Every load request follows the same cycle: submit `0x1523c4` (the
+kind-2 child from `0xd1ab10`/`0x532160`, then its kind-3 parent from `0x15464c`), then start
+`0x14f690`, then two async callbacks `0x150584(r4=0xb)` and `0x150584(r4=0x17)` 30 ms to 1.5 s
+apart (chain `0x15392c` -> `0x1507a8`), then complete `0x14eca0` with status 2. Slot 3
+(`client_bootstrap_patchable`) goes through this **many times**: handles `0x00878001` up to
+`0x06878001` from 0:32 to 1:36, then generation-2 `0x00878002/0x01878002`. Its records
+`0x6087be48`/`0x6087be90` complete each time. The final submission is at 1:37.933 (stage tick
+`0x362dbc` -> `0x532160`: child `0x01878002`, kind-3 parent `0x01fa0002` = record
+`0x6087be90`), and `0x14f690` starts the parent at 1:37.965. **After that, neither
+`0x150584` callback ever arrives and `0x14eca0` is never called for it.**
+
+**The FIOS media thread at that moment.** At 1:37.966 it opens `0172_2.pkg` (fd 3) and
+`fstat`s it, then opens and `fstat`s disc `ps3_shared_manifest_0430_0.pkg` (fd 4), and **logs
+nothing more for the rest of the run**. Two thread snapshots 100 s apart
+(`FINAL124_REQTRACE-threads{1,2}.json`) show both FIOS media threads (`0x1000003`,
+`0x1000004`) at the same PC `0x01ca5ae0` with the same stack, and the job threads parked at
+`0x10498c`. **The loader is idle, not blocked in I/O**: the last operation's completion was
+never delivered, or it failed without notifying the scheduler. The same tail appears in every
+stuck run: FINAL124_NEXT2 (disc 0430_0, 2:47) and FINAL124_CHAIN_D1P3B (update 0430_4). In the
+passing run (FINAL124_DISC0172_D1P3) FIOS reads `0430_0` at 1:37.45, then `0431_0` at 1:37.88,
+then carries on (`ps3_globals_audio_0161_0`...).
+
+**Shared-manifest experiments.** The registry has disc `0430_0` (8,192 entries) and `0431_0`
+(3,967), and no `0x0432`: shared manifest 0432 shipped only in updates (01.13+) and is in no
+manifest. `0430_4` and `0432_4` share registration value `0x3c1c37cc3517fdbc`. Variants built
+from an exact rebuild of `manifest-final-smoke.bin` (generator kept in the session scratchpad;
+outputs in `local/RESEARCH/ps3_updates`):
+
+| Run | Change vs final manifest | Registry 0430/0431/0432 | Result |
+| --- | --- | --- | --- |
+| FINAL124_SHARED_A0432 | + `0432_4` | `_0` / `_0` / `_4` | substate 12; FIOS stops after opening `0430_0` |
+| FINAL124_SHARED_B4 | `0430_4`, `0431_4`, `0432_4` | `_4` / `_4` (8,192) / `_4` (3,617) | substate 12; FIOS stops after opening `0430_4` |
+
+**Conclusion.** Registering shared manifest 0432, or the 01.23 shared-manifest set, does not
+change the stall. With 01.20's `0172_2` registered, the FIOS operation that reads shared manifest
+0430 never completes; with disc `0172_0` it does. Next: see what that read is. This RPCS3 log
+collapses `sys_fs_read` lines (`⁂ sys_fs_read [N]`), so raise sys_fs logging, or hook the
+game's FIOS read submission, to capture the fd, offset, size and result of the reads on fd 4
+after 1:37.97.
