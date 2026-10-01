@@ -242,3 +242,36 @@ resolution in the package registry for 0172, to see whether the overlay `_2` res
 into `_1`'s data and whether FIOS has a pending read on fd 3. (2) Compare against run 020
 (substate 16, slot 3 done): which 0172 package that manifest served, and whether it used the
 disc 0430/0431 shared manifests.
+
+### 2026-10-01 (cont.): package registry live, three manifests on d1p3
+
+**Registry (static analysis from the main PC, checked live).** Pool `*0x1896510` (records at +0x20,
+stride 0x1a8; 314 records in the final manifest), u16 id -> index map at `0x19c2c60`, head/count
+`0x19bac30`/`0x19bac34`, so there is one record per package id. Live record fields: +0x04 id,
+**+0x10 = the package's build time** (equal to the .pkg header's build time; 0xecc6c prefers the
+newest), **+0xb4 = entry count** (not a block size), +0xec named-tag count, +0x140 the
+`packages/<name>.pkg` path, +0x178 tag-table offset, +0x17c resident header block.
+`rpcs3_final124_bootflow.py --package HEXID` now dumps it (`--request` adds 0172), as of `9fce601`.
+
+**Package 0172 offline.** `_2` (01.20) is an overlay. Of its 118 blocks, 68 are stored in patch 0
+(the disc `_0`), 49 in patch 1 (01.13 `_1`) and 1 in itself. Entry 0, the root tag `0x80ae4000`
+(48 bytes, pointing at entries 2 and 1), sits in a patch-0 block. `d1_pkg.py blocks --verify` on
+`_2` with `_0`/`_1` alongside: 118/118 SHA-1 match, so the shipped chain is internally
+consistent. Entry 0 is byte-identical in `_1` and `_2`. A word scan of all entries for
+cross-package tags is too noisy to isolate a missing dependency (about 230 plausible packages in
+both `_0` and `_2`); not pursued.
+
+| Run (d1p3) | Manifest | 0172 record (+0x140, build time, entries) | 0172 files opened | Stage 19 | Slot 3 | Active request |
+| --- | --- | --- | --- | --- | --- | --- |
+| FINAL124_NEXT2 | `manifest-final-smoke.bin` (`_2` only, disc shared) | `_2`, `0x56fcaa7c`, 949 | `_2` only (async + FIOS); `_0`/`_1` never | substate 12 | 1, `0x01878002` | `0x01fa0002` |
+| FINAL124_CHAIN_D1P3B | `manifest-final-bootstrap-chain.bin` (`_0`+`_1`+`_2`, shared `_4`) | `_2`, `0x56fcaa7c`, 949 | all three, by async and by FIOS (`_2`, `_1`, disc `_0`) | substate 12 | 1, `0x01878002` | `0x01fa0002` |
+| FINAL124_DISC0172_D1P3 | `manifest_0151_override.bin` (run 020; `_0` only) | `_0`, `0x53b251f2`, 943 | disc `_0` (async + FIOS) | substate **16** | **2**, pending 0 | `0x02fa0002` |
+
+**Conclusion.** The substate-12 wait follows the 01.20 version of package 0172 (`_2`). Making its
+base files reachable (the explicit chain) changes which files FIOS opens, but not the outcome: the
+same kind-2 request, its kind-3 parent `0x01fa0002` and the retry slot `0x06fa0001` remain. With
+the disc `_0` the slot completes (run 020 reproduced), but the final manifest with `0172_0`
+crashed in run 021. The next question is what the kind-3 request `0x01fa0002` waits on while
+`_2` is registered. Next test: hook-trace the request poller `0x14e864` and the status writer, or
+diff first-call coverage between FINAL124_NEXT2 and FINAL124_DISC0172_D1P3 around the load.
+`01a3` also differs (`_1` vs `_0`) between the two manifests.
