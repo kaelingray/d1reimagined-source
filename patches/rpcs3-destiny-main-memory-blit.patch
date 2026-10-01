@@ -10,7 +10,7 @@ index 595e34a51..069418743 100644
  #include "PPUInterpreter.h"
  #include "PPUAnalyser.h"
  #include "PPUModule.h"
-@@ -3386,6 +3387,113 @@ static void ppu_trace(u64 addr)
+@@ -3386,6 +3387,114 @@ static void ppu_trace(u64 addr)
  	ppu_log.notice("Trace: 0x%llx", addr);
  }
  
@@ -31,6 +31,7 @@ index 595e34a51..069418743 100644
 +
 +// Destiny diagnostics: armed function entry reached (see d1diag::ppu_poll). Logs the argument
 +// registers, LR, the saved return addresses up the stack and the configured memory dumps.
++// Dumps based on r1 use the live stack pointer passed in; ppu.gpr[1] is stale at a translated entry.
 +static void ppu_d1hit(ppu_thread& ppu, u64 addr, u64 r1)
 +{
 +	if (d1diag::g_ppu_mask[addr >> 2] == 2)
@@ -56,7 +57,7 @@ index 595e34a51..069418743 100644
 +			u64 key = 0xcbf29ce484222325ull ^ ppu.lr;
 +			for (const auto& [reg, off, len] : w.dumps)
 +			{
-+				const u32 ptr = static_cast<u32>(ppu.gpr[reg]) + off;
++				const u32 ptr = static_cast<u32>(reg == 1 ? r1 : ppu.gpr[reg]) + off;
 +				if (len && vm::check_addr(ptr, vm::page_readable, len))
 +				{
 +					for (u32 i = 0; i < len; i++) key = (key ^ vm::read8(ptr + i)) * 0x100000001b3ull;
@@ -100,7 +101,7 @@ index 595e34a51..069418743 100644
 +
 +		for (const auto& [reg, off, len] : w.dumps)
 +		{
-+			const u32 ptr = static_cast<u32>(ppu.gpr[reg]) + off;
++			const u32 ptr = static_cast<u32>(reg == 1 ? r1 : ppu.gpr[reg]) + off;
 +
 +			if (len && vm::check_addr(ptr, vm::page_readable, len))
 +			{
@@ -124,7 +125,7 @@ index 595e34a51..069418743 100644
  template <typename T>
  static T ppu_load_acquire_reservation(ppu_thread& ppu, u32 addr)
  {
-@@ -4918,6 +5026,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+@@ -4918,6 +5027,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
  			{ "__error", reinterpret_cast<u64>(&ppu_error) },
  			{ "__check", reinterpret_cast<u64>(&ppu_check) },
  			{ "__trace", reinterpret_cast<u64>(&ppu_trace) },
@@ -132,7 +133,7 @@ index 595e34a51..069418743 100644
  			{ "__syscall", reinterpret_cast<u64>(ppu_execute_syscall) },
  			{ "__get_tb", reinterpret_cast<u64>(get_timebased_time) },
  			{ "__lwarx", reinterpret_cast<u64>(ppu_lwarx) },
-@@ -5550,7 +5659,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+@@ -5550,7 +5660,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
  				settings += ppu_settings::daz_and_ftz;
  
  			// Write version, hash, CPU, settings

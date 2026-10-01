@@ -3,14 +3,15 @@
 # store holds its account user data), answer the post-prologue matchmaking poll with a match,
 # point the client at an activity host proxy stand-in (127.1.1.128:12851) and sample the
 # bootflow while the join runs. The stack is left running (-KeepRpcs3); -Stop closes it,
-# including the proxy, which is not in the run's ownership manifest.
+# including the proxy, whose full process identity is saved separately.
 #
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Local <runtime> -DataRepo <data>
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN2 -World 231 -ProxyExtra '--ah-zone;112:0x811c9dc5'
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Stop
 #
 # Defaults are the furthest recipe so far (FINAL124_MM8, notes/checkpoint-2026-10-01-profile.md):
-# empty mm rsp field 4, ahp rsp to the proxy, all unlock flags, universe flag 215 = 1, and a
+# empty mm rsp field 4, ahp rsp to the proxy, all unlock flags, universe flags 3390 and 309 = 1 (the
+# intro activity's access rules NOT flag[3390] and NOT flag[309], FINAL124_JOIN3/5; 01.00 used 215), and a
 # proxy that joins, grants entity indices and sends the activity state for
 # act_cosmo_m0_highway, world (activity) 231. -BapExtra / -ProxyExtra are semicolon
 # separated and appended last, so single-value options override the defaults.
@@ -35,15 +36,13 @@ if (-not $DataRepo) { $DataRepo = if ($env:D1_DATA_REPO) { $env:D1_DATA_REPO } e
 $DataRepo = (Resolve-Path -LiteralPath $DataRepo).Path
 $logs = Join-Path $D1Local 'SIGNON_LOCAL\logs'
 $research = Join-Path $D1Local 'RESEARCH\ps3_updates'
-$proxyPidFile = Join-Path $logs "$Name-proxy.pid"
+$proxyManifest = Join-Path $logs "$Name-proxy-process.json"
 
 if ($Stop) {
     $owned = Read-D1ProcessManifest (Join-Path $logs "$Name-processes.json")
     foreach ($process in ($owned.processes | Sort-Object { $_.tag -ne 'gdbd' })) { Stop-D1OwnedProcess $process }
-    if (Test-Path $proxyPidFile) {
-        $proxyPid = [int](Get-Content $proxyPidFile)
-        $proxy = Get-CimInstance Win32_Process -Filter "ProcessId=$proxyPid"
-        if ($proxy -and $proxy.CommandLine -match 'bap_server\.py.*127\.1\.1\.128') { Stop-Process -Id $proxyPid -Confirm:$false }
+    if (Test-Path -LiteralPath $proxyManifest) {
+        Stop-D1OwnedProcess (Get-Content -LiteralPath $proxyManifest -Raw | ConvertFrom-Json)
     }
     Copy-D1SharedFileSnapshot -Source (Join-Path $D1Rpcs3 'log\RPCS3.log') -Destination (Join-Path $logs "$Name-rpcs3-final.log") | Out-Null
     "stopped $Name"
@@ -52,7 +51,7 @@ if ($Stop) {
 
 $types = Join-Path $DataRepo 'ps3_updates\types_01.24.json'
 $services = Join-Path $DataRepo 'ps3_updates\services_01.24.json'
-$bapArgs = '--mm-rsp;4=;--ahp-reply;00000000000000007f01018000003233;--self-flags;2;--universe-flag-values;215=1'
+$bapArgs = '--mm-rsp;4=;--ahp-reply;00000000000000007f01018000003233;--self-flags;2;--universe-flag-values;3390=1,309=1'
 if ($BapExtra) { $bapArgs += ";$BapExtra" }
 # c->ah mgr rsp: 02 | u64 host id 1 | char[128] host name (137 bytes, decoder 0x415be4 in 01.00)
 $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes('d1local-host') + (,0 * 116))
@@ -79,9 +78,11 @@ Start-Sleep 25   # the wrapper presses Cross until 110 s after launch
 
 # Started only now: Invoke-Final124Run refuses to launch while any bap_server is running.
 $proxy = Start-Process -FilePath $D1Python -PassThru -WindowStyle Hidden -WorkingDirectory $D1Repo `
-    -ArgumentList (@('-u', 'server/bap_server.py', '--bind', '127.1.1.128', '--port', '12851') + $proxyArgs) `
+    -ArgumentList ((@('-u', 'server/bap_server.py', '--bind', '127.1.1.128', '--port', '12851') + $proxyArgs) |
+        ForEach-Object { ConvertTo-D1ProcessArgument $_ }) `
     -RedirectStandardOutput (Join-Path $logs "$Name-ahl.log") -RedirectStandardError (Join-Path $logs "$Name-ahl.err")
-Set-Content $proxyPidFile $proxy.Id
+Get-D1ProcessIdentity -Process $proxy -Tag 'proxy' -Executable $D1Python |
+    ConvertTo-Json | Set-Content -LiteralPath $proxyManifest
 "proxy pid $($proxy.Id)"
 
 $owned = Read-D1ProcessManifest (Join-Path $logs "$Name-processes.json")

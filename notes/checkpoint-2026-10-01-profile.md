@@ -460,3 +460,96 @@ defaults are the MM8 recipe; `-World`, `-Map`, `-BapExtra` and `-ProxyExtra` var
 `FINAL124_JOIN1` validated the script: the same path to 30/31 and **urchin**; `-Stop` closed the
 owned stack and the proxy. (The launcher job's output pipe can stay open while the kept stack
 runs, so the script waits for it at most 60 s.)
+
+## Urchin: the intro activity's access rule is NOT flag[3390]
+
+"World-transition requires DLC." / "...requires permissions." remain in 01.24 (`0x012fcc20`,
+`0x012fcc40`), referenced from the world-transition step `0x36e92c`: DLC check `0x470384(world)`
+-> failure (0x19, 0x17); permission check **`0x46db2c(obj, world)`** -> failure (0x19, 0x18),
+shown as **urchin**. `0x46db2c` calls `0xc36d4c`, which fills three results:
+`0xc39ecc(world, leader, level)`, `0xc39a94(obj, world)` and `0xc3987c(obj, world)`; the first
+two must pass, and the third too when the player is fireteam leader (the 01.00 layout:
+`0xb51c64`/`0xb51894`/`0xb51698`). Both of the last two evaluate the activity's unlock
+expressions through `0xc5cfa4` -> evaluator **`0xc5cbcc`**: `{u32 count, u32 offset}`, 8-byte
+entries at `+offset+0x14` (u8 opcode, operand word at +4): 1 = flag test `0xc5be34` (byte table of
+0x2000 flags, true when == 2), 0xa = value lookup `0xc5c014`, 0xb = constant, 2 = NOT, 0x15 =
+negate, 3..0x14 = binary operators (jump table at `0x013c3234`); `0xc58e84` checks a world list.
+
+D1P hooks armed only once `mm req` arrived (the evaluator is hot; an earlier 120-hit budget
+was spent before the join, FINAL124_JOIN2), `FINAL124_JOIN3`: the check ran with world 0xe7
+(231) and both rule evaluations read the expression `{2, 0x1c}` = `01 .. 0d3e`, `02` =
+**NOT flag[3390]**, with the flag table all 2 (true) by default, followed by the (0x19, 0x18)
+raise from `0x36ea74`. That is 01.00's `NOT flag[215]` renumbered (01.24 has 8192 flags), so
+`Invoke-Final124Join.ps1` now overrides universe flag **3390 = 1**. `FINAL124_JOIN4` tests it.
+
+`FINAL124_JOIN4` (3390 = 1): still urchin, although a live read of the flag table showed the
+override applied. The table at `0x600a1b9c` (header type `0xf04cc38e` = universe, root
+`0x7fffffffffffffff`; 8192 bytes: 4331 x 2, 3690 x 0, 171 x 1) had flag 3390 = 1, so the
+service 205 / sign-in universe `+0x3c` list (01.24 count width 6, entries `0x8080185c`
+{i16 index, u2}) does reach it. `FINAL124_JOIN5` (hooks armed at mm req): `0xc39a94` walks the
+activity's expression list and stops at the first false one: expression 1 `NOT flag[3390]`
+(now true), expression 2 `{2, 0x44}` = **`NOT flag[309]`** (0x135, still 2 -> false); the
+leader check `0xc3987c` evaluates the same pair. Its world-list test `0xc58e84` passes (empty
+list). The level check `0xc39ecc` (activity definition +0x48 vs the player's level via
+`0xc38d10`, failing on result 7) ran with leader flag 0. Script default is now `3390=1,309=1`;
+`FINAL124_JOIN6` tests it.
+
+`FINAL124_JOIN6` (3390 = 1, 309 = 1): still urchin, but now both rule checks walk all their
+expressions - group 1 `NOT flag[3390]`, `NOT flag[309]`; group 2 `flag[435]`, `flag[2670]`,
+`flag[5003]` (plain tests; all 2 in the live table) - and the world-list test `0xc58e84`. Every
+term now evaluates true, so the remaining suspect is the level check `0xc39ecc`: it resolves
+the activity definition (`0x1cb820()->vfn 0x188(world)`) and passes its `+0x48` with the
+player's level (`0xc38970`: a float at universe-object +0x4004 + 4 * index, the index being a
+content constant at `+0xda`) to `0xc38d10` -> the virtual `0x2a1d04` (`0xc39028`, `0xc45c718`),
+failing when the result is 7. The live universe-object floats read 1.0, 1.0, 0.0001, 5.0 at
+indices 0-3 and 0 after that. The universe type also has a `{i16 index, i32 value}` override
+list at +264 (`0x80804ee0` -> `0x80805bc4` -> `0x80801a3c`), probably those values.
+Dismissing urchin replays the prologue and retries the whole join automatically.
+
+Hook fix: dumps based on r1 used `ppu.gpr[1]`, which is stale at a translated function entry
+(the hook receives the live stack pointer separately), so `r1+OFF` dumps read the wrong place.
+`rpcs3-destiny-main-memory-blit.patch` now uses the live value (two lines; `git apply --check`
+against `b5a174e93` passes); rebuilt and deployed to the 01.24 copy (previous build kept as
+`rpcs3.colorreads.exe`). `FINAL124_JOIN7` dumps `0x46db2c`'s three result bytes from its frame
+(`sp - 0x2c..-0x2a` relative to the raising caller) when (0x19, 0x18) is raised.
+
+## Resolving the intro activity index (FINAL124_JOIN8/9)
+
+The corrected stack dump confirms JOIN7's three access results were `00 01 01`:
+level false, both expression checks true. JOIN9 reproduces this with activity 231:
+`0xc38d10` receives required level **25** (`r4 = 0x19`), while the comparison's
+player-side value is **1.0**. Raising `(0x19, 0x18)` from `0x36ea74` is therefore
+an expected level rejection, not evidence that another universe override is missing.
+
+JOIN8 was launched with `-World 230` (confirmed from the proxy's command line),
+not the wrapper's default 231. Its later traced transition has `01 01 01` and
+raises `(0x19, 0x37)` from `0x36ebb4`: "Transition completed, but we don't have an
+active activity." The screen says **lime**. The retry reused the original activity
+state; restarting a proxy during a prologue is not a clean activity comparison.
+
+A read-only inspection of the 01.24 activity table resolves the mismatch. The
+content provider's vtable +0x188 points to `0x1cbb68`; its +0x1c accessor returns
+the activity table through cache `0x1a2082c` (raw root +4). The table has 338
+entries. Each entry is at `table + offset + 0x14 + 8 * index`; its +4 relative
+pointer resolves to `entry + relative +4`. Definition +0x48 is the required level,
+and +0x40 holds the scenario reference:
+
+| Activity | Hash | Required level | Scenario reference |
+| --- | --- | --- | --- |
+| 229 | `0xd03ec63d` | 1 | `0x80a585cc` |
+| 230 | `0x5a6705db` | 1 | `0xffffffff` (none) |
+| 231 | `0x8d389a14` | 25 | `0x80a585cc` |
+
+Activity **229** is the next intro candidate: it shares 231's scenario and accepts
+a level-1 character. The earlier analogy that service 105's 230 implies mission
+231 was not established for this build. No character level or client permission
+code has been changed to evade the rejection. The constants accessor's +0xda
+selects universe numeric index 0 for the comparison, confirmed live.
+
+The join runner now records the proxy's executable and creation time in
+`<run>-proxy-process.json`, and cleanup uses the shared ownership checker. Old
+bare `<run>-proxy.pid` files do not authorize stopping a process. Proxy arguments
+also use the existing Windows argument quoting helper. The script parses cleanly;
+93 server tests and 65 script tests pass. The updated main-memory patch applies
+cleanly against RPCS3 base `b5a174e93`; its stack diagnostics were rebuilt and used
+in the live evidence above. Raw memory, logs and screenshots remain private.
