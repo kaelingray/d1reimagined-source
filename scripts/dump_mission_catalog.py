@@ -30,11 +30,14 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def dump(paths, out, oodle=None, all_named=False, investment_items=False):
+def dump(paths, out, oodle=None, all_named=False, investment_items=False, entry_index=False):
     out.mkdir(parents=True, exist_ok=True)
     raw_dir, group_dir = out / "tags", out / "groups"
     raw_dir.mkdir(exist_ok=True)
     group_dir.mkdir(exist_ok=True)
+    entry_dir = out / "entries"
+    if entry_index:
+        entry_dir.mkdir(exist_ok=True)
     ps = d1_pkg.PackageSet(paths, oodle)
     catalog = {"created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                "scope": "latest local package chains; static data, not playable mission coverage",
@@ -46,6 +49,19 @@ def dump(paths, out, oodle=None, all_named=False, investment_items=False):
                         "entries": len(package.entries), "named_tags": len(package.named),
                         "registration": f"0x{package.reg_value:016x}"}
         catalog["packages"].append(package_info)
+        if entry_index:
+            # Metadata covers unnamed assets too without exporting every texture,
+            # audio or geometry payload. Preserve reference/class and patch-block
+            # provenance for later targeted extraction.
+            entries = [{**entry, "tag": f"0x{d1_pkg.tag_hash(pkg_id, entry['index']):08x}",
+                        "reference": f"0x{entry['reference']:08x}"} for entry in package.entries]
+            blocks = [{**block, "sha1": block["sha1"].hex()} for block in package.blocks]
+            metadata = f"entries/{pkg_id:04x}.json"
+            write_json(out / metadata, {"package": package_info, "entries": entries,
+                                       "blocks": blocks,
+                                       "table_hash_valid": {name: package.table_hash_ok(name)
+                                                            for name in ("entries", "blocks", "named")}})
+            package_info["entry_metadata"] = metadata
         for tag in package.named:
             catalog["named_tags"].append({**tag, "package": f"0x{pkg_id:04x}"})
             suffix = tag["name"].rsplit(":", 1)[-1]
@@ -124,6 +140,10 @@ def dump(paths, out, oodle=None, all_named=False, investment_items=False):
         catalog["errors"].append({"scope": "01.24 investment activity table", "error": str(exc)})
     catalog["counts"] = {key: len(catalog[key]) for key in
                          ("packages", "named_tags", "scenarios", "groups", "exported_tags", "errors")}
+    if entry_index:
+        catalog["entry_index"] = {"directory": "entries", "packages": len(ps.by_id),
+                                  "entries": sum(len(p.entries) for p in ps.by_id.values()),
+                                  "blocks": sum(len(p.blocks) for p in ps.by_id.values())}
     if investment_items:
         try:
             buckets, items = d1_pkg.investment_items(ps)
@@ -163,6 +183,8 @@ def main():
                         help="also preserve every other named tag's raw data privately")
     parser.add_argument("--investment-items", action="store_true",
                         help="also preserve decoded equipment and localized text metadata")
+    parser.add_argument("--entry-index", action="store_true",
+                        help="also index every entry/block, including unnamed game assets")
     args = parser.parse_args()
     # This tool deliberately emits game data. Refuse a tracked-repository output
     # folder; private local/ and explicit research folders remain available.
@@ -171,7 +193,7 @@ def main():
     if destination.is_relative_to(repo) and not destination.is_relative_to(repo / "local"):
         parser.error("game-data output must be outside the tracked repository or under ignored local/")
     dump(args.paths, destination, d1_pkg.Oodle(args.oodle) if args.oodle else None,
-         args.all_named_tags, args.investment_items)
+         args.all_named_tags, args.investment_items, args.entry_index)
 
 
 if __name__ == "__main__":
