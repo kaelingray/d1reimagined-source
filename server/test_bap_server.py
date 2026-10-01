@@ -488,3 +488,24 @@ class AccountUserData(unittest.TestCase):
         self.assertEqual(bap.mm_rsp_body("4=0801"), bytes.fromhex("22020801"))
         with self.assertRaises(ValueError):
             bap.mm_rsp_body("7=x")
+
+
+class GroupSwitch(unittest.TestCase):
+    """Group record 1 carries a slice-set switch in progress (--ah-group-switch)."""
+
+    def test_target_goes_to_group_record_one(self):
+        path = Path(__file__).resolve().parents[2] / "d1xenia-data" / "ps3_updates" / "types_01.24.json"
+        if not path.exists():
+            self.skipTest("01.24 schema not available")
+        schema = json.loads(path.read_text(encoding="utf-8"))
+
+        def groups(data):
+            reader = bap.investment.BitReader(data)
+            reader.get(1)
+            return bap.investment.decode_from(reader, schema, bap.WORLD_STATE_TYPE)[0x2E48][0]
+
+        switching = groups(bap.world_state_delta(schema, {0x10: {}, 0x38: {}}, 113, 1, 0, target=112))
+        self.assertEqual((switching[0][0], switching[0xD8][0], switching[0xD8][8][1], switching[0xD8][8][2]),
+                         (113, 112, 1, 0))
+        settled = groups(bap.world_state_delta(schema, {0x10: {}, 0x38: {}}, 112, 1, 0))
+        self.assertEqual((settled[0][0], settled[0xD8][0]), (112, -1))

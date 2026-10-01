@@ -1018,3 +1018,53 @@ slot 2 {0xc, index, hash} through `0x1268d4` when slot 2 is free (`0x126a40(tabl
 stop ticking once 113 is de-instantiated (they are reached from `0x340130` / `0x3325b8`, a
 component update list), and which host message fills sim+0x5080 so the stand-in can send it
 itself (types 2/4/10/18/23/24/27/29/38/39/42 are candidates; 01.00 left the same question open).
+
+## The slice-set switch protocol (JOIN36-38): phases, group record 1, version
+
+`FINAL124_JOIN36` (arrive 113, no director; scratch `autopoke.py` writes the 112 request 40 s
+after arrival and arms hooks just before): the in-world update `0x32fd94` -> `0x3325a8` ->
+`0x340114` -> `0x35575c` (gate: engine +0x88 != 0, state < 7, +0x80 == 0) -> zone component
+**`0x355258`** runs every tick. It executes one **phase** per bit of zone-state byte +2 (= engine
++0x8a, mirrored via event 0x4f): 0x01 de-instantiate (`0x354f80`, posts slot 1), 0x02 peer
+loop, 0x04 load (`0x354e38`), 0x08 `0x354acc`, 0x10 `0x354578`, 0x20 `0x3542cc`, **0x40
+`0x354144` = post slot 2 "Change slice-set"**; a second set bit raises the +0x80 abort flag.
+After the poke the client goes 0x01 -> 0x04 (112 loads) and then stays in phase 0x04: nothing
+sets 0x08/0x10. (`0x347028`/`0x346f50`/`0x347158` are only load-timing telemetry.)
+
+Phase 0x08 is set by `0x3518f4` and 0x10 by `0x351794` (both called from the state-6 handler
+`0x351a20`), and both depend on the engine's copy of **world-state group record 1** (+0x490: zone
++0, sequence i8 +8, state u2 +9, peer u5 +0xa; record 0 at +0x3b8): phase 0x08 starts when record
+1 names a zone with state 1 (or state 2 and a new sequence) and its peer is the local slot
+(+0x3b4), plus +0x1d2 > 1, target +0x13c != 0, target +0x141 not 1/2. So a real host answers a
+client's slice-set request by publishing the target in group record 1. The stand-in's
+`--ah-follow-client-zone` instead rewrote record 0. New **`--ah-group-switch`**: keep record 0 on
+the current set, put {target, state 1, peer 0} in record 1 when the client's type-21 target
+changes, move record 0 and clear record 1 when the client reports the target as current.
+
+`FINAL124_JOIN37` (`--ah-group-switch`): record 1 sent (113 -> 112), still no phase 0x08; the
+engine's group copies (+0x3b8, +0x490) read **-1**. The copy (**`0x351df0`**, called from the engine
+update before `0x351a20`; world state = host session `0x336410` + 0xe00, i.e. +0xe08) takes record
+0 into +0x3b8 when its zone equals the current record's +8 (engine +0x98) and treats it as the
+switch when it equals the target's +8 (+0x138) **and** its per-peer byte (+0x38 + local slot)
+equals engine +0x1d0 = the i8 @0x140 of the client's reported slice record. The client reports
+peer byte 1 on arrival and **2** once the switch starts; the proxy now tracks it
+(`client_slice_record()["peer_byte"]`, resent in the world state; logged as "peer byte N").
+`FINAL124_JOIN38` (with that): record 1 and peer byte 2 sent, copies still -1, client drops the
+activity-host connection ~95 s after the switch began (as JOIN34). Cause: `0x351df0` only runs the
+copy when the world state's **u32 @0 (version, read by `0x12904`)** differs from engine +0x3b0;
+the stand-in always sent 0, equal to the initial cache, so **no world-state group record ever
+reached the client** (not the 113 record, not the switch). `world_state_delta()` now sends an
+incrementing version.
+
+`FINAL124_JOIN39` (versioned world state + `--ah-group-switch` + peer-byte tracking; arrive 113,
+112 request poked at 00:43:27): the engine now takes the group records (copy shows version 1,
+local slot 0, record 0 = 113). When the client reports target 112 / peer byte 2 the proxy sends
+record 1 = 112; the engine takes it, runs phase 0x08 and then **0x40: `0x354144` posts slot 2
+{0xc, 112}**, the change-slice-set handler `0x3336dc` calls `0x14d738(112)`, and the engine ends
+with current 112, table active 112. The request machine's copy waits in state 3 for the host's
+record state 3; writing {3, 0, 112, empty hash} completes it (copy 3 -> 4 -> 0; `0x391068` /
+`0x72932c` ran). The **gameplay area appears** (00:45:39, behind the Urgent Message); after the
+two dialogs the HUD radar is up (00:46:02) and 3 s of stick input walk forward (00:46:11): the
+113 -> 112 hand-off after the intro works end to end, with the request record still written by
+hand (state 1 to start, state 3 to finish). Still open: the host message that carries the
+sim+0x5080 record (it is cleared again within about a second of each write).

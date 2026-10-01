@@ -633,6 +633,10 @@ def client_slice_record(schema, body):
               for name, off in (("current", 0), ("target", 0xA0)) if off in zone}
     if 0x142 in zone:
         record["state"] = zone[0x142]
+    if 0x140 in zone:
+        # i8 @0x140 = engine +0x1d0: the world controller copies a world-state group record only
+        # when that record's per-peer byte (@0x38 + local slot) equals it.
+        record["peer_byte"] = zone[0x140]
     return record or None
 
 
@@ -645,6 +649,8 @@ def client_slice_state(schema, body):
              if name in record]
     if "state" in record:
         parts.append(f"state {record['state']}")
+    if "peer_byte" in record:
+        parts.append(f"peer byte {record['peer_byte']}")
     return ", ".join(parts)
 
 
@@ -993,7 +999,10 @@ def default_baseline(key, kind, index, has_b=False):
     return {0: key, 4: kind, 6: index}, None, None, has_b
 
 
-def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0):
+_world_state_version = 0
+
+
+def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0, target=None):
     """Body of host type 11 (0x25715c): one present bit, then a world-state delta (type
     0x808009ed, decoded with 0x1ca478 onto the host simulation's copy at +0xbc0 and posted to
     the world controller as RPC 6). Peer slot 0 is the joining client: its identity (@0x10)
@@ -1008,10 +1017,22 @@ def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0):
     # = identities to search for the local slot (0x1c9ab8).
     if not 0 <= group_peer < 20:
         raise ValueError("group peer must be a world-state peer slot (0-19)")
-    values = {8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}}, 0x5028: 1, 0x502C: 1}
+    # u32 @0: the world-state version. The world controller re-reads the group records
+    # (0x351df0) only when it differs from its cached copy (engine +0x3b0, initially 0), so a
+    # constant 0 meant no group record - current or switch - ever reached the client.
+    global _world_state_version
+    _world_state_version += 1
+    values = {0: _world_state_version, 8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}},
+              0x5028: 1, 0x502C: 1}
     if zone is not None:
         records = {0xD8 * i: {0: -1} for i in range(1, 40)}  # unused groups: index -1
         records[0] = {0: zone, 8: {1: 1, 2: group_peer}, 0x28: {0x10: {0: peer_byte}}}
+        if target is not None:
+            # Group record 1 = the fireteam's slice-set switch in progress (01.24 engine +0x490..):
+            # the client's phase updates 0x3518f4 / 0x351794 start the switch (phase 0x08 ->
+            # 0x354acc -> 0x40 -> 0x354144 posts "Change slice-set") only when this record names a
+            # zone with state 1 and the local slot as its peer.
+            records[0xD8] = {0: target, 8: {1: 1, 2: group_peer}, 0x28: {0x10: {0: peer_byte}}}
         values[0x2E48] = {0: records}
     w = investment.BitWriter()
     w.put(1, 1)
@@ -1390,6 +1411,7 @@ def handle(conn, peer, args):
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
+    switch_target = None  # --ah-group-switch: zone set published in group record 1
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1555,7 +1577,35 @@ def handle(conn, peer, args):
                         # Mirror the client's switch in the world state's group record, as the
                         # host that tracks the fireteam's slice set would (opt-in experiment)
                         wanted = requested_client_zone(record)
-                        if (args.ah_follow_client_zone and world_params and wanted is not None
+                        current = record.get("current", (None,))[0]
+                        if (args.ah_group_switch and world_params and "peer_byte" in record
+                                and record["peer_byte"] != world_params[1]):
+                            world_params = (world_params[0], record["peer_byte"], *world_params[2:])
+                            data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                     *world_params[1:], target=switch_target)
+                            conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                              bc_notification(AH_ESTABLISH, data, host_id)))
+                            log(f"[{tag}] world state: per-peer byte -> {world_params[1]} (client slice record)")
+                        if args.ah_group_switch and world_params:
+                            # The host side of a slice-set switch: publish the requested set in
+                            # group record 1 while record 0 keeps the current one; once the client
+                            # reports the target as current, move record 0 and clear record 1.
+                            if (switch_target is not None and current == switch_target):
+                                zone_now, switch_target = switch_target, None
+                                data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                         *world_params[1:])
+                                conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                                  bc_notification(AH_ESTABLISH, data, host_id)))
+                                log(f"[{tag}] world state: zone set {zone_now} reached, switch cleared")
+                            elif (wanted is not None and wanted >= 0 and wanted != zone_now
+                                  and wanted != switch_target and current != wanted):
+                                switch_target = wanted
+                                data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                         *world_params[1:], target=switch_target)
+                                conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                                  bc_notification(AH_ESTABLISH, data, host_id)))
+                                log(f"[{tag}] world state: switch {zone_now} -> {switch_target} (group record 1)")
+                        elif (args.ah_follow_client_zone and world_params and wanted is not None
                                 and wanted >= 0 and wanted != zone_now):
                             zone_now = wanted
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
@@ -1954,6 +2004,10 @@ def parse_args(argv=None):
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
+    ap.add_argument("--ah-group-switch", action="store_true",
+                    help="with --ah-world-state, answer the client's slice-set requests (type 21 target) "
+                         "the way the host does: group record 1 = {target, state 1, local peer} while "
+                         "record 0 stays current; record 0 moves when the client reports the target")
     ap.add_argument("--ah-follow-client-zone", action="store_true",
                     help="with --ah-world-state, send a new world-state delta naming the zone set the "
                          "client reports in its type-21 state (target, else current) whenever it changes")
