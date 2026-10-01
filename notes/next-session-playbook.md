@@ -1,5 +1,10 @@
 # Next session on the PC: ordered runbook (written 2026-09-27)
 
+> **2026-10-01, for Codex:** your staged 2026-09-30 audit work is committed as `951222b`
+> (unchanged from the staged index) and pushed, on top of the main PC's handoff commits. Run
+> `git pull --rebase` before you continue; do not re-stage it. Start with
+> [the handoff](HANDOFF-2026-10-01.md).
+
 ## Active work: 01.24 (updated 2026-09-30)
 
 The ordered 01.00 mission experiments later in this file are historical. Continue
