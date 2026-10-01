@@ -789,3 +789,18 @@ table `0x12f9a90` maps leave reasons for states 8-15 only; states 0-6 share `0x3
 Next, `FINAL124_JOIN22`: arrive directly in slice 24 (`--ah-zone 24:0x68935472
 --ah-world-state 24:1`, bubbles `-1,3=0`) with the full 2,311-record baseline superset;
 JOIN14 forced 24 with only the 158 highway baselines.
+
+`FINAL124_JOIN22` (arrive in slice 24: `--ah-zone 24:0x68935472 --ah-world-state 24:1`, bubbles
+`-1,3=0`, 2,311-record superset, final Titan gear, sim player spawn grant **0** as in JOIN19-21):
+stage 34 `activity:initial_slice_set_loading` for all 240 s (loading screen). Live reads: the
+engine is healthy (state 0, current slice 24 / `0x68935472`; slice table active 24, loaded
+{24}). The stage-34 object (`*(bootflow + 0x80 + 4*34)` = `0x1abeff0`, vtable `0x13e84a0`,
+tick `0x35fef8`) advances to 35 when its done mask (+0x150) equals its required mask (+0x140):
+required `0x7ff`, done `0x1ff`, i.e. tasks 9 and 10 pending (11 tasks of 0x18 bytes from +0x44;
+task 9 = `0x3603e0`, task 10 = `0x36057c`). Task 9 needs `0xc07ef0` (kind-0x10 lookup), the
+local player record (`0x158304(0x136b68())`, table `0x1a1d720`: base +8, stride +0xc = 0x1b0;
+record 0 holds machine `e0d55e272f90` and character `0x0a3d4a2c8fbea6ba`) to resolve its
+**entity handle at +0x50** to an object with byte +8 set, and `0x33dc88` (count at
+`*(*0x1abc7d4) + 0xc`, live 0) to be 0. The player record's +0x50 is **-1**: no player entity
+exists, so initial slice loading waits for the spawn. JOIN12 used spawn grant 1;
+`FINAL124_JOIN23` repeats JOIN22 with `--ah-sim-player ...:1`.
