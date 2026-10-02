@@ -59,7 +59,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import investment  # noqa: E402
+import investment
+from player_db import PlayerDB  # noqa: E402
 from local_paths import SIGNON  # noqa: E402
 import signon_proto  # noqa: E402
 
@@ -873,6 +874,7 @@ def replace_object(objects, spec):
 
 
 ANY_MESSAGE = -1  # --ah-on / mission rule type matching every client message type
+WORLD_HEARTBEAT = -2  # --ah-heartbeat SECONDS:world
 
 
 class ObjectIdMatcher:
@@ -1407,6 +1409,8 @@ def handle(conn, peer, args):
     log(f"[{tag}] connection from {peer[0]}:{peer[1]}")
     rx = tx = None
     account_id = character_id = character_profile = active_id = account_data = None
+    # one database handle per connection (thread); state is scoped by account/character ids
+    player_db = PlayerDB(args.player_db) if getattr(args, "player_db", None) else None
     self_version = 1
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
@@ -1423,6 +1427,7 @@ def handle(conn, peer, args):
     # hosts one instance per activity-host connection; a multi-client host will own one counter
     # per world instance and share it between that instance's peers.
     world_version = itertools.count(1)
+    world_version_now = 0  # last version sent (heartbeat resends reuse it)
     teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
     teleport_targeted = False  # the client has requested the teleport's slice set
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
@@ -1485,6 +1490,17 @@ def handle(conn, peer, args):
                 folder.joinpath(f"{number:03}-server-ws-rsp.bin").write_bytes(reply)
                 log(f"[{tag}] sent sign-in rsp (account id {account_id:#x})")
                 saved = load_store(args.store).get(f"{account_id:#x}") if args.store else None
+                if player_db is not None:
+                    # Durable store: the account's characters by slot (multiplayer-safe ids);
+                    # the stand-in still presents one profile, the first character.
+                    player_db.ensure_account(account_id, f"{account_id:#x}")
+                    owned = player_db.characters(account_id)
+                    stored = player_db.account(account_id)
+                    saved = {}
+                    if owned:
+                        saved.update(id=owned[0]["character_id"], request=owned[0]["create_request"].hex())
+                    if stored and stored["account_data"]:
+                        saved["account_data"] = stored["account_data"].hex()
                 if saved and args.schema and "id" in saved:
                     character_id = saved["id"]
                     character_profile = character_from_request(args.schema, character_id,
@@ -1497,8 +1513,13 @@ def handle(conn, peer, args):
                 # Service 501 creates a character; its response carries the new character soid.
                 # Keep the id stable for this local account during this connection.
                 character_id = (account_id or 1) + 1
+                if player_db is not None and account_id is not None:
+                    # database-allocated, globally unique; a resent request (same connection and
+                    # message id) returns the same character instead of creating another
+                    character_id = player_db.create_character(account_id, payload[2:],
+                                                              f"501:{tag}:{msg_id}")
                 character_profile = character_from_request(args.schema, character_id, payload[2:])
-                if args.store and account_id is not None:
+                if args.store and account_id is not None and player_db is None:
                     save_character(args.store, account_id, character_id, payload[2:])
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200,
                                         default_ws_response(args.schema, 501, {8: character_id}))
@@ -1541,7 +1562,11 @@ def handle(conn, peer, args):
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-{wire}.bin").write_bytes(reply)
                 log(f"[{tag}] sent default reply for service {wire} (result error_none)")
-                if wire == 701 and args.store and account_id is not None and account_data_offset(args.schema):
+                if (wire == 701 and player_db is not None and account_id is not None
+                        and account_data_offset(args.schema)):
+                    player_db.set_account_data(account_id, payload[2:])
+                    account_data = account_data_values(args.schema, payload[2:])
+                elif wire == 701 and args.store and account_id is not None and account_data_offset(args.schema):
                     # Keep the latest account user data (settings) for the next sign-in.
                     if payload[2:].hex() != (load_store(args.store).get(f"{account_id:#x}") or {}).get("account_data"):
                         save_account_data(args.store, account_id, payload[2:])
@@ -1595,7 +1620,7 @@ def handle(conn, peer, args):
                                 and record["peer_byte"] != world_params[1]):
                             world_params = (world_params[0], record["peer_byte"], *world_params[2:])
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: per-peer byte -> {world_params[1]} (client slice record)")
@@ -1610,7 +1635,7 @@ def handle(conn, peer, args):
                             # (JOIN42: copy waiting in state 3 with the engine already in 112).
                             teleport_now = (3, teleport_now[1], teleport_now[2])
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: teleport to {teleport_now[1]} reached (state 3)")
@@ -1621,7 +1646,7 @@ def handle(conn, peer, args):
                             if (switch_target is not None and current == switch_target):
                                 zone_now, switch_target = switch_target, None
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                         *world_params[1:], teleport=teleport_now, version=next(world_version))
+                                                         *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                                   bc_notification(AH_ESTABLISH, data, host_id)))
                                 log(f"[{tag}] world state: zone set {zone_now} reached, switch cleared")
@@ -1629,7 +1654,7 @@ def handle(conn, peer, args):
                                   and wanted != switch_target and current != wanted):
                                 switch_target = wanted
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                         *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                                                         *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                                   bc_notification(AH_ESTABLISH, data, host_id)))
                                 log(f"[{tag}] world state: switch {zone_now} -> {switch_target} (group record 1)")
@@ -1637,7 +1662,7 @@ def handle(conn, peer, args):
                                 and wanted >= 0 and wanted != zone_now):
                             zone_now = wanted
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:], teleport=teleport_now, version=next(world_version))
+                                                     *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: zone set -> {zone_now} (following the client)")
@@ -1676,7 +1701,7 @@ def handle(conn, peer, args):
                                         int(parts[2], 0) if len(parts) > 2 else 0)
                         zone_now = None if zone == "peer" else int(zone, 0)
                         establish = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                      *world_params[1:], teleport=teleport_now, version=next(world_version))
+                                                      *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                         zone_joined = time.time()
                     for subtype, data in ((AH_ESTABLISH, establish), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
                                                                       args.ah_bubbles, args.ah_zone,
@@ -1730,7 +1755,14 @@ def handle(conn, peer, args):
                 # crashed (status 36, reason 0x67, "baboon") once the time since the host's last
                 # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
                 seconds, subtype = args.ah_heartbeat
-                if subtype >= 0:  # -1: only the machines/simulation repeats below
+                if subtype == WORLD_HEARTBEAT and world_params:
+                    # the current world state, unchanged version: keeps the group request
+                    # (@0x2e48+0x21c8) alive, which an empty type-11 message resets to "none"
+                    data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                             *world_params[1:], target=switch_target, teleport=teleport_now,
+                                             version=world_version_now)
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
+                elif subtype >= 0:  # -1: only the machines/simulation repeats below
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
                 if confirm_repeat:
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_MACHINES, confirm_repeat, host_id)))
@@ -1752,7 +1784,7 @@ def handle(conn, peer, args):
                     if time.time() - zone_joined >= after:
                         teleport_now = (1, zone_t, 0x811C9DC5)
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                 *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                                                 *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
                         conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                         log(f"[{tag}] world state: teleport request -> slice set {zone_t} (state 1)")
                 if world_params and args.ah_zone_schedule:
@@ -1762,7 +1794,7 @@ def handle(conn, peer, args):
                     due = [z for z, sec in args.ah_zone_schedule if time.time() - zone_joined >= sec]
                     if due and due[-1] != zone_now:
                         zone_now = due[-1]
-                        data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:], teleport=teleport_now, version=next(world_version))
+                        data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                         conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                         log(f"[{tag}] world state: zone set -> {zone_now}")
                 if sim_build and objects_applied < len(args.ah_object_at):
@@ -2074,10 +2106,12 @@ def parse_args(argv=None):
     ap.add_argument("--ah-baselines-watch", type=Path, metavar="FILE",
                     help="with --ah-heartbeat, re-read this --ah-baselines list whenever it changes and "
                          "add default baselines for objects not sent yet (bubbles loaded after the join)")
-    ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]), int((v.split(":") + ["11"])[1], 0)),
-                    metavar="SECONDS[:SUBTYPE]",
-                    help="with --ah-join, push an empty host message (default type 11; -1 = none) plus the "
-                         "machines/simulation repeats every SECONDS")
+    ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]),
+                                                      WORLD_HEARTBEAT if (v.split(":") + ["11"])[1] == "world"
+                                                      else int((v.split(":") + ["11"])[1], 0)),
+                    metavar="SECONDS[:SUBTYPE|world]",
+                    help="with --ah-join, push an empty host message (default type 11; -1 = none; 'world' = the "
+                         "current world state) plus the machines/simulation repeats every SECONDS")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-join-fields", default=[],
@@ -2088,6 +2122,9 @@ def parse_args(argv=None):
                     help="activity session id sent in the host join response")
     ap.add_argument("--activity-schema", type=Path, default=ACTIVITY_SCHEMA,
                     help="activity host message schema from a runtime dump or EBOOT type export")
+    ap.add_argument("--player-db", type=Path,
+                    help="durable player database (SQLite, server/player_db.py; replaces --store): "
+                         "accounts, several characters per account, settings")
     ap.add_argument("--store", type=Path,
                     help="JSON file remembering created characters per account (outside Git)")
     ap.add_argument("--schema", type=Path, default=investment.DEFAULT_SCHEMA,
