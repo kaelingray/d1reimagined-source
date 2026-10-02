@@ -46,7 +46,7 @@ Last full review: 2026-10-02.
 | Talent grids, perks, stats, Light | NOT INVESTIGATED | - | - | - |
 | Unlock / universe flags | PARTIAL | `--self-flags`, `--universe-flag-values 3390=1,309=1` | flag meanings mostly unknown | map flags to definitions |
 | Grimoire, records | NOT INVESTIGATED | - | - | - |
-| Player database (durable store) | PARTIAL | `server/player_db.py` schema v1 (accounts, characters, items, idempotent grant ledger, migrations; concurrency tests) and `bap_server.py --player-db`; legacy JSON store still the default | not yet used in a live run; inventory families not served from it | live run with `--player-db`; serve inventory from it |
+| Player database (durable store) | PARTIAL | `server/player_db.py` schema v1 (accounts, characters, items, idempotent grant ledger, migrations; concurrency tests) and `bap_server.py --player-db`; legacy JSON store still the default; legacy JSON store import keeping ids; live sign-in restore from the DB (JOIN69) | not yet used in a live run; inventory families not served from it | live run with `--player-db`; serve inventory from it |
 
 ## 3. Orbit, Director, matchmaking
 

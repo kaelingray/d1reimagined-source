@@ -37,6 +37,14 @@ id that exists) and the account's 701 user data, so recipes naming the character
 working. The allocator skips ids that imports occupy. `python server/player_db.py show DB` lists
 accounts and characters. The local test database is `SIGNON_LOCAL/players-0124.db` (outside Git).
 
+## Live validation
+
+`FINAL124_JOIN69` (2026-10-02, `--player-db SIGNON_LOCAL/players-0124.db` after `import-store`):
+sign-in restored character `0x0a3d4a2c8fbea6ba` and the account's 701 user data from the
+database ("restored stored character", "restored stored account user data (701)"), the family
+fetch served that character, and character select showed it (d1localtest, Titan, Awoken Male,
+one free slot). Not exercised live yet: creating a second character (501) and 701 writes.
+
 ## Operational rules
 
 - SQLite in WAL mode; one connection per thread (`PlayerDB` keeps a thread-local connection).
