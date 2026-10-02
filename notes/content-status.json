@@ -1,0 +1,7 @@
+{
+  "act_cosmo_m0_highway": {
+    "status": "PARTIAL",
+    "evidence": "intro activity (world 229, checksum 0x8fe07299, 22 bubbles): arrival 112/113, revival cinematics, New Mission banner, walking (FINAL124_JOIN27-41)",
+    "next": "objectives, triggers, enemies, completion"
+  }
+}
