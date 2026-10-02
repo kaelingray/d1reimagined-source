@@ -1004,7 +1004,7 @@ def control_steps(path, offset, objects, schema):
         try:
             step = json.loads(line)
             if "teleport" in step:
-                teleports.append(int(str(step["teleport"]), 0))
+                teleports.append(parse_slice_set(step["teleport"]))
                 continue
             timed, _ = expand_mission({"objects": objects, "steps": [{"at": 0, "set": step["set"]}]}, schema)
             specs += [spec for _, spec in timed]
@@ -1020,10 +1020,18 @@ def mission_clock(mission):
     return clock
 
 
+def parse_slice_set(value):
+    """A slice set as INDEX or "INDEX:NAMEHASH" -> (index, hash or None). Named sets need their
+    hash in a teleport request (24 = 0x68935472 on the highway, JOIN71); None means "use the hash
+    the client reported for this index, else the empty name"."""
+    index, _, name_hash = str(value).partition(":")
+    return int(index, 0), (int(name_hash, 0) if name_hash else None)
+
+
 def mission_teleports(mission):
     """Timed host teleports of a mission script: steps {"at": SECONDS, "teleport": SLICE_SET}
-    (e.g. the intro's hand-off 113 -> 112) as [(slice set, seconds)]."""
-    return [(int(str(step["teleport"]), 0), float(step["at"])) for step in mission.get("steps", [])
+    (e.g. the intro's hand-off 113 -> 112) as [((index, hash), seconds)]."""
+    return [(parse_slice_set(step["teleport"]), float(step["at"])) for step in mission.get("steps", [])
             if "teleport" in step and "at" in step]
 
 
@@ -1510,6 +1518,7 @@ def handle(conn, peer, args):
     # timed host teleports of this activity session: [(slice set, seconds after the join)] from
     # --ah-teleport and the mission script's {"at": S, "teleport": SET} steps, in order
     teleport_plan = sorted(args.ah_teleports, key=lambda entry: entry[1])
+    slice_hashes = {}  # slice-set index -> name hash, as the client reported it
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1696,6 +1705,10 @@ def handle(conn, peer, args):
                         record = None
                     if record:
                         log(f"[{tag}] client slice set: {client_slice_state(args.activity_schema, body)}")
+                        for name in ("target", "current"):
+                            index, name_hash = record.get(name, (None, None))
+                            if index is not None and index >= 0 and name_hash not in (None, 0, 0x811C9DC5):
+                                slice_hashes[index] = name_hash  # named sets need it in teleports
                         # Mirror the client's switch in the world state's group record, as the
                         # host that tracks the fireteam's slice set would (opt-in experiment)
                         wanted = requested_client_zone(record)
@@ -1907,15 +1920,15 @@ def handle(conn, peer, args):
                     log(f"[{tag}] world state: finished teleport request dropped")
                 if (world_params and teleport_plan and mission_t0(zone_joined) is not None
                         and teleport_now is None):
-                    zone_t, after = teleport_plan[0]
+                    (zone_t, zone_hash), after = teleport_plan[0]
                     if time.time() - mission_t0(zone_joined) >= after:
                         teleport_plan.pop(0)
                         teleport_targeted, teleport_finish_at, teleport_finished_at = False, None, None
-                        teleport_now = (1, zone_t, 0x811C9DC5)
+                        teleport_now = (1, zone_t, zone_hash or slice_hashes.get(zone_t, 0x811C9DC5))
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                  *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
                         conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
-                        log(f"[{tag}] world state: teleport request -> slice set {zone_t} (state 1)")
+                        log(f"[{tag}] world state: teleport request -> slice set {zone_t}:{teleport_now[2]:#x} (state 1)")
                 if world_params and args.ah_zone_schedule:
                     # A zone change the way the real host moves a player between bubbles: a new
                     # world-state delta (type 11) naming another zone set in group record 0.
@@ -1952,7 +1965,7 @@ def handle(conn, peer, args):
                         log(f"[{tag}] control: ignored {error}")
                     for zone_t in teleports:
                         teleport_plan.insert(0, (zone_t, 0.0))  # due at once (after any running one)
-                        log(f"[{tag}] control: teleport to slice set {zone_t} queued")
+                        log(f"[{tag}] control: teleport to slice set {zone_t[0]} queued")
                     reactions_due += [(time.time(), spec, "control") for spec in specs]
                 if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
@@ -2210,8 +2223,8 @@ def parse_args(argv=None):
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
-    ap.add_argument("--ah-teleport", type=lambda v: (int(v.split("@")[0], 0), float(v.split("@")[1])),
-                    metavar="ZONE@SECONDS",
+    ap.add_argument("--ah-teleport", type=lambda v: (parse_slice_set(v.split("@")[0]), float(v.split("@")[1])),
+                    metavar="ZONE[:HASH]@SECONDS",
                     help="with --ah-world-state, SECONDS after the join ask the group to move to slice set "
                          "ZONE (world-state group block @0x21c8, state 1; state 3 once the client reports it) - "
                          "the host's hand-off after the intro cinematic (113 -> 112)")

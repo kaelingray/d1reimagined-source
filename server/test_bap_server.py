@@ -531,7 +531,8 @@ class MissionTeleports(unittest.TestCase):
     def test_teleport_steps(self):
         mission = {"objects": {}, "steps": [{"at": 175, "teleport": 112}, {"at": 20, "set": {}},
                                             {"at": 400, "teleport": "0x18"}]}
-        self.assertEqual(bap.mission_teleports(mission), [(112, 175.0), (24, 400.0)])
+        self.assertEqual(bap.mission_teleports(mission), [((112, None), 175.0), ((24, None), 400.0)])
+        self.assertEqual(bap.parse_slice_set("24:0x68935472"), (24, 0x68935472))
         timed, reactive = bap.expand_mission(mission, {})
         self.assertEqual((timed, reactive), ([], []))
 
@@ -552,7 +553,7 @@ class MissionTeleports(unittest.TestCase):
             self.assertEqual(bap.control_steps(path, offset2, objects, {})[0], [])
             with path.open("a", encoding="utf-8") as f:
                 f.write('{"teleport": "0x18"}\n')
-            self.assertEqual(bap.control_steps(path, offset2, objects, {})[1], [24])
+            self.assertEqual(bap.control_steps(path, offset2, objects, {})[1], [(24, None)])
 
     def test_mission_clock(self):
         self.assertEqual(bap.mission_clock({}), "world")
