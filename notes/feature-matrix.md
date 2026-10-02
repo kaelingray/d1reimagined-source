@@ -82,7 +82,7 @@ Last full review: 2026-10-02.
 | Revival cinematics `pf_104_res`, `pf_104_res_fp` | WORKING | JOIN34/35 with the director; null object refs fix (JOIN32) | letterbox stale strip (rendering) | - |
 | Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN53 after both cinematics (stopped by the script) | a cinematic left to end on its own keeps the screen black (JOIN52) | - |
 | "New Mission" banner (incoming sequence) | WORKING | JOIN31 | - | - |
-| Objective display / waypoints | INVESTIGATING | handler `0x3a68c0` runs; nothing shown (JOIN31) | gate `0x20f048` (definition +0x24) | trace in 112 after the hand-off |
+| Objective display / waypoints | INVESTIGATING | definition +0x4c = category (0 mission, 1 optional event: banner shown in JOIN57 with a test write); mission objectives are listed via the client reference registry (kind-0x20 count 0) | which scenario content registers the activity's objectives | trace `0x14d034` registrations per slice set / bubble |
 | Player triggers, Ghost light cinematic, weapon pickup | NOT INVESTIGATED (01.24) | script exists (`missions/a_guardian_rises.json`) | - | after objectives |
 | Enemies (Fallen squads in The Breach) | NOT INVESTIGATED (01.24) | squad layout mapped (+0x74) | spawn trigger unknown | - |
 | Zone change 112 -> 24 (The Breach) by walking | PARTIAL | follow-player request seen (JOIN25); protocol now known | not re-tested with the switch protocol | test with `--ah-group-switch` |
@@ -126,7 +126,7 @@ VERIFIED. Debts and replacement paths: [`architecture-multiplayer.md`](architect
 | Fireteams, presence, matchmaking | NOT DESIGNED | constant replies |
 | Activity host: world state, simulation, scripts | SINGLE-CLIENT ONLY | one private world per connection, client fixed in roster/peer slot 0; world-state version now per connection |
 | Slice-set switch protocol (group records, group request) | MULTIPLAYER-AWARE | protocol is group-level by design (records name peers, request is per group); implementation still per connection |
-| Mission director | SINGLE-CLIENT ONLY | timeline per connection, configured by process arguments |
+| Mission director | SINGLE-CLIENT ONLY | timeline per connection (clock `world` or `ready` = client's in-world report), configured by process arguments |
 | Rewards / loot | NOT DESIGNED | research opened (`loot-and-rewards.md`), design constraints recorded |
 | Logging (`run_log.py`) | MULTIPLAYER-AWARE | per-connection event files; ids not yet on every record |
 | Test tooling (run wrappers) | SINGLE-CLIENT ONLY | one emulator per run; second emulator instance not yet supported |

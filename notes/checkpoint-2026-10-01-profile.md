@@ -1195,3 +1195,30 @@ Objective trace (hooks + owned-memory reads):
   nav refs, +0x2c8/+0x2dc strings), registration in the activity's objective registry, or
   def +0x4c. JOIN55 tests def +0x4c = 1 (memory write, test only) with the objective step moved
   to 20 s after arrival in 112 (reactive on the slice-set report).
+
+## JOIN55-57: objective definition +0x4c is the presentation category
+
+- `FINAL124_JOIN55` hung 20 s after the teleport request (emulator time 0:08:52: all PPU threads
+  stop logging, CPU busy, no error; proxy "timed out" 2 min later) - the intermittent stall of
+  JOIN29, this time with 6 PPU hooks. `FINAL124_JOIN56` (3 hooks) completed the hand-off in 29 s.
+- The first objective step is now reactive: 20 s after the client reports slice set 112 as
+  current (`{"on": {"type": 21, "slice_set": 112}, "delay": 20}`), so the state arrives after
+  the 112 objective instances exist instead of during the load.
+- Objective instance and definition addresses are identical across runs (JOIN54/56/57:
+  objective 3 = component `0x607bbc30`, definition `0x72a98f84`).
+- `FINAL124_JOIN57` (test-process memory write): definition +0x4c of objective 3 set to **1**
+  before the state arrived. The handler now calls the gate `0x20f048` (passes) and the HUD shows
+  the banner **"EVENT INCOMING (OPTIONAL)"** for a few seconds (09:33:04); no lasting objective
+  text (the definition's name hash +0x60 is null). With the content value 0 the same step gave
+  "NEW MISSION - THE TAKEN KING: PRELUDE" in JOIN31. So **+0x4c is the objective category**:
+  0 = mission objective, 1 = optional public event, 5 = another event-like category; the
+  local-activation branch (mask, +0x404, HUD post) serves the event categories only. Mission
+  objectives are not broken content - they are presented by another path.
+- That path: `0x392d08` (activity tick) walks kind-0x20 entries of the client reference
+  registry (count u16 at registry +`0x16d92`) and feeds each to the display provider
+  `0x3a7dac` -> `0x3a72a4`. The count is 0: the registry (filled by `0x14d034` -> `0x155810`
+  -> insert `0xe22d2c` while a scenario's content loads; records are content objects keyed by
+  group and kind, e.g. {`0x4786c0e0`, kind `0x15`}) never receives the activity's objectives.
+  Next: find which scenario content registers kind-0x20 objects (`act_cosmo_m0_highway:
+  scenario_client`, tag `0x80cb800d`, 22 bubbles; the objective names carry phase prefixes such
+  as `cosmo_m0_phase00_highway`) and what the host must send for it to load.

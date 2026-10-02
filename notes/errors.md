@@ -34,5 +34,5 @@ failure step/code where it was traced. Add rows as new errors appear; keep the s
 | Black screen with loading glyph after the 113 -> 112 hand-off | 01.24 | teleport finish sent as a new world-state version, the engine re-read group record 1 and restarted the switch | fixed (JOIN51) | profile checkpoint |
 | Black screen after a cinematic that ended on its own | 01.24 | fade-to-black at the end of `pf_104_res_fp` not lifted | worked around: the script stops the cinematics before the teleport (JOIN53); lifting the fade itself not investigated | profile checkpoint |
 | Urgent Message / Message of the Day dialogs on world entry | 01.00/01.24 | data source unknown (not the user-msg reply) | INVESTIGATING | profile checkpoint |
-| Frames stop at character select | 01.24 | intermittent emulator stall (JOIN29) | open | profile checkpoint |
+| Frames stop at character select; all threads stop during the 113 -> 112 load | 01.24 | intermittent emulator stall: no error, CPU busy, PPU threads stop logging (JOIN29; JOIN55 20 s after the teleport request, with 6 PPU hooks) | open - rerun; watch whether hook count matters | profile checkpoint |
 | Vulkan "Device lost" in slice 113 | 01.24 | GPU driver loss, not reproduced (JOIN33) | open | profile checkpoint |

@@ -13,6 +13,7 @@
     "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
     "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24."
   ],
+  "clock": "ready",
   "objects": {
     "cine_revival": "0x992bb471:0x6:1:0x8080254d",
     "cine_revival_fp": "0x992bb471:0x6:2:0x8080254d",
@@ -90,7 +91,11 @@
       "teleport": 112
     },
     {
-      "at": 140,
+      "on": {
+        "type": 21,
+        "slice_set": 112
+      },
+      "delay": 20,
       "set": {
         "obj_enter_wall": {
           "0": 1,
