@@ -1301,3 +1301,8 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   the wrapper's Cross presses); JOIN65 froze in RSX on an **"Unimplemented FP CAL
   instruction"** (RPCS3 bug; fix prepared in `patches/rpcs3-fp-cal-ignore.patch`, not built -
   this PC has no MSVC).
+- `FINAL124_JOIN66`: test-only position writes (`d1_traverse.py teleport`) do not move the
+  player: entity +0x40 is rewritten from elsewhere within a frame, and the other three copies of
+  the position bytes in memory (`0x31e0bf70`, `0x31ef7a40`, `0x31e0d760`; transient buffers)
+  are not authoritative either. The authoritative state (physics / character controller) is not
+  found yet, so traversal walks with the pad (`goto`/`route`).

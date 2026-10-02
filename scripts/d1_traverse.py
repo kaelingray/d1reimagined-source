@@ -9,6 +9,8 @@ frame), and the position is the float triple at record +0x40 (x, y, z; z up) - J
     python scripts/d1_traverse.py --manifest <run>-processes.json where
     python scripts/d1_traverse.py --manifest <run>-processes.json goto X Y [--radius 2]
     python scripts/d1_traverse.py --manifest <run>-processes.json find 0x992bb471 0x2c 87
+    python scripts/d1_traverse.py --manifest <run>-processes.json teleport X Y Z   (test only;
+        JOIN66: the game rewrites entity +0x40 every frame, so this does not move the player yet)
 """
 import argparse
 import ctypes
@@ -103,6 +105,25 @@ class Player:
 
     def position(self):
         return struct.unpack(">fff", self.mem.read(self.entity + POSITION, 12))
+
+
+def write_position(mem, pid, entity, xyz):
+    """TEST ONLY (reverse engineering): overwrite the entity record's position in the run's own
+    emulator. Whether the game keeps it (or a physics body restores it) is what this tests."""
+    k = mem.kernel
+    k.WriteProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+                                     ctypes.POINTER(ctypes.c_size_t)]
+    k.OpenProcess.restype = wt.HANDLE
+    handle = k.OpenProcess(0x0028, False, pid)  # VM_OPERATION | VM_WRITE
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        data, written = struct.pack(">fff", *xyz), ctypes.c_size_t()
+        if not k.WriteProcessMemory(handle, ctypes.c_void_p(mem.base + entity + POSITION), data,
+                                    len(data), ctypes.byref(written)):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        k.CloseHandle(handle)
 
 
 def heading(a, b):
@@ -233,6 +254,10 @@ def main():
     r = sub.add_parser("route")
     r.add_argument("points", nargs="+", help="X,Y waypoints")
     r.add_argument("--radius", type=float, default=3.0)
+    t = sub.add_parser("teleport", help="TEST ONLY: write the player position")
+    t.add_argument("x", type=float)
+    t.add_argument("y", type=float)
+    t.add_argument("z", type=float)
     f = sub.add_parser("find")
     f.add_argument("group", type=lambda v: int(v, 0))
     f.add_argument("kind", type=lambda v: int(v, 0))
@@ -253,6 +278,12 @@ def main():
             pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
             goto(player, Pad(pid), (args.x, args.y), args.radius, step_ms=args.step_ms,
                  sprint=not args.no_sprint)
+        if args.cmd == "teleport":
+            pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
+            write_position(mem, pid, entity, (args.x, args.y, args.z))
+            for _ in range(5):
+                time.sleep(0.5)
+                print("now", [round(v, 2) for v in player.position()])
         if args.cmd == "route":
             pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
             route(player, Pad(pid), [tuple(float(v) for v in p.split(",")) for p in args.points], args.radius)
