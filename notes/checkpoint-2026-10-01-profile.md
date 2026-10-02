@@ -1328,3 +1328,25 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   Grimoire event (BAP side not traced yet).
 - Next: record a known-good route once (`d1_traverse.py record`, walked by hand) and replay it
   (`replay`); breadcrumb routes go in `missions/routes/`.
+
+## JOIN68: where the Urgent Message text lives (dialog source still open)
+
+- The dialog texts are a content string library of server messages, tag `0x80a5843f` (57
+  strings): "Urgent Message" `0x84cc7b33`, body `0x40e5f178`/`0x40e5f17b` ("Destiny servers will
+  go offline temporarily..."), "Message of the Day" `0xb57b5899`, "Attention" `0xcd6a5d41`,
+  "Game world will reboot soon" `0x0a92c9d5`, "New game updates are available!" `0x0a92c9d6`,
+  "Activity Banned" `0x274fcbf1`, test prompts, etc. The EBOOT does not reference these hashes.
+- Message definitions are content records (tags `0x80a58505`...`0x80a58525`, live at
+  `0x70110b14...` in JOIN68): {0x28, category hash (`0xb57b5899` or `0xc13350ff`), ..., `0x80a5e184`,
+  library `0x80a5843f`, title, body, ..., two hashes}; the urgent one: title `0x84cc7b33`, body
+  `0x40e5f178`, hashes `0xa98ab48b`/`0x9f8f08b9`. The live dialog object (`0x336bfd50`) holds
+  {lib, title}, {lib, null}, {lib, body}.
+- Not the source: the 01.00 state machine `0x401048` maps to 01.24 `0x460b98` (exact) - it is the
+  **incident announcer** ("incident announcer list"; incidents are gameplay events), stepped from
+  `0x2a1348` with the object at `0x1ab5138`. The 01.00 "account message list" maps to `0x38a480` /
+  walker `0x46b7b0` / list via `0x2a33e8` (globals tag +0x18, cached `0x1ab5164`): 144 entries
+  {expression, hash}, expression = typed array (header 0x14 bytes, 8-byte ops {u8 op, i32 arg});
+  its output hashes (`0xf3b26f48`, `0x13bcdd5d`, ...) repeat under different conditions - a
+  generic conditional mapping, not message ids.
+- Open: which backend data selects message `0x80a585xx` (candidates: `--self-flags 2` making a
+  gate true; a universe flag/value; the time in universe +8). Runs dismiss the two dialogs.
