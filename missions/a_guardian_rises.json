@@ -145,6 +145,9 @@
         "seq_enter_wall_done": {
           "0": "$now",
           "4": 1
+        },
+        "trig_enter_wall": {
+          "0": false
         }
       }
     },
@@ -203,6 +206,9 @@
         "trig_ghost_light": {
           "0": true,
           "4": "$now"
+        },
+        "trig_investigate": {
+          "0": false
         }
       }
     },
@@ -260,6 +266,9 @@
               "$player"
             ]
           }
+        },
+        "trig_ghost_light": {
+          "0": false
         }
       }
     },
@@ -276,6 +285,9 @@
         "seq_get_weapon_done": {
           "0": "$now",
           "4": 1
+        },
+        "trig_get_weapon": {
+          "0": false
         }
       }
     },

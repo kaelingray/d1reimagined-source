@@ -1367,3 +1367,54 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   Orbit because you were inactive"); `d1_traverse.py keepalive` nudges the camera every 2 min.
 - The mission script's handovers now run complete (3 + completion sequence) -> +4 s clear (0) and
   next objective 1 (incoming sequence step 1, trigger armed) -> +10 s next objective 5.
+
+## JOIN79-82 (2026-10-02): squad authority, automated walk to the Wall, incidents and pumpkin
+
+- **Shader cache.** JOIN78 crashed at boot while RPCS3 precompiled cached shaders ("[FP] Invalid
+  Src type 3"); programs cached before the CAL/BEM patch were broken. The cache was moved aside
+  (`shaders_cache.before-fpcal-2026-10-02`). Boots work again, but the first visit to each area
+  recompiles (the 113 -> 112 hand-off took 2 minutes in JOIN80).
+- **Squads (JOIN79/80).** Squad state apply and update are gated on bubble authority; details are
+  in `mission-director.md` ("01.24 runtime"). Setting bit 14 of sim+0x844 on the test emulator
+  made a new `sq_ghost` generation spawn `sq_ghost__ghost`, which the client reported in type 6
+  (`sensor_sense_update`). On the highway the Ghost is not visible: in the real mission it stays
+  "inside" the player until The Breach.
+- **Activity-host message names** (01.24 table of string pointers at `0x1898168`, indexed by
+  message type):
+
+  | Types | Names |
+  | --- | --- |
+  | 0-4 | entity_slots_allocated, global_activity_state, world_globals_state, join_request, join_result |
+  | 5-7 | sensor_auth_update, sensor_sense_update, sensor_message |
+  | 11 | replicate_membership |
+  | 15-17 | keepalive request/response, activity_client_request_state_refresh |
+  | 18 | **incident** |
+  | 19-20 | allocate/free_entity_indices |
+  | 21-22 | client_authoritative_data_update, client_identity_update |
+  | 23-26 | claim/purge/abandon entity-slot authority, request_purge_entity_slots |
+  | 27-28 | **reset_entity_slot_authority_mask** and its acknowledgement |
+  | 29-31 | query_entity_slot_authority_mask (and its per-bubble response and response) |
+  | 32 | abdicate_authority |
+  | 36-39 | membership_acknowledgement, send_client_heartbeat, script_state, script_event |
+  | 42-47 | advance_replication_epoch, reservations_failed, lag switch, connection quality, speculative_migration, high_water |
+
+  The host table at `0x18980e0` maps types to handler descriptors:
+  - 18 -> `0xe2e9ec`, payload `0x8080097d`;
+  - 27 -> `0xe2efa8`, payload `0x80800d31`, one u32 stored at activity +0x6444;
+  - 29 -> `0xe2f0ec`, 23 -> `0xe2eb90`, 24 -> `0xe2eda0`.
+
+  The +0x844 squad gate is probably this entity-slot authority mask (to test: host type 27).
+- **Automated walk (JOIN81/82).** `d1_walker.py go` with every third point of
+  `missions/routes/enter_the_wall.json` reached the inside of the Wall in about 3 minutes (JOIN82,
+  no help). JOIN81's first run walked into the pit at spawn; the player respawned under a new
+  entity record, which has to be found again (hook `0x138e24`). Near the Wall the client requests
+  slice set 24 by itself; a host teleport (`{"teleport": "24:0x68935472"}`) completes the switch.
+  A host teleport *without* walking there leaves the player outside the Breach geometry (black
+  screen, no player updates; JOIN80).
+- **pumpkin (JOIN81/82).** In The Breach, the client sends `incident` (type 18) about 4/s. The
+  payload (`0x8080097d`) holds incident type 2665 and a 49-byte body with a time, the player id
+  twice, and the Enter the Wall trigger `0x992bb471/0x1d/30`. After about 100 s the client closes
+  the connection (error pumpkin).
+  - The mission rules matched the first report and advanced the objectives.
+  - Disarming the trigger on that report (JOIN82) did not stop the stream.
+  - Next (JOIN83): echo each incident back (`--ah-echo-incidents`).

@@ -625,6 +625,10 @@ TELEPORT_SETTLE_SECONDS = 10
 # client -> host type 17 {u32 counter, u32 status}: 0x7fffffff while loading, 0x8000000e once the
 # client is in the world (JOIN53: 14 s after the world state, again after each slice-set switch)
 AH_CLIENT_PROGRESS, CLIENT_IN_WORLD = 17, 0x8000000E
+# Activity-host message 18 is "incident" (name table at 0x1898168 in 01.24; payload 0x8080097d:
+# incident type list, 49-byte body). Clients send them (JOIN81: "player entered trigger"), and hosts
+# can send them too (handler 0xe2e9ec).
+AH_INCIDENT = 18
 
 
 def client_in_world(body):
@@ -1496,6 +1500,7 @@ def handle(conn, peer, args):
     # Mission clock (per connection = per activity instance until instances are shared: debt in
     # notes/architecture-multiplayer.md); with "ready" the timed steps wait for the client
     client_ready_at = None
+    incident_echoed = False
 
     def mission_t0(world_anchor):
         return world_anchor if args.mission_clock == "world" else client_ready_at
@@ -1698,6 +1703,14 @@ def handle(conn, peer, args):
                     client_ready_at = time.time()
                     log(f"[{tag}] client in world (type 17 {CLIENT_IN_WORLD:#x})"
                         + ("; mission clock started" if args.mission_clock == "ready" else ""))
+                if ah_type == AH_INCIDENT and args.ah_echo_incidents and tx is not None:
+                    # EXPERIMENT (JOIN83): the client re-sends an incident (e.g. "player entered
+                    # trigger") about 4/s and leaves with pumpkin after ~100 s (JOIN81/82); hosts
+                    # may send incidents too (handler 0xe2e9ec), so try broadcasting it back.
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_INCIDENT, body, host_id)))
+                    if not incident_echoed:
+                        log(f"[{tag}] incident echoed to the client (type {AH_INCIDENT})")
+                    incident_echoed = True
                 if ah_type == AH_CLIENT_STATE:
                     try:
                         record = client_slice_record(args.activity_schema, body)
@@ -2263,6 +2276,8 @@ def parse_args(argv=None):
     ap.add_argument("--ah-baselines-watch", type=Path, metavar="FILE",
                     help="with --ah-heartbeat, re-read this --ah-baselines list whenever it changes and "
                          "add default baselines for objects not sent yet (bubbles loaded after the join)")
+    ap.add_argument("--ah-echo-incidents", action="store_true",
+                    help="EXPERIMENT: send every client incident (type 18) straight back to the client")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]),
                                                       WORLD_HEARTBEAT if (v.split(":") + ["11"])[1] == "world"
                                                       else int((v.split(":") + ["11"])[1], 0)),
