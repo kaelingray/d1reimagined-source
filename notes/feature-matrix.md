@@ -46,7 +46,7 @@ Last full review: 2026-10-02.
 | Talent grids, perks, stats, Light | NOT INVESTIGATED | - | - | - |
 | Unlock / universe flags | PARTIAL | `--self-flags`, `--universe-flag-values 3390=1,309=1` | flag meanings mostly unknown | map flags to definitions |
 | Grimoire, records | NOT INVESTIGATED | - | - | - |
-| Player database (durable store) | PARTIAL | JSON stores `SIGNON_LOCAL/characters-0124.json` | not transactional, no schema/migrations | design schema (scope 43) |
+| Player database (durable store) | PARTIAL | `server/player_db.py` schema v1 (accounts, characters, items, idempotent grant ledger, migrations; concurrency tests) and `bap_server.py --player-db`; legacy JSON store still the default | not yet used in a live run; inventory families not served from it | live run with `--player-db`; serve inventory from it |
 
 ## 3. Orbit, Director, matchmaking
 
@@ -67,8 +67,8 @@ Last full review: 2026-10-02.
 | Simulation packets (roster, sim player spawn grant, game mode, baselines, clock) | WORKING | JOIN24+ | - | multi-peer roster |
 | Game mode state incl. **activity quarantine** | WORKING | `game_mode()` sends bubble -1 (JOIN27) | real per-activity quarantine values unknown | find what the original host sent |
 | World state (peer slot, group records, **version**) | WORKING | `world_state_delta()`; version fix (JOIN39) | - | full peer client-state relay |
-| Slice-set switch protocol (group record 1, per-peer byte) | WORKING | `--ah-group-switch` (JOIN39) | - | regression test in a live run |
-| Host-driven teleport (peer client state @0x208) | INVESTIGATING | live pokes JOIN39; `--ah-teleport` implemented, first run JOIN41 | - | verify JOIN41, then wire into mission scripts |
+| Slice-set switch protocol (group record 1, per-peer byte, world-state version) | WORKING | `--ah-group-switch`; version per session; JOIN39, JOIN51 | finish must not bump the version (JOIN43-50 black screen) | automated regression run |
+| Host-driven teleport (world-state group request @0x2e48+0x21c8) | WORKING | `--ah-teleport ZONE@SECONDS` (state 1 -> finish state 3 at the client's arrival report, same version; dropped on arrival); JOIN51 | - | move into mission scripts (per activity instance) |
 | Client state relay (type 21 -> world-state peer slot) | NOT INVESTIGATED | - | - | needed for multiplayer |
 | Heartbeats / host timeout (baboon) | WORKING | `--ah-heartbeat` (01.24 runs use `1:-1` from JOIN41) | an empty type-11 heartbeat clears the teleport field | - |
 | Multi-client activity sessions | NOT INVESTIGATED | - | - | scope 44 |
@@ -80,7 +80,7 @@ Last full review: 2026-10-02.
 | Arrival in 112 (highway), visible world, HUD, walking | WORKING | JOIN27 | Urgent Message dialogs | - |
 | Arrival in 113 (intro cinematic slice set) | WORKING | JOIN32-35 | one GPU device loss (JOIN33) | - |
 | Revival cinematics `pf_104_res`, `pf_104_res_fp` | WORKING | JOIN34/35 with the director; null object refs fix (JOIN32) | letterbox stale strip (rendering) | - |
-| Hand-off 113 -> 112 after the cinematic | PARTIAL | JOIN39 (group switch + hand-written request) | not yet automatic | JOIN41 (`--ah-teleport`) |
+| Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN52 with both cinematics | - | - |
 | "New Mission" banner (incoming sequence) | WORKING | JOIN31 | - | - |
 | Objective display / waypoints | INVESTIGATING | handler `0x3a68c0` runs; nothing shown (JOIN31) | gate `0x20f048` (definition +0x24) | trace in 112 after the hand-off |
 | Player triggers, Ghost light cinematic, weapon pickup | NOT INVESTIGATED (01.24) | script exists (`missions/a_guardian_rises.json`) | - | after objectives |

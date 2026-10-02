@@ -525,3 +525,12 @@ class ClientSliceRecord(unittest.TestCase):
         record = bap.client_slice_record(schema, writer.data())
         self.assertEqual((record["target"], record["peer_byte"], record["state"]), ((112, 0x811C9DC5), 2, 2))
         self.assertIn("peer byte 2", bap.client_slice_state(schema, writer.data()))
+
+
+class MissionTeleports(unittest.TestCase):
+    def test_teleport_steps(self):
+        mission = {"objects": {}, "steps": [{"at": 175, "teleport": 112}, {"at": 20, "set": {}},
+                                            {"at": 400, "teleport": "0x18"}]}
+        self.assertEqual(bap.mission_teleports(mission), [(112, 175.0), (24, 400.0)])
+        timed, reactive = bap.expand_mission(mission, {})
+        self.assertEqual((timed, reactive), ([], []))

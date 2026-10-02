@@ -945,6 +945,8 @@ def expand_mission(mission, schema):
         if "at" in step:
             timed += [(float(step["at"]), change) for change in changes]
             continue
+        if "teleport" in step and not changes:
+            raise ValueError(f"mission step {number}: a teleport step needs \"at\"")
         on = step.get("on")
         if not on or "type" not in on:  # "type": "any" matches every client message type
             raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
@@ -958,6 +960,13 @@ def expand_mission(mission, schema):
         on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
         reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
     return timed, reactive
+
+
+def mission_teleports(mission):
+    """Timed host teleports of a mission script: steps {"at": SECONDS, "teleport": SLICE_SET}
+    (e.g. the intro's hand-off 113 -> 112) as [(slice set, seconds)]."""
+    return [(int(str(step["teleport"]), 0), float(step["at"])) for step in mission.get("steps", [])
+            if "teleport" in step and "at" in step]
 
 
 def validate_mission_states(schema, timed, reactive):
@@ -1431,7 +1440,9 @@ def handle(conn, peer, args):
     teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
     teleport_targeted = False  # the client has requested the teleport's slice set
     teleport_finish_at = None  # when to send the finishing state 3 (--ah-teleport-finish-delay)
-    teleport_done = False  # the --ah-teleport request has completed (do not start it again)
+    # timed host teleports of this activity session: [(slice set, seconds after the join)] from
+    # --ah-teleport and the mission script's {"at": S, "teleport": SET} steps, in order
+    teleport_plan = sorted(args.ah_teleports, key=lambda entry: entry[1])
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1661,7 +1672,7 @@ def handle(conn, peer, args):
                                     # the teleport is complete: stop publishing the request (JOIN39,
                                     # the only run that showed 112 after a hand-off, never had it in
                                     # the host's world state once the client had arrived)
-                                    teleport_now, teleport_done = None, True
+                                    teleport_now = None
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                          *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
@@ -1805,10 +1816,11 @@ def handle(conn, peer, args):
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                     log(f"[{tag}] world state: teleport to {teleport_now[1]} finished (state 3, after "
                         f"{args.ah_teleport_finish_delay:g} s)")
-                if (world_params and args.ah_teleport and zone_joined is not None and teleport_now is None
-                        and not teleport_done):
-                    zone_t, after = args.ah_teleport
+                if world_params and teleport_plan and zone_joined is not None and teleport_now is None:
+                    zone_t, after = teleport_plan[0]
                     if time.time() - zone_joined >= after:
+                        teleport_plan.pop(0)
+                        teleport_targeted, teleport_finish_at = False, None
                         teleport_now = (1, zone_t, 0x811C9DC5)
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                  *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
@@ -2174,6 +2186,7 @@ def parse_args(argv=None):
                                              character_layout(args.schema))
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
+    args.ah_teleports = [args.ah_teleport] if args.ah_teleport else []
     if args.ah_mission:
         if not args.activity_schema:
             ap.error("--ah-mission needs the activity schema (--activity-schema)")
@@ -2185,6 +2198,7 @@ def parse_args(argv=None):
             ap.error(f"--ah-mission: {exc}")
         args.ah_object_at += timed
         args.ah_on += reactive
+        args.ah_teleports += mission_teleports(json.loads(args.ah_mission.read_text(encoding="utf-8")))
     args.ah_object_at.sort(key=lambda entry: entry[0])
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")

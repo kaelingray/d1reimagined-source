@@ -1144,3 +1144,12 @@ is 0. `FINAL124_JOIN48` tests the timing with `--ah-teleport-finish-delay 20`, s
   area is visible** (with the Urgent Message, as in JOIN39); after dismissing it, 3 s of stick
   input walk forward (07:59:07). The hand-off from the intro slice set to gameplay now works
   without any memory writes.
+
+`FINAL124_JOIN52` (director lets both cinematics end on their own, `--ah-teleport 112@175`): the
+hand-off completes (arrival 08:09:48) and the load reaches progress **43** like JOIN39, but the
+screen stays black: the fade-to-black at the end of `pf_104_res_fp` is not lifted. JOIN53 stops
+the cinematics (+130/+175 s) before the teleport (+180 s), as the original script does.
+
+Teleports are now part of the mission-script format: a step `{"at": SECONDS, "teleport": SET}`
+adds a timed host teleport for the activity session (`mission_teleports()`); `--ah-teleport`
+adds one more. The proxy keeps a per-session plan (`teleport_plan`) instead of one global flag.
