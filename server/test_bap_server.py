@@ -534,3 +534,13 @@ class MissionTeleports(unittest.TestCase):
         self.assertEqual(bap.mission_teleports(mission), [(112, 175.0), (24, 400.0)])
         timed, reactive = bap.expand_mission(mission, {})
         self.assertEqual((timed, reactive), ([], []))
+
+    def test_mission_clock(self):
+        self.assertEqual(bap.mission_clock({}), "world")
+        self.assertEqual(bap.mission_clock({"clock": "ready"}), "ready")
+        with self.assertRaises(ValueError):
+            bap.mission_clock({"clock": "arrival"})
+        # type 17 {counter, status}: loading vs in world (JOIN53)
+        self.assertFalse(bap.client_in_world(bytes.fromhex("000000007fffffff")))
+        self.assertTrue(bap.client_in_world(bytes.fromhex("000000018000000e")))
+        self.assertFalse(bap.client_in_world(bytes(2)))

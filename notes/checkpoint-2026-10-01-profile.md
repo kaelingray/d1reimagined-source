@@ -1164,3 +1164,34 @@ for this mission. Recipe (proxy): `--ah-bubble-states -1,0=0,3=0,14=0 --ah-zone 
 --ah-world-state 113:1 --ah-group-switch --ah-roster 0 --ah-sim-player ... --ah-game-mode ...
 --ah-baselines @baselines_highway_0124_all.txt --ah-heartbeat 1 --ah-sim-clock 30 --ah-mission
 missions/a_guardian_rises.json`.
+
+## JOIN54: the intro from the repository script; why no objective shows
+
+Mission scripts can declare `"clock": "ready"`: the `at` times then count from the client's first
+in-world report (type 17 status `0x8000000e`, 14 s after the world state in JOIN53) instead of
+from the stand-in's send time (`mission_clock()`, `client_in_world()`); `a_guardian_rises.json`
+uses it. `FINAL124_JOIN54` ran the unmodified repository script (no `--ah-teleport`, no timing
+copy): in world 08:36:40, revival +20 s, fp +90 s, both stopped, teleport at +140 s (08:39:01),
+112 current 08:40:13, gameplay with radar after dismissing the Urgent Message. No objective.
+
+Objective trace (hooks + owned-memory reads):
+- The client holds 8 objective instances (kind 0x20: 3, 7, 11, 14, 17, 20, 23, 26), created
+  when 112 loads; the apply handler `0x3a68c0` runs for all 8 with default state, then once for
+  `0x607bbc30` with our state {0: 1, 0x2c0: -1}. Its definition (handle `0x80cb911e` + 0x464,
+  resolved like the handler does) holds its own id {`0x992bb471`, `0x20000003`} at +0x24, so the
+  state reached the right objective.
+- The handler only computes "active for the local player" (+0x404, from the mask +0x3d0) and
+  posts the HUD event when **definition +0x4c is 1 or 5** (01.00: +0x44 == 1). All 8 mission
+  objectives have **0** there and a null name hash at +0x60 - the definitions are generic, so
+  the gate `0x20f048` (resolves +0x24 through the "client reference manager") is never reached.
+- The remaining handler code feeds 10 waypoint markers (`0x57a7d8`) from state +4/+8/+0xa
+  (nav object references) and +0x405, which is the index of state **+0x2e0** (a hash, schema
+  kind 9) in a 20-entry list of the **Investment Globals** client interface (`0x2a4a88`, list
+  at globals tag +0xc8). The script sets none of these.
+- The HUD data provider `0x3a72a4` (builds a display record: state, def +0x4c, +0x405, nav
+  refs, progress +0x3d4/+0x3d8) is reached from `0x392d08`, which runs every tick but walks
+  kind-0x20 objects of a registry that lists none; the provider never ran.
+- Open: what makes these objectives displayable - a state field the host fills (+0x2e0 hash,
+  nav refs, +0x2c8/+0x2dc strings), registration in the activity's objective registry, or
+  def +0x4c. JOIN55 tests def +0x4c = 1 (memory write, test only) with the objective step moved
+  to 20 s after arrival in 112 (reactive on the slice-set report).

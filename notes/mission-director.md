@@ -124,12 +124,20 @@ and `--ah-on` (reactive) changes:
   - `regex`: over the body hex, as `--ah-on` does.
 
   Each rule fires once.
+- **`{"at": S, "teleport": SET}`**: a host teleport of the activity session to slice set SET
+  (world-state group request; see `checkpoint-2026-10-01-profile.md`, JOIN51-53).
+- **`"clock"`** (top level): where `at` counts from. `"world"` (default) = when the stand-in sends
+  the world state and simulation; `"ready"` = the client's first in-world report (type 17 status
+  `0x8000000e`, about 14 s later on 01.24), so the script's times do not depend on load time.
+  The clock is per connection today (one activity instance per connection - a multiplayer debt in
+  `architecture-multiplayer.md`); with shared instances it belongs to the activity instance.
 
-`missions/a_guardian_rises.json` follows the reference recording (`feature-gaps.md`):
+`missions/a_guardian_rises.json` (clock `ready`) follows the reference recording (`feature-gaps.md`):
 1. Revival cinematic `pf_104_res` at +20 s.
-2. The first-person part `pf_104_res_fp` at +90 s.
-3. At +140 s: "Enter the Wall" (objective 3 with mask −1), its incoming sequence, and its armed
-   trigger `0x1d/30`.
+2. The first-person part `pf_104_res_fp` at +90 s; both stopped at +90/+135 s (a cinematic that
+   ends on its own leaves a black fade, JOIN52).
+3. At +140 s: host teleport 113 -> 112, "Enter the Wall" (objective 3 with mask −1), its incoming
+   sequence, and its armed trigger `0x1d/30`.
 4. On that trigger: complete it and start "Find a Weapon" (7).
 5. On `0x1d/34`: "Grab the Rifle" (11), and arm the Ghost-light cinematic trigger (`0x1d/37`
    -> `pf_104a_pwr`).

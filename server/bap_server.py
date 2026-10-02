@@ -618,6 +618,14 @@ AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
 # then current 112 with state 0).
 AH_CLIENT_STATE, CLIENT_STATE_TYPE = 21, 0x80800C56
 
+# client -> host type 17 {u32 counter, u32 status}: 0x7fffffff while loading, 0x8000000e once the
+# client is in the world (JOIN53: 14 s after the world state, again after each slice-set switch)
+AH_CLIENT_PROGRESS, CLIENT_IN_WORLD = 17, 0x8000000E
+
+
+def client_in_world(body):
+    return len(body) >= 8 and struct.unpack_from(">I", body, 4)[0] == CLIENT_IN_WORLD
+
 
 def client_slice_record(schema, body):
     """The slice-set part of a type-21 client state delta: {"current"/"target": (index, hash),
@@ -960,6 +968,19 @@ def expand_mission(mission, schema):
         on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
         reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
     return timed, reactive
+
+
+# Where a mission script's "at" times count from: "world" = when the stand-in sends the world
+# state / simulation (the original behaviour), "ready" = the client's first in-world report
+# (type 17 0x8000000e), so a script's times do not depend on how long the client takes to load.
+MISSION_CLOCKS = ("world", "ready")
+
+
+def mission_clock(mission):
+    clock = mission.get("clock", "world")
+    if clock not in MISSION_CLOCKS:
+        raise ValueError(f"mission clock {clock!r} is not one of {MISSION_CLOCKS}")
+    return clock
 
 
 def mission_teleports(mission):
@@ -1427,6 +1448,12 @@ def handle(conn, peer, args):
     baselines_stamp = None  # modification time of --ah-baselines-watch when last read
     objects_applied = 0  # --ah-object-at entries already sent (they are sorted by time)
     reactions_fired = set()  # --ah-on rules already triggered (each fires once)
+    # Mission clock (per connection = per activity instance until instances are shared: debt in
+    # notes/architecture-multiplayer.md); with "ready" the timed steps wait for the client
+    client_ready_at = None
+
+    def mission_t0(world_anchor):
+        return world_anchor if args.mission_clock == "world" else client_ready_at
     reactions_due = []  # (absolute time, object spec, rule text) scheduled by --ah-on
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
@@ -1618,6 +1645,10 @@ def handle(conn, peer, args):
                 body = payload[21:21 + ah_len]
                 record_event(ev="ah", n=number, host=f"{host_id:#x}", ah_type=ah_type, body=body.hex())
                 log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+                if ah_type == AH_CLIENT_PROGRESS and client_ready_at is None and client_in_world(body):
+                    client_ready_at = time.time()
+                    log(f"[{tag}] client in world (type 17 {CLIENT_IN_WORLD:#x})"
+                        + ("; mission clock started" if args.mission_clock == "ready" else ""))
                 if ah_type == AH_CLIENT_STATE:
                     try:
                         record = client_slice_record(args.activity_schema, body)
@@ -1816,9 +1847,10 @@ def handle(conn, peer, args):
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                     log(f"[{tag}] world state: teleport to {teleport_now[1]} finished (state 3, after "
                         f"{args.ah_teleport_finish_delay:g} s)")
-                if world_params and teleport_plan and zone_joined is not None and teleport_now is None:
+                if (world_params and teleport_plan and mission_t0(zone_joined) is not None
+                        and teleport_now is None):
                     zone_t, after = teleport_plan[0]
-                    if time.time() - zone_joined >= after:
+                    if time.time() - mission_t0(zone_joined) >= after:
                         teleport_plan.pop(0)
                         teleport_targeted, teleport_finish_at = False, None
                         teleport_now = (1, zone_t, 0x811C9DC5)
@@ -1841,8 +1873,8 @@ def handle(conn, peer, args):
                     # (e.g. a bubble's objective sensor, kind 3): replace the object's state.
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     changed = False
-                    while (objects_applied < len(args.ah_object_at)
-                           and time.time() - joined_ >= args.ah_object_at[objects_applied][0]):
+                    while (objects_applied < len(args.ah_object_at) and mission_t0(joined_) is not None
+                           and time.time() - mission_t0(joined_) >= args.ah_object_at[objects_applied][0]):
                         # (not `seconds`: that is the heartbeat interval used below - reusing it
                         # delayed the next heartbeat by the object's time, TEST361 baboon)
                         due_at, spec = args.ah_object_at[objects_applied]
@@ -2187,6 +2219,7 @@ def parse_args(argv=None):
     args.activity_schema = (investment.load_schema(args.activity_schema)
                             if args.activity_schema.exists() else None)
     args.ah_teleports = [args.ah_teleport] if args.ah_teleport else []
+    args.mission_clock = "world"
     if args.ah_mission:
         if not args.activity_schema:
             ap.error("--ah-mission needs the activity schema (--activity-schema)")
@@ -2199,6 +2232,10 @@ def parse_args(argv=None):
         args.ah_object_at += timed
         args.ah_on += reactive
         args.ah_teleports += mission_teleports(json.loads(args.ah_mission.read_text(encoding="utf-8")))
+        try:
+            args.mission_clock = mission_clock(json.loads(args.ah_mission.read_text(encoding="utf-8")))
+        except ValueError as exc:
+            ap.error(f"--ah-mission: {exc}")
     args.ah_object_at.sort(key=lambda entry: entry[0])
     if not ipaddress.IPv4Address(args.bind).is_loopback:
         ap.error("listener must be loopback")
