@@ -3,7 +3,9 @@ import threading
 import unittest
 from pathlib import Path
 
-from player_db import ConflictError, ID_BASE, PlayerDB
+import json
+
+from player_db import ConflictError, ID_BASE, PlayerDB, import_store
 
 
 class PlayerDBTest(unittest.TestCase):
@@ -104,6 +106,29 @@ class PlayerDBTest(unittest.TestCase):
             self.assertTrue(all(i["character_id"] == characters[a] for i in items))
             all_ids += [i["item_instance_id"] for i in items]
         self.assertEqual(len(all_ids), len(set(all_ids)))
+
+    def test_import_legacy_store_keeps_ids(self):
+        legacy = Path(self.dir.name) / "characters.json"
+        legacy.write_text(json.dumps({"0xa3d4a2c8fbea6b9": {"id": 0x0A3D4A2C8FBEA6BA, "request": "c0e0",
+                                                           "account_data": "e000"}}), encoding="utf-8")
+        self.assertEqual(import_store(self.db, legacy), [(0xA3D4A2C8FBEA6B9, 0x0A3D4A2C8FBEA6BA)])
+        self.assertEqual(import_store(self.db, legacy), [(0xA3D4A2C8FBEA6B9, 0x0A3D4A2C8FBEA6BA)])  # idempotent
+        chars = self.db.characters(0xA3D4A2C8FBEA6B9)
+        self.assertEqual([(c["character_id"], c["slot"], c["create_request"]) for c in chars],
+                         [(0x0A3D4A2C8FBEA6BA, 0, bytes.fromhex("c0e0"))])
+        self.assertEqual(self.db.account(0xA3D4A2C8FBEA6B9)["account_data"], bytes.fromhex("e000"))
+        # a new character on the same account takes the next slot and a fresh id
+        new = self.db.create_character(0xA3D4A2C8FBEA6B9, b"x", "501:new")
+        self.assertNotEqual(new, 0x0A3D4A2C8FBEA6BA)
+        self.assertEqual({c["character_id"]: c["slot"] for c in self.db.characters(0xA3D4A2C8FBEA6B9)}[new], 1)
+
+    def test_allocator_skips_imported_ids(self):
+        self.db.ensure_account(1, "p")
+        self.db.import_character(1, ID_BASE + 1, b"x", "import:1")
+        allocated = self.db.create_character(1, b"y", "c")
+        self.assertNotEqual(allocated, ID_BASE + 1)
+        with self.assertRaises(ValueError):
+            self.db.import_character(1, ID_BASE + 1, b"x", "import:other-key")
 
 
 if __name__ == "__main__":

@@ -131,9 +131,15 @@ class PlayerDB:
 
     @staticmethod
     def _allocate(db):
-        (counter,) = db.execute("SELECT next FROM id_allocator WHERE name='object'").fetchone()
-        db.execute("UPDATE id_allocator SET next = next + 1 WHERE name='object'")
-        return ID_BASE + counter
+        while True:
+            (counter,) = db.execute("SELECT next FROM id_allocator WHERE name='object'").fetchone()
+            db.execute("UPDATE id_allocator SET next = next + 1 WHERE name='object'")
+            candidate = ID_BASE + counter
+            # imported legacy ids live in the same 64-bit space: never hand one out twice
+            taken = db.execute("SELECT 1 FROM characters WHERE character_id=? UNION ALL "
+                               "SELECT 1 FROM items WHERE item_instance_id=?", (candidate, candidate)).fetchone()
+            if not taken:
+                return candidate
 
     # accounts
     def ensure_account(self, account_id, display_name):
@@ -177,6 +183,27 @@ class PlayerDB:
                        "VALUES (?, ?, ?, ?, ?)", (character_id, account_id, free[0], create_request, time.time()))
             db.execute("INSERT INTO grants VALUES (?, ?, ?, ?, ?, ?)",
                        (idempotency_key, account_id, character_id, "create_character",
+                        json.dumps({"character_id": character_id}), time.time()))
+            return character_id
+
+    def import_character(self, account_id, character_id, create_request, idempotency_key):
+        """Adopt a character created elsewhere (e.g. the legacy JSON store) with its existing id,
+        so running sessions and recipes that name that id keep working. Idempotent by key."""
+        with self._tx() as db:
+            done = db.execute("SELECT result FROM grants WHERE idempotency_key=?", (idempotency_key,)).fetchone()
+            if done:
+                return json.loads(done[0])["character_id"]
+            if db.execute("SELECT 1 FROM characters WHERE character_id=?", (character_id,)).fetchone():
+                raise ValueError(f"character id {character_id:#x} already exists")
+            used = {row[0] for row in db.execute(
+                "SELECT slot FROM characters WHERE account_id=? AND deleted_at IS NULL", (account_id,))}
+            free = [slot for slot in range(3) if slot not in used]
+            if not free:
+                raise ValueError(f"account {account_id:#x} has no free character slot")
+            db.execute("INSERT INTO characters (character_id, account_id, slot, create_request, created_at) "
+                       "VALUES (?, ?, ?, ?, ?)", (character_id, account_id, free[0], create_request, time.time()))
+            db.execute("INSERT INTO grants VALUES (?, ?, ?, ?, ?, ?)",
+                       (idempotency_key, account_id, character_id, "import_character",
                         json.dumps({"character_id": character_id}), time.time()))
             return character_id
 
@@ -239,3 +266,45 @@ class PlayerDB:
                              (character_id, location, equip_slot, item_instance_id, account_id, expected_version))
             if cur.rowcount != 1:
                 raise ConflictError(f"item {item_instance_id:#x} changed or not owned by {account_id:#x}")
+
+
+def import_store(db, path):
+    """Import the legacy single-client JSON store ({account: {id, request, account_data}}) into a
+    PlayerDB; safe to run again (idempotency keys). Returns [(account, character)]."""
+    store = json.loads(Path(path).read_text(encoding="utf-8"))
+    imported = []
+    for account_hex, entry in store.items():
+        account_id = int(account_hex, 16)
+        db.ensure_account(account_id, account_hex)
+        if "id" in entry and "request" in entry:
+            character_id = db.import_character(account_id, int(entry["id"]), bytes.fromhex(entry["request"]),
+                                               f"import:{account_hex}:{int(entry['id']):#x}")
+            imported.append((account_id, character_id))
+        if entry.get("account_data") and not (db.account(account_id) or {}).get("account_data"):
+            db.set_account_data(account_id, bytes.fromhex(entry["account_data"]))
+    return imported
+
+
+if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description="player database tools")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    imp = sub.add_parser("import-store", help="import the legacy JSON character store")
+    imp.add_argument("db", type=Path)
+    imp.add_argument("store", type=Path)
+    show = sub.add_parser("show", help="list accounts and characters")
+    show.add_argument("db", type=Path)
+    args = ap.parse_args()
+    database = PlayerDB(args.db)
+    try:
+        if args.cmd == "import-store":
+            for account_id, character_id in import_store(database, args.store):
+                print(f"account {account_id:#x}: character {character_id:#x}")
+        else:
+            for (account_id,) in database._conn().execute("SELECT account_id FROM accounts ORDER BY account_id"):
+                chars = ", ".join(f"slot {c['slot']}: {c['character_id']:#x}" for c in database.characters(account_id))
+                data = (database.account(account_id) or {}).get("account_data")
+                print(f"account {account_id:#x} ({chars or 'no characters'}; account data "
+                      f"{len(data) if data else 0} bytes; schema v{database.schema_version()})")
+    finally:
+        database.close()

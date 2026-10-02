@@ -29,6 +29,14 @@ character, fireteam or activity instance), unlocks and Grimoire, vendor state (g
 player), sessions and presence, fireteams and members, matchmaking tickets/groups, activity and
 world instances with memberships, reward history.
 
+## Migration from the legacy JSON store
+
+`python server/player_db.py import-store DB characters-0124.json` adopts each stored character
+with its existing id (`import_character`, idempotency key `import:<account>:<id>`, refuses an
+id that exists) and the account's 701 user data, so recipes naming the character id keep
+working. The allocator skips ids that imports occupy. `python server/player_db.py show DB` lists
+accounts and characters. The local test database is `SIGNON_LOCAL/players-0124.db` (outside Git).
+
 ## Operational rules
 
 - SQLite in WAL mode; one connection per thread (`PlayerDB` keeps a thread-local connection).
