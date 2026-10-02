@@ -1306,3 +1306,25 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   the position bytes in memory (`0x31e0bf70`, `0x31ef7a40`, `0x31e0d760`; transient buffers)
   are not authoritative either. The authoritative state (physics / character controller) is not
   found yet, so traversal walks with the pad (`goto`/`route`).
+
+## JOIN67: fixed emulator, automatic walking toward the Wall
+
+- RPCS3 rebuilt on this PC (Build Tools 2026 already at `F:\VS\BuildTools`; incremental build
+  `F:\d1\lukespc-import\dev\build-d1.cmd`, about 6 minutes) with `patches/rpcs3-fp-cal-ignore.patch`
+  and deployed to `RPCS3_FINAL124_SMOKE001` (old binary `rpcs3.before-fpcal.exe`). The walk went
+  through the area that had crashed JOIN65 (z -26 east of the spawn) without a freeze.
+- Terrain (112, start): spawn ~(383, -962, 12) on the junkyard plateau (z ~5-12); to the east
+  the ground falls away (z -20...-32, the player dies around z -32 and respawns near the spawn);
+  cars and a building block straight lines. The Enter the Wall volume (z 4.8) is on the plateau
+  level, the `tv_ab` bands (z -17) on the lower level.
+- `d1_traverse.py`: align-before-walk (probe steps, damped camera turns; facing from a backward
+  step when blocked ahead), drop detection, and an escape that tries headings around the target
+  bearing with sprint + jump. Best result: from the spawn to (322, -901) - about 100 units short
+  of the volume - in ~10 minutes; not reached.
+- 13:23:19: after many falls the client sent a new activity-host request (`ahp req`), closed the
+  activity connection and rejoined the activity from its start (intro 113 again). Cause not
+  identified (possibly the activity restart a client does when it cannot respawn at a checkpoint).
+- After the rejoin the client showed **"You've obtained a Grimoire unlock!"** - a client-side
+  Grimoire event (BAP side not traced yet).
+- Next: record a known-good route once (`d1_traverse.py record`, walked by hand) and replay it
+  (`replay`); breadcrumb routes go in `missions/routes/`.

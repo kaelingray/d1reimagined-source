@@ -9,6 +9,8 @@ frame), and the position is the float triple at record +0x40 (x, y, z; z up) - J
     python scripts/d1_traverse.py --manifest <run>-processes.json where
     python scripts/d1_traverse.py --manifest <run>-processes.json goto X Y [--radius 2]
     python scripts/d1_traverse.py --manifest <run>-processes.json find 0x992bb471 0x2c 87
+    python scripts/d1_traverse.py --manifest <run>-processes.json record routes/wall.json  (walk by hand)
+    python scripts/d1_traverse.py --manifest <run>-processes.json replay routes/wall.json
     python scripts/d1_traverse.py --manifest <run>-processes.json teleport X Y Z   (test only;
         JOIN66: the game rewrites entity +0x40 every frame, so this does not move the player yet)
 """
@@ -140,7 +142,14 @@ def facing_now(player, pad, ms=350):
     pad.hold(["W"], ms)
     time.sleep(0.15)
     b = player.position()
-    return heading(a, b) if math.dist(a[:2], b[:2]) > 0.15 else None
+    if math.dist(a[:2], b[:2]) > 0.15:
+        return heading(a, b)
+    pad.hold(["S"], ms)  # blocked ahead: a backward step shows the facing too
+    time.sleep(0.15)
+    c = player.position()
+    if math.dist(b[:2], c[:2]) > 0.15:
+        return heading(b, c) + math.pi
+    return None
 
 
 class Steering:
@@ -162,20 +171,54 @@ class Steering:
         self.rate = -math.radians(120) / 1000
         self.log("camera: calibration failed, assuming L turns -120 deg/s")
 
-    def turn(self, error):
+    def turn(self, error, gain=0.7):
         if self.rate is None:
             self.calibrate()
         key = "L" if error * self.rate > 0 else "J"
-        ms = min(900, abs(error / self.rate))
+        ms = min(700, gain * abs(error / self.rate))
         if ms >= 20:
             self.pad.hold([key], ms)
+
+    def align(self, target, tolerance=math.radians(15), tries=6):
+        """Turn toward the target using short probe steps; returns the last heading error."""
+        error = None
+        for _ in range(tries):
+            here = self.player.position()
+            facing = facing_now(self.player, self.pad, 250)
+            if facing is None:
+                return error
+            error = angle_diff(facing, heading(self.player.position(), target))
+            if abs(error) <= tolerance:
+                return error
+            self.turn(error)
+        return error
+
+
+def escape(player, pad, steering, bearing, log=print):
+    """Blocked: try absolute headings around the target bearing (sprint + jump) and keep the
+    first one that makes progress."""
+    for offset in (45, -45, 90, -90, 135, -135, 180):
+        direction = bearing + math.radians(offset)
+        here = player.position()
+        steering.align((here[0] + 50 * math.cos(direction), here[1] + 50 * math.sin(direction)),
+                       tolerance=math.radians(25), tries=3)
+        start = player.position()
+        pad.hold(["W", "G", "X"], 1200)
+        time.sleep(0.2)
+        end = player.position()
+        if end[2] < start[2] - 6:
+            pad.hold(["S"], 800)
+            continue
+        if math.dist(start[:2], end[:2]) > 1.5:
+            log(f"  escaped heading {math.degrees(direction):.0f} -> {[round(v, 1) for v in end]}")
+            return True
+    return False
 
 
 def goto(player, pad, target, radius=2.0, max_steps=200, step_ms=1200, sprint=True, log=print,
          steering=None):
     """Closed loop: step forward, measure heading from the motion, turn toward the target."""
     steering = steering or Steering(player, pad, log)
-    unstick = [("hop", ["X", "W"], 0), ("left", None, 60), ("right", None, -120), ("back", ["S"], 0)]
     blocked = 0
     for step in range(max_steps):
         here = player.position()
@@ -183,32 +226,28 @@ def goto(player, pad, target, radius=2.0, max_steps=200, step_ms=1200, sprint=Tr
         if distance <= radius:
             log(f"reached {target} at {[round(v, 1) for v in here]}")
             return True
-        pad.hold(["W", "G"] if sprint else ["W"], min(step_ms, max(300, distance * 400)))
+        steering.align(target)
+        pad.hold(["W", "G"] if sprint else ["W"], min(step_ms, max(300, distance * 300)))
         time.sleep(0.15)
         after = player.position()
+        if after[2] < here[2] - 6:
+            log(f"step {step}: dropping ({here[2]:.1f} -> {after[2]:.1f}); backing up")
+            pad.hold(["S"], 800)
         moved = math.dist(here[:2], after[:2])
         if moved > 25:
             log(f"step {step}: jumped {moved:.0f} units to {[round(v, 1) for v in after]} (respawn?)")
             continue
         if moved < 0.3:
-            name, keys, angle = unstick[blocked % len(unstick)]
             blocked += 1
-            log(f"step {step}: blocked at {[round(v, 1) for v in after]}; {name}")
-            if keys:
-                pad.hold(keys, 700)
-            else:
-                if steering.rate is None:
-                    steering.calibrate()
-                steering.turn(math.radians(angle))
-                pad.hold(["W", "G"], 900)
+            log(f"step {step}: blocked at {[round(v, 1) for v in after]}; probing")
+            if escape(player, pad, steering, heading(after, target), log):
+                blocked = 0
             continue
         blocked = 0
         facing = heading(here, after)
         error = angle_diff(facing, heading(after, target))
         log(f"step {step}: at {[round(v, 1) for v in after]} dist {distance:.1f} "
             f"facing {math.degrees(facing):.0f} error {math.degrees(error):+.0f}")
-        if abs(error) > math.radians(10):
-            steering.turn(error)
     return False
 
 
@@ -220,6 +259,26 @@ def route(player, pad, waypoints, radius=3.0, log=print):
             log(f"gave up before {point}")
             return False
     return True
+
+
+def record(player, path, spacing=3.0, log=print):
+    """Breadcrumbs: sample the position while someone walks the route (Ctrl+C to stop); saves
+    [[x, y, z], ...] whenever the player moved `spacing` units. Replay with `replay`."""
+    points = [list(player.position())]
+    try:
+        while True:
+            time.sleep(0.3)
+            here = list(player.position())
+            if math.dist(here[:2], points[-1][:2]) > 25:
+                log(f"jump to {[round(v, 1) for v in here]} (respawn?) - recording restarts here")
+                points.append(here)
+            elif math.dist(here[:2], points[-1][:2]) >= spacing:
+                points.append(here)
+                log(f"{len(points)}: {[round(v, 1) for v in here]}")
+            path.write_text(json.dumps(points), encoding="utf-8")
+    except KeyboardInterrupt:
+        path.write_text(json.dumps(points), encoding="utf-8")
+        log(f"saved {len(points)} points to {path}")
 
 
 def find_object(mem, group, kind, index, low=0x30000000, high=0x80000000, chunk=16 << 20):
@@ -258,6 +317,12 @@ def main():
     t.add_argument("x", type=float)
     t.add_argument("y", type=float)
     t.add_argument("z", type=float)
+    rec = sub.add_parser("record", help="save breadcrumbs while the route is walked by hand")
+    rec.add_argument("path", type=Path)
+    rp = sub.add_parser("replay", help="walk a recorded route")
+    rp.add_argument("path", type=Path)
+    rp.add_argument("--radius", type=float, default=2.5)
+    rp.add_argument("--every", type=int, default=2, help="use every Nth recorded point")
     f = sub.add_parser("find")
     f.add_argument("group", type=lambda v: int(v, 0))
     f.add_argument("kind", type=lambda v: int(v, 0))
@@ -278,6 +343,13 @@ def main():
             pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
             goto(player, Pad(pid), (args.x, args.y), args.radius, step_ms=args.step_ms,
                  sprint=not args.no_sprint)
+        if args.cmd == "record":
+            record(player, args.path)
+        if args.cmd == "replay":
+            pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
+            points = json.loads(args.path.read_text(encoding="utf-8"))
+            route(Player(mem, entity), Pad(pid), [tuple(p[:2]) for p in points[::args.every]] + [tuple(points[-1][:2])],
+                  args.radius)
         if args.cmd == "teleport":
             pid = emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"]
             write_position(mem, pid, entity, (args.x, args.y, args.z))
