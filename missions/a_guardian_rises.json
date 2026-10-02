@@ -87,6 +87,10 @@
     },
     {
       "at": 140,
+      "teleport": 112
+    },
+    {
+      "at": 140,
       "set": {
         "obj_enter_wall": {
           "0": 1,

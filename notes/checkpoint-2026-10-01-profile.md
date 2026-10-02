@@ -1153,3 +1153,14 @@ the cinematics (+130/+175 s) before the teleport (+180 s), as the original scrip
 Teleports are now part of the mission-script format: a step `{"at": SECONDS, "teleport": SET}`
 adds a timed host teleport for the activity session (`mission_teleports()`); `--ah-teleport`
 adds one more. The proxy keeps a per-session plan (`teleport_plan`) instead of one global flag.
+
+`FINAL124_JOIN53` (director stops `pf_104_res` at +130 s and `pf_104_res_fp` at +175 s, teleport
+112 at +180 s; mission timing = repository script +40 s): both cinematics play, the hand-off
+completes and **gameplay 112 is visible with the HUD**; stick input walks. The complete automatic
+intro of A Guardian Rises (arrival 113 -> revival cinematics -> host teleport -> gameplay 112)
+works on 01.24 with no memory writes. The repository script now carries the teleport itself
+(`{"at": 140, "teleport": 112}`, after the fp stop at 135), so `--ah-teleport` is no longer needed
+for this mission. Recipe (proxy): `--ah-bubble-states -1,0=0,3=0,14=0 --ah-zone 113:0x811c9dc5
+--ah-world-state 113:1 --ah-group-switch --ah-roster 0 --ah-sim-player ... --ah-game-mode ...
+--ah-baselines @baselines_highway_0124_all.txt --ah-heartbeat 1 --ah-sim-clock 30 --ah-mission
+missions/a_guardian_rises.json`.

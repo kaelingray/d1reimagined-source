@@ -86,3 +86,10 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
   a matching u64 id (+0x20) and returns the record's +0x3c field (+0x60 relative to the scan
   base). So a pickup first resolves the loot object against client-side investment data keyed by
   a 64-bit id (OBSERVED: code; the meaning of kind 4 is OPEN).
+- Kind 4 in that table is investment **family 4 = "self"** (`FAMILY_TYPES` in `bap_server.py`,
+  table `0xb6068c`): the 257 records are the client's family-object cache {family, u64 root}.
+  So the pickup sender first looks up the player's own self-family object - the per-character
+  investment state is where loot state lives (fits `c_cui_investment_character_loot_state_component`).
+  INFERRED next step: loot nonces/baubles are fields of the self family (or a family-4 child
+  object) that the backend pushes via qz updates; decode the self family's loot-related fields
+  in the 01.24 schema.

@@ -68,7 +68,7 @@ Last full review: 2026-10-02.
 | Game mode state incl. **activity quarantine** | WORKING | `game_mode()` sends bubble -1 (JOIN27) | real per-activity quarantine values unknown | find what the original host sent |
 | World state (peer slot, group records, **version**) | WORKING | `world_state_delta()`; version fix (JOIN39) | - | full peer client-state relay |
 | Slice-set switch protocol (group record 1, per-peer byte, world-state version) | WORKING | `--ah-group-switch`; version per session; JOIN39, JOIN51 | finish must not bump the version (JOIN43-50 black screen) | automated regression run |
-| Host-driven teleport (world-state group request @0x2e48+0x21c8) | WORKING | `--ah-teleport ZONE@SECONDS` (state 1 -> finish state 3 at the client's arrival report, same version; dropped on arrival); JOIN51 | - | move into mission scripts (per activity instance) |
+| Host-driven teleport (world-state group request @0x2e48+0x21c8) | WORKING | mission step `{"at": S, "teleport": SET}` or `--ah-teleport ZONE@SECONDS` (state 1 -> finish state 3 at the client's arrival report, same version; dropped on arrival); JOIN51/53 | one world per proxy connection (debt) | per activity instance with several peers |
 | Client state relay (type 21 -> world-state peer slot) | NOT INVESTIGATED | - | - | needed for multiplayer |
 | Heartbeats / host timeout (baboon) | WORKING | `--ah-heartbeat` (01.24 runs use `1:-1` from JOIN41) | an empty type-11 heartbeat clears the teleport field | - |
 | Multi-client activity sessions | NOT INVESTIGATED | - | - | scope 44 |
@@ -80,7 +80,7 @@ Last full review: 2026-10-02.
 | Arrival in 112 (highway), visible world, HUD, walking | WORKING | JOIN27 | Urgent Message dialogs | - |
 | Arrival in 113 (intro cinematic slice set) | WORKING | JOIN32-35 | one GPU device loss (JOIN33) | - |
 | Revival cinematics `pf_104_res`, `pf_104_res_fp` | WORKING | JOIN34/35 with the director; null object refs fix (JOIN32) | letterbox stale strip (rendering) | - |
-| Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN52 with both cinematics | - | - |
+| Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN53 after both cinematics (stopped by the script) | a cinematic left to end on its own keeps the screen black (JOIN52) | - |
 | "New Mission" banner (incoming sequence) | WORKING | JOIN31 | - | - |
 | Objective display / waypoints | INVESTIGATING | handler `0x3a68c0` runs; nothing shown (JOIN31) | gate `0x20f048` (definition +0x24) | trace in 112 after the hand-off |
 | Player triggers, Ghost light cinematic, weapon pickup | NOT INVESTIGATED (01.24) | script exists (`missions/a_guardian_rises.json`) | - | after objectives |
