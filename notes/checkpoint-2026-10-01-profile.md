@@ -1275,3 +1275,29 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   u5 type, u3, object ref +4, i32 +0xc, kind-13 value +0x10, object ref +0x20). Entry 0 =
   {type 0..3, ref `0x992bb471/0x2c/87` (`obj_m0_phase00_m1._nav_point`)}, others type -1: no
   waypoint seen (the square on the radar edge is there without markers too). Open.
+
+## JOIN63-65: traversal tooling
+
+- Waypoints: objective state **+4** is the marker target (the handler's 10 markers copy state
+  +4/+8/+0xa; `0x3a67ac` picks a style entry from the definition by state +0xc). Setting +4 to
+  nav point `0x992bb471/0x2c/87` showed nothing, in normal view or nav mode (JOIN63). Open.
+- **Player position**: the world controller's follow-player step (`0x352968`) calls `0x138e24`
+  with the local player's entity record in r4 (`0x602c33c0` in JOIN63/65); the position is the
+  float triple at record **+0x40** (x, y, z; z up). Verified by walking (W/S/D move it, idle
+  keeps it). `scripts/rpcs3_position_scan.py` (memory diff) was too noisy; the hook found it.
+- **Content positions**: content records carry their own id {group, kind << 24 | index}; the
+  floats next to it are the object's geometry (`d1_traverse.py find`). 112 spawn ~(383, -962, 12).
+  Enter the Wall trigger volume `0x3a/77`: polygon (375.6,-800.9) (375.8,-790.5) (315.8,-789.5)
+  (315.3,-821.7) (319.6,-819.2) (320.0,-799.8), z 4.8; `tv_in_wall` `0x3a/70`: x 316-330,
+  y -823..-794; path bands `tv_ab`/`tv_ab_1` (62/63): curves through (411, ...), (397.6, -875/-845),
+  (364.6, -907/-877), (344.2, -913/-883), (323, -914/-884), (208.9, -896/-866), (181.6, -805/-775),
+  z -17; nav point `0x2c/87` at (141.3, -609.0, 4.1).
+- `scripts/d1_traverse.py`: `where`, `find GROUP KIND INDEX`, `goto X Y`, `route X,Y ...` -
+  closed-loop walking with the keyboard pad (W + sprint, camera J/L calibrated from the motion,
+  unstick moves). JOIN65 runs: a building blocks the direct line north at y ~ -954; one run
+  dropped to z -32 and respawned near the spawn.
+- JOIN63 ended with **"STILL THERE? You have been returned to Orbit because you were
+  inactive"** after minutes without input; JOIN64 stayed on the title screen (slow boot past
+  the wrapper's Cross presses); JOIN65 froze in RSX on an **"Unimplemented FP CAL
+  instruction"** (RPCS3 bug; fix prepared in `patches/rpcs3-fp-cal-ignore.patch`, not built -
+  this PC has no MSVC).

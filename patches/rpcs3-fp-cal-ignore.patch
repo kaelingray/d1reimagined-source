@@ -1,0 +1,18 @@
+diff --git a/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp b/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp
+index 0178ba5ef..cddd0be64 100644
+--- a/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp
++++ b/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp
+@@ -189,8 +189,11 @@ namespace rsx::assembler
+ 			case RSX_FP_OPCODE_BRK:
+ 				break;
+ 			case RSX_FP_OPCODE_CAL:
+-				// Unimplemented. Also unused by the RSX compiler
+-				fmt::throw_exception("Unimplemented FP CAL instruction.");
++				// Unimplemented. Also unused by the RSX compiler, so a CAL means the ucode is not a real
++				// program (Destiny 01.24 binds such program memory in the Cosmodrome). Do as
++				// FragmentProgramDecompiler does: log it and continue without a flow control change,
++				// instead of terminating the RSX thread.
++				rsx_log.error("Unimplemented FP CAL instruction at 0x%x (ignored)", pc * 16);
+ 				break;
+ 			case RSX_FP_OPCODE_FENCT:
+ 				break;
