@@ -1098,3 +1098,23 @@ the original script does.
 
 The world-state version counter is now owned per activity-host connection (`world_version` in
 `handle()`), no longer process-global (multiplayer debt fixed while it was new).
+
+### Black screen after the automatic hand-off (JOIN44-47)
+
+Every automatic run completes the protocol (request latched, group switch, finish, client reports
+current 112, record 0 moved) with engine current 112, table active 112, request machine idle and
+the player record bound (+0x50 = live handle), stage `activity:in_world` - yet the screen stays
+black with the loading glyph for minutes, walking shows nothing:
+- JOIN44: director stops both cinematics (+130/+175 s) before `--ah-teleport 112@180`: black.
+  Writing zeros to the request afterwards (live) changed nothing.
+- JOIN45: `--ah-heartbeat 1:world` (new mode: resend the current world state with an unchanged
+  version instead of an empty type-11 message): black.
+- JOIN46: no director (no cinematics), teleport at +60 s: black.
+- JOIN47: as JOIN46 with the empty type-11 heartbeats JOIN39 used: black; timeline frames are dark
+  from the switch through finish and "reached", so it is not caused by the "reached" update.
+In JOIN39 (hand-written request) the world was visible 00:45:39, about 17 s after the finish was
+written, which itself came ~17 s after the client's state-4 report; the automatic runs send the
+finish immediately at state 4. `0x391068` (finish check) returns 0 - and lets `0x72932c` run -
+only when `0xc07b30(request)` is non-zero and sim+0x18 (copy of the other group record @0x21c0)
+is 0. `FINAL124_JOIN48` tests the timing with `--ah-teleport-finish-delay 20`, screenshots every
+5 s from the switch.

@@ -1430,6 +1430,7 @@ def handle(conn, peer, args):
     world_version_now = 0  # last version sent (heartbeat resends reuse it)
     teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
     teleport_targeted = False  # the client has requested the teleport's slice set
+    teleport_finish_at = None  # when to send the finishing state 3 (--ah-teleport-finish-delay)
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1627,9 +1628,13 @@ def handle(conn, peer, args):
                         if (teleport_now is not None and teleport_now[0] == 1
                                 and record.get("target", (None,))[0] == teleport_now[1]):
                             teleport_targeted = True
+                        if (teleport_now is not None and teleport_now[0] == 1 and teleport_finish_at is None
+                                and teleport_targeted and record.get("state") == 4):
+                            # finish after the configured settle time (sent from the timer below)
+                            teleport_finish_at = time.time() + args.ah_teleport_finish_delay
                         if (teleport_now is not None and teleport_now[0] == 1 and world_params
                                 and (current == teleport_now[1]
-                                     or (teleport_targeted and record.get("state") == 4))):
+                                     or (teleport_finish_at is not None and time.time() >= teleport_finish_at))):
                             # The client reports the arrival (record state 4) but only reports the
                             # set as current after the request completes, which needs state 3
                             # (JOIN42: copy waiting in state 3 with the engine already in 112).
@@ -1779,6 +1784,15 @@ def handle(conn, peer, args):
                             objects_.extend(default_baseline(*b) for b in new)
                             sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                             log(f"[{tag}] {len(new)} new baselines from {args.ah_baselines_watch}")
+                if (teleport_now is not None and teleport_now[0] == 1 and teleport_finish_at is not None
+                        and time.time() >= teleport_finish_at and world_params):
+                    teleport_now = (3, teleport_now[1], teleport_now[2])
+                    data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                             *world_params[1:], target=switch_target, teleport=teleport_now,
+                                             version=(world_version_now := next(world_version)))
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
+                    log(f"[{tag}] world state: teleport to {teleport_now[1]} finished (state 3, after "
+                        f"{args.ah_teleport_finish_delay:g} s)")
                 if world_params and args.ah_teleport and zone_joined is not None and teleport_now is None:
                     zone_t, after = args.ah_teleport
                     if time.time() - zone_joined >= after:
@@ -2077,6 +2091,9 @@ def parse_args(argv=None):
                     help="with --ah-world-state, SECONDS after the join ask the group to move to slice set "
                          "ZONE (world-state group block @0x21c8, state 1; state 3 once the client reports it) - "
                          "the host's hand-off after the intro cinematic (113 -> 112)")
+    ap.add_argument("--ah-teleport-finish-delay", type=float, default=0.0, metavar="SECONDS",
+                    help="with --ah-teleport, wait this long after the client reports its arrival (slice "
+                         "record state 4) before sending the finishing state 3")
     ap.add_argument("--ah-group-switch", action="store_true",
                     help="with --ah-world-state, answer the client's slice-set requests (type 21 target) "
                          "the way the host does: group record 1 = {target, state 1, local peer} while "
