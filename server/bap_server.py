@@ -999,10 +999,8 @@ def default_baseline(key, kind, index, has_b=False):
     return {0: key, 4: kind, 6: index}, None, None, has_b
 
 
-_world_state_version = 0
-
-
-def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0, target=None):
+def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0, target=None, teleport=None,
+                      version=1):
     """Body of host type 11 (0x25715c): one present bit, then a world-state delta (type
     0x808009ed, decoded with 0x1ca478 onto the host simulation's copy at +0xbc0 and posted to
     the world controller as RPC 6). Peer slot 0 is the joining client: its identity (@0x10)
@@ -1017,12 +1015,12 @@ def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0, tar
     # = identities to search for the local slot (0x1c9ab8).
     if not 0 <= group_peer < 20:
         raise ValueError("group peer must be a world-state peer slot (0-19)")
-    # u32 @0: the world-state version. The world controller re-reads the group records
-    # (0x351df0) only when it differs from its cached copy (engine +0x3b0, initially 0), so a
-    # constant 0 meant no group record - current or switch - ever reached the client.
-    global _world_state_version
-    _world_state_version += 1
-    values = {0: _world_state_version, 8: {0: {0: request[0x10], 0x28: {0: request[0x38]}}},
+    # u32 @0 `version`: the world-state version of this activity instance. The world controller
+    # re-reads the group records (0x351df0) only when it differs from its cached copy (engine
+    # +0x3b0, initially 0), so a constant 0 meant no group record ever reached the client. The
+    # caller owns the counter (one per activity instance's world state), never the process.
+    client_state = {0: request[0x38]}
+    values = {0: version, 8: {0: {0: request[0x10], 0x28: client_state}},
               0x5028: 1, 0x502C: 1}
     if zone is not None:
         records = {0xD8 * i: {0: -1} for i in range(1, 40)}  # unused groups: index -1
@@ -1034,6 +1032,15 @@ def world_state_delta(schema, request, zone=None, peer_byte=1, group_peer=0, tar
             # zone with state 1 and the local slot as its peer.
             records[0xD8] = {0: target, 8: {1: 1, 2: group_peer}, 0x28: {0x10: {0: peer_byte}}}
         values[0x2E48] = {0: records}
+    if teleport is not None:
+        # Group block @0x2e48 + 0x21c8 (0x80800bf9 = {u3 state, {u8, i10 slice-set index, u32
+        # hash}}): the host's slice-set request for the whole group. The world state is copied to
+        # the activity simulation at +0x70, so this lands at sim+0x5080, where the request machine
+        # 0x3adf8c latches state 1 into a pending switch (0x35097c), waits for the engine to reach
+        # the index and finishes on state 3 (0x391068 / 0x72932c). Not optional: every world state
+        # without it reads as "no request" (JOIN39/40).
+        state, index, name_hash = teleport
+        values.setdefault(0x2E48, {})[0x21C8] = {0: state, 4: {0: 0, 4: index, 8: name_hash}}
     w = investment.BitWriter()
     w.put(1, 1)
     investment.encode_into(w, schema, WORLD_STATE_TYPE, values)
@@ -1412,6 +1419,12 @@ def handle(conn, peer, args):
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
     switch_target = None  # --ah-group-switch: zone set published in group record 1
+    # World-state version counter of the activity instance this connection hosts. The stand-in
+    # hosts one instance per activity-host connection; a multi-client host will own one counter
+    # per world instance and share it between that instance's peers.
+    world_version = itertools.count(1)
+    teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
+    teleport_targeted = False  # the client has requested the teleport's slice set
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1582,10 +1595,25 @@ def handle(conn, peer, args):
                                 and record["peer_byte"] != world_params[1]):
                             world_params = (world_params[0], record["peer_byte"], *world_params[2:])
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:], target=switch_target)
+                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: per-peer byte -> {world_params[1]} (client slice record)")
+                        if (teleport_now is not None and teleport_now[0] == 1
+                                and record.get("target", (None,))[0] == teleport_now[1]):
+                            teleport_targeted = True
+                        if (teleport_now is not None and teleport_now[0] == 1 and world_params
+                                and (current == teleport_now[1]
+                                     or (teleport_targeted and record.get("state") == 4))):
+                            # The client reports the arrival (record state 4) but only reports the
+                            # set as current after the request completes, which needs state 3
+                            # (JOIN42: copy waiting in state 3 with the engine already in 112).
+                            teleport_now = (3, teleport_now[1], teleport_now[2])
+                            data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                            conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                                              bc_notification(AH_ESTABLISH, data, host_id)))
+                            log(f"[{tag}] world state: teleport to {teleport_now[1]} reached (state 3)")
                         if args.ah_group_switch and world_params:
                             # The host side of a slice-set switch: publish the requested set in
                             # group record 1 while record 0 keeps the current one; once the client
@@ -1593,7 +1621,7 @@ def handle(conn, peer, args):
                             if (switch_target is not None and current == switch_target):
                                 zone_now, switch_target = switch_target, None
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                         *world_params[1:])
+                                                         *world_params[1:], teleport=teleport_now, version=next(world_version))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                                   bc_notification(AH_ESTABLISH, data, host_id)))
                                 log(f"[{tag}] world state: zone set {zone_now} reached, switch cleared")
@@ -1601,7 +1629,7 @@ def handle(conn, peer, args):
                                   and wanted != switch_target and current != wanted):
                                 switch_target = wanted
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                         *world_params[1:], target=switch_target)
+                                                         *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                                   bc_notification(AH_ESTABLISH, data, host_id)))
                                 log(f"[{tag}] world state: switch {zone_now} -> {switch_target} (group record 1)")
@@ -1609,7 +1637,7 @@ def handle(conn, peer, args):
                                 and wanted >= 0 and wanted != zone_now):
                             zone_now = wanted
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:])
+                                                     *world_params[1:], teleport=teleport_now, version=next(world_version))
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: zone set -> {zone_now} (following the client)")
@@ -1648,7 +1676,7 @@ def handle(conn, peer, args):
                                         int(parts[2], 0) if len(parts) > 2 else 0)
                         zone_now = None if zone == "peer" else int(zone, 0)
                         establish = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                      *world_params[1:])
+                                                      *world_params[1:], teleport=teleport_now, version=next(world_version))
                         zone_joined = time.time()
                     for subtype, data in ((AH_ESTABLISH, establish), (AH_STATE, activity_state(args.activity_schema, args.ah_map, args.ah_world, args.ah_checksum,
                                                                       args.ah_bubbles, args.ah_zone,
@@ -1719,6 +1747,14 @@ def handle(conn, peer, args):
                             objects_.extend(default_baseline(*b) for b in new)
                             sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                             log(f"[{tag}] {len(new)} new baselines from {args.ah_baselines_watch}")
+                if world_params and args.ah_teleport and zone_joined is not None and teleport_now is None:
+                    zone_t, after = args.ah_teleport
+                    if time.time() - zone_joined >= after:
+                        teleport_now = (1, zone_t, 0x811C9DC5)
+                        data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                                 *world_params[1:], target=switch_target, teleport=teleport_now, version=next(world_version))
+                        conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
+                        log(f"[{tag}] world state: teleport request -> slice set {zone_t} (state 1)")
                 if world_params and args.ah_zone_schedule:
                     # A zone change the way the real host moves a player between bubbles: a new
                     # world-state delta (type 11) naming another zone set in group record 0.
@@ -1726,7 +1762,7 @@ def handle(conn, peer, args):
                     due = [z for z, sec in args.ah_zone_schedule if time.time() - zone_joined >= sec]
                     if due and due[-1] != zone_now:
                         zone_now = due[-1]
-                        data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:])
+                        data = world_state_delta(args.activity_schema, world_params[0], zone_now, *world_params[1:], teleport=teleport_now, version=next(world_version))
                         conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                         log(f"[{tag}] world state: zone set -> {zone_now}")
                 if sim_build and objects_applied < len(args.ah_object_at):
@@ -2004,6 +2040,11 @@ def parse_args(argv=None):
                     help="with --ah-roster and --ah-heartbeat, replicate this object state from SECONDS "
                          "after the join, replacing any earlier state of the object (repeatable; e.g. "
                          "step an objective sensor: 60@G:3:I:0x808004fa:1={\"0\": {\"0\": 1}})")
+    ap.add_argument("--ah-teleport", type=lambda v: (int(v.split("@")[0], 0), float(v.split("@")[1])),
+                    metavar="ZONE@SECONDS",
+                    help="with --ah-world-state, SECONDS after the join ask the group to move to slice set "
+                         "ZONE (world-state group block @0x21c8, state 1; state 3 once the client reports it) - "
+                         "the host's hand-off after the intro cinematic (113 -> 112)")
     ap.add_argument("--ah-group-switch", action="store_true",
                     help="with --ah-world-state, answer the client's slice-set requests (type 21 target) "
                          "the way the host does: group record 1 = {target, state 1, local peer} while "

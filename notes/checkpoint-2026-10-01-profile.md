@@ -1068,3 +1068,33 @@ two dialogs the HUD radar is up (00:46:02) and 3 s of stick input walk forward (
 113 -> 112 hand-off after the intro works end to end, with the request record still written by
 hand (state 1 to start, state 3 to finish). Still open: the host message that carries the
 sim+0x5080 record (it is cleared again within about a second of each write).
+
+## The host teleport: world-state group request (JOIN40-43)
+
+`FINAL124_JOIN40` (arrive 113, `--ah-heartbeat 1:-1` = no empty type-11 heartbeats): a hand-written
+state-3 record at sim+0x5080 survives 8 s in four trials; with heartbeats (JOIN39) it was cleared
+~0.25 s after each heartbeat. So the world-state message writes it. The world-state receiver
+(`0x1d97a4` -> `0x1da894`, the 01.00 `0x1c8944`) copies the world state into the simulation at
+**sim+0x70**, so sim+0x5080 = world-state offset 0x5010 = the group block (`0x80800bd7` @0x2e48)
+field **+0x21c8: `0x80800bf9` {u3 state, {u8, i10 slice-set index, u32 hash}}** - the host's
+slice-set request for the whole group (sim+0x5078 = +0x21c0, `0x80800c93` {u8, u3, i32}, the
+other record). Both are non-optional, so every world state the stand-in sent wrote zeros there.
+(`FINAL124_JOIN41` put the request in the peer client state @0x208 instead - wrong field, never
+arrived.) `world_state_delta(teleport=...)` now writes the group field; **`--ah-teleport ZONE@SECONDS`**
+sends state 1 at the given time and state 3 when the client - having targeted ZONE - reports its
+slice record state 4 (it reports the set as current only after state 3; JOIN42 sat in the copy's
+state 3 with the engine already in 112).
+
+`FINAL124_JOIN42`: request at 01:27:53, latched ~90 s later (01:29:21; the request machine waits,
+probably for the first-person cinematic), group switch, engine in 112; stuck before the fix above.
+`FINAL124_JOIN43` (arrive 113, director starts both cinematics, `--ah-teleport 112@175`,
+`--ah-group-switch`, heartbeat `1:-1`): **fully automatic** - request 01:40:03, client target 112
+(01:40:48), group record 1, record state 3 -> 4, state 3 sent (01:41:10), client reports **current
+112** (01:42:11), record 0 moved to 112. Engine current 112, table active 112, group copy 112,
+request machine idle, player record +0x50 bound, stage `activity:in_world` - but the screen stays
+black with the loading glyph for 3.5 min (the first-person cinematic ran to its natural end and
+was never stopped; JOIN39 without cinematics showed the world). JOIN44 stops the cinematics as
+the original script does.
+
+The world-state version counter is now owned per activity-host connection (`world_version` in
+`handle()`), no longer process-global (multiplayer debt fixed while it was new).

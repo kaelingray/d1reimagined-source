@@ -509,3 +509,19 @@ class GroupSwitch(unittest.TestCase):
                          (113, 112, 1, 0))
         settled = groups(bap.world_state_delta(schema, {0x10: {}, 0x38: {}}, 112, 1, 0))
         self.assertEqual((settled[0][0], settled[0xD8][0]), (112, -1))
+
+
+class ClientSliceRecord(unittest.TestCase):
+    def test_peer_byte_is_reported(self):
+        # JOIN38: target 112 with the client's i8 @0x140 (engine +0x1d0) = 2
+        path = Path(__file__).resolve().parents[2] / "d1xenia-data" / "ps3_updates" / "types_01.24.json"
+        if not path.exists():
+            self.skipTest("01.24 schema not available")
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        writer = bap.investment.BitWriter()
+        writer.put(1, 1)
+        bap.investment.encode_into(writer, schema, bap.CLIENT_STATE_TYPE,
+                                   {0xB8: {0xA0: {0: 112, 4: 0x811C9DC5}, 0x140: 2, 0x142: 2}})
+        record = bap.client_slice_record(schema, writer.data())
+        self.assertEqual((record["target"], record["peer_byte"], record["state"]), ((112, 0x811C9DC5), 2, 2))
+        self.assertIn("peer byte 2", bap.client_slice_state(schema, writer.data()))
