@@ -81,3 +81,8 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
 - `investment_loot_object_manager`: registered in `0x2b3fb8`.
 - `loot-bauble`: used in `0x2b2c00` (the bauble object, same module as the loot manager).
 - `investment_activity_reward_tracker`: registered in `0x482268` (BAP/investment block).
+- In `0xcbb6c4`: `0x47c1a0()` returns `*(0x1ad5fa0 + 4)` (an investment/BAP singleton) and
+  `0x47d684(table, 4, &id)` scans a **257-entry table of 0x40-byte records** for kind byte 4 with
+  a matching u64 id (+0x20) and returns the record's +0x3c field (+0x60 relative to the scan
+  base). So a pickup first resolves the loot object against client-side investment data keyed by
+  a 64-bit id (OBSERVED: code; the meaning of kind 4 is OPEN).

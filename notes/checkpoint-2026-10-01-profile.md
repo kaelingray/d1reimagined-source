@@ -1118,3 +1118,29 @@ finish immediately at state 4. `0x391068` (finish check) returns 0 - and lets `0
 only when `0xc07b30(request)` is non-zero and sim+0x18 (copy of the other group record @0x21c0)
 is 0. `FINAL124_JOIN48` tests the timing with `--ah-teleport-finish-delay 20`, screenshots every
 5 s from the switch.
+
+### Root cause and fix: the finish must not bump the world-state version (JOIN48-51)
+
+- JOIN48 (`--ah-teleport-finish-delay 20`) and JOIN49 (no input at all in 113) stay black too,
+  so neither timing nor dismissing the dialogs in 113 matters. The Urgent Message never appears
+  in these runs (in JOIN39 it appeared together with the world).
+- Bootflow diff JOIN39 vs JOIN49: the world-controller component `*(0x1abc8b8)` +0x84 reads
+  **0x2b** in JOIN39 and **0x13** in JOIN49 (load progress stuck part-way).
+- JOIN50 hooks: the progress poster (01.24 `0x355d54`, matched from 01.00 `0x3204a8`) does not
+  fire during the hand-off; `0x72932c` runs once at the finish (it requests respawns, event 0x52
+  via `0x3a86c0`, for local players whose entity slot +0x644 is -1); the client keeps sending
+  type 36 (`0x80800bd0`, an incrementing u32: 3, 4, 5, 6 every ~23 s) and type 17
+  {4, 0x8000000e} - JOIN39 sent its next type 36 only 1.5 min later.
+- Cause: every automatic finish was sent as a **new world-state version**, and the world
+  controller re-reads the group records on each new version (`0x351df0`). Group record 1 still
+  names the switch to 112 with state 1 and our peer, while the engine is already in 112, so the
+  phase updates start the switch again and the load stalls. JOIN39 sent nothing versioned between
+  the switch and the client's arrival (its finish was written into the simulation directly).
+- **Fix:** the finish is sent with the **same version** (the simulation copies the whole world
+  state - and so the request - on every message, but the group records are not re-read), and the
+  request is dropped from the world state once the client reports the target as current.
+- `FINAL124_JOIN51` (arrive 113, no director, empty heartbeats, `--ah-teleport 112@60`): switch
+  07:56:44, finish 07:57:06, client current 112 at 07:57:49, and from **07:57:52 the gameplay
+  area is visible** (with the Urgent Message, as in JOIN39); after dismissing it, 3 s of stick
+  input walk forward (07:59:07). The hand-off from the intro slice set to gameplay now works
+  without any memory writes.

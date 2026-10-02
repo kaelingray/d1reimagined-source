@@ -1431,6 +1431,7 @@ def handle(conn, peer, args):
     teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
     teleport_targeted = False  # the client has requested the teleport's slice set
     teleport_finish_at = None  # when to send the finishing state 3 (--ah-teleport-finish-delay)
+    teleport_done = False  # the --ah-teleport request has completed (do not start it again)
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
 
     def host_tick():
@@ -1639,8 +1640,14 @@ def handle(conn, peer, args):
                             # set as current after the request completes, which needs state 3
                             # (JOIN42: copy waiting in state 3 with the engine already in 112).
                             teleport_now = (3, teleport_now[1], teleport_now[2])
+                            # same version: the simulation copies the world state (and so the
+                            # request) on every message, but the world controller re-reads the group
+                            # records only on a new version - re-reading record 1 (the switch to
+                            # the set the engine is already in) restarted the switch phases and
+                            # left the screen black (JOIN43-50)
                             data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                                     *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
+                                                     *world_params[1:], target=switch_target, teleport=teleport_now,
+                                                     version=world_version_now)
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: teleport to {teleport_now[1]} reached (state 3)")
@@ -1650,6 +1657,11 @@ def handle(conn, peer, args):
                             # reports the target as current, move record 0 and clear record 1.
                             if (switch_target is not None and current == switch_target):
                                 zone_now, switch_target = switch_target, None
+                                if teleport_now is not None and teleport_now[1] == zone_now:
+                                    # the teleport is complete: stop publishing the request (JOIN39,
+                                    # the only run that showed 112 after a hand-off, never had it in
+                                    # the host's world state once the client had arrived)
+                                    teleport_now, teleport_done = None, True
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                          *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
@@ -1789,11 +1801,12 @@ def handle(conn, peer, args):
                     teleport_now = (3, teleport_now[1], teleport_now[2])
                     data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                              *world_params[1:], target=switch_target, teleport=teleport_now,
-                                             version=(world_version_now := next(world_version)))
+                                             version=world_version_now)  # same version (see above)
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                     log(f"[{tag}] world state: teleport to {teleport_now[1]} finished (state 3, after "
                         f"{args.ah_teleport_finish_delay:g} s)")
-                if world_params and args.ah_teleport and zone_joined is not None and teleport_now is None:
+                if (world_params and args.ah_teleport and zone_joined is not None and teleport_now is None
+                        and not teleport_done):
                     zone_t, after = args.ah_teleport
                     if time.time() - zone_joined >= after:
                         teleport_now = (1, zone_t, 0x811C9DC5)
