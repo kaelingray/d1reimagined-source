@@ -93,3 +93,16 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
   INFERRED next step: loot nonces/baubles are fields of the self family (or a family-4 child
   object) that the backend pushes via qz updates; decode the self family's loot-related fields
   in the 01.24 schema.
+- Pickup sender `0xcbb6c4` (2026-10-02, OBSERVED code): after the self-family lookup it sends,
+  when the network flag (bit 1 of the byte at `*0x1a93690`) is set, the named network message
+  **`loot_component_send_pickup_message`** (`0x276c44`, 0x38-byte payload, handler table
+  `0x1886af8`: `0xcbb5d4`, `0xcbb600`, `0xcbb60c`, `0xcbb6c4`, `0xcbba18`, `0xcbbafc`, `0xcbbb04`)
+  - i.e. a pickup is reported to the activity's authority, not straight to the investment
+  server; otherwise it calls `0x472518` with the loot object's byte +0x1d8 (a local path that
+  looks up id 0x259 = 601 through a virtual call and posts a 0x50-byte message via `0x475d50` /
+  `0x47676c`; whether that is BAP service 601 is OPEN). The loot object keeps a u64 at +0x208,
+  a sent flag +0x1c6 and a count +0x1c8.
+- Service 601 (`0x3bf631f4`): request {u3, {i32, u64}, i32}, response {status} {{i32, u64}, i32}
+  - the shape of an item claim ({source kind, {item hash, instance}, quantity} -> granted
+  {item hash, new instance}, quantity). INFERRED; to confirm with a live pickup (needs the
+  Breach rifle pickup or enemy drops, i.e. traversal / AI).
