@@ -72,7 +72,8 @@ later. Current code is mapped to them.
 | One world per activity-host connection; client always roster slot 0, world-state peer slot 0 | proxy (`--ah-roster 0`, `world_state_delta`) | two clients in "the same" activity get two private worlds | activity-host service owning world instances; peers join an instance; roster and peer slots allocated per instance |
 | Activity-host behaviour configured by process arguments (`--ah-zone`, `--ah-teleport`, mission script) | proxy CLI | one configuration for every client of the process | per-instance configuration from the activity-instance service (activity definition + script) |
 | World-state version counter | fixed 2026-10-02: per connection (`world_version` in `handle()`) | was process-global before | per world instance once instances are shared |
-| Mission director timeline relative to the connection's join | `--ah-mission` | each client runs its own copy | script state per activity instance, events from all members |
+| Mission director timeline relative to the connection's join or its client's in-world report (`clock`) | `--ah-mission` | each client runs its own copy | script state per activity instance, events from all members |
+| Debug live control file (`--ah-control`) | proxy | a line applies to every connected client | operator console on the activity-instance service, addressed by instance id |
 | Constant mm/ahp replies | `--mm-rsp`, `--ahp-reply` | every client "matches" alone | matchmaking/fireteam service |
 
 ## 5. Rules for new code

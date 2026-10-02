@@ -976,6 +976,35 @@ def expand_mission(mission, schema):
 MISSION_CLOCKS = ("world", "ready")
 
 
+def control_steps(path, offset, objects, schema):
+    """DEBUG TOOL (--ah-control): mission-script steps appended to a file, one JSON object per
+    line ({"set": {NAME: {offset: value}}}, names from the mission's "objects"), applied live.
+    Returns ([object specs], new offset, [errors]). Each connection reads from the file size at
+    its start, so earlier lines are not replayed. Replacement: an operator console on the
+    activity-instance service (notes/architecture-multiplayer.md)."""
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return [], offset, []
+    if size <= offset:
+        return [], size, []
+    with path.open("rb") as f:
+        f.seek(offset)
+        data = f.read(size - offset)
+    end = data.rfind(b"\n") + 1  # only complete lines
+    specs, errors = [], []
+    for line in data[:end].decode("utf-8", "replace").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        try:
+            step = json.loads(line)
+            timed, _ = expand_mission({"objects": objects, "steps": [{"at": 0, "set": step["set"]}]}, schema)
+            specs += [spec for _, spec in timed]
+        except (ValueError, KeyError, TypeError) as exc:
+            errors.append(f"{line.strip()[:80]}: {exc}")
+    return specs, offset + end, errors
+
+
 def mission_clock(mission):
     clock = mission.get("clock", "world")
     if clock not in MISSION_CLOCKS:
@@ -1455,6 +1484,7 @@ def handle(conn, peer, args):
     def mission_t0(world_anchor):
         return world_anchor if args.mission_clock == "world" else client_ready_at
     reactions_due = []  # (absolute time, object spec, rule text) scheduled by --ah-on
+    control_offset = args.ah_control.stat().st_size if args.ah_control and args.ah_control.exists() else 0
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
     zone_now = zone_joined = None  # zone-set index last sent in the world state, and when joined
@@ -1887,6 +1917,12 @@ def handle(conn, peer, args):
                         at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                if args.ah_control and sim_build:
+                    specs, control_offset, errors = control_steps(args.ah_control, control_offset,
+                                                                  args.mission_objects, args.activity_schema)
+                    for error in errors:
+                        log(f"[{tag}] control: ignored {error}")
+                    reactions_due += [(time.time(), spec, "control") for spec in specs]
                 if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     for entry in [e for e in reactions_due if e[0] <= time.time()]:
@@ -2169,6 +2205,9 @@ def parse_args(argv=None):
                          "and steps that set their states at a time or when the client first reports "
                          "an object (expanded into --ah-object-at / --ah-on); \"$player\" and \"$now\" "
                          "in states are the local player's machine id and the host tick")
+    ap.add_argument("--ah-control", type=Path, metavar="FILE",
+                    help="DEBUG: apply mission steps appended to FILE live, one JSON line each, e.g. "
+                         "{\"set\": {\"obj_enter_wall\": {\"0\": 1}}} (names from --ah-mission)")
     ap.add_argument("--ah-sim-clock", type=float, default=0, metavar="HZ",
                     help="send an advancing host tick (HZ ticks a second since the first simulation "
                          "packet; the client's sequences and timers run on it; 30 matches the "
@@ -2220,6 +2259,7 @@ def parse_args(argv=None):
                             if args.activity_schema.exists() else None)
     args.ah_teleports = [args.ah_teleport] if args.ah_teleport else []
     args.mission_clock = "world"
+    args.mission_objects = {}
     if args.ah_mission:
         if not args.activity_schema:
             ap.error("--ah-mission needs the activity schema (--activity-schema)")
@@ -2231,6 +2271,7 @@ def parse_args(argv=None):
             ap.error(f"--ah-mission: {exc}")
         args.ah_object_at += timed
         args.ah_on += reactive
+        args.mission_objects = json.loads(args.ah_mission.read_text(encoding="utf-8")).get("objects", {})
         args.ah_teleports += mission_teleports(json.loads(args.ah_mission.read_text(encoding="utf-8")))
         try:
             args.mission_clock = mission_clock(json.loads(args.ah_mission.read_text(encoding="utf-8")))

@@ -157,3 +157,12 @@ python scripts\d1_mission_preflight.py --schema local\SIGNON_LOCAL\investment_sc
 
 The offline check passes for both scripts against the saved 01.00 activity schema and the
 corrected 01.24 EBOOT type export. It verifies serialization, not client behavior.
+
+## Live control (debug tool)
+
+`--ah-control FILE` applies mission steps appended to FILE while a session runs, one JSON line
+each: `{"set": {"obj_enter_wall": {"0": 1, "0x2c0": -1}}}` (object names from `--ah-mission`).
+Lines starting with `#` are ignored; each connection starts reading at the file's size, so old
+lines are not replayed. Used to re-send states during reverse engineering without restarting.
+Temporary: applies to every connection of the stand-in; the replacement is an operator console
+on the activity-instance service (debt register in `architecture-multiplayer.md`).

@@ -535,6 +535,22 @@ class MissionTeleports(unittest.TestCase):
         timed, reactive = bap.expand_mission(mission, {})
         self.assertEqual((timed, reactive), ([], []))
 
+    def test_control_steps(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "control.jsonl"
+            path.write_text('{"set": {"obj": {"0": 1}}}\n# note\n{"bad": 1}\n{"set": {"obj": {"0": 3}}}',
+                            encoding="utf-8")
+            objects = {"obj": "0x992bb471:0x20:3:0x80802a1b"}
+            specs, offset, errors = bap.control_steps(path, 0, objects, {})
+            self.assertEqual(len(specs), 1)            # the last line is not complete yet
+            self.assertEqual(len(errors), 1)           # {"bad": 1}
+            with path.open("a", encoding="utf-8") as f:
+                f.write("\n")
+            more, offset2, _ = bap.control_steps(path, offset, objects, {})
+            self.assertEqual(len(more), 1)
+            self.assertEqual(bap.control_steps(path, offset2, objects, {})[0], [])
+
     def test_mission_clock(self):
         self.assertEqual(bap.mission_clock({}), "world")
         self.assertEqual(bap.mission_clock({"clock": "ready"}), "ready")
