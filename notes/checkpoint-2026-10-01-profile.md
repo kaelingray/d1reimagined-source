@@ -1222,3 +1222,22 @@ Objective trace (hooks + owned-memory reads):
   Next: find which scenario content registers kind-0x20 objects (`act_cosmo_m0_highway:
   scenario_client`, tag `0x80cb800d`, 22 bubbles; the objective names carry phase prefixes such
   as `cosmo_m0_phase00_highway`) and what the host must send for it to load.
+
+## JOIN58: the mission objective reaches the HUD widget
+
+No memory writes. Corrections to JOIN54: the provider does run (the distinct-dump hook filter
+hid the repeats) and the registry at `0x33d63900` is the right one; the activity group itself is
+registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
+- `0x3a7dac` routes each objective with state != 0 by definition category (+0x4c): 1/5/3 to the
+  single event slot (+0x600), everything else to one of two mission slots (0x300 each); the
+  buffer is global `*0x1acbdf4` (`0x3070d9f0`; accessors `0x393180`.. `0x3931fc`).
+- Objective 3's record (built by `0x3a72a4`): key `0x992bb474`, string library tag `0x80cc052f`,
+  description `0xb1fb2ef7`, title `0x52ff1516` ("Enter the Wall" - from the objective's own
+  content component `0x808031d7`, tag +0x4e4), state 1, category 0, activity-type index -1.
+- State +0x2e0 is an activity-type hash: the Investment Globals list (20 entries) holds mode
+  names (FNV-1: `pvp` = `0x39774ee1`, `pvp_ffa` = `0xdc483e01`); -1 is expected for story content.
+- The HUD objective widget update `0x7659c8` (from `0x74fd00`; object `0x1b39190`) runs every
+  frame, does not take its hide path (`0x7658bc`), and holds the objective (key, title,
+  description, state 1 at +0x2d0, flags `0x48` at +0x2dc, +0x2d4/+0x2d8 = 7). Nothing is drawn.
+  Next: the widget's text/visibility calls (`0x74ec30`, `0xea2fac`, `0xea2d74`, `0xea2b44`) -
+  whether string library `0x80cc052f` resolves, and what +0x2d4/+0x2d8 = 7 means.
