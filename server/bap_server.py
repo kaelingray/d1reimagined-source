@@ -982,31 +982,35 @@ MISSION_CLOCKS = ("world", "ready")
 
 def control_steps(path, offset, objects, schema):
     """DEBUG TOOL (--ah-control): mission-script steps appended to a file, one JSON object per
-    line ({"set": {NAME: {offset: value}}}, names from the mission's "objects"), applied live.
-    Returns ([object specs], new offset, [errors]). Each connection reads from the file size at
+    line ({"set": {NAME: {offset: value}}}, names from the mission's "objects"; or
+    {"teleport": SLICE_SET}), applied live. Returns ([object specs], [slice sets to teleport to],
+    new offset, [errors]). Each connection reads from the file size at
     its start, so earlier lines are not replayed. Replacement: an operator console on the
     activity-instance service (notes/architecture-multiplayer.md)."""
     try:
         size = path.stat().st_size
     except OSError:
-        return [], offset, []
+        return [], [], offset, []
     if size <= offset:
-        return [], size, []
+        return [], [], size, []
     with path.open("rb") as f:
         f.seek(offset)
         data = f.read(size - offset)
     end = data.rfind(b"\n") + 1  # only complete lines
-    specs, errors = [], []
+    specs, teleports, errors = [], [], []
     for line in data[:end].decode("utf-8", "replace").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         try:
             step = json.loads(line)
+            if "teleport" in step:
+                teleports.append(int(str(step["teleport"]), 0))
+                continue
             timed, _ = expand_mission({"objects": objects, "steps": [{"at": 0, "set": step["set"]}]}, schema)
             specs += [spec for _, spec in timed]
         except (ValueError, KeyError, TypeError) as exc:
             errors.append(f"{line.strip()[:80]}: {exc}")
-    return specs, offset + end, errors
+    return specs, teleports, offset + end, errors
 
 
 def mission_clock(mission):
@@ -1942,10 +1946,13 @@ def handle(conn, peer, args):
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
                         sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
                 if args.ah_control and sim_build:
-                    specs, control_offset, errors = control_steps(args.ah_control, control_offset,
-                                                                  args.mission_objects, args.activity_schema)
+                    specs, teleports, control_offset, errors = control_steps(
+                        args.ah_control, control_offset, args.mission_objects, args.activity_schema)
                     for error in errors:
                         log(f"[{tag}] control: ignored {error}")
+                    for zone_t in teleports:
+                        teleport_plan.insert(0, (zone_t, 0.0))  # due at once (after any running one)
+                        log(f"[{tag}] control: teleport to slice set {zone_t} queued")
                     reactions_due += [(time.time(), spec, "control") for spec in specs]
                 if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build

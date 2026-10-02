@@ -542,14 +542,17 @@ class MissionTeleports(unittest.TestCase):
             path.write_text('{"set": {"obj": {"0": 1}}}\n# note\n{"bad": 1}\n{"set": {"obj": {"0": 3}}}',
                             encoding="utf-8")
             objects = {"obj": "0x992bb471:0x20:3:0x80802a1b"}
-            specs, offset, errors = bap.control_steps(path, 0, objects, {})
+            specs, teleports, offset, errors = bap.control_steps(path, 0, objects, {})
             self.assertEqual(len(specs), 1)            # the last line is not complete yet
             self.assertEqual(len(errors), 1)           # {"bad": 1}
             with path.open("a", encoding="utf-8") as f:
                 f.write("\n")
-            more, offset2, _ = bap.control_steps(path, offset, objects, {})
+            more, _, offset2, _ = bap.control_steps(path, offset, objects, {})
             self.assertEqual(len(more), 1)
             self.assertEqual(bap.control_steps(path, offset2, objects, {})[0], [])
+            with path.open("a", encoding="utf-8") as f:
+                f.write('{"teleport": "0x18"}\n')
+            self.assertEqual(bap.control_steps(path, offset2, objects, {})[1], [24])
 
     def test_mission_clock(self):
         self.assertEqual(bap.mission_clock({}), "world")

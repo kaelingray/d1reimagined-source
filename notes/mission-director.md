@@ -162,6 +162,7 @@ corrected 01.24 EBOOT type export. It verifies serialization, not client behavio
 
 `--ah-control FILE` applies mission steps appended to FILE while a session runs, one JSON line
 each: `{"set": {"obj_enter_wall": {"0": 1, "0x2c0": -1}}}` (object names from `--ah-mission`).
+A line `{"teleport": SLICE_SET}` queues a host teleport (e.g. 24, the Breach) at once.
 Lines starting with `#` are ignored; each connection starts reading at the file's size, so old
 lines are not replayed. Used to re-send states during reverse engineering without restarting.
 Temporary: applies to every connection of the stand-in; the replacement is an operator console
