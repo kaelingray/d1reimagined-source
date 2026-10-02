@@ -82,7 +82,7 @@ Last full review: 2026-10-02.
 | Revival cinematics `pf_104_res`, `pf_104_res_fp` | WORKING | JOIN34/35 with the director; null object refs fix (JOIN32) | letterbox stale strip (rendering) | - |
 | Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN53 after both cinematics (stopped by the script) | a cinematic left to end on its own keeps the screen black (JOIN52) | - |
 | "New Mission" banner (incoming sequence) | WORKING | JOIN31 | - | - |
-| Objective display / waypoints | PARTIAL | "NEW MISSION" banner (state 1) and "ENTER THE WALL" on the HUD (state 5), JOIN60, from the stand-in's state only | waypoint marker (state +4/+8 nav refs) not shown; completion state on screen unconfirmed | waypoints; completion; check the script run end to end |
+| Objective display / waypoints | PARTIAL | script: "NEW MISSION" banner (state 1) then "ENTER THE WALL" (state 5), JOIN62, no memory writes | waypoint marker: state +0x40 markers -> nav point 87 shows nothing yet; completion state unconfirmed | marker type/fields; completion |
 | Player triggers, Ghost light cinematic, weapon pickup | NOT INVESTIGATED (01.24) | script exists (`missions/a_guardian_rises.json`) | - | after objectives |
 | Enemies (Fallen squads in The Breach) | NOT INVESTIGATED (01.24) | squad layout mapped (+0x74) | spawn trigger unknown | - |
 | Zone change 112 -> 24 (The Breach) by walking | PARTIAL | follow-player request seen (JOIN25); protocol now known | not re-tested with the switch protocol | test with `--ah-group-switch` |

@@ -1259,3 +1259,19 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   its description "Take refuge inside the ancient wall." (fading in); 5 -> 6 keeps the title.
   So **1 = incoming, 5 = active/displayed**; the meaning of 3 and 6 on screen is not settled.
 - The mission script now sets each objective to 1 and, 6 s later, to 5.
+
+## JOIN61-62: hand-off race; the intro with its objective from the script alone
+
+- `FINAL124_JOIN61` (script only): the hand-off took 10 s - the client reported 112 as current
+  before any state-4 report, the stand-in sent the teleport finish (state 3) and dropped the
+  request with a new version 50 ms later. Screen black with the loading glyph (the player is
+  respawned while the client handles state 3, `0x72932c`). Fix: a finished request stays
+  published (state 3) for `TELEPORT_SETTLE_SECONDS` = 10 s after it was first sent, then
+  "finished teleport request dropped" (new version). Only the normal-speed path has run since.
+- `FINAL124_JOIN62` (script only, dialogs dismissed 8 s after arrival): hand-off, then
+  "NEW MISSION - THE TAKEN KING: PRELUDE" (10:46:22), then "ENTER THE WALL" (10:46:26-31). The
+  objective text fades after a while (gone 30 s later), as Destiny 1's HUD does.
+- Waypoints (control lines): objective state +0x40 is 10 marker entries (`0x8080293c`, 64 bytes:
+  u5 type, u3, object ref +4, i32 +0xc, kind-13 value +0x10, object ref +0x20). Entry 0 =
+  {type 0..3, ref `0x992bb471/0x2c/87` (`obj_m0_phase00_m1._nav_point`)}, others type -1: no
+  waypoint seen (the square on the radar edge is there without markers too). Open.

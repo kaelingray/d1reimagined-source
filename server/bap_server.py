@@ -618,6 +618,10 @@ AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
 # then current 112 with state 0).
 AH_CLIENT_STATE, CLIENT_STATE_TYPE = 21, 0x80800C56
 
+# How long a finished teleport request (state 3) stays in the world state before it is dropped
+# (the client respawns the player while handling state 3; JOIN61 dropped it 50 ms after sending)
+TELEPORT_SETTLE_SECONDS = 10
+
 # client -> host type 17 {u32 counter, u32 status}: 0x7fffffff while loading, 0x8000000e once the
 # client is in the world (JOIN53: 14 s after the world state, again after each slice-set switch)
 AH_CLIENT_PROGRESS, CLIENT_IN_WORLD = 17, 0x8000000E
@@ -1497,6 +1501,8 @@ def handle(conn, peer, args):
     teleport_now = None  # --ah-teleport: (state, index, hash) in the world-state group request
     teleport_targeted = False  # the client has requested the teleport's slice set
     teleport_finish_at = None  # when to send the finishing state 3 (--ah-teleport-finish-delay)
+    teleport_finished_at = None  # when state 3 was first published
+    teleport_drop_at = None  # when to stop publishing the finished request (TELEPORT_SETTLE_SECONDS)
     # timed host teleports of this activity session: [(slice set, seconds after the join)] from
     # --ah-teleport and the mission script's {"at": S, "teleport": SET} steps, in order
     teleport_plan = sorted(args.ah_teleports, key=lambda entry: entry[1])
@@ -1712,6 +1718,7 @@ def handle(conn, peer, args):
                             # set as current after the request completes, which needs state 3
                             # (JOIN42: copy waiting in state 3 with the engine already in 112).
                             teleport_now = (3, teleport_now[1], teleport_now[2])
+                            teleport_finished_at = time.time()
                             # same version: the simulation copies the world state (and so the
                             # request) on every message, but the world controller re-reads the group
                             # records only on a new version - re-reading record 1 (the switch to
@@ -1732,8 +1739,17 @@ def handle(conn, peer, args):
                                 if teleport_now is not None and teleport_now[1] == zone_now:
                                     # the teleport is complete: stop publishing the request (JOIN39,
                                     # the only run that showed 112 after a hand-off, never had it in
-                                    # the host's world state once the client had arrived)
-                                    teleport_now = None
+                                    # the host's world state once the client had arrived) - but not
+                                    # before state 3 has been published for a while: its handling
+                                    # respawns the player (0x72932c), and a fast arrival (JOIN61:
+                                    # state 3 and the drop 50 ms apart) left the screen black
+                                    if (teleport_finished_at is not None
+                                            and time.time() - teleport_finished_at >= TELEPORT_SETTLE_SECONDS):
+                                        teleport_now = None
+                                    else:
+                                        teleport_now = (3, teleport_now[1], teleport_now[2])
+                                        teleport_finished_at = teleport_finished_at or time.time()
+                                        teleport_drop_at = teleport_finished_at + TELEPORT_SETTLE_SECONDS
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                          *world_params[1:], teleport=teleport_now, version=(world_version_now := next(world_version)))
                                 conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
@@ -1871,18 +1887,26 @@ def handle(conn, peer, args):
                 if (teleport_now is not None and teleport_now[0] == 1 and teleport_finish_at is not None
                         and time.time() >= teleport_finish_at and world_params):
                     teleport_now = (3, teleport_now[1], teleport_now[2])
+                    teleport_finished_at = time.time()
                     data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                              *world_params[1:], target=switch_target, teleport=teleport_now,
                                              version=world_version_now)  # same version (see above)
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                     log(f"[{tag}] world state: teleport to {teleport_now[1]} finished (state 3, after "
                         f"{args.ah_teleport_finish_delay:g} s)")
+                if teleport_drop_at is not None and time.time() >= teleport_drop_at and world_params:
+                    teleport_now, teleport_drop_at = None, None
+                    data = world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                             *world_params[1:], target=switch_target, teleport=None,
+                                             version=(world_version_now := next(world_version)))
+                    conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
+                    log(f"[{tag}] world state: finished teleport request dropped")
                 if (world_params and teleport_plan and mission_t0(zone_joined) is not None
                         and teleport_now is None):
                     zone_t, after = teleport_plan[0]
                     if time.time() - mission_t0(zone_joined) >= after:
                         teleport_plan.pop(0)
-                        teleport_targeted, teleport_finish_at = False, None
+                        teleport_targeted, teleport_finish_at, teleport_finished_at = False, None, None
                         teleport_now = (1, zone_t, 0x811C9DC5)
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                  *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
