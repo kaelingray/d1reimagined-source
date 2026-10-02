@@ -138,7 +138,11 @@ try {
             }
             if (-not $ContinueAfterBap) { break }
         }
-        if ($PressSeconds -gt 0 -and (Get-Date) -lt $pressUntil -and (Get-Date) -ge $nextPress -and $manifest) {
+        # Keep pressing past the deadline while SignOn has not started: on slow boots the title
+        # screen ("PRESS X TO PLAY") appears after PressSeconds and SignOn waits for Cross
+        # (FINAL124_JOIN64/69).
+        $stillAtTitle = $progress.SignonRequests -eq 0
+        if ($PressSeconds -gt 0 -and ((Get-Date) -lt $pressUntil -or $stillAtTitle) -and (Get-Date) -ge $nextPress -and $manifest) {
             $emulatorIdentity = @($manifest.processes | Where-Object tag -EQ 'rpcs3') | Select-Object -First 1
             if ($emulatorIdentity) {
                 $emulator = Get-D1OwnedProcess $emulatorIdentity
