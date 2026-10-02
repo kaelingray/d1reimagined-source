@@ -1350,3 +1350,20 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   generic conditional mapping, not message ids.
 - Open: which backend data selects message `0x80a585xx` (candidates: `--self-flags 2` making a
   gate true; a universe flag/value; the time in universe +8). Runs dismiss the two dialogs.
+
+## JOIN70: objective handover (control channel, no traversal)
+
+- Enter the Wall at **3**: the title stays with a "[touchpad] for details" prompt; at **4** the
+  title stays (no completion animation captured). Neither clears the HUD line by itself.
+- Find a Weapon (objective 7) started while Enter the Wall stayed at 3: banner, but no HUD line
+  at state 5 (the HUD went blank). After clearing Enter the Wall (0) and restarting Find a
+  Weapon (1 with its incoming sequence at **step 1**, then 5): **"FIND A WEAPON"** on the HUD
+  (14:24:45). With the sequence at step 2 the line never appeared - the HUD line waits for the
+  objective's incoming sequence. Every objective's state 1 shows the "NEW MISSION - THE TAKEN
+  KING: PRELUDE" banner.
+- Grab the Rifle (objective 11): banner shown, no HUD line within ~20 s; a clean retry was cut
+  short by the idle kick.
+- **Idle kick after ~5 minutes without pad input** ("STILL THERE? You have been returned to
+  Orbit because you were inactive"); `d1_traverse.py keepalive` nudges the camera every 2 min.
+- The mission script's handovers now run complete (3 + completion sequence) -> +4 s clear (0) and
+  next objective 1 (incoming sequence step 1, trigger armed) -> +10 s next objective 5.

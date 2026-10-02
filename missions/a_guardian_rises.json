@@ -14,7 +14,9 @@
     "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24.",
     "Objective states (01.24, JOIN60): 1 = incoming (the 'NEW MISSION' banner with the activity name, about 4 s), 5 = active:",
     "the title (and on change its description) shows at the left of the HUD. Each objective is set to 1 and 6 s later to 5.",
-    "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet."
+    "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet.",
+    "Handover (JOIN70): the completed objective goes to 3 (with its completion sequence), 4 s later to 0 while the next",
+    "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5."
   ],
   "clock": "ready",
   "objects": {
@@ -140,6 +142,19 @@
         "seq_enter_wall_done": {
           "0": "$now",
           "4": 1
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_enter_wall"
+      },
+      "delay": 4,
+      "set": {
+        "obj_enter_wall": {
+          "0": 0,
+          "0x2c0": -1
         },
         "obj_investigate": {
           "0": 1,
@@ -160,7 +175,7 @@
         "type": "any",
         "object": "trig_enter_wall"
       },
-      "delay": 6,
+      "delay": 10,
       "set": {
         "obj_investigate": {
           "0": 5,
@@ -185,6 +200,19 @@
         "trig_ghost_light": {
           "0": true,
           "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_investigate"
+      },
+      "delay": 4,
+      "set": {
+        "obj_investigate": {
+          "0": 0,
+          "0x2c0": -1
         },
         "obj_get_weapon": {
           "0": 1,
@@ -205,7 +233,7 @@
         "type": "any",
         "object": "trig_investigate"
       },
-      "delay": 6,
+      "delay": 10,
       "set": {
         "obj_get_weapon": {
           "0": 5,
@@ -245,6 +273,19 @@
         "seq_get_weapon_done": {
           "0": "$now",
           "4": 1
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_get_weapon"
+      },
+      "delay": 4,
+      "set": {
+        "obj_get_weapon": {
+          "0": 0,
+          "0x2c0": -1
         },
         "obj_graveyard": {
           "0": 1,
@@ -265,7 +306,7 @@
         "type": "any",
         "object": "trig_get_weapon"
       },
-      "delay": 6,
+      "delay": 10,
       "set": {
         "obj_graveyard": {
           "0": 5,

@@ -11,6 +11,7 @@ frame), and the position is the float triple at record +0x40 (x, y, z; z up) - J
     python scripts/d1_traverse.py --manifest <run>-processes.json find 0x992bb471 0x2c 87
     python scripts/d1_traverse.py --manifest <run>-processes.json record routes/wall.json  (walk by hand)
     python scripts/d1_traverse.py --manifest <run>-processes.json replay routes/wall.json
+    python scripts/d1_traverse.py --manifest <run>-processes.json keepalive   (avoid the idle kick)
     python scripts/d1_traverse.py --manifest <run>-processes.json teleport X Y Z   (test only;
         JOIN66: the game rewrites entity +0x40 every frame, so this does not move the player yet)
 """
@@ -317,6 +318,9 @@ def main():
     t.add_argument("x", type=float)
     t.add_argument("y", type=float)
     t.add_argument("z", type=float)
+    ka = sub.add_parser("keepalive", help="nudge the camera every N seconds (the client returns an idle "
+                                         "player to orbit after about 5 minutes without input)")
+    ka.add_argument("--every", type=float, default=120)
     rec = sub.add_parser("record", help="save breadcrumbs while the route is walked by hand")
     rec.add_argument("path", type=Path)
     rp = sub.add_parser("replay", help="walk a recorded route")
@@ -328,6 +332,12 @@ def main():
     f.add_argument("kind", type=lambda v: int(v, 0))
     f.add_argument("index", type=lambda v: int(v, 0))
     args = ap.parse_args()
+    if args.cmd == "keepalive":
+        pad = Pad(emulator_identity(json.loads(args.manifest.read_text(encoding="utf-8-sig")))["id"])
+        while True:
+            pad.hold(["J"], 40)
+            pad.hold(["L"], 40)
+            time.sleep(args.every)
     with OwnedMemory(args.manifest) as mem:
         if args.cmd == "find":
             for address in find_object(mem, args.group, args.kind, args.index):
