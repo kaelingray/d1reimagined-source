@@ -1,3 +1,43 @@
+diff --git a/rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.cpp b/rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.cpp
+index 2ec3e2e38..a1dfcc4bf 100644
+--- a/rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.cpp
++++ b/rpcs3/Emu/RSX/Program/Assembler/FPOpcodes.cpp
+@@ -141,15 +141,16 @@ namespace rsx::assembler::FP
+ 
+ 		// The rest are unimplemented and not encountered in real software.
+ 		// TODO: Probe these on real PS3 and figure out what they actually do.
++		// They only appear in ucode that is not a real program (Destiny binds such program
++		// memory, see FPToCFG CAL): report no operands instead of terminating the RSX thread.
+ 		case RSX_FP_OPCODE_POW:
+-			fmt::throw_exception("Unimplemented POW instruction."); // Unused
+ 		case RSX_FP_OPCODE_BEM:
+ 		case RSX_FP_OPCODE_TEXBEM:
+ 		case RSX_FP_OPCODE_TXPBEM:
+ 		case RSX_FP_OPCODE_BEMLUM:
+-			fmt::throw_exception("Unimplemented BEM class instruction"); // Unused
+ 		case RSX_FP_OPCODE_TIMESWTEX:
+-			fmt::throw_exception("Unimplemented TIMESWTEX instruction"); // Unused
++			rsx_log.error("Unimplemented FP instruction class (opcode 0x%x) ignored", static_cast<u32>(opcode));
++			return 0;
+ 		default:
+ 			break;
+ 		}
+@@ -308,14 +309,12 @@ namespace rsx::assembler::FP
+ 			return 0;
+ 
+ 		case RSX_FP_OPCODE_POW:
+-			fmt::throw_exception("Unimplemented POW instruction."); // Unused ??
+ 		case RSX_FP_OPCODE_BEM:
+ 		case RSX_FP_OPCODE_TEXBEM:
+ 		case RSX_FP_OPCODE_TXPBEM:
+ 		case RSX_FP_OPCODE_BEMLUM:
+-			fmt::throw_exception("Unimplemented BEM class instruction"); // Unused
+ 		case RSX_FP_OPCODE_TIMESWTEX:
+-			fmt::throw_exception("Unimplemented TIMESWTEX instruction"); // Unused
++			return 0; // broken ucode, see get_operand_count
+ 		default:
+ 			break;
+ 		}
 diff --git a/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp b/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp
 index 0178ba5ef..cddd0be64 100644
 --- a/rpcs3/Emu/RSX/Program/Assembler/FPToCFG.cpp

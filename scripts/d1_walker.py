@@ -29,6 +29,27 @@ from rpcs3_position_scan import guest_regions
 
 CELL = 2.0  # grid cell size (world units)
 
+# Pointer paths to the forward facing vector (JOIN73; static roots in the EBOOT data segment):
+# *0x1adbce8 + 0x92c, *0x1b27fe8 + 0x18c, *(*0x1b28210 + 4) + 0x3c - all three led to the same
+# vector and followed the camera.
+FACING_PATHS = ((0x1ADBCE8, (0x92C,)), (0x1B27FE8, (0x18C,)), (0x1B28210, (0x4, 0x3C)))
+
+
+def facing_from_pointers(mem):
+    """Address of the forward facing vector through the static pointer paths, or None."""
+    for root, offsets in FACING_PATHS:
+        try:
+            address = struct.unpack(">I", mem.read(root, 4))[0]
+            for offset in offsets[:-1]:
+                address = struct.unpack(">I", mem.read(address + offset, 4))[0]
+            address += offsets[-1]
+            c, s, z = struct.unpack(">3f", mem.read(address, 12))
+        except (OSError, ValueError, struct.error):
+            continue
+        if abs(z) < 0.01 and abs(c * c + s * s - 1) < 0.02:
+            return address
+    return None
+
 
 def find_facing(mem, player, pad, low=0x30000000, high=0x38000000, log=print):
     """(guest address, sign) of a unit vector (cos, sin, 0) that follows the camera; sign -1
@@ -170,6 +191,9 @@ class Walker:
         self.rate = math.radians(115) / 1000  # camera turn, radians per ms (adapted below)
 
     def yaw(self):
+        live = facing_from_pointers(self.mem)
+        if live is not None:
+            self.facing, self.sign = live, 1
         c, s = struct.unpack(">2f", self.mem.read(self.facing, 8))
         if not (c or s):
             self.refind()
@@ -177,8 +201,15 @@ class Walker:
         return math.atan2(self.sign * s, self.sign * c)
 
     def refind(self):
+        live = facing_from_pointers(self.mem)
+        if live is not None and live != self.facing:
+            self.facing, self.sign = live, 1
+            return
         self.log("facing vector went stale; searching again")
-        self.facing, self.sign = find_facing(self.mem, self.player, self.pad, log=self.log)
+        try:
+            self.facing, self.sign = find_facing(self.mem, self.player, self.pad, log=self.log)
+        except RuntimeError as exc:
+            self.log(f"  facing search failed ({exc}); keeping the current vector")
 
     def face(self, target_heading, tolerance=math.radians(6), tries=12):
         still = 0
@@ -194,7 +225,7 @@ class Walker:
             if turned > 0.02:
                 self.rate = 0.7 * self.rate + 0.3 * (turned / ms)
                 still = 0
-            else:
+            elif ms >= 150:  # short taps barely move the camera (stick acceleration)
                 still += 1
                 if still >= 2:  # the vector stopped following the camera
                     self.refind()
@@ -307,6 +338,9 @@ def main():
         if args.facing:
             address, _, sign = args.facing.partition(":")
             facing = (int(address, 0), int(sign or "1"))
+        elif facing_from_pointers(mem) is not None:
+            facing = (facing_from_pointers(mem), 1)
+            print(f"facing vector via static pointers at {facing[0]:#x}")
         else:
             facing = find_facing(mem, player, pad)
         if args.cmd == "facing":
