@@ -41,7 +41,10 @@
     "trig_graveyard": "0x992bb471:0x1d:38:0x80800463",
     "sq_breach_floor_a": "0xfc0e45a3:0x1:34:0x8080071e:1",
     "sq_breach_floor_b": "0xfc0e45a3:0x1:36:0x8080071e:1",
-    "sq_breach_wall_l_a": "0xfc0e45a3:0x1:32:0x8080071e:1"
+    "sq_breach_wall_l_a": "0xfc0e45a3:0x1:32:0x8080071e:1",
+    "sq_ghost": "0xecf574b5:0x1:28:0x8080071e:1",
+    "seq_nux_ghost": "0xfc0e45a3:0x5:100:0x808029a1",
+    "trig_ghostlight": "0xfc0e45a3:0x1d:107:0x80800463"
   },
   "steps": [
     {
