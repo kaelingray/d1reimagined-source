@@ -34,9 +34,11 @@ The Ghost that floats beside the player is an **AI squad the host spawns**, not 
   `of_ghostlight`, `o_device_invis_light`, and `tv_flashlight` in the sequence group. This is the
   torch: on entering the dark Breach the Ghost lights up ("We need more light. I'll see what I can
   do."), then flies to the rifle.
-- Status: the stand-in spawns **no squads** - neither the Ghost nor the Fallen. Squad state
-  (kind 1, `0x80800...` per the 01.00 notes: a +0x44 generation re-runs the squad, "spawn members"
-  unknown) is the next piece to decode; it serves the Ghost and every enemy.
+- Status: the stand-in spawns **no squads** - neither the Ghost nor the Fallen - because the
+  client only runs a squad when its bubble's roster slot is flagged as locally simulated (the
+  authority gate `0x20f858`; see `mission-director.md`, "01.24 runtime"). With that flag set by
+  hand (JOIN79), a new `sq_ghost` generation made the client spawn and report
+  `sq_ghost__ghost`. Open: the host message that grants the flag.
 
 ## Beat by beat
 

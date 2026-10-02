@@ -99,6 +99,39 @@ id in any client message type (`"type": "any"`).
 - Per the Truman talk, the host places the squad and the physics host (the client) spawns and
   runs the AI.
 
+**01.24 runtime (JOIN79, 2026-10-02).** OBSERVED unless marked.
+- The squad component's handler table sits at `0x12e71d0`: 8 entries of {descriptor, name hash,
+  flags}, listed from `0x1899120`. The state apply is `0x20d1dc`; it is reached through the
+  generic state dispatch `0x27a3f4`, the same path as the sequences. The per-frame update is
+  `0x20c4a4`, and the generation handler is `0x20cc38`.
+- Both the apply and the update start with the **authority gate `0x20f858`**:
+  - the object's +0x2c is its bubble (14 for `sq_ghost`; -1 for activity/sequence objects,
+    which then use the local slot);
+  - the gate looks up the object's group in the table at `*0x1917100` and gets the simulation
+    record (one record shared by all six groups, at `0x6023e780` in JOIN79);
+  - `0x1d8e5c` then requires that slot's bit to be **set in +0x844 and clear in +0x850**.
+- Without that, the apply returns before `0x20cc38`: three generations in JOIN79 had no effect,
+  and +0x844/+0x850 were all zero.
+- +0x844/+0x850 are per-roster-slot flags (65 slots). Their writers:
+  - `0x1d8468` (simulation start) sets +0x844 to all ones and copies it to +0x850;
+  - `0x1d90e0` (the roster delta, called per slot from `0x1d9440`) sets both bits when a slot's
+    generation changes, and clears both once an active slot has been processed;
+  - `0x1d99cc` and `0x1d9940` act on the local slot (`0x1daf04`) when its bit is in +0x844 but
+    not in +0x850 (`0x1e0410(sim+0x18, 1)`).
+
+  How a real host produces "set in +0x844, clear in +0x850" for a bubble slot is still OPEN; the
+  JOIN80 hooks record the transitions.
+- **Test (memory write on the owned test emulator):** setting bit 14 of +0x844 made the next
+  generation (+0x44 = 4, existing members -1) run `0x20cc38`, `0x245204` and `0x20c714`.
+  - Within a second, the client sent type-6 upstream messages for group `0xecf574b5`: the squad
+    (kind 1/28), the six kind-4 spawn slots, and then **`sq_ghost__ghost` (kind 2/29)**, the
+    Ghost member.
+  - So the client acts as physics host for bubble 14 and spawns the members itself. Kind 2
+    members are never sent by the host.
+  - Not seen on screen yet: the run ended on the inactivity kick a minute later.
+- Encoding: the 01.24 squad state is 0x7c bytes. +0x5c does not exist in 01.24; use
+  `squad_existing_members` (+0x74).
+
 ## Mission scripts
 
 `bap_server.py --ah-mission FILE` reads the script and expands it into `--ah-object-at` (timed)
