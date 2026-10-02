@@ -11,7 +11,10 @@
     "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
     "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
     "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
-    "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24."
+    "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24.",
+    "Objective states (01.24, JOIN60): 1 = incoming (the 'NEW MISSION' banner with the activity name, about 4 s), 5 = active:",
+    "the title (and on change its description) shows at the left of the HUD. Each objective is set to 1 and 6 s later to 5.",
+    "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet."
   ],
   "clock": "ready",
   "objects": {
@@ -113,6 +116,19 @@
     },
     {
       "on": {
+        "type": 21,
+        "slice_set": 112
+      },
+      "delay": 26,
+      "set": {
+        "obj_enter_wall": {
+          "0": 5,
+          "0x2c0": -1
+        }
+      }
+    },
+    {
+      "on": {
         "type": "any",
         "object": "trig_enter_wall"
       },
@@ -136,6 +152,19 @@
         "trig_investigate": {
           "0": true,
           "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_enter_wall"
+      },
+      "delay": 6,
+      "set": {
+        "obj_investigate": {
+          "0": 5,
+          "0x2c0": -1
         }
       }
     },
@@ -168,6 +197,19 @@
         "trig_get_weapon": {
           "0": true,
           "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_investigate"
+      },
+      "delay": 6,
+      "set": {
+        "obj_get_weapon": {
+          "0": 5,
+          "0x2c0": -1
         }
       }
     },
@@ -215,6 +257,19 @@
         "trig_graveyard": {
           "0": true,
           "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": "any",
+        "object": "trig_get_weapon"
+      },
+      "delay": 6,
+      "set": {
+        "obj_graveyard": {
+          "0": 5,
+          "0x2c0": -1
         }
       }
     },

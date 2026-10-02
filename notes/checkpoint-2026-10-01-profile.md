@@ -1241,3 +1241,21 @@ registered (record {`0x992bb471`, `0x002b0032`, `0x5d` = its 93 objects}).
   description, state 1 at +0x2d0, flags `0x48` at +0x2dc, +0x2d4/+0x2d8 = 7). Nothing is drawn.
   Next: the widget's text/visibility calls (`0x74ec30`, `0xea2fac`, `0xea2d74`, `0xea2b44`) -
   whether string library `0x80cc052f` resolves, and what +0x2d4/+0x2d8 = 7 means.
+
+## JOIN59-60: "Enter the Wall" on the HUD
+
+- `0x7659c8` is the objective HUD data model (object `0x1b39190`): on a new mission-slot
+  objective with state 1 it posts UI event 5 {library `0x80cc052f`, title} through `0xea2fac`
+  (bus `0x74ec30()+0x1d88`, UI node `0x80aa2128`, queue limit 16); state 4 posts event 8
+  (`0xea2d74`). Its +0x2dc flags only gate audio cues (`0x7662f4`, `0x74c704`). `0x850bb4` is the
+  HUD reveal logic (game state `0x359100`, input `0x736b34`, flag `0x1b5575e`).
+- JOIN59: event 5 was posted with the title while the Urgent Message dialog covered the HUD;
+  nothing appeared after dismissing it. Select (keyboard Space) opens **nav mode**: "NAV MODE",
+  "COSMODROME", "No Tracked Items".
+- JOIN60 with the new debug tool `--ah-control` (mission steps appended to a file, applied live):
+  replaying objective 3 as state 0 -> 1 showed the **"NEW MISSION - THE TAKEN KING: PRELUDE"**
+  banner (about 4 s; event 5 is the incoming banner). State 0 -> **5** shows **"ENTER THE WALL"**
+  at the left of the HUD, persistently (screenshots 10:20:46/51). 5 -> 3 shows the title with
+  its description "Take refuge inside the ancient wall." (fading in); 5 -> 6 keeps the title.
+  So **1 = incoming, 5 = active/displayed**; the meaning of 3 and 6 on screen is not settled.
+- The mission script now sets each objective to 1 and, 6 s later, to 5.
