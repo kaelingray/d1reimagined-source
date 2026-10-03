@@ -14,6 +14,12 @@ it is kept outside Git). Encoding mirrors the client's deserializer (0x25d2dc ->
   * primitives (readers at 0x175d5c8) store `value + min` in `width` bits: kind 2 bool
     (1 bit), 3/7 u8, 4/8 u16, 5/9 u32, 6/10 u64, 11 real32 (32 bits), 0x23 machine id (64 raw
     bits: 0xd1d184 reads type 0x80801932 or 0x808004ac, both 8 bytes MSB-first).
+  * kind 0x17 is a nullable handle: one presence bit, then u32 when present;
+    None/-1/0xffffffff encode null, which decodes to -1;
+  * kind 0x22 is a nullable typed value: the same handle prefix, then the selected
+    schema's fields. None encodes null; present values use {"type": HANDLE,
+    "values": {OFFSET: VALUE}}. Unknown handles are rejected. These readers are
+    0xe45198/0xe45604 in 01.24 and 0xd1ccb8/0xd1d124 in 01.00.
 
 `values` maps a struct offset to a value (or, for nested fields, a dict or list of dicts for
 that struct) at each level; everything not given is encoded as absent (optional) or zero.
@@ -34,6 +40,9 @@ from local_paths import SIGNON  # noqa: E402
 
 DEFAULT_SCHEMA = SIGNON / "investment_schema.json"
 MACHINE_ID_KIND = 0x23
+NULLABLE_HANDLE_KIND = 0x17
+TYPED_VALUE_KIND = 0x22
+NULL_HANDLE = 0xFFFFFFFF
 
 
 class BitWriter:
@@ -67,6 +76,33 @@ def _slots(schema, handle):
     return [f["off"] for f in schema[f"{handle:#x}"]["fields"]]
 
 
+def _read_handle(reader):
+    # 01.24 0xe45198 (01.00 0xd1ccb8): absent is the native -1 handle.
+    value = reader.get(32) if reader.get(1) else NULL_HANDLE
+    return -1 if value == NULL_HANDLE else value
+
+
+def _write_handle(writer, value):
+    value = -1 if value is None else int(value)
+    if value in (-1, NULL_HANDLE):
+        writer.put(0, 1)
+    elif 0 <= value < NULL_HANDLE:
+        writer.put(1, 1)
+        writer.put(value, 32)
+    else:
+        raise ValueError("nullable handle must be null or an unsigned 32-bit handle")
+
+
+def _typed_handle(schema, value):
+    try:
+        handle = int(value, 0) if isinstance(value, str) else int(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("typed value needs an integer type handle") from exc
+    if not 0 <= handle < NULL_HANDLE or f"{handle:#x}" not in schema:
+        raise ValueError(f"typed value has an unknown type handle {handle:#x}")
+    return handle
+
+
 def decode_from(reader, schema, handle, limit=None):
     values = {}
     for field in schema[f"{handle:#x}"]["fields"][:limit]:
@@ -86,6 +122,14 @@ def decode_from(reader, schema, handle, limit=None):
             values[off] = struct.unpack(">f", struct.pack(">I", reader.get(32)))[0]
         elif kind == MACHINE_ID_KIND:
             values[off] = reader.get(64)
+        elif kind == NULLABLE_HANDLE_KIND:
+            values[off] = _read_handle(reader)
+        elif kind == TYPED_VALUE_KIND:
+            # 0xe45604 reads a nullable type handle, then that type's fields.
+            nested = _read_handle(reader)
+            values[off] = (None if nested == -1 else
+                           {"type": _typed_handle(schema, nested),
+                            "values": decode_from(reader, schema, nested)})
         else:
             values[off] = reader.get(field["width"]) - field["min"]
     return values
@@ -108,6 +152,9 @@ def _primitive(w, field, value):
     if kind == MACHINE_ID_KIND:
         w.put(int(value or 0), 64)
         return
+    if kind == NULLABLE_HANDLE_KIND:
+        _write_handle(w, value)
+        return
     width = 32 if kind == 11 else field["width"]
     if kind == 11:
         value = struct.unpack(">I", struct.pack(">f", float(value or 0)))[0]
@@ -126,7 +173,18 @@ def encode_into(w, schema, handle, values=None, limit=None):
             if not present:
                 continue
         value = values.get(off)
-        if field["kind"] != 1:
+        if field["kind"] == TYPED_VALUE_KIND:
+            if value is None or value in (-1, NULL_HANDLE):
+                _write_handle(w, None)
+            else:
+                if not isinstance(value, dict) or set(value) != {"type", "values"}:
+                    raise ValueError("typed value needs a type handle and a values mapping")
+                nested = _typed_handle(schema, value["type"])
+                if not isinstance(value["values"], dict):
+                    raise ValueError("typed value fields must be a mapping")
+                _write_handle(w, nested)
+                encode_into(w, schema, nested, value["values"])
+        elif field["kind"] != 1:
             _primitive(w, field, value)
         elif field["arr"] == 1:
             items = list(value or [])
