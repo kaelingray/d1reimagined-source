@@ -142,7 +142,9 @@ class GuardianRoute(unittest.TestCase):
 
     def preload_guard(self):
         class Memory:
-            read = None
+            position = (351.464, -797.333, 13.929)
+            def read(self, address, size):
+                return struct.pack(">fff", *self.position)
         class Tail:
             pending = []
             def lines(self):
@@ -229,6 +231,63 @@ class GuardianRoute(unittest.TestCase):
         memory.position = (336, -898, 4)
         with self.assertRaisesRegex(RouteStopped, "position jumped"):
             player.position()
+
+    def final_entry_guard(self):
+        guard = self.preload_guard()
+        class Trace:
+            def lines(self):
+                return [b"pc=0x138e24 lr=0x352a4c r4=0x60000000"]
+        guard.world.target = BREACH_SLICE
+        guard.bind_player(Trace(), 0x60000000)
+        guard.arm_final_entry((353.751, -796.292, 14.008))
+        return guard
+
+    def test_final_doorway_crossing_accepts_only_the_captured_reversal(self):
+        state = {"current": 36, "engine": 3, "stable": True,
+                 "native_slice_current": BREACH_SLICE, "native_slice_target": WALL_SLICE}
+        with patch("d1_guardian_route.time.monotonic", return_value=100):
+            guard = self.final_entry_guard()
+            with patch("d1_guardian_route.run_state", return_value=state):
+                # JOIN90 was 2.51 units from its final target when local records flipped first.
+                guard.check()
+                # Its AH report caught up about 40 seconds later; the same tuple is recognized.
+                guard.world.current, guard.world.target = BREACH_SLICE, WALL_SLICE
+                guard.check()
+                guard.allow_breach_preload = False
+                with self.assertRaisesRegex(RouteStopped, "engine 3"):
+                    guard.check()
+
+    def test_final_entry_still_stops_for_bounds_deadline_other_slices_and_rejoin(self):
+        valid = {"current": 36, "engine": 3, "stable": True,
+                 "native_slice_current": BREACH_SLICE, "native_slice_target": WALL_SLICE}
+        cases = [{"engine": 6}, {"current": 25}, {"stable": False},
+                 {"native_slice_current": (24, 0x811C9DC5)},
+                 {"native_slice_target": None}, {"native_slice_target": BREACH_SLICE},
+                 {"native_slice_target": (104, 0x811C9DC5)}]
+        for changes in cases:
+            with self.subTest(changes=changes), patch("d1_guardian_route.time.monotonic", return_value=100):
+                guard = self.final_entry_guard()
+                with patch("d1_guardian_route.run_state", return_value={**valid, **changes}):
+                    with self.assertRaises(RouteStopped):
+                        guard.check()
+        with patch("d1_guardian_route.time.monotonic", return_value=100):
+            guard = self.final_entry_guard()
+            with patch("d1_guardian_route.run_state", return_value=valid):
+                guard.memory.position = (343.872, -796.341, 14.018)
+                with self.assertRaisesRegex(RouteStopped, "slice changed"):
+                    guard.check()
+                guard.memory.position = (353.751, -796.292, 14.008)
+                guard.final_entry_deadline = 100
+                with self.assertRaisesRegex(RouteStopped, "slice changed"):
+                    guard.check()
+                guard.final_entry_deadline = 120
+                guard.world.target = (24, 0x811C9DC5)
+                with self.assertRaisesRegex(RouteStopped, "slice changed"):
+                    guard.check()
+                guard.world.target = BREACH_SLICE
+                guard.world.joins += 1
+                with self.assertRaisesRegex(RouteStopped, "rejoined"):
+                    guard.check()
 
 
 if __name__ == "__main__":

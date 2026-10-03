@@ -1,6 +1,6 @@
 # A Guardian Rises: 01.24 acceptance checks
 
-Updated 2026-10-02 against repository `64bd695`. This turns the two user-supplied tutorial
+Updated 2026-10-03 after repository `9f66264`. This turns the two user-supplied tutorial
 specifications into checks for the PS3 BLES01857 01.24 client. It summarizes their requirements;
 it does not copy their walkthrough, dialogue, proposed API, or public-release enemy counts.
 
@@ -18,8 +18,15 @@ weapons, combat, completion, and Tower hand-off remain incomplete.
 - **Open:** a value, transition, or responsibility still requiring target-build evidence.
 - **Proposed:** backend architecture or an acceptance test; not an original wire message.
 
-The immediate gate is **diagnosing the Breach disconnect and repeated incidents**, followed by
-establishing squad authority through the protocol. In JOIN81/82 the client reported the Enter-the-Wall trigger in
+The immediate gate is **a visible, playable Breach handover at the actual entrance**, followed by
+establishing Breach squad authority through the protocol. The host now retains type-21
+slice deltas, publishes teleport finish state 3 when the client completes the request,
+and echoes the request ID in a subsequent host-address reply. These repairs pass encrypted
+session regressions; they do not prove the client can play the Breach. JOIN90 reached
+the final entrance segment with normal movement, but the local slice changed before
+the route guard's next waypoint completed. See the [October 3 checkpoint](checkpoint-2026-10-03-mission.md).
+
+In JOIN81/82 the client reported the Enter-the-Wall trigger in
 type 18 (`incident`, incident type 2665) about four times per second, and both runs later
 disconnected with `pumpkin`. Advancing the objective and disarming the trigger did not
 stop that stream; echoing incidents in JOIN83 also failed to prevent a disconnect. Schema decoding
@@ -61,7 +68,7 @@ Later objective labels must not be used to claim that an encounter or item grant
 | New-character state | Level 1, correct initial subclass and class armor, default Ghost shell; no usable firearm or travel capability. Completion/unlock state represents an unprogressed character. | Final starter kit definitions are verified below. Broad test unlock flags and CLI equipment overlays do not prove authentic initial progression or durable inventory. |
 | Appearance and rendering | The same custom Guardian appears correctly in creation, inventory, revival, mission, and later social space; repeated frames show no flicker or distorted lighting. | Selective SPU-written color-buffer reads eliminated sampled setup magenta frames and restored normal Titan lighting. Mission/social-space coverage and other appearance combinations still require captures. Keep color reads enabled as required by the fix. |
 | Account intro and character revival | Account introduction and each character's resurrection have distinct progression. Revival plays with the actual Guardian, then hands control to an unarmed player without a lasting fade. | Both revival cinematic objects and automatic 113 -> 112 hand-off work in JOIN53+. The script currently uses timed start/stop steps, not a verified cinematic-completion acknowledgement. First versus later character intro flags are open. |
-| Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; recorded-route traversal reaches the Wall, reproduced in JOIN88 with extra climb points. Highway Ghost spawning works through the protocol in JOIN87/88. The Breach disconnect is the immediate gap: JOIN88 posts cleanup reason 0x4d. This is a final-build session-status mapping; the exact waiting state needs a live sample. |
+| Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; recorded-route traversal reaches the Wall, reproduced in JOIN88 with extra climb points. Highway Ghost spawning works through the protocol in JOIN87/88. JOIN90's guarded preload walk reached within 2.51 units of the route endpoint before the local slice changed. JOIN88 posts cleanup reason 0x4d, which maps to three final-build session states; its exact selecting state remains unknown. |
 | Find a Weapon / The Breach | Client-requested slice 24 completes at the actual entrance; correct objective, darkness, Ghost torch, path, power sequence, lights, Fallen reaction, and weapon access occur in order. | Slice 24 hash `0x68935472`, bubble 3 and local group `0xfc0e45a3` are observed. Find-a-Weapon HUD works; host teleport completes the switch after walking there. Ghost light/power and automatic trigger-to-switch progression are open. Teleporting without traversal can leave the player outside the geometry. |
 | Grab the Rifle | Correct Khvostov 7G-02 instance is granted once, equipped in Primary, and saved. Armed first-person view, ammo, reload, and firing work. Replay/reconnect cannot duplicate or lose the item. | Rifle container and relevant objective/cinematic/trigger objects are identified. HUD display for objective 11, pickup transaction, item definition selection, and durable equip are not verified. A title change is insufficient. |
 | Fight through the Wall | Ordered Fallen encounters run on the expected simulator, with damage, death, radar and ammo behavior. Ghost cues, cache, tripmines, crouching, exit conditions, and ordinary respawn work. | Named squads, cue/trigger objects, firing areas, mines and exit objects are catalogued. Squad authority and spawning are incomplete. Do not invent encounter counts, kill XP, checkpoint transforms, or hazard tuning. |

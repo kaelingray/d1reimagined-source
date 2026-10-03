@@ -124,3 +124,55 @@ zero clear record versus real slice 0), connection reset, and delayed-finish can
 The original handler fails the JOIN88 regression: it keeps sending state 1 after arrival.
 All 60 `test_bap*.py` tests pass. The fix still requires a
 fresh live traversal to demonstrate that the complete Breach handover succeeds.
+
+## Baseline completeness and earlier reset gates
+
+JOIN89 later remained at client current slice 24 / state 0 for more than six minutes,
+but the view was black. A fresh native sample at `0x1df644` identified the replication
+context and showed bit 3 set in both outer SIM masks `+0x844` and `+0x850`. These masks
+do **not** uniquely identify a missing baseline: the updater has earlier gates, and the
+waiting bit is only cleared when that update path runs for its corresponding bubble.
+
+The private `baselines_highway_0124_all.txt` superset contains 2,311 entries across 31
+group keys. Comparing it to the 01.24 catalog's exported baseline lists found no omitted
+static baseline in the four groups relevant to this handover:
+
+| Group tag | Group key | Exported baselines | Missing from superset |
+|---|---|---:|---:|
+| Breach `0x80cb8167` | `0xfc0e45a3` | 213 | 0 |
+| Highway activity `0x80cb8165` | `0x992bb471` | 43 | 0 |
+| Outdoor `0x80cb8ce5` | `0xecf574b5` | 35 | 0 |
+| Bootstrap `0x80b4600f` | `0x4786c0e0` | 21 | 0 |
+
+This comparison establishes the exported static coverage. It does not establish which
+records the live client instantiated or whether additional dynamic records need a baseline.
+The bounded JOIN89 watch at `0x1df4d0` produced no hits, so it did not identify a missing
+object. A later owned-memory read encountered an empty context pool; its sample does not
+establish the pool state when the paired masks were captured.
+
+The checked final-build reset path is:
+
+1. `0x1d6fc8` enumerates outer SIM instances from the table at `0x1a20bf0`. It only calls
+   `0x1d8e14` / `0x1d8b6c` when SIM byte `+0x10` is nonzero. At `0x1d70a8`, native
+   register `r10` is the outer SIM and `r7` is this byte, including inactive instances.
+2. `0x1d8b6c` obtains the **actual resource bubble** through `0x14dcf4`. That routine
+   derives it from the loaded scenario's slice at `+0x110c` using `0x158dbc`: index
+   `-1` produces bubble `-1`; otherwise the bubble is `(index >> 3) & 0x3f`.
+   At `0x1d8b98`, `r3` still holds this bubble, so the native register log can observe
+   it without reading the unlogged `r27`. Client slice reports alone do not prove that
+   this resource-side slice has changed.
+3. An invalid resource bubble (`< 0` or `>= 128`) exits before baseline readiness.
+   If neither the corresponding `+0x850` waiting bit nor `+0x858` bit 0 is set, it also
+   exits before readiness. At `0x1d8be8`, `r3` is the embedded replication context
+   (outer SIM `+0x18`) passed to the predicate.
+4. `0x1df358` examines occupied records, using the pool's occupancy bitmap and `0x48`
+   record stride. A pending-baseline byte at record `+0x15` reaches `0x1df4d0`, where
+   `r30` still points to the complete record. The predicate fails only for such a
+   record assigned to the current resource bubble, a negative bubble, or an out-of-range
+   bubble; pending records for other valid bubbles are ignored.
+5. Successful readiness runs the reset callbacks and clears the matching `+0x850`
+   waiting bit at `0x1d8cbc`, leaving its `+0x844` bit set. Capturing the active flag and
+   actual resource bubble is therefore necessary before interpreting paired set bits
+   as an object-baseline failure.
+
+No specific missing baseline object has been established by this investigation.

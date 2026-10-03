@@ -10,7 +10,9 @@ only. Diagnostic watch lines are preserved and private audit/state/result/grid f
 written beside the manifest by default. This is a route test, not proof of mission completion.
 
 --allow-breach-preload explicitly allows the observed engine-3 player-follow request for
-24/0x68935472 while the same player remains in 112. Other transitions still stop the route.
+24/0x68935472 while the same player remains in 112. At the canonical route's final point,
+the observed reversed 24 -> 112 request permits at most 20 seconds within five units of the
+endpoint, allowing the same live player to finish crossing the doorway. Other transitions stop.
 """
 
 import argparse
@@ -36,6 +38,8 @@ WALL_ROUTE = ROOT / "missions/routes/enter_the_wall.json"
 WALL_DENSE_POINTS = (1, 2, *range(44, 52))
 WALL_SLICE = (112, 0x811C9DC5)
 BREACH_SLICE = (24, 0x68935472)
+FINAL_ENTRY_SECONDS = 20
+FINAL_ENTRY_DISTANCE = 5
 HOOK = re.compile(rb"\bpc=0x138e24\s+lr=0x352a4c\b.*?\br4=0x([0-9a-f]+)\b", re.I)
 HOOK_LINE = re.compile(r"^\s*(?:0x)?138e24(?:\s|$)", re.I)
 SLICE = re.compile(rb"\b(current|target) (-?\d+):0x([0-9a-f]+)", re.I)
@@ -174,9 +178,27 @@ class Guard:
         self.deadline = None
         self.allow_breach_preload = allow_breach_preload
         self.entity_trace = self.entity = self.entity_seen_at = None
+        self.entity_position = self.final_endpoint = self.final_entry_deadline = None
 
     def bind_player(self, trace, entity):
         self.entity_trace, self.entity, self.entity_seen_at = trace, entity, time.monotonic()
+        self.entity_position = None
+
+    def arm_final_entry(self, endpoint):
+        """Bound the observed doorway reversal to this canonical route's final target."""
+        self.final_endpoint = tuple(endpoint)
+        self.final_entry_deadline = time.monotonic() + FINAL_ENTRY_SECONDS
+        self.audit(ev="final_entry_armed", endpoint=self.final_endpoint,
+                   seconds=FINAL_ENTRY_SECONDS, distance=FINAL_ENTRY_DISTANCE)
+
+    def final_entry_ready(self, state, position):
+        reported = (self.world.current, self.world.target)
+        return (self.final_endpoint is not None and position is not None and
+                time.monotonic() < self.final_entry_deadline and
+                math.dist(position, self.final_endpoint) <= FINAL_ENTRY_DISTANCE and
+                state.get("native_slice_current") == BREACH_SLICE and
+                state.get("native_slice_target") == WALL_SLICE and
+                reported in ((WALL_SLICE, BREACH_SLICE), (BREACH_SLICE, WALL_SLICE)))
 
     def check_player(self):
         if self.entity_trace is None:
@@ -189,6 +211,13 @@ class Guard:
             self.entity_seen_at = time.monotonic()
         if time.monotonic() - self.entity_seen_at > 3:
             raise RouteStopped("follow-player hook is no longer fresh")
+        position = struct.unpack(">fff", self.memory.read(self.entity + 0x40, 12))
+        if not all(math.isfinite(v) and abs(v) < 1e6 for v in position):
+            raise RouteStopped("player position is invalid")
+        if self.entity_position is not None and math.dist(position, self.entity_position) > 25:
+            raise RouteStopped("player position jumped; respawn requires a fresh route")
+        self.entity_position = position
+        return position
 
     def observe(self):
         self.world.update(self.tail.lines())
@@ -206,12 +235,14 @@ class Guard:
         allowed_engines = (0, 3) if preload else (0,)
         if not (state["stable"] and state["current"] == 36 and state["engine"] in allowed_engines):
             raise RouteStopped(f"mission is loading or leaving: stage {state['current']}, engine {state['engine']}")
+        position = self.check_player() if preload else None
         if preload:
             allowed_targets = (None, WALL_SLICE, BREACH_SLICE)
             world_ready = (self.world.current == WALL_SLICE and self.world.target in allowed_targets and
                            state.get("native_slice_current") == WALL_SLICE and
                            state.get("native_slice_target") in allowed_targets and
                            (state["engine"] != 3 or state.get("native_slice_target") == BREACH_SLICE))
+            world_ready = world_ready or self.final_entry_ready(state, position)
         else:
             world_ready = self.world.ready()
         if not world_ready:
@@ -220,8 +251,6 @@ class Guard:
                                f"native target {state.get('native_slice_target')}")
         if self.walking and self.world.joins != self.join_at_start:
             raise RouteStopped("client rejoined the activity")
-        if preload:
-            self.check_player()
         return state
 
 
@@ -383,6 +412,9 @@ def main(argv=None):
                       allow_breach_preload=args.allow_breach_preload)
                 for index, point in points:
                     guard.check()
+                    if (args.allow_breach_preload and args.route.resolve() == WALL_ROUTE.resolve() and
+                            index == points[-1][0]):
+                        guard.arm_final_entry(point)
                     audit(ev="waypoint", route_index=index, xyz=point)
                     if not walker.go(point[:2], radius=args.radius, budget=max(0, guard.deadline - time.monotonic())):
                         raise RouteStopped(f"waypoint {index} was not reached")

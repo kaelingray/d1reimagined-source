@@ -31,8 +31,9 @@ take precedence. See [the acceptance checks](guardian-rises-acceptance.md).
   Engine 6, unexpected targets, cleanup, rejoin, respawn, or an expired budget
   still stop input. Final-build follow-player code `0x352968` runs in engine
   states up to 3 and sets state 3 through `0x352138` for this area request;
-  JOIN88's successful approach retained state 3. This mode needs its own live
-  validation rather than treating the older unguarded walk as proof.
+  JOIN88's successful approach retained state 3. JOIN90 validated the guarded
+  approach and climb through that state, to within 2.51 units of the endpoint.
+  Its final doorway crossing stopped on the native slice reversal described below.
 - **Slow startup:** the join wrapper keeps its launcher/input observation alive
   for the advertised eight-minute sign-in window. Previously the inner 250-second
   observation could end the outer wait early.
@@ -87,6 +88,51 @@ mission scripts encode/decode against the corrected final-build schema, and
 the modified PowerShell join wrapper parses without errors. JOIN90 starts a
 fresh stack with the repaired host handler and will exercise the opted-in
 preload route before its host teleport.
+
+## JOIN90: guarded approach and the final doorway
+
+The repaired handler completed resurrection's 113 -> 112 request: client state 4
+at 16:34:44, current 112 at 16:34:47, idle at 16:34:50, and finished request
+dropped at 16:34:55. An inactive bubble-14 reset and highway Ghost generation
+were sent after arrival. The preload route started at 16:36:01 and retained
+all narrow-climb waypoints. The Enter-the-Wall trigger fired at 16:40:02;
+Find a Weapon became active at 16:40:12. These labels do not prove illumination
+or weapon access.
+
+At 16:40:51 the route stopped with the same player at about
+`(351.464, -797.333, 13.929)`, 2.51 units from the recorded endpoint. Native
+current had become 24 / `0x68935472`, with target 112 / `0x811c9dc5`, while
+the AH log still reported current 112 / target 24. Its report caught up at
+16:41:31. No manual host teleport was sent in this run. The guard correctly
+caught the actual local change before the network report; the player had
+not completed the final target, so this is not a full Breach-entry result.
+
+The client departed at 16:55:50, almost exactly 15 minutes after its last
+route input. The error-post watch captured category `0x19`, reason `0x12`,
+through `0x35fa80`. The final-build leave-condition-1 path selects this reason
+only after its configured in-world elapsed and local-input thresholds pass.
+No failure-state-37/38 callback was captured. This departure is an inactivity
+timeout, and must not be conflated with JOIN88's reason `0x4d`.
+
+The opted-in route now permits that exact native 24 -> 112 reversal only at
+the canonical route's last waypoint, with a fresh unchanged player, in-world
+stage 36 / engine 0 or 3, within five units of the endpoint, and for at most
+20 seconds. The accepted AH pairs are exactly 112/24 or 24/112. Other changes,
+cleared targets, position jumps, respawn, cleanup and rejoin still stop input.
+Two new regressions exercise these bounds; all 109 script tests pass.
+
+## JOIN91: repeat malformed shader-cache boot
+
+The next boot stalled before initializing the 01.24 bootflow singleton. Its
+RSX worker log contained repeated `Invalid Src type 3` and unexpected precision
+messages while precompiling cached fragment programs. The same symptom occurred
+in JOIN78, despite normal subsequent live frames. The owned JOIN91 stack was
+stopped. The cache's 210,251 files were preserved by renaming only its private
+`shaders_cache` directory to `shaders_cache.before-JOIN92-2026-10-03`.
+
+JOIN92 boots again with a fresh shader cache. This recovery does not repair the
+cache writer or loader; a bounded cache-validation fix is being investigated.
+The SPU colour-buffer changes and required Read Color Buffers remain enabled.
 
 ## Remaining acceptance work
 

@@ -87,9 +87,13 @@ posts the slice switch through `0x35097c` after the engine readiness checks
 (`0x350a8c/0x158e1c`). State 3 needs the incoming request's **state 3**:
 `0x3ae0d8` checks the local phase and `0x3ae0dc` checks the incoming state.
 Its success path clears the pending byte at `0x3ae10c`. `0x391068` additionally
-gates the final `0x72932c` callback, requiring `0xc07b30(request)` to be nonzero
-and the other pending byte `+0x18` to be zero. The second pending byte still
-clears after accepted host state 3 regardless of that callback gate's result.
+gates the final `0x72932c` callback: **zero permits the callback**, while nonzero
+skips it. `0x1da88c(context)` returns context `+0x68`; the getter's `+0x5010`
+therefore points to the **first incoming record at context `+0x5078`**.
+`0xc07b30(record)` simply returns whether that record's byte `+1` is zero.
+The normal callback path requires that byte to be zero and the other pending
+byte `+0x18` to be zero. The second pending byte still clears after accepted
+host state 3 regardless of that callback gate's result.
 
 The type-11 world-state receiver (`0x1d97a4 -> 0x1da894`) copies the decoded
 world state to context `+0x70`. Thus the two inputs are group-block fields
@@ -156,6 +160,56 @@ state 38 but the host claims a finish publication, add these bounded watches:
 the dumps show the incoming request and pending copy. `0x3ae10c` is the final
 clear. A watch at `0x3ae0d8` would run every frame while waiting and could use
 its budget before the finish arrives.
+
+## Black frame after a completed protocol switch
+
+A nonzero `0x391068` result causes `0x3ae0e8` to skip `0x72932c`, while the
+pending teleport still advances 3 -> 4 -> 0. That callback is not retried by
+the teleport machine once it is idle. However, this does **not** establish a
+permanently lost respawn when the first pending structure is nonzero: the
+first machine independently calls `0x72932c` at `0x39142c` on completing its
+phase 4. There are only these two direct callers in the checked ELF. A stuck
+first machine would normally become session state 37 through its timeout.
+
+`0x72932c` does not unconditionally reposition or respawn an existing player.
+It requires the player manager `*0x1b29450` to exist and its byte `+0x39` to
+be active. It enumerates its active records, matches each record's eight-byte
+owner at `+0x620` against the local descriptor `*0x1b29458` (descriptor active
+byte `+0xa8`), then calls `0x3a86c0(player_datum, 0, -1)` **only when the
+record's entity slot `+0x644` is -1** (`0x729430..0x729448`). The latter posts
+event `0x52` through `0x27d744` at `0x3a8734`, unless global gate `0x71aba4()`
+is true. That gate checks globals `0x1b28860/0x1b28864`; it is not a per-player
+argument check.
+
+These completion watches distinguish a skipped callback, a callback with an
+existing entity, and an actual posted respawn event:
+
+```text
+3ae0e4 6 r30+0:20
+729438 12
+3a8734 8 r5+0:36
+```
+
+At `0x3ae0e4`, r3 is the final `0x391068` result. At `0x729438`, r3 is the
+entity-slot value, before its conditional respawn call. At `0x3a8734`, r3 is
+event `0x52` and r5 points to its payload (player datum at +0, flag at +4,
+requested spawn index at +0x20). The last hook proves a posting, not completed
+entity creation.
+
+An optional `3910c0 6 r29+0:28 r31+0:24` watch shows the gate inputs: r3 is
+the byte-1-zero test, r29 points to first pending `+0x18`, and r31 to the two
+incoming records `+0x5078/+0x5080`. **Arm it close to the teleport finish**:
+`0x391068` also has unrelated direct callers, so this hook can consume its
+budget early. The default stand-in world record has first byte `+1 == 0`,
+so a skipped first-record gate is an observation to establish, not an assumed
+cause of JOIN89's black frame.
+
+Existing JOIN80 evidence already describes a different failure: teleporting
+before walking to the Wall leaves the player outside the Breach geometry,
+with black output and no player updates. A completed protocol and existing
+entity do not prove an entry trigger fired or that the player lies inside
+the destination geometry. See the JOIN81/82 paragraph in
+[the profile checkpoint](checkpoint-2026-10-01-profile.md).
 
 Reproduce the static checks with `scripts/d1_eboot.py --elf <private-01.24-ELF>`:
 `disasm 0x35dd14 --func`, `disasm 0x33a808 --func`,
