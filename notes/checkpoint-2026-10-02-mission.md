@@ -103,3 +103,16 @@ group identities, kinds, indexes and baselines.
 - **Wrapper:** JOIN86's Cross presses came before the title accepted input. With no
   sign-in after 8 minutes, the wrapper stopped before starting the activity host, and
   logging in by hand ended in currant. If that happens, rerun rather than continuing.
+- **JOIN88 (fixed script, no help):**
+  - The dialogs were dismissed until the objective showed; arrival in 112 came 28 s after state 4.
+  - `bubble_reset 14:2` plus a `sq_ghost` generation brought the Ghost member report in
+    21 s (reproduced).
+  - The walk with denser waypoints at the climb (328.6,-823.5)/(327.5,-820.4) reached the Wall
+    in 3.5 min (29/29 waypoints). JOIN87's sparser list overshot into the pit beside the
+    climb (z about -2, no way out).
+  - The client requested 24 by itself, the host teleport went out, the client reached
+    state 4 at 15:39:54 and then left at 15:41:15 with **pumpkin, cleanup-stage reason 0x4d**
+    (see `errors.md`; probably `private_activity_host_timed_out_initializing_ipahp`).
+  - After the leave, the client sent `ahp req` with value 1 (twice). At join it had sent value 0.
+- Next: find the 01.24 "ipahp" initialization (what the client waits for after a switch
+  into a private bubble), starting from the reason-0x4d writer and the `ahp req` argument.
