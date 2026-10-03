@@ -5,9 +5,8 @@
     "Order from the reference recording: revival cinematic (third person, then first person), 'Enter the Wall',",
     "trigger at the Wall, 'Find a Weapon' in The Breach, the Ghost's light (pf_104a_pwr), 'Grab the Rifle'.",
     "Field meanings are from the EBOOT handlers; the values marked in the note as guesses are what the runs test.",
-    "Triggers (kind 0x1d): +0 true arms the trigger; the client reports once per arming, when its last report is older than",
-    "the arming time at +4 (0xb2fb68), so +4 = \"$now\" and --ah-sim-clock is required. Which client message carries the",
-    "report is not known yet, so the trigger steps match the trigger's object id in any client message type.",
+    "Triggers (kind 0x1d): +0 true arms the trigger, with the arming time at +4 = \"$now\" and --ah-sim-clock enabled.",
+    "01.24 trigger reports are type-18 incidents; repeated reports and the Breach disconnect still need diagnosis.",
     "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
     "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
     "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
@@ -16,7 +15,9 @@
     "the title (and on change its description) shows at the left of the HUD. Each objective is set to 1 and 6 s later to 5.",
     "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet.",
     "Handover (JOIN70): the completed objective goes to 3 (with its completion sequence), 4 s later to 0 while the next",
-    "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5."
+    "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5.",
+    "01.24 JOIN77/81: player-trigger reports are type-18 incidents. Objective lane phases cancel delayed updates from earlier handovers.",
+    "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records."
   ],
   "clock": "ready",
   "objects": {
@@ -39,12 +40,13 @@
     "obj_graveyard": "0x992bb471:0x20:14:0x80802a1b",
     "seq_graveyard_in": "0x992bb471:0x5:15:0x808029a1",
     "trig_graveyard": "0x992bb471:0x1d:38:0x80800463",
-    "sq_breach_floor_a": "0xfc0e45a3:0x1:34:0x8080071e:1",
-    "sq_breach_floor_b": "0xfc0e45a3:0x1:36:0x8080071e:1",
-    "sq_breach_wall_l_a": "0xfc0e45a3:0x1:32:0x8080071e:1",
+    "sq_breach_floor_a": "0xfc0e45a3:0x1:28:0x8080071e:1",
+    "sq_breach_floor_b": "0xfc0e45a3:0x1:30:0x8080071e:1",
+    "sq_breach_wall_l_a": "0xfc0e45a3:0x1:26:0x8080071e:1",
     "sq_ghost": "0xecf574b5:0x1:28:0x8080071e:1",
-    "seq_nux_ghost": "0xfc0e45a3:0x5:100:0x808029a1",
-    "trig_ghostlight": "0xfc0e45a3:0x1d:107:0x80800463"
+    "trig_ghostlight": "0xfc0e45a3:0x1d:120:0x80800463",
+    "sq_nux_ghost": "0xfc0e45a3:0x1:94:0x8080071e:1",
+    "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463"
   },
   "steps": [
     {
@@ -117,7 +119,9 @@
           "0": true,
           "4": "$now"
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "enter_wall"
     },
     {
       "on": {
@@ -130,11 +134,13 @@
           "0": 5,
           "0x2c0": -1
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "enter_wall"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_enter_wall"
       },
       "set": {
@@ -149,11 +155,13 @@
         "trig_enter_wall": {
           "0": false
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "investigate"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_enter_wall"
       },
       "delay": 4,
@@ -174,11 +182,13 @@
           "0": true,
           "4": "$now"
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "investigate"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_enter_wall"
       },
       "delay": 10,
@@ -187,11 +197,13 @@
           "0": 5,
           "0x2c0": -1
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "investigate"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_investigate"
       },
       "set": {
@@ -210,11 +222,13 @@
         "trig_investigate": {
           "0": false
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "get_weapon"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_investigate"
       },
       "delay": 4,
@@ -235,11 +249,13 @@
           "0": true,
           "4": "$now"
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "get_weapon"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_investigate"
       },
       "delay": 10,
@@ -248,11 +264,13 @@
           "0": 5,
           "0x2c0": -1
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "get_weapon"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_ghost_light"
       },
       "set": {
@@ -274,7 +292,7 @@
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_get_weapon"
       },
       "set": {
@@ -289,11 +307,13 @@
         "trig_get_weapon": {
           "0": false
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "graveyard"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_get_weapon"
       },
       "delay": 4,
@@ -314,11 +334,13 @@
           "0": true,
           "4": "$now"
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "graveyard"
     },
     {
       "on": {
-        "type": "any",
+        "type": 18,
         "object": "trig_get_weapon"
       },
       "delay": 10,
@@ -327,7 +349,9 @@
           "0": 5,
           "0x2c0": -1
         }
-      }
+      },
+      "lane": "objectives",
+      "phase": "graveyard"
     },
     {
       "on": {

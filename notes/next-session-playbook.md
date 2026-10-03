@@ -5,19 +5,20 @@
 > `git pull --rebase` before you continue; do not re-stage it. Start with
 > [the handoff](HANDOFF-2026-10-01.md).
 
-## Active work: 01.24 (updated 2026-10-01)
+## Active work: 01.24 (updated 2026-10-02)
 
-The current milestone is stage **36 `activity:in_world`**, sustained in FINAL124_JOIN16–20
-with an urgent-message dialog over a black scene. No visible Guardian is verified yet.
-Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`.
-Activity 231 is level 25; activity 230 reports no active activity. The next gate is **lobster**,
-reason `0x10c`, after the client requests slice 24. Advertising all bubble states as zero
-avoids immediate failure but leaves engine state 6 and a black scene. The request also
-occurs without the mission director, so the scripted cinematic is not its established cause.
+Start with the [October 2 checkpoint](checkpoint-2026-10-02-mission.md) and
+[acceptance checks](guardian-rises-acceptance.md). JOIN53–82 supersede the earlier black-scene
+experiments: both resurrection cinematics, the outdoor Guardian, the first objective HUD,
+and a recorded walk to the Wall have live evidence. The current work is the Breach handover,
+its disconnect, and running Ghost/Fallen squads through the protocol. The mission is not
+complete. Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`;
+activity 231 is level 25 and 230 reports no active activity. The JOIN12–20 lobster and
+black-scene recipes below remain historical, not the next experiment to repeat.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
 magenta blocks and distorted character lighting are fixed together by
-`patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Mission visuals,
-the Ghost cinematic and movement still need screenshots and live verification. The
+`patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Keep Read Color Buffers
+enabled; disabling it distorted the Guardian. Continue checking later mission scenes. The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the

@@ -564,3 +564,94 @@ class MissionTeleports(unittest.TestCase):
         self.assertFalse(bap.client_in_world(bytes.fromhex("000000007fffffff")))
         self.assertTrue(bap.client_in_world(bytes.fromhex("000000018000000e")))
         self.assertFalse(bap.client_in_world(bytes(2)))
+
+
+class TeleportCompletion(unittest.TestCase):
+    """A completed host teleport settles, expires, and releases the next queued request."""
+
+    def complete_and_queue_next(self, *, delay=0, follow=False, repeat_report=False):
+        import socket
+        import tempfile
+        import threading
+        import time
+        from unittest.mock import patch
+        from test_ah_session import FakeClient, PEER, schema
+
+        # Exercise the real encrypted session and scheduling loop. World/client-state codecs
+        # are replaced here so this protocol regression needs no private exported schema.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        activity_schema = schema()
+        path = Path(tmp.name) / "schema.json"
+        path.write_text(json.dumps(activity_schema), encoding="utf-8")
+        args = bap.parse_args(["--capture-dir", tmp.name, "--schema", str(Path(tmp.name) / "none.json"),
+                               "--activity-schema", str(path), "--ah-join", "--ah-state",
+                               "--ah-world-state", "113" if follow else "112",
+                               "--ah-heartbeat", "0.01:world",
+                               "--ah-teleport-finish-delay", str(delay),
+                               *(["--ah-follow-client-zone"] if follow else [])])
+        args.ah_teleports = [((112, 0x811C9DC5), 0), ((24, 0x68935472), 0)]
+        settle = 0.12
+
+        def world_data(_schema, _request, zone, *unused, **fields):
+            return json.dumps({"zone": zone, "sent_at": time.monotonic(), **fields}).encode()
+
+        for mock in (patch.object(bap, "world_state_delta", side_effect=world_data),
+                     patch.object(bap, "activity_state", return_value=b"activity"),
+                     patch.object(bap, "client_slice_record", side_effect=lambda _s, body: json.loads(body)),
+                     patch.object(bap, "client_slice_state", return_value="test report"),
+                     patch.object(bap, "TELEPORT_SETTLE_SECONDS", settle),
+                     patch.object(bap, "log")):
+            mock.start()
+            self.addCleanup(mock.stop)
+        server, client = socket.socketpair()
+        thread = threading.Thread(target=bap.handle, args=(server, ("127.0.0.1", 0), args), daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 2)
+        self.addCleanup(client.close)
+        c = FakeClient(client)
+        c.notify(bap.AH_JOIN_REQUEST, bap.investment.encode(activity_schema, bap.JOIN_REQUEST_TYPE,
+                                                          {0: 7, 8: 9, 0x10: {0: PEER}}))
+        report = ({"target": [112, 0x811C9DC5], "state": 4} if delay
+                  else {"current": [112, 0x811C9DC5], "state": 0})
+        reported, worlds = False, []
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            c.notify(bap.AH_CLIENT_STATE if reported and repeat_report else 15,
+                     json.dumps(report).encode() if reported and repeat_report else b"\0")
+            for arrival, subtype, data in c.pushes(0.005):
+                if subtype != bap.AH_ESTABLISH:
+                    continue
+                world = json.loads(data)
+                worlds.append((arrival, world))
+                if world.get("teleport") == [1, 112, 0x811C9DC5] and not reported:
+                    c.notify(bap.AH_CLIENT_STATE, json.dumps(report).encode())
+                    reported = True
+            if any(w.get("teleport") == [1, 24, 0x68935472] for _, w in worlds):
+                break
+
+        finished = [(t, w) for t, w in worlds if w.get("teleport") == [3, 112, 0x811C9DC5]]
+        dropped = [(t, w) for t, w in worlds if finished and t > finished[0][0]
+                   and w.get("teleport") is None]
+        transitions = []
+        for _, world in worlds:
+            value = {k: v for k, v in world.items() if k != "sent_at"}
+            if not transitions or value != transitions[-1]:
+                transitions.append(value)
+        self.assertTrue(finished, transitions)
+        self.assertTrue(dropped, transitions)
+        self.assertGreaterEqual(dropped[0][1]["sent_at"] - finished[0][1]["sent_at"], settle - 0.02)
+        self.assertTrue(any(w.get("teleport") == [1, 24, 0x68935472] for _, w in worlds), transitions)
+        # State 3 reuses the request version; removing it publishes a new version.
+        started = next(w for _, w in worlds if w.get("teleport") == [1, 112, 0x811C9DC5])
+        self.assertEqual(finished[0][1]["version"], started["version"])
+        self.assertGreater(dropped[0][1]["version"], finished[0][1]["version"])
+
+    def test_already_current_teleport_expires_despite_repeated_arrival_reports(self):
+        self.complete_and_queue_next(repeat_report=True)
+
+    def test_follow_mode_teleport_expires(self):
+        self.complete_and_queue_next(follow=True)
+
+    def test_timer_finished_teleport_expires_without_further_slice_reports(self):
+        self.complete_and_queue_next(delay=0.06)

@@ -1,7 +1,8 @@
 # A Guardian Rises (act_cosmo_m0_highway, 01.24 "The Taken King: Prelude") - how it is meant to play
 
-Sources (2026-10-02): the activity's object lists (`mission-objects-highway.md`, names from the
-disc's group tags), its two subtitle libraries (`0x80cb8d68` revival, `0x80cb91bb` mission, from
+Sources (2026-10-02): the activity's corrected object lists (`mission-objects-highway.md`, names
+read through per-record pointers from the latest local disc/final 01.24 package chains), its two
+subtitle libraries (`0x80cb8d68` revival, `0x80cb91bb` mission, from
 the private catalog's `string-libraries.json`), the objective/description library `0x80cc052f`,
 the launch-day walkthrough timeline in `feature-gaps.md`, and today's runs (JOIN54-77).
 OBSERVED = seen in content or a run; INFERRED = from names/order, to confirm.
@@ -28,17 +29,27 @@ The Ghost that floats beside the player is an **AI squad the host spawns**, not 
   `o_ghost_bc`, `o_ghost_bc_int`, `o_ghost_c` (kind 4; "_int" = interior) and player triggers
   `pt_ab`, `pt_ab_1`, `pt_ab_2` with volumes `tv_ab`, `tv_ab_1`, `tv_ab_2` - the Ghost moves
   between waypoints a -> b -> c as the player advances (INFERRED from names).
-- The Breach: `sq_nux_ghost` / `sq_nux_ghost__ghost` ("nux" = new-user experience) with
-  `pt_nux_ghost_light_up_start`, `pt_nux_ghost_light_up_continue`,
+- The Breach: `sq_nux_ghost` / `sq_nux_ghost__ghost` ("nux" = new-user experience) are
+  **kind 1/index 94** and **kind 2/index 95** in `0xfc0e45a3`. The player triggers
+  `pt_nux_ghost_light_up_start` and `pt_nux_ghost_light_up_continue` are kind `0x1d` at
+  indices **120 and 121**. The group also contains
   `pm_nux_ghost_light_up_fly_to_gun` (+ volumes `tv_nux_ghost_light_up_*`), `ho_ghostlight`,
   `of_ghostlight`, `o_device_invis_light`, and `tv_flashlight` in the sequence group. This is the
   torch: on entering the dark Breach the Ghost lights up ("We need more light. I'll see what I can
   do."), then flies to the rifle.
+- **Name correction:** the old printable-string scan shifted The Breach's names by six
+  positions. Kind 5/index 100 is `seq_breach_fallen_drop`; kind `0x1d`/index 107 is
+  `pt_fallen_3_spawn`. Neither is a Ghost object. `ho_ghostlight` is kind `0x18`/index 101,
+  `pm_nux_ghost_light_up_fly_to_gun` is kind `0x1c`/index 123, `of_ghostlight` is kind
+  `0x21`/index 124, and performance `nux_ghost` is kind `0x28`/index 125. Their exact state
+  behavior is still to trace. IDs and baseline lists were unaffected by the name-decoding bug.
 - Status: the stand-in spawns **no squads** - neither the Ghost nor the Fallen - because the
   client only runs a squad when its bubble's roster slot is flagged as locally simulated (the
   authority gate `0x20f858`; see `mission-director.md`, "01.24 runtime"). With that flag set by
   hand (JOIN79), a new `sq_ghost` generation made the client spawn and report
-  `sq_ghost__ghost`. Open: the host message that grants the flag.
+  `sq_ghost__ghost`. A wire-only inactive-slot generation experiment is now available as
+  `--ah-bubble-reset`; see `simulation-bubble-reset.md`. Retail ownership semantics and
+  successful spawning through that option remain to verify.
 
 ## Beat by beat
 

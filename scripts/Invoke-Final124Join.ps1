@@ -104,7 +104,7 @@ function Get-JoinEmulatorId {
 }
 # Character select uses a free cursor: right and up onto the stored character, then Log In.
 & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys D -HoldMs 500 -WaitSeconds 0 | Out-Null
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys W -HoldMs 250 -WaitSeconds 1
+& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys W -HoldMs 125 -WaitSeconds 1
 & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys X -WaitSeconds 3
 $deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
 while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {

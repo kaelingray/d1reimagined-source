@@ -452,8 +452,10 @@ def cmd_bubbles(a):
 
 # Replicated entity groups (class 0x8080076e): {u32 size, u32 destination hash, u32 group key
 # (FNV-1 of the group's name, the key of its replicated object ids), u32, array @0x10 of objects
-# {u8 kind, 3 bytes, u32}, u32, array @0x1c, ...}, then one NUL-terminated dev name per object in
-# the same order. An object's replicated id is (group key, kind, position in this list): bubble
+# {u8 kind, 3 bytes, i32 relative name pointer}, u32, array @0x1c, ...}. Each name pointer is
+# relative to its own field at record +4; zero means an unnamed object. Scanning printable
+# strings instead misassigns names when the binary data includes printable fragments or a name
+# is empty. An object's replicated id is (group key, kind, position in this list): bubble
 # 14's group 0xecf574b5 has kind 4 at 0-27 (o_ghost_*, pigeon_1-22), kind 1 sq_ghost at 28, as in
 # the live client's records (TEST362).
 GROUP_CLASS = 0x8080076E
@@ -464,11 +466,23 @@ def entity_group(data):
     if struct.unpack_from(">II", data, 0x10) == (0, 0):
         return key, []  # empty groups have no dynamic-array header
     count, off, _ = dyn_array(data, 0x10)
-    kinds = [data[off + 8 * i] for i in range(count)]
-    names = [m.group(1).decode("latin-1")
-             for m in __import__("re").finditer(rb"([\x20-\x7e]+)\x00", data[off + 8 * count:])]
-    names = names[-count:] if len(names) >= count else names + [""] * (count - len(names))
-    return key, list(zip(kinds, names))
+    if off + 8 * count > len(data):
+        raise ValueError("entity-group object table is truncated")
+    objects = []
+    for index in range(count):
+        record = off + 8 * index
+        relative = struct.unpack_from(">i", data, record + 4)[0]
+        name = ""
+        if relative:
+            target = record + 4 + relative
+            if not 0 <= target < len(data):
+                raise ValueError(f"entity-group object {index} name pointer is out of bounds")
+            end = data.find(b"\0", target)
+            if end < 0:
+                raise ValueError(f"entity-group object {index} name is unterminated")
+            name = data[target:end].decode("latin-1")
+        objects.append((data[record], name))
+    return key, objects
 
 
 def cmd_groups(a):

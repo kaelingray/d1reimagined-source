@@ -38,6 +38,7 @@ which deserializes as an all-zero response structure and no blob.
 """
 
 import argparse
+from mission_script import ReactionQueue, ReactionRule, reaction_scope
 import datetime
 import hashlib
 import hmac
@@ -695,7 +696,50 @@ def machine_list(schema, machine_ids):
     return investment.encode(schema, MACHINES_TYPE, {0: {0: len(machine_ids), 4: list(machine_ids)}})
 
 
-def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=()):
+def bubble_reset_spec(text):
+    """Inactive roster-slot generations to test the client's bubble reset path."""
+    if not isinstance(text, str):
+        raise ValueError("bubble resets expect a SLOT[:GEN],... string")
+    resets = []
+    for part in text.split(","):
+        fields = part.split(":")
+        if len(fields) not in (1, 2) or not fields[0]:
+            raise ValueError("bubble resets expect SLOT[:GEN],...")
+        slot = int(fields[0], 0)
+        generation = int(fields[1], 0) if len(fields) == 2 else 1
+        if not 0 <= slot < ROSTER_SLOTS or not 1 <= generation <= 0xFFFF:
+            raise ValueError("bubble reset slots must be 0..64 and generations 1..65535")
+        if any(existing == slot for existing, _ in resets):
+            raise ValueError(f"duplicate bubble reset slot {slot}")
+        resets.append((slot, generation))
+    return tuple(resets)
+
+
+def update_bubble_resets(current, changes, client_slot):
+    """Merge one validated control batch without mutating the shared startup options."""
+    merged = dict(current)
+    merged.update(changes)
+    resets = tuple(merged.items())
+    simulation_roster(None, client_slot, 0, resets)  # validate the entire update atomically
+    return resets
+
+
+def simulation_roster(peer_id, slot, generation, bubble_resets=()):
+    """Keep the client slot active while changing only explicit inactive slots."""
+    if not 0 <= slot < ROSTER_SLOTS or not 0 <= generation <= 0xFFFF:
+        raise ValueError("client roster slot or generation is out of range")
+    slots = {0xC * slot: {0: peer_id, 8: generation, 0xA: True}}
+    for reset_slot, reset_generation in bubble_resets:
+        if not 0 <= reset_slot < ROSTER_SLOTS or not 1 <= reset_generation <= 0xFFFF:
+            raise ValueError("bubble reset slot or generation is out of range")
+        if 0xC * reset_slot in slots:
+            raise ValueError(f"bubble reset slot {reset_slot} collides with the client or another reset")
+        slots[0xC * reset_slot] = {8: reset_generation, 0xA: False}
+    return slots
+
+
+def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=(),
+               bubble_resets=()):
     """Host type 5 (0x25b920 -> session receive -> event 0x13 -> 0x1c85e0): u8 epoch, roster
     present bit, 65 changed-slot bits, roster delta (present bit + type 0x80800cf7: 65 slots of
     {opt 8-byte peer id, opt u16, bool active}; changed slots add/remove peers via 0x1c8280),
@@ -706,14 +750,19 @@ def sim_packet(schema, peer_id, slot=0, generation=1, epoch=0, tick=0, objects=(
     a state B type (+8), a 0 bit for it; a 0 bit ends the list. `objects` holds (id values,
     state A type or None for a default baseline, state values, has state B). Replicated state is
     applied only once every object of the active bubbles has had a baseline (`0x1ce1b8`: record
-    +0x15), so all of them must be listed."""
+    +0x15), so all of them must be listed. `bubble_resets` explicitly changes inactive roster
+    slots without assigning a peer. In 01.24, 0x1d90e0 arms both reset flags on a changed
+    generation; 0x1d8b6c clears the waiting flag after that bubble's baselines are ready.
+    Repeated packets preserve the generation, so a heartbeat does not reset it again.
+    This opt-in experiment does not establish retail authority ownership semantics."""
+    roster = simulation_roster(peer_id, slot, generation, bubble_resets)
     w = investment.BitWriter()
     w.put(epoch, 8)
     w.put(1, 1)
     for i in range(ROSTER_SLOTS):
-        w.put(1 if i == slot else 0, 1)
+        w.put(1 if 0xC * i in roster else 0, 1)
     w.put(1, 1)
-    investment.encode_into(w, schema, ROSTER_TYPE, {4: {0xC * slot: {0: peer_id, 8: generation, 0xA: True}}})
+    investment.encode_into(w, schema, ROSTER_TYPE, {4: roster})
     w.put(tick, 32)
     w.put(1 if objects else 0, 1)
     for object_id, state_type, state, has_b in objects:
@@ -952,6 +1001,7 @@ def expand_mission(mission, schema):
     heads = {name: object_spec(f"{head}=") for name, head in mission.get("objects", {}).items()}
     timed, reactive = [], []
     for number, step in enumerate(mission.get("steps", [])):
+        scope = reaction_scope(step)
         changes = []
         for name, values in step.get("set", {}).items():
             if name not in heads:
@@ -974,7 +1024,8 @@ def expand_mission(mission, schema):
         else:
             matcher = re.compile(on["regex"]) if on.get("regex") else None
         on_type = ANY_MESSAGE if on["type"] == "any" else int(on["type"])
-        reactive += [(on_type, matcher, float(step.get("delay", 0)), change) for change in changes]
+        reactive += [ReactionRule(on_type, matcher, float(step.get("delay", 0)), change, scope)
+                     for change in changes]
     return timed, reactive
 
 
@@ -984,29 +1035,41 @@ def expand_mission(mission, schema):
 MISSION_CLOCKS = ("world", "ready")
 
 
+class ControlChanges(list):
+    """Object specs retain the original list API; roster controls carry separate metadata."""
+
+    def __init__(self):
+        super().__init__()
+        self.bubble_resets = []
+
+
 def control_steps(path, offset, objects, schema):
     """DEBUG TOOL (--ah-control): mission-script steps appended to a file, one JSON object per
     line ({"set": {NAME: {offset: value}}}, names from the mission's "objects"; or
-    {"teleport": SLICE_SET}), applied live. Returns ([object specs], [slice sets to teleport to],
+    {"teleport": SLICE_SET} or {"bubble_reset": "SLOT[:GEN],..."}), applied live. Returns
+    (ControlChanges object-spec list with bubble_resets metadata, [slice sets to teleport to],
     new offset, [errors]). Each connection reads from the file size at
     its start, so earlier lines are not replayed. Replacement: an operator console on the
     activity-instance service (notes/architecture-multiplayer.md)."""
     try:
         size = path.stat().st_size
     except OSError:
-        return [], [], offset, []
+        return ControlChanges(), [], offset, []
     if size <= offset:
-        return [], [], size, []
+        return ControlChanges(), [], size, []
     with path.open("rb") as f:
         f.seek(offset)
         data = f.read(size - offset)
     end = data.rfind(b"\n") + 1  # only complete lines
-    specs, teleports, errors = [], [], []
+    specs, teleports, errors = ControlChanges(), [], []
     for line in data[:end].decode("utf-8", "replace").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         try:
             step = json.loads(line)
+            if "bubble_reset" in step:
+                specs.bubble_resets.append(bubble_reset_spec(step["bubble_reset"]))
+                continue
             if "teleport" in step:
                 teleports.append(parse_slice_set(step["teleport"]))
                 continue
@@ -1504,7 +1567,7 @@ def handle(conn, peer, args):
 
     def mission_t0(world_anchor):
         return world_anchor if args.mission_clock == "world" else client_ready_at
-    reactions_due = []  # (absolute time, object spec, rule text) scheduled by --ah-on
+    reactions_due = ReactionQueue()  # phase-scoped changes from --ah-on and live control
     control_offset = args.ah_control.stat().st_size if args.ah_control and args.ah_control.exists() else 0
     game_mode_now = None  # game-mode state currently replicated (--ah-game-mode-schedule)
     world_params = None  # (join request, peer byte, group peer) of the --ah-world-state delta
@@ -1525,6 +1588,11 @@ def handle(conn, peer, args):
     teleport_plan = sorted(args.ah_teleports, key=lambda entry: entry[1])
     slice_hashes = {}  # slice-set index -> name hash, as the client reported it
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
+    bubble_resets = tuple(getattr(args, "ah_bubble_reset", ()))  # generations belong to this connection
+
+    def make_sim_packet(peer, slot, generation, **values):
+        return sim_packet(args.activity_schema, peer, slot, generation,
+                          bubble_resets=bubble_resets, **values)
 
     def host_tick():
         # --ah-sim-clock: host simulation ticks since the first simulation packet (0 without it)
@@ -1749,6 +1817,9 @@ def handle(conn, peer, args):
                             # (JOIN42: copy waiting in state 3 with the engine already in 112).
                             teleport_now = (3, teleport_now[1], teleport_now[2])
                             teleport_finished_at = time.time()
+                            # Completion must expire even without a group-record switch (e.g.
+                            # follow mode, or a teleport to the already-current slice set).
+                            teleport_drop_at = teleport_finished_at + TELEPORT_SETTLE_SECONDS
                             # same version: the simulation copies the world state (and so the
                             # request) on every message, but the world controller re-reads the group
                             # records only on a new version - re-reading record 1 (the switch to
@@ -1806,7 +1877,11 @@ def handle(conn, peer, args):
                     if (rule_index not in reactions_fired and on_type in (ah_type, ANY_MESSAGE)
                             and (on_body is None or on_body.search(body.hex()))):
                         reactions_fired.add(rule_index)
-                        reactions_due.append((time.time() + delay, spec, f"type {on_type} rule {rule_index}"))
+                        cancelled = reactions_due.schedule(
+                            time.time() + delay, spec, f"type {on_type} rule {rule_index}",
+                            getattr(args.ah_on[rule_index], "scope", None))
+                        if cancelled:
+                            log(f"[{tag}] --ah-on rule {rule_index}: cancelled {cancelled} obsolete phase changes")
                         log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: object "
                             f"{spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]} in {delay:g} s")
             if (kind == 1 and msg_type == AH_NOT and len(payload) >= 21 and ah_type == AH_JOIN_REQUEST
@@ -1874,11 +1949,13 @@ def handle(conn, peer, args):
                     for key, kind, index, has_b in args.ah_baselines:
                         if (key, kind, index) not in sent:
                             objects.append(default_baseline(key, kind, index, has_b))
-                    data = sim_repeat = sim_packet(args.activity_schema, peer, int(slot, 0),
+                    data = sim_repeat = make_sim_packet(peer, int(slot, 0),
                                                    int(gen or "1", 0), objects=objects)
                     sim_build = (peer, int(slot, 0), int(gen or "1", 0), objects, game_mode_at, time.time())
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_SIMULATION, data, host_id)))
                     log(f"[{tag}] pushed simulation packet (type 5): roster slot {slot} = client")
+                    if getattr(args, "ah_bubble_reset", ()):
+                        log(f"[{tag}] simulation bubble reset experiment: {args.ah_bubble_reset}")
                 for spec in args.ah_after_join:
                     subtype, _, data = spec.partition(":")
                     push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0), bytes.fromhex(data),
@@ -1912,12 +1989,13 @@ def handle(conn, peer, args):
                         new = [b for b in baseline_list("@" + str(args.ah_baselines_watch)) if b[:3] not in have]
                         if new:
                             objects_.extend(default_baseline(*b) for b in new)
-                            sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                            sim_repeat = make_sim_packet(peer_, slot_, gen_, objects=objects_)
                             log(f"[{tag}] {len(new)} new baselines from {args.ah_baselines_watch}")
                 if (teleport_now is not None and teleport_now[0] == 1 and teleport_finish_at is not None
                         and time.time() >= teleport_finish_at and world_params):
                     teleport_now = (3, teleport_now[1], teleport_now[2])
                     teleport_finished_at = time.time()
+                    teleport_drop_at = teleport_finished_at + TELEPORT_SETTLE_SECONDS
                     data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                              *world_params[1:], target=switch_target, teleport=teleport_now,
                                              version=world_version_now)  # same version (see above)
@@ -1970,26 +2048,35 @@ def handle(conn, peer, args):
                     if changed:
                         at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                         sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
-                        sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                        sim_repeat = make_sim_packet(peer_, slot_, gen_, objects=objects_)
                 if args.ah_control and sim_build:
                     specs, teleports, control_offset, errors = control_steps(
                         args.ah_control, control_offset, args.mission_objects, args.activity_schema)
                     for error in errors:
                         log(f"[{tag}] control: ignored {error}")
+                    for reset_changes in specs.bubble_resets:
+                        try:
+                            bubble_resets = update_bubble_resets(bubble_resets, reset_changes, sim_build[1])
+                        except ValueError as exc:
+                            log(f"[{tag}] control: ignored bubble reset {reset_changes}: {exc}")
+                            continue
+                        peer_, slot_, gen_, objects_, _, _ = sim_build
+                        sim_repeat = make_sim_packet(peer_, slot_, gen_, tick=host_tick(), objects=objects_)
+                        log(f"[{tag}] control: simulation bubble reset experiment -> {bubble_resets}")
                     for zone_t in teleports:
                         teleport_plan.insert(0, (zone_t, 0.0))  # due at once (after any running one)
                         log(f"[{tag}] control: teleport to slice set {zone_t[0]} queued")
-                    reactions_due += [(time.time(), spec, "control") for spec in specs]
-                if sim_build and any(due <= time.time() for due, _, _ in reactions_due):
+                    for spec in specs:
+                        reactions_due.schedule(time.time(), spec, "control")
+                if sim_build and reactions_due.has_due(time.time()):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
-                    for entry in [e for e in reactions_due if e[0] <= time.time()]:
-                        reactions_due.remove(entry)
+                    for entry in reactions_due.pop_due(time.time()):
                         entry = (entry[0], resolve_spec(entry[1], mission_context()), entry[2])
                         ident = replace_object(objects_, entry[1])
                         log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {entry[1][2]} ({entry[2]})")
                     at_ = next((i for i, o in enumerate(objects_) if o[0][4] == 0x10), at_) if at_ is not None else None
                     sim_build = (peer_, slot_, gen_, objects_, at_, joined_)
-                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                    sim_repeat = make_sim_packet(peer_, slot_, gen_, objects=objects_)
                 if sim_build and sim_build[4] is not None and args.ah_game_mode_schedule:
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     due = [st for st, sec in args.ah_game_mode_schedule if time.time() - joined_ >= sec]
@@ -1997,13 +2084,13 @@ def handle(conn, peer, args):
                         game_mode_now = due[-1]
                         group, index, _ = args.ah_game_mode
                         objects_[at_] = game_mode(args.activity_schema, group, index, game_mode_now)
-                        sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_, objects=objects_)
+                        sim_repeat = make_sim_packet(peer_, slot_, gen_, objects=objects_)
                         log(f"[{tag}] game mode {group:#x}:{index} -> state {game_mode_now}")
                 if sim_repeat and sim_build and args.ah_sim_clock:
                     # an advancing host tick: the client's simulation time (0x1c94e0) is the last
                     # host tick plus the time since, so with a constant tick it never advances
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
-                    sim_repeat = sim_packet(args.activity_schema, peer_, slot_, gen_,
+                    sim_repeat = make_sim_packet(peer_, slot_, gen_,
                                             tick=host_tick(), objects=objects_)
                 if sim_repeat:
                     # the roster packet is dropped until the client's host session exists
@@ -2213,6 +2300,11 @@ def parse_args(argv=None):
                     help="experiment: send host type 43 (boot list) naming the client's machine -> error bass")
     ap.add_argument("--ah-roster", metavar="SLOT[:GEN]",
                     help="with --ah-join, send a type-5 simulation packet with the client in roster SLOT")
+    ap.add_argument("--ah-bubble-reset", type=bubble_reset_spec, default=(),
+                    metavar="SLOT[:GEN],...",
+                    help="EXPERIMENT: with --ah-roster, change these inactive roster slots to the "
+                         "given generation (default 1), testing bubble reset/baseline readiness. "
+                         "The client slot stays active; generations remain fixed across heartbeats")
     ap.add_argument("--ah-sim-player", type=lambda v: tuple(int(x, 0) for x in v.split(":")),
                     metavar="GROUP:INDEX:OWNER[:SPAWN]",
                     help="with --ah-roster, the type-5 packets also replicate simulation player INDEX "
@@ -2304,6 +2396,14 @@ def parse_args(argv=None):
     ap.add_argument("--services-schema", type=Path, default=investment.DEFAULT_SCHEMA,
                     help="saved service ID table used when --schema is an EBOOT-only type export")
     args = ap.parse_args(argv)
+    if args.ah_bubble_reset:
+        if args.ah_roster is None:
+            ap.error("--ah-bubble-reset requires --ah-roster")
+        try:
+            slot, _, generation = args.ah_roster.partition(":")
+            simulation_roster(0, int(slot, 0), int(generation or "1", 0), args.ah_bubble_reset)
+        except ValueError as exc:
+            ap.error(str(exc))
     args.schema = investment.load_schema(args.schema) if args.schema.exists() else None
     if args.schema and not args.schema.get("services"):
         if not args.services_schema.exists():

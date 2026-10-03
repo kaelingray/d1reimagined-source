@@ -121,6 +121,42 @@ class PackageTest(unittest.TestCase):
             p.entry_data(0)
 
 
+class EntityGroups(unittest.TestCase):
+    @staticmethod
+    def group():
+        data = bytearray(0x100)
+        struct.pack_into(">I", data, 8, 0x12345678)
+        struct.pack_into(">II", data, 0x10, 4, 0x30)
+        struct.pack_into(">III", data, 0x40, 0x80800184, 4, 0x808007D3)
+        data[0x28:0x2E] = b"early\0"
+        data[0x80:0x8D] = b"decoy string\0"  # not any object's name
+        data[0xA0:0xA6] = b"squad\0"
+        data[0xB0:0xB7] = b"member\0"
+        for index, kind, target in ((0, 1, 0xA0), (1, 2, 0xB0), (2, 4, None), (3, 5, 0x28)):
+            record = 0x54 + 8 * index
+            data[record] = kind
+            struct.pack_into(">i", data, record + 4, 0 if target is None else target - record - 4)
+        return data
+
+    def test_names_follow_record_relative_pointers_including_empty_and_backward(self):
+        self.assertEqual(d1_pkg.entity_group(self.group()),
+                         (0x12345678, [(1, "squad"), (2, "member"), (4, ""), (5, "early")]))
+
+    def test_malformed_name_pointers_and_truncated_table_are_rejected(self):
+        for relative in (-0x100, 0x100):
+            data = self.group()
+            struct.pack_into(">i", data, 0x58, relative)
+            with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, "out of bounds"):
+                d1_pkg.entity_group(data)
+        data = self.group()
+        struct.pack_into(">i", data, 0x58, 0xE0 - 0x58)
+        data[0xE0:] = b"x" * 0x20
+        with self.assertRaisesRegex(ValueError, "unterminated"):
+            d1_pkg.entity_group(data)
+        with self.assertRaisesRegex(ValueError, "table is truncated"):
+            d1_pkg.entity_group(self.group()[:0x60])
+
+
 class LocalizedStrings(unittest.TestCase):
     def test_split_parts_are_joined_before_hashes_are_assigned(self):
         index = bytearray(0x60)
