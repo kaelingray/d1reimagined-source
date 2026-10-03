@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from d1_guardian_route import ClientWorld, Guard, GuardedPad, HOOK, HookLease, RouteStopped, SharedTail, route_points, run_state
+from d1_guardian_route import BREACH_SLICE, WALL_SLICE, ClientWorld, Guard, GuardedPad, GuardedPlayer, HOOK, HookLease, RouteStopped, SharedTail, WALL_ROUTE, route_points, run_state
 
 
 class GuardianRoute(unittest.TestCase):
@@ -21,6 +21,18 @@ class GuardianRoute(unittest.TestCase):
         path.write_text('[[1, 2, NaN]]')
         with self.assertRaises(ValueError):
             route_points(path)
+
+    def test_wall_route_retains_successful_climb_and_approach(self):
+        # JOIN88 used these 29 targets; point zero is also kept to check the initial position.
+        targets = [1, 2, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42,
+                   44, 45, 46, 47, 48, 49, 50, 51, 54, 57, 60, 63, 66]
+        selected = route_points(WALL_ROUTE)
+        self.assertEqual([i for i, _ in selected], [0, *targets])
+        recorded = json.loads(WALL_ROUTE.read_text())
+        self.assertEqual(dict(selected)[47], recorded[47])
+        # An explicit lower point density still cannot omit the narrow climb's turn.
+        sparse = dict(route_points(WALL_ROUTE, every=8))
+        self.assertTrue(all(i in sparse for i in range(44, 52)))
 
     def test_fresh_tail_rejects_historical_entity_and_wrong_caller(self):
         path = self.root / "RPCS3.log"
@@ -64,9 +76,11 @@ class GuardianRoute(unittest.TestCase):
     def test_boot_state_checks_engine_and_nonatomic_changes(self):
         fields = struct.pack(">7I", 36, 0, 0, 0, 36, 0, 0)
         values = {0x01ABC89C: struct.pack(">I", 0x2000), 0x01ABC8AC: struct.pack(">I", 0x3000),
-                  0x2118: fields, 0x3089: b"\0"}
+                  0x2118: fields, 0x3089: b"\0", 0x3090: struct.pack(">iI", *WALL_SLICE),
+                  0x3130: struct.pack(">iI", -1, 0x811C9DC5)}
         read = lambda address, size: values[address]
-        self.assertEqual(run_state(read), {"current": 36, "engine": 0, "stable": True})
+        self.assertEqual(run_state(read), {"current": 36, "engine": 0, "stable": True,
+                                          "native_slice_current": WALL_SLICE, "native_slice_target": None})
         values[0x3089] = b"\xff"
         self.assertEqual(run_state(read)["engine"], -1)
         reads = 0
@@ -78,6 +92,15 @@ class GuardianRoute(unittest.TestCase):
                     return struct.pack(">7I", 25, 0, 0, 0, 25, 0, 0)
             return values[address]
         self.assertFalse(run_state(changing)["stable"])
+        reads = 0
+        def changing_target(address, size):
+            nonlocal reads
+            if address == 0x3130:
+                reads += 1
+                if reads == 2:
+                    return struct.pack(">iI", *BREACH_SLICE)
+            return values[address]
+        self.assertFalse(run_state(changing_target)["stable"])
 
     def test_guard_stops_for_world_change_rejoin_and_loading(self):
         class Memory:
@@ -116,6 +139,96 @@ class GuardianRoute(unittest.TestCase):
             pad.hold(["W", "G"], 5)
         self.assertEqual(posts, [(pad.VK["W"], True), (pad.VK["G"], True),
                                  (pad.VK["W"], False), (pad.VK["G"], False)])
+
+    def preload_guard(self):
+        class Memory:
+            read = None
+        class Tail:
+            pending = []
+            def lines(self):
+                lines, self.pending = self.pending, []
+                return lines
+        guard = Guard(Memory(), Tail(), self.root, lambda **event: None, allow_breach_preload=True)
+        guard.world.current = WALL_SLICE
+        guard.walking = True
+        guard.join_at_start = guard.world.joins = 1
+        return guard
+
+    def test_opt_in_preload_uses_native_target_before_its_log_report(self):
+        guard = self.preload_guard()
+        state = {"current": 36, "engine": 3, "stable": True,
+                 "native_slice_current": WALL_SLICE, "native_slice_target": BREACH_SLICE}
+        with patch("d1_guardian_route.run_state", return_value=state):
+            # JOIN89's engine3 preceded its AHL target24 report by about 51 seconds.
+            self.assertIsNone(guard.world.target)
+            guard.check()
+            guard.world.target = BREACH_SLICE
+            guard.check()
+            guard.allow_breach_preload = False
+            with self.assertRaisesRegex(RouteStopped, "engine 3"):
+                guard.check()
+
+    def test_preload_rejects_unexpected_targets_hashes_source_and_engine_states(self):
+        valid = {"current": 36, "engine": 3, "stable": True,
+                 "native_slice_current": WALL_SLICE, "native_slice_target": BREACH_SLICE}
+        cases = [{"engine": 6}, {"engine": 2}, {"current": 25}, {"stable": False},
+                 {"native_slice_current": (-1, 0x811C9DC5)}, {"native_slice_current": BREACH_SLICE},
+                 {"native_slice_target": None}, {"native_slice_target": (24, 0x811C9DC5)},
+                 {"native_slice_target": (104, 0x811C9DC5)}]
+        for changes in cases:
+            with self.subTest(changes=changes):
+                guard = self.preload_guard()
+                with patch("d1_guardian_route.run_state", return_value={**valid, **changes}):
+                    with self.assertRaises(RouteStopped):
+                        guard.check()
+        for reported in ((24, 0x811C9DC5), (104, 0x811C9DC5)):
+            guard = self.preload_guard()
+            guard.world.target = reported
+            with patch("d1_guardian_route.run_state", return_value=valid):
+                with self.assertRaisesRegex(RouteStopped, "slice changed"):
+                    guard.check()
+        guard = self.preload_guard()
+        guard.world.joins += 1
+        with patch("d1_guardian_route.run_state", return_value=valid):
+            with self.assertRaisesRegex(RouteStopped, "rejoined"):
+                guard.check()
+
+    def test_preload_fresh_player_hook_stops_on_replacement_or_staleness(self):
+        guard = self.preload_guard()
+        class Trace:
+            pending = []
+            def lines(self):
+                lines, self.pending = self.pending, []
+                return lines
+        trace = Trace()
+        with patch("d1_guardian_route.time.monotonic", return_value=100):
+            guard.bind_player(trace, 0x60000000)
+        trace.pending = [b"pc=0x138e24 lr=0x352a4c r4=0x60000000"]
+        with patch("d1_guardian_route.time.monotonic", return_value=102):
+            guard.check_player()
+        with patch("d1_guardian_route.time.monotonic", return_value=106):
+            with self.assertRaisesRegex(RouteStopped, "no longer fresh"):
+                guard.check_player()
+        trace.pending = [b"pc=0x138e24 lr=0x352a4c r4=0x62000000"]
+        with self.assertRaisesRegex(RouteStopped, "entity changed"):
+            guard.check_player()
+
+    def test_guarded_player_stops_on_respawn_position_jump(self):
+        class Memory:
+            position = (383, -962, 12)
+            def read(self, address, size):
+                return struct.pack(">fff", *self.position)
+        class ReadyGuard:
+            def check(self):
+                pass
+            def audit(self, **unused):
+                pass
+        memory = Memory()
+        player = GuardedPlayer(memory, 0x60000000, ReadyGuard())
+        player.position()
+        memory.position = (336, -898, 4)
+        with self.assertRaisesRegex(RouteStopped, "position jumped"):
+            player.position()
 
 
 if __name__ == "__main__":

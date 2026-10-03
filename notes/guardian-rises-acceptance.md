@@ -35,10 +35,13 @@ events continue.
 Separately, JOIN79 established that a new highway Ghost squad generation spawns its member
 only when bubble authority passes the client gate. Changing the authority bit manually made
 the client report the Ghost member; this is diagnostic evidence, not a production mechanism.
-The protocol sequence that establishes that authority is still under investigation. Later code
+JOIN87 and JOIN88 subsequently spawned the highway Ghost through protocol messages alone:
+a fresh inactive bubble-14 generation after current slice 112, followed by a squad generation.
+The member report took about 70 seconds and 21 seconds respectively. Code
 analysis identifies the gate's two masks as transient roster-reset state: changing an inactive
 bubble slot's generation sets both, and baseline-ready processing clears only the blocking mask.
-This needs live validation. Type 27 only writes a separate activity-level value and is not a
+The highway case now has live validation; Breach ownership and enemy spawning remain open.
+Type 27 only writes a separate activity-level value and is not a
 demonstrated direct setter of the squad gate.
 
 Current evidence: [mission walkthrough](mission-a-guardian-rises.md),
@@ -58,7 +61,7 @@ Later objective labels must not be used to claim that an encounter or item grant
 | New-character state | Level 1, correct initial subclass and class armor, default Ghost shell; no usable firearm or travel capability. Completion/unlock state represents an unprogressed character. | Final starter kit definitions are verified below. Broad test unlock flags and CLI equipment overlays do not prove authentic initial progression or durable inventory. |
 | Appearance and rendering | The same custom Guardian appears correctly in creation, inventory, revival, mission, and later social space; repeated frames show no flicker or distorted lighting. | Selective SPU-written color-buffer reads eliminated sampled setup magenta frames and restored normal Titan lighting. Mission/social-space coverage and other appearance combinations still require captures. Keep color reads enabled as required by the fix. |
 | Account intro and character revival | Account introduction and each character's resurrection have distinct progression. Revival plays with the actual Guardian, then hands control to an unarmed player without a lasting fade. | Both revival cinematic objects and automatic 113 -> 112 hand-off work in JOIN53+. The script currently uses timed start/stop steps, not a verified cinematic-completion acknowledgement. First versus later character intro flags are open. |
-| Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; automated recorded-route traversal reaches the Wall in JOIN82. Trigger report arrives around the 112 -> 24 switch. Ordering/gating and the Breach disconnect are the immediate gap; repeated incidents are not yet proven retries. |
+| Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; recorded-route traversal reaches the Wall, reproduced in JOIN88 with extra climb points. Highway Ghost spawning works through the protocol in JOIN87/88. The Breach disconnect is the immediate gap: JOIN88 posts cleanup reason 0x4d. This is a final-build session-status mapping; the exact waiting state needs a live sample. |
 | Find a Weapon / The Breach | Client-requested slice 24 completes at the actual entrance; correct objective, darkness, Ghost torch, path, power sequence, lights, Fallen reaction, and weapon access occur in order. | Slice 24 hash `0x68935472`, bubble 3 and local group `0xfc0e45a3` are observed. Find-a-Weapon HUD works; host teleport completes the switch after walking there. Ghost light/power and automatic trigger-to-switch progression are open. Teleporting without traversal can leave the player outside the geometry. |
 | Grab the Rifle | Correct Khvostov 7G-02 instance is granted once, equipped in Primary, and saved. Armed first-person view, ammo, reload, and firing work. Replay/reconnect cannot duplicate or lose the item. | Rifle container and relevant objective/cinematic/trigger objects are identified. HUD display for objective 11, pickup transaction, item definition selection, and durable equip are not verified. A title change is insufficient. |
 | Fight through the Wall | Ordered Fallen encounters run on the expected simulator, with damage, death, radar and ammo behavior. Ghost cues, cache, tripmines, crouching, exit conditions, and ordinary respawn work. | Named squads, cue/trigger objects, firing areas, mines and exit objects are catalogued. Squad authority and spawning are incomplete. Do not invent encounter counts, kill XP, checkpoint transforms, or hazard tuning. |

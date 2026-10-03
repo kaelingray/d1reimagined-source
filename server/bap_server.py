@@ -503,8 +503,9 @@ SUB_REQ, SUB_RSP = 0x0C, 0x0D
 QZ_UPDATE = 0x7B
 ACCT_ID_TRANS_REQ, ACCT_ID_TRANS_RSP = 0x17, 0x18
 CLIENT_CONFIG_REQ, CLIENT_CONFIG_RSP = 0x12, 0x13
-# Activity host request (sent when joining an activity): 8-byte request; the reply decoder
-# (0x416f14) copies exactly 16 raw bytes. Their meaning is still unknown.
+# Activity host proxy assignment: u64 request id; reply = echoed u64 | IPv4 | u16 | port.
+# 01.24 consumer 0x48ea44 rejects a reply whose first u64 differs from request state +8
+# (comparison at 0x48ea78 through 0x1da944), before storing the address and accepting it.
 AHP_REQ, AHP_RSP = 0x10, 0x11
 # b->c notification push (type 9; decoder 0x416064): u8 flag, u64 id (flag 1), u32 subtype,
 # u32 length, data. Subtype 1 appears to reach the ahp consumer 0x42a5a0 (16 bytes).
@@ -545,6 +546,17 @@ STATE_TYPE = 0x80800E76
 JOIN_REQUEST_TYPE, JOIN_RESPONSE_TYPE = 0x80800E98, 0x80800A58
 ENTITY_INDICES_TYPE, ENTITY_WORDS = 0x80800D64, 384
 ACTIVITY_SCHEMA = SIGNON / "activity_schema.json"
+
+
+def ahp_response(request, configured):
+    """Correlate a valid proxy assignment with its request, keeping the configured endpoint.
+
+    Malformed lengths remain raw experiment payloads, as before; never manufacture a valid
+    assignment by truncating a request or padding a configured reply.
+    """
+    if len(request) == 8 and len(configured) == 16:
+        return request + configured[8:]
+    return configured
 
 
 def char_array(text, size=128):
@@ -1587,6 +1599,7 @@ def handle(conn, peer, args):
     # --ah-teleport and the mission script's {"at": S, "teleport": SET} steps, in order
     teleport_plan = sorted(args.ah_teleports, key=lambda entry: entry[1])
     slice_hashes = {}  # slice-set index -> name hash, as the client reported it
+    client_slice_fields = {}  # type 21 carries deltas; retain explicit fields for this connection
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
     bubble_resets = tuple(getattr(args, "ah_bubble_reset", ()))  # generations belong to this connection
 
@@ -1786,6 +1799,7 @@ def handle(conn, peer, args):
                         record = None
                     if record:
                         log(f"[{tag}] client slice set: {client_slice_state(args.activity_schema, body)}")
+                        client_slice_fields.update(record)
                         for name in ("target", "current"):
                             index, name_hash = record.get(name, (None, None))
                             if index is not None and index >= 0 and name_hash not in (None, 0, 0x811C9DC5):
@@ -1793,7 +1807,7 @@ def handle(conn, peer, args):
                         # Mirror the client's switch in the world state's group record, as the
                         # host that tracks the fireteam's slice set would (opt-in experiment)
                         wanted = requested_client_zone(record)
-                        current = record.get("current", (None,))[0]
+                        current = requested_client_zone({"current": client_slice_fields.get("current", (None, None))})
                         if (args.ah_group_switch and world_params and "peer_byte" in record
                                 and record["peer_byte"] != world_params[1]):
                             world_params = (world_params[0], record["peer_byte"], *world_params[2:])
@@ -1802,9 +1816,14 @@ def handle(conn, peer, args):
                             conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
                                                               bc_notification(AH_ESTABLISH, data, host_id)))
                             log(f"[{tag}] world state: per-peer byte -> {world_params[1]} (client slice record)")
-                        if (teleport_now is not None and teleport_now[0] == 1
-                                and record.get("target", (None,))[0] == teleport_now[1]):
-                            teleport_targeted = True
+                        if teleport_now is not None and teleport_now[0] == 1:
+                            # A state-only delta still refers to the last target, which can have
+                            # been sent before a live teleport was queued (JOIN88). An explicit
+                            # clear/change must invalidate it rather than leave a latched match.
+                            teleport_targeted = requested_client_zone({
+                                "target": client_slice_fields.get("target", (None, None))}) == teleport_now[1]
+                            if not teleport_targeted:
+                                teleport_finish_at = None
                         if (teleport_now is not None and teleport_now[0] == 1 and teleport_finish_at is None
                                 and teleport_targeted and record.get("state") == 4):
                             # finish after the configured settle time (sent from the timer below)
@@ -2014,7 +2033,9 @@ def handle(conn, peer, args):
                     (zone_t, zone_hash), after = teleport_plan[0]
                     if time.time() - mission_t0(zone_joined) >= after:
                         teleport_plan.pop(0)
-                        teleport_targeted, teleport_finish_at, teleport_finished_at = False, None, None
+                        teleport_targeted = requested_client_zone({
+                            "target": client_slice_fields.get("target", (None, None))}) == zone_t
+                        teleport_finish_at, teleport_finished_at = None, None
                         teleport_now = (1, zone_t, zone_hash or slice_hashes.get(zone_t, 0x811C9DC5))
                         data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                  *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
@@ -2110,10 +2131,11 @@ def handle(conn, peer, args):
                 folder.joinpath(f"{number:03}-server-07.bin").write_bytes(reply)
                 log(f"[{tag}] sent c->ah mgr rsp ({len(args.ah_mgr_reply)} bytes)")
             if kind == 1 and msg_type == AHP_REQ and args.ahp_reply is not None:
-                reply = encrypted_frame(tx, AHP_RSP, msg_id, 200, args.ahp_reply)
+                response = ahp_response(payload, args.ahp_reply)
+                reply = encrypted_frame(tx, AHP_RSP, msg_id, 200, response)
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-11.bin").write_bytes(reply)
-                log(f"[{tag}] sent ahp rsp {args.ahp_reply.hex()} (request {payload.hex()})")
+                log(f"[{tag}] sent ahp rsp {response.hex()} (request {payload.hex()})")
                 if args.ahp_push is not None:
                     subtype, _, data = args.ahp_push.partition(":")
                     push = encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(int(subtype, 0),
@@ -2262,7 +2284,9 @@ def parse_args(argv=None):
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')
     ap.add_argument("--ahp-reply", type=bytes.fromhex,
-                    help="experiment: 16-byte hex payload for ahp rsp (0x11)")
+                    help="16-byte hex ahp rsp (0x11): valid 8-byte requests replace the first "
+                         "u64 with their request id; the configured endpoint stays unchanged. "
+                         "Other lengths remain raw experiment payloads")
     ap.add_argument("--ahp-push", help="experiment: SUBTYPE:HEX b->c not pushed after the ahp rsp")
     ap.add_argument("--ah-mgr-reply", type=bytes.fromhex,
                     help="experiment: hex payload for c->ah mgr rsp (0x07), normally 137 bytes")

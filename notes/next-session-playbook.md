@@ -5,9 +5,10 @@
 > `git pull --rebase` before you continue; do not re-stage it. Start with
 > [the handoff](HANDOFF-2026-10-01.md).
 
-## Active work: 01.24 (updated 2026-10-02)
+## Active work: 01.24 (updated 2026-10-03)
 
-Start with the [October 2 checkpoint](checkpoint-2026-10-02-mission.md) and
+Start with the [October 3 checkpoint](checkpoint-2026-10-03-mission.md),
+[October 2 run history](checkpoint-2026-10-02-mission.md), and
 [acceptance checks](guardian-rises-acceptance.md). JOIN53–82 supersede the earlier black-scene
 experiments: both resurrection cinematics, the outdoor Guardian, the first objective HUD,
 and a recorded walk to the Wall have live evidence. The current work is the Breach handover,
@@ -15,6 +16,12 @@ its disconnect, and running Ghost/Fallen squads through the protocol. The missio
 complete. Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`;
 activity 231 is level 25 and 230 reports no active activity. The JOIN12–20 lobster and
 black-scene recipes below remain historical, not the next experiment to repeat.
+JOIN87/88 reproduced the highway Ghost spawn with a fresh inactive bubble-14
+generation after current 112, then a squad generation. For the recorded Wall route,
+`scripts/d1_guardian_route.py --manifest <RUN>-processes.json --allow-breach-preload`
+permits only its verified engine-3 preload while the same player remains in 112.
+Queue the host teleport after reaching the actual entrance; protocol arrival from
+the cars was not a playable Breach check in JOIN89. See the current checkpoint.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
 magenta blocks and distorted character lighting are fixed together by
 `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Keep Read Color Buffers

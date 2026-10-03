@@ -72,11 +72,26 @@ embedded replication state in r3. Subtract `0x18` to find the outer simulation
 before reading its masks; hooks at `0x1d9440` or `0x1d90e0` give the outer pointer
 directly. Do not reuse an address from a different process or load.
 
+## Live result: JOIN87 and JOIN88 (2026-10-03)
+
+Both runs reproduced a protocol-only highway Ghost spawn. After the client
+reported current slice 112, generation 2 for inactive bubble slot 14 rearmed
+the reset path. A subsequent `sq_ghost` generation ran the squad handler and
+the client reported `sq_ghost__ghost` (group `0xecf574b5`, kind 2/index 29).
+JOIN87 took about 70 seconds from reset to member report; JOIN88 took about
+21 seconds. Sending the squad state does not establish that baseline readiness
+has allowed it to apply immediately. Neither run wrote client RAM.
+
+The startup reset in slice 113 did not survive the transition. Apply a fresh
+generation after arrival; replaying generation 1 is insufficient. This verifies
+the mechanism for the highway Ghost, not every bubble or retail authority policy.
+Breach illumination and Fallen spawning remain separate acceptance checks.
+
 Validation: seven tests check changed-slot bits,
 inactive records without a peer, unchanged client slot, generation bounds,
 complete-line control parsing, collision rejection, and stable generations
 while the tick advances, including an encrypted session. Encoding and decoding with
 the private corrected 01.24 type export also preserves these fields; without
 the option, output matches the previous packet encoding byte for byte. Client
-behavior still needs a new owned mission run: observe post-transition reset flags, squad
-generation handler `0x20cc38`, and upstream kind-2 Ghost member reports.
+behavior has the bounded JOIN87/88 evidence above: post-transition reset flags,
+squad generation handler `0x20cc38`, and upstream kind-2 Ghost member reports.

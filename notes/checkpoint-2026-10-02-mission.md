@@ -116,3 +116,17 @@ group identities, kinds, indexes and baselines.
   - After the leave, the client sent `ahp req` with value 1 (twice). At join it had sent value 0.
 - Next: find the 01.24 "ipahp" initialization (what the client waits for after a switch
   into a private bubble), starting from the reason-0x4d writer and the `ahp req` argument.
+
+## October 3 follow-up: distinguish failure states
+
+The old failure-name inference above is insufficient. Final-build leave-condition 32
+passes through `0x35f50c -> 0x35dd14`, and table `0x12f9d9c` maps three session statuses
+(9, 37, 38) to reason `0x4d`. Sample the status before cleanup to identify the producer.
+The old status numbers also shifted: final-build status 35 maps to `0x67`, whereas
+the older analysis used 36. Preserve the observed leave code without treating an old
+name as the exact final-build condition.
+
+JOIN88's successful walk used the older walker directly. The guarded runner's default
+had still omitted the approach and narrow-climb points. It now retains those points
+from the recorded route and uses JOIN88's 1.5-unit arrival tolerance. A live guarded
+walk is a separate check; stopping when slice 24 is requested is intentional.

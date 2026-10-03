@@ -72,7 +72,9 @@ $proxyArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower(), '--ah-j
 $launch = Start-Job -ScriptBlock { param($script, $n, $l, $d, $b)
     $env:D1_LOCAL = $l
     $ErrorActionPreference = 'Stop'
-    & $script -Name $n -Local $l -DataRepo $d -BootSeconds 250 -PressSeconds 110 `
+    # Keep title-screen input available for the join wrapper's full eight-minute
+    # sign-in window; a successful launcher exit at 250 s ended slow boots early.
+    & $script -Name $n -Local $l -DataRepo $d -BootSeconds 480 -PressSeconds 110 `
         -ContinueAfterBap -KeepRpcs3 -BapExtra $b 2>&1 | Select-Object -Last 5
 } -ArgumentList (Join-Path $PSScriptRoot 'Invoke-Final124Run.ps1'), $Name, $D1Local, $DataRepo, $bapArgs
 $bap = Join-Path $logs "$Name-bap.log"
