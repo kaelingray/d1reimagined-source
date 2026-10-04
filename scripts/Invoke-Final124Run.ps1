@@ -44,6 +44,7 @@ $progress = $null
 $presses = 0
 $launcherCompleted = $false
 $bapReported = $false
+$waitingForGameWindow = $false
 $logCapture = [ordered]@{ status = 'not_started'; source = $null; destination = $null; bytes = $null; error = $null }
 
 function Get-LaunchFailureDetail {
@@ -123,9 +124,9 @@ try {
         }
         if ($manifest -and $manifest.state -eq 'ready') {
             foreach ($identity in $manifest.processes) {
-                if (-not (Get-D1OwnedProcess $identity)) { throw "Owned $($identity.tag) exited during the experiment. Check $logs\$Name-$($identity.tag).err." }
+                if (-not (Get-D1OwnedProcess $identity)) { throw "Owned $($identity.tag) could not be verified by exact identity during the experiment; exit status is unavailable in this observer. Check $logs\$Name-$($identity.tag).err." }
                 $errorLog = Join-Path $logs "$Name-$($identity.tag).err"
-                if ((Test-Path -LiteralPath $errorLog) -and (Get-Item -LiteralPath $errorLog).Length -gt 0) {
+                if ($identity.tag -ne 'rpcs3' -and (Test-Path -LiteralPath $errorLog) -and (Get-Item -LiteralPath $errorLog).Length -gt 0) {
                     throw "Owned $($identity.tag) reported an error. Check $errorLog."
                 }
             }
@@ -142,17 +143,31 @@ try {
         # screen ("PRESS X TO PLAY") appears after PressSeconds and SignOn waits for Cross
         # (FINAL124_JOIN64/69).
         $stillAtTitle = $progress.SignonRequests -eq 0
-        if ($PressSeconds -gt 0 -and ((Get-Date) -lt $pressUntil -or $stillAtTitle) -and (Get-Date) -ge $nextPress -and $manifest) {
+        if ($PressSeconds -gt 0 -and ((Get-Date) -lt $pressUntil -or $stillAtTitle) -and
+                (Get-Date) -ge $nextPress -and (Get-Date) -lt $deadline -and $manifest) {
             $emulatorIdentity = @($manifest.processes | Where-Object tag -EQ 'rpcs3') | Select-Object -First 1
             if ($emulatorIdentity) {
                 $emulator = Get-D1OwnedProcess $emulatorIdentity
                 if (-not $emulator) { throw 'The owned RPCS3 process is no longer running.' }
-                & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys X -HoldMs 150 -ProcessId $emulator.Id | Out-Null
-                $presses++
-                $nextPress = (Get-Date).AddSeconds($PressEverySeconds)
-                Write-Host ("  {0}  Cross #{1}" -f (Get-Date -Format HH:mm:ss), $presses) -ForegroundColor DarkCyan
-                if ($presses -eq 1 -and $Shot) {
-                    & "$PSScriptRoot\Invoke-RpcsStep.ps1" -WaitSeconds 1 -ProcessId $emulator.Id | Out-Null
+                # PPU/shader startup may still have no game window at 45 s. Try
+                # again within this same boot deadline; an ownership failure
+                # still throws, and an absent window posts no input.
+                $posted = & "$PSScriptRoot\Send-RpcsKey.ps1" -Keys X -HoldMs 150 -ProcessId $emulator.Id `
+                    -ProcessIdentity $emulatorIdentity -IfWindowReady
+                if ($posted) {
+                    $waitingForGameWindow = $false
+                    $presses++
+                    $nextPress = (Get-Date).AddSeconds($PressEverySeconds)
+                    Write-Host ("  {0}  Cross #{1}" -f (Get-Date -Format HH:mm:ss), $presses) -ForegroundColor DarkCyan
+                    if ($presses -eq 1 -and $Shot) {
+                        & "$PSScriptRoot\Invoke-RpcsStep.ps1" -WaitSeconds 1 -ProcessId $emulator.Id | Out-Null
+                    }
+                } else {
+                    if (-not $waitingForGameWindow) {
+                        Write-Host '  waiting for this owned RPCS3 game window within the boot deadline' -ForegroundColor DarkCyan
+                    }
+                    $waitingForGameWindow = $true
+                    $nextPress = (Get-Date).AddSeconds([Math]::Min(5, $PressEverySeconds))
                 }
             }
         }
@@ -164,6 +179,9 @@ try {
         }
     }
     if (-not $launcherCompleted) { throw "Launch did not finish successfully within $BootSeconds seconds. Check $logs\$Name-launch.*." }
+    if ($waitingForGameWindow -and $presses -eq 0) {
+        throw "The owned RPCS3 game window did not become ready within $BootSeconds seconds; no input was posted. Check $logs\$Name-rpcs3-stdout.log and the emulator log."
+    }
     $progress = Read-Final124Progress -LogRoot $logs -Name $Name
     Write-Host "$Name : $(Get-Final124Verdict $progress)" -ForegroundColor Yellow
     Write-Host ("  probes={0} replies={1} dns={2} signon-requests={3} signon-replies={4} manifest-replies={5} bap-connections={6} bap-frames={7}" -f `
@@ -216,11 +234,11 @@ try {
     if ($processManifest) {
         try {
             $manifest = Read-D1ProcessManifest $processManifest
-            if (@($manifest.processes | Where-Object tag -EQ 'rpcs3').Count -gt 0) {
+            $emulatorIdentity = @($manifest.processes | Where-Object tag -EQ 'rpcs3') | Select-Object -First 1
+            if ($emulatorIdentity) {
                 $logCapture.destination = Join-Path $logs "$Name-rpcs3.log"
                 $sources = @(Join-Path $Rpcs3Dir 'log\RPCS3.log'; Join-Path $Rpcs3Dir 'RPCS3.log')
-                $logCapture.source = $sources | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-                if (-not $logCapture.source) { throw "RPCS3 log not found at $($sources -join ' or ')." }
+                $logCapture.source = Get-D1CurrentRunLog -Identity $emulatorIdentity -Sources $sources
                 $snapshot = Copy-D1SharedFileSnapshot -Source $logCapture.source -Destination $logCapture.destination
                 $logCapture.status = 'captured'
                 $logCapture.bytes = $snapshot.bytes

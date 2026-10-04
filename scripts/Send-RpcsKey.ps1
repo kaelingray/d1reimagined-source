@@ -10,8 +10,11 @@ param(
     [int]$Count = 1,
     [int]$HoldMs = 150,
     [int]$GapMs = 600,
-    [int]$ProcessId = 0          # 0 = all matching RPCS3 windows (legacy behavior)
+    [int]$ProcessId = 0,         # 0 = all matching RPCS3 windows (legacy behavior)
+    [object]$ProcessIdentity,   # optional exact manifest identity, checked before posting
+    [switch]$IfWindowReady      # bool result; no input when compilation has no game window yet
 )
+. "$PSScriptRoot\Final124RunHelpers.ps1"
 Add-Type @"
 using System; using System.Runtime.InteropServices; using System.Text;
 public static class RpcsKeys {
@@ -37,6 +40,13 @@ foreach ($k in $Keys) {
 }
 if (-not $vks) { $vks = @(0x58) }
 
+function Assert-RpcsKeyOwnership {
+    if ($ProcessIdentity) {
+        if ($ProcessId -ne $ProcessIdentity.id) { throw 'RPCS3 input PID does not match the supplied ownership identity.' }
+        if (-not (Get-D1OwnedProcess $ProcessIdentity)) { throw 'The exact owned RPCS3 process could not be verified before input.' }
+    }
+}
+Assert-RpcsKeyOwnership
 $ids = if ($ProcessId) {
     $process = Get-Process -Id $ProcessId -ErrorAction Stop
     if ($process.ProcessName -ne 'rpcs3') { throw "Process $ProcessId is not RPCS3" }
@@ -48,7 +58,11 @@ $script:game = @()
         $sb = New-Object Text.StringBuilder 256; [void][RpcsKeys]::GetWindowText($h, $sb, 256)
         if ($sb.ToString() -match 'FPS|Destiny|BLES') { $script:game += $h } }
     $true }, [IntPtr]::Zero) | Out-Null
-if (-not $script:game) { throw "Destiny game window not found" }
+Assert-RpcsKeyOwnership
+if (-not $script:game) {
+    if ($IfWindowReady) { return $false }
+    throw "Destiny game window not found"
+}
 
 foreach ($h in $script:game) {
     # a minimized game window presents no frames (F12 then saves nothing): restore it without
@@ -56,15 +70,24 @@ foreach ($h in $script:game) {
     if ([RpcsKeys]::IsIconic($h)) { [void][RpcsKeys]::ShowWindow($h, 4); Start-Sleep -Milliseconds 500 }
     for ($i = 0; $i -lt $Count; $i++) {
         foreach ($v in $vks) {
+            Assert-RpcsKeyOwnership
+            $windowProcessId = 0
+            [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$windowProcessId)
+            if ($ids -notcontains $windowProcessId) { throw 'RPCS3 game window ownership changed before input.' }
             $scan = [RpcsKeys]::MapVirtualKey([uint32]$v, 0)
             $ext = if ($v -ge 0x21 -and $v -le 0x28) { 1 -shl 24 } else { 0 }
             $down = 1 -bor ($scan -shl 16) -bor $ext
             $up = $down -bor (1 -shl 30) -bor (1 -shl 31)
             [void][RpcsKeys]::PostMessage($h, 0x100, [IntPtr]$v, [IntPtr][int64]$down)
             Start-Sleep -Milliseconds $HoldMs
+            Assert-RpcsKeyOwnership
+            $windowProcessId = 0
+            [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$windowProcessId)
+            if ($ids -notcontains $windowProcessId) { throw 'RPCS3 game window ownership changed before key release.' }
             [void][RpcsKeys]::PostMessage($h, 0x101, [IntPtr]$v, [IntPtr][int64]([uint32]$up))
             Start-Sleep -Milliseconds $GapMs
         }
     }
 }
+if ($IfWindowReady) { return $true }
 "posted {0} x{1}" -f (($vks | ForEach-Object { '0x{0:X2}' -f $_ }) -join ','), $Count

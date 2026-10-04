@@ -102,6 +102,74 @@ function Read-D1ProcessManifest {
     }
 }
 
+function Read-D1LaunchOutputTail {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    $stream = $null
+    try {
+        $sharing = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+        $stream = [IO.FileStream]::new($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, $sharing)
+        # A shader/compiler failure can write a very long line. Bound bytes as
+        # well as lines so startup diagnostics cannot copy an entire runtime log.
+        $length = [int][Math]::Min(8192, $stream.Length)
+        [void]$stream.Seek(-$length, [IO.SeekOrigin]::End)
+        $buffer = [byte[]]::new($length)
+        $read = $stream.Read($buffer, 0, $length)
+        $tail = [Text.Encoding]::UTF8.GetString($buffer, 0, $read)
+        ($tail -split '\r?\n' | Select-Object -Last 8) -join [Environment]::NewLine
+    } catch {
+        "Could not read output tail: $($_.Exception.Message)"
+    } finally {
+        if ($stream) { $stream.Dispose() }
+    }
+}
+
+function Get-D1LaunchedProcessDiagnostic {
+    param(
+        [Parameter(Mandatory)][System.Diagnostics.Process]$Process,
+        [Parameter(Mandatory)][string]$Tag,
+        [string[]]$OutputPaths = @()
+    )
+    # Only accept the retained Process from Start-Process (or an already verified
+    # identity). Do not look up a PID here: it may now belong to another process.
+    $hasExited = $null
+    $exitCode = $null
+    $status = 'process status unavailable'
+    try {
+        $Process.Refresh()
+        $hasExited = $Process.HasExited
+        $status = "HasExited=$hasExited"
+        if ($hasExited) {
+            $exitCode = $Process.ExitCode
+            $hex = ([long]$exitCode -band 0xffffffffL).ToString('X8')
+            $status += "; ExitCode=$exitCode (0x$hex)"
+        }
+    } catch { $status += ": $($_.Exception.Message)" }
+    $details = @("${Tag}: $status")
+    foreach ($path in $OutputPaths) {
+        $tail = Read-D1LaunchOutputTail $path
+        if ($tail) { $details += "$([IO.Path]::GetFileName($path)):$([Environment]::NewLine)$tail" }
+    }
+    [pscustomobject]@{
+        hasExited = $hasExited
+        exitCode = $exitCode
+        message = $details -join [Environment]::NewLine
+    }
+}
+
+function Get-D1CurrentRunLog {
+    param([Parameter(Mandatory)]$Identity, [Parameter(Mandatory)][string[]]$Sources)
+    if (-not $Identity.startTimeUtcTicks) { throw 'RPCS3 creation time is unavailable; shared log ownership cannot be established.' }
+    $startedUtc = [datetime]::new([long]$Identity.startTimeUtcTicks, [DateTimeKind]::Utc)
+    foreach ($source in $Sources) {
+        if (Test-Path -LiteralPath $source -PathType Leaf) {
+            $file = Get-Item -LiteralPath $source -ErrorAction Stop
+            if ($file.LastWriteTimeUtc -ge $startedUtc) { return $file.FullName }
+        }
+    }
+    throw "No shared RPCS3 log was written since this emulator started at $($startedUtc.ToString('o')); refusing to capture a previous run's log. Checked $($Sources -join ' or ')."
+}
+
 function Copy-D1SharedFileSnapshot {
     param(
         [Parameter(Mandatory)][string]$Source,

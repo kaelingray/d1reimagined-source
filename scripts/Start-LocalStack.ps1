@@ -25,6 +25,7 @@ $rpcs3 = $D1Rpcs3
 $usrdir = $D1Usrdir
 
 $owned = [System.Collections.Generic.List[object]]::new()
+$launchedProcesses = [System.Collections.Generic.Dictionary[string, System.Diagnostics.Process]]::new()
 $state = 'starting'
 $failure = $null
 function Save-ProcessManifest {
@@ -38,6 +39,10 @@ function Save-ProcessManifest {
 }
 function Register-Process([System.Diagnostics.Process]$Process, [string]$Tag, [string]$Executable) {
     try {
+        # Keep the kernel handle from this exact launch for exit diagnostics;
+        # later PID lookup alone cannot prove that the process actually exited.
+        $null = $Process.Handle
+        $launchedProcesses[$Tag] = $Process
         $identity = Get-D1ProcessIdentity -Process $Process -Tag $Tag -Executable $Executable
         $owned.Add($identity)
         Save-ProcessManifest
@@ -45,8 +50,10 @@ function Register-Process([System.Diagnostics.Process]$Process, [string]$Tag, [s
     } catch {
         # Registration itself can fail before the PID is written to disk. This
         # handle came directly from this invocation's Start-Process call.
+        $registrationFailure = $_.Exception.Message
+        $detail = Get-D1LaunchedProcessDiagnostic $Process $Tag @("$logs\$Name-$Tag-stdout.log", "$logs\$Name-$Tag.log", "$logs\$Name-$Tag.err")
         Stop-Process -InputObject $Process -Force -Confirm:$false -ErrorAction SilentlyContinue
-        throw
+        throw "$registrationFailure$([Environment]::NewLine)$($detail.message)"
     }
 }
 function Start-StandIn([string]$Tag, [string[]]$ArgList) {
@@ -60,10 +67,19 @@ function Start-StandIn([string]$Tag, [string[]]$ArgList) {
 function Assert-StandIns {
     Assert-D1StopNotRequested $ProcessManifest
     foreach ($identity in $owned) {
-        if (-not (Get-D1OwnedProcess $identity)) { throw "$($identity.tag) exited during stack launch. Check $logs\$Name-$($identity.tag).err." }
+        $process = $launchedProcesses[$identity.tag]
+        $process.Refresh()
+        if ($process.HasExited -or -not (Get-D1OwnedProcess $identity)) {
+            $detail = Get-D1LaunchedProcessDiagnostic $process $identity.tag @(
+                "$logs\$Name-$($identity.tag)-stdout.log", "$logs\$Name-$($identity.tag).log", "$logs\$Name-$($identity.tag).err")
+            $reason = if ($detail.hasExited) { 'exited during stack launch' } else { 'could not be verified by exact identity during stack launch' }
+            throw "$($identity.tag) $reason.$([Environment]::NewLine)$($detail.message)"
+        }
         $errorLog = Join-Path $logs "$Name-$($identity.tag).err"
-        if ((Test-Path -LiteralPath $errorLog) -and (Get-Item -LiteralPath $errorLog).Length -gt 0) {
-            $detail = (Get-Content -LiteralPath $errorLog -Tail 8) -join [Environment]::NewLine
+        # RPCS3 can write nonfatal driver/compiler messages to stderr. Its
+        # process exit or debugger startup deadline determines launch failure.
+        if ($identity.tag -ne 'rpcs3' -and (Test-Path -LiteralPath $errorLog) -and (Get-Item -LiteralPath $errorLog).Length -gt 0) {
+            $detail = Read-D1LaunchOutputTail $errorLog
             throw "$($identity.tag) reported a startup error:$([Environment]::NewLine)$detail"
         }
     }
@@ -108,7 +124,8 @@ try {
     if (-not $NoGame) {
         Assert-D1StopNotRequested $ProcessManifest
         $emulator = Start-Process -FilePath "$rpcs3\rpcs3.exe" `
-            -ArgumentList (ConvertTo-D1ProcessArgument "$usrdir\EBOOT.BIN") -WorkingDirectory $rpcs3 -PassThru -WindowStyle Hidden
+            -ArgumentList (ConvertTo-D1ProcessArgument "$usrdir\EBOOT.BIN") -WorkingDirectory $rpcs3 -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput "$logs\$Name-rpcs3-stdout.log" -RedirectStandardError "$logs\$Name-rpcs3.err"
         Register-Process $emulator 'rpcs3' (Join-Path $rpcs3 'rpcs3.exe') | Out-Null
         Assert-D1StopNotRequested $ProcessManifest
         $deadline = (Get-Date).AddSeconds(60)
@@ -117,7 +134,10 @@ try {
             Assert-StandIns
             $debugListener = Get-NetTCPConnection -State Listen -LocalPort 2345 -OwningProcess $emulator.Id -ErrorAction SilentlyContinue
         } until ($debugListener -or (Get-Date) -ge $deadline)
-        if (-not $debugListener) { throw 'This RPCS3 process did not open debugger port 2345 within 60 seconds.' }
+        if (-not $debugListener) {
+            $detail = Get-D1LaunchedProcessDiagnostic $emulator 'rpcs3' @("$logs\$Name-rpcs3-stdout.log", "$logs\$Name-rpcs3.err")
+            throw "This RPCS3 process did not open debugger port 2345 within 60 seconds.$([Environment]::NewLine)$($detail.message)"
+        }
         # RPCS3's GDB stub serves one connection per emulator session: the daemon holds it.
         Start-StandIn gdbd @('scripts/rpcs3_gdb_daemon.py')
         Start-Sleep 3

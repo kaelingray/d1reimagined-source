@@ -87,16 +87,40 @@ try {
         Assert-Equal @(Get-ChildItem -LiteralPath $fixtureRoot -Filter 'snapshot.log.tmp.*').Count 0 'failed snapshot leaves no temporary artifact'
     } finally { $exclusive.Dispose() }
 
+    # Failed launches must not relabel a shared log from an older emulator.
+    # Both existing file locations are checked against this launch's exact time.
+    $logIdentity = [pscustomobject]@{ startTimeUtcTicks = [DateTime]::UtcNow.Ticks.ToString() }
+    $staleLog = Join-Path $fixtureRoot 'previous RPCS3.log'
+    $freshLog = Join-Path $fixtureRoot 'current RPCS3.log'
+    Set-Content -LiteralPath $staleLog 'previous run evidence'
+    [IO.File]::SetLastWriteTimeUtc($staleLog, [DateTime]::UtcNow.AddDays(-1))
+    $staleFailure = $null
+    try { Get-D1CurrentRunLog $logIdentity @($staleLog) | Out-Null } catch { $staleFailure = $_.Exception.Message }
+    Assert-Equal ([bool]($staleFailure -like '*refusing to capture a previous run*')) $true 'stale shared log is rejected'
+    Set-Content -LiteralPath $freshLog 'current run evidence'
+    Assert-Equal (Get-D1CurrentRunLog $logIdentity @($staleLog, $freshLog)) $freshLog 'fresh fallback log is selected after stale first location'
+    $largeOutput = Join-Path $fixtureRoot 'large stderr.log'
+    [IO.File]::WriteAllText($largeOutput, ('x' * 20000) + 'tail marker')
+    $tail = Read-D1LaunchOutputTail $largeOutput
+    Assert-Equal ($tail.Length -le 8192 -and $tail.EndsWith('tail marker')) $true 'startup output is bounded even for a long line'
+
     $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
-    $sleeper = Start-Process -FilePath $pwsh -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 90') -PassThru -WindowStyle Hidden
+    $sleeper = Start-Process -FilePath $pwsh -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 300') -PassThru -WindowStyle Hidden
     $identity = Get-D1ProcessIdentity $sleeper 'unrelated-test-process' $pwsh
     $testIdentities.Add($identity)
+    $liveDiagnostic = Get-D1LaunchedProcessDiagnostic $sleeper 'sleeping-test-process'
+    Assert-Equal $liveDiagnostic.hasExited $false 'live retained launch handle does not claim exit'
     $wrong = [pscustomobject]@{ id = $identity.id; executable = $identity.executable; startTimeUtcTicks = '0' }
     Stop-D1OwnedProcess $wrong
     Assert-Equal ([bool](Get-D1OwnedProcess $identity)) $true 'wrong start time cannot authorize cleanup'
     $wrong = [pscustomobject]@{ id = $identity.id; executable = 'wrong.exe'; startTimeUtcTicks = $identity.startTimeUtcTicks }
     Stop-D1OwnedProcess $wrong
     Assert-Equal ([bool](Get-D1OwnedProcess $identity)) $true 'wrong executable cannot authorize cleanup'
+    $inputFailure = $null
+    try {
+        & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId $identity.id -ProcessIdentity $wrong -IfWindowReady | Out-Null
+    } catch { $inputFailure = $_.Exception.Message }
+    Assert-Equal ($inputFailure -like '*exact owned RPCS3 process could not be verified*') $true 'window readiness does not swallow wrong input ownership'
 
     # Verify actual Windows argv parsing, including empty strings, quotes and a
     # trailing backslash in a path containing spaces.
@@ -114,6 +138,17 @@ try {
     # Record the actual executable supplied to Start-Process, then verify both
     # monitoring and cleanup once the OS has finished starting the child.
     $python = (Get-Command python).Source
+    $exitOutput = Join-Path $fixtureRoot 'exit stdout.log'
+    $exitError = Join-Path $fixtureRoot 'exit stderr.log'
+    $exitArguments = @('-c', 'import sys; print("startup stdout"); print("startup stderr", file=sys.stderr); sys.exit(23)' |
+        ForEach-Object { ConvertTo-D1ProcessArgument $_ })
+    $exitedChild = Start-Process -FilePath $python -ArgumentList $exitArguments -Wait -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $exitOutput -RedirectStandardError $exitError
+    $exitDiagnostic = Get-D1LaunchedProcessDiagnostic $exitedChild 'exited-test-process' @($exitOutput, $exitError)
+    Assert-Equal $exitDiagnostic.hasExited $true 'retained launch handle confirms actual exit'
+    Assert-Equal $exitDiagnostic.exitCode 23 'actual child exit code is reported'
+    Assert-Equal ($exitDiagnostic.message.Contains('0x00000017') -and
+        $exitDiagnostic.message.Contains('startup stdout') -and $exitDiagnostic.message.Contains('startup stderr')) $true 'exit diagnosis includes hexadecimal code and both redirected streams'
     $pythonArguments = @('-c', 'import time; time.sleep(90)' | ForEach-Object { ConvertTo-D1ProcessArgument $_ })
     for ($trial = 0; $trial -lt 8; $trial++) {
         $pythonChild = Start-Process -FilePath $python -ArgumentList $pythonArguments -WindowStyle Hidden -PassThru
@@ -148,6 +183,20 @@ Add-Content -LiteralPath $Path '2026-09-30T12:00:09 [fixture] frame 2 (kind 1): 
 Start-Sleep -Seconds 90
 '@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'FixtureLateFrame.ps1')
     @'
+param([string[]]$Keys, [int]$HoldMs, [int]$ProcessId, [object]$ProcessIdentity, [switch]$IfWindowReady)
+. "$PSScriptRoot\Final124RunHelpers.ps1"
+if (-not $IfWindowReady -or $ProcessId -ne $ProcessIdentity.id -or -not (Get-D1OwnedProcess $ProcessIdentity)) {
+    throw 'Fixture input must use readiness mode and the exact owned process.'
+}
+$attemptPath = Join-Path $env:D1_LOCAL 'SIGNON_LOCAL\logs\window-attempts.txt'
+Add-Content -LiteralPath $attemptPath 'checked exact ownership before window lookup'
+$attempts = @(Get-Content -LiteralPath $attemptPath).Count
+# First lookup models PPU compilation with no game window. It posts nothing.
+if ($attempts -eq 1) { return $false }
+Add-Content -LiteralPath (Join-Path $env:D1_LOCAL 'SIGNON_LOCAL\logs\window-input.txt') 'posted only after game window became ready'
+return $true
+'@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'Send-RpcsKey.ps1')
+    @'
 param([string]$DataRepo, [string]$Rpcs3Dir, [string]$GameUsrdir, [string]$Name,
     [switch]$Run, [switch]$PreserveExistingProcesses, [string]$ProcessManifest)
 $ErrorActionPreference = 'Stop'
@@ -159,7 +208,10 @@ $manifest = @{ name = $Name; state = 'starting'; error = $null; processes = @() 
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProcessManifest
 $logPath = Join-Path $Rpcs3Dir 'log\RPCS3.log'
 New-Item -ItemType Directory -Path (Split-Path $logPath -Parent) -Force | Out-Null
-Set-Content -LiteralPath $logPath "synthetic RPCS3 evidence for $Name"
+if ($env:D1_TEST_LAUNCH_MODE -eq 'stale-log') {
+    Set-Content -LiteralPath $logPath 'synthetic evidence from a previous run'
+    [IO.File]::SetLastWriteTimeUtc($logPath, [DateTime]::UtcNow.AddDays(-1))
+}
 if ($env:D1_TEST_LAUNCH_MODE -eq 'retained-exclusive') {
     $arguments = @('-NoProfile', '-File', "$PSScriptRoot\FixtureLockedLog.ps1", '-Path', $logPath |
         ForEach-Object { ConvertTo-D1ProcessArgument $_ })
@@ -173,6 +225,9 @@ if ($env:D1_TEST_LAUNCH_MODE -eq 'retained-exclusive') {
     $child = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 90') -WindowStyle Hidden -PassThru
 }
 $identity = Get-D1ProcessIdentity $child 'rpcs3' (Get-Command pwsh).Source
+if ($env:D1_TEST_LAUNCH_MODE -notin @('retained-exclusive', 'stale-log')) {
+    Set-Content -LiteralPath $logPath "synthetic RPCS3 evidence for $Name"
+}
 if ($env:D1_TEST_LAUNCH_MODE -like 'interrupted-*') {
     # Independent test record lets the parent verify that a child launched
     # before manifest registration never survives wrapper interruption.
@@ -189,7 +244,7 @@ try { Assert-D1StopNotRequested $ProcessManifest } catch {
     Stop-D1OwnedProcess $identity
     throw
 }
-$state = if ($env:D1_TEST_LAUNCH_MODE -eq 'stack-failure') { 'failed' } else { 'ready' }
+$state = if ($env:D1_TEST_LAUNCH_MODE -in @('stack-failure', 'stale-log')) { 'failed' } else { 'ready' }
 $manifest = @{ name = $Name; state = $state; error = 'synthetic stack failure'; processes = @($identity) }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ProcessManifest
 if ($state -eq 'failed') { throw 'synthetic stack failure' }
@@ -200,16 +255,17 @@ if ($state -eq 'failed') { throw 'synthetic stack failure' }
 '@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'Start-FinalBuildSmoke.ps1')
     $env:D1_RPCS3 = $null
     $env:D1_USRDIR = $null
-    foreach ($mode in @('success', 'continue-bap', 'preflight-failure', 'stack-failure',
+    foreach ($mode in @('success', 'continue-bap', 'window-delay', 'preflight-failure', 'stack-failure', 'stale-log',
         'interrupted-registration', 'interrupted-hung', 'retained-exclusive')) {
         $env:D1_TEST_LAUNCH_MODE = $mode
         $runName = $mode.Replace('-', '_')
-        $successful = $mode -in @('success', 'continue-bap', 'retained-exclusive')
+        $successful = $mode -in @('success', 'continue-bap', 'window-delay', 'retained-exclusive')
         $keep = $mode -eq 'retained-exclusive'
-        $bootSeconds = if ($mode -like 'interrupted-*') { 1 } elseif ($mode -eq 'continue-bap') { 12 } else { 15 }
+        $bootSeconds = if ($mode -like 'interrupted-*') { 1 } elseif ($mode -eq 'window-delay') { 56 } elseif ($mode -eq 'continue-bap') { 12 } else { 15 }
+        $pressSeconds = if ($mode -eq 'window-delay') { 1 } else { 0 }
         $caught = $null
         try {
-            & (Join-Path $fixtureScripts 'Invoke-Final124Run.ps1') -Name $runName -Local $fixtureLocal -DataRepo $fixtureData -BootSeconds $bootSeconds -KeepRpcs3:($mode -notin @('success', 'continue-bap')) -ContinueAfterBap:($mode -eq 'continue-bap')
+            & (Join-Path $fixtureScripts 'Invoke-Final124Run.ps1') -Name $runName -Local $fixtureLocal -DataRepo $fixtureData -BootSeconds $bootSeconds -PressSeconds $pressSeconds -KeepRpcs3:($mode -notin @('success', 'continue-bap', 'window-delay')) -ContinueAfterBap:($mode -in @('continue-bap', 'window-delay'))
         } catch { $caught = $_.Exception.Message }
         $report = Get-Content -LiteralPath (Join-Path $fixtureLogs "$runName-summary.json") -Raw | ConvertFrom-Json
         Assert-Equal $report.completed $successful "$mode completed status"
@@ -218,14 +274,24 @@ if ($state -eq 'failed') { throw 'synthetic stack failure' }
         if ($successful) {
             Assert-Equal $report.verdict 'REACHED BAP (protocol frame received)' 'wrapper BAP verdict'
         }
-        Assert-Equal $report.continuedAfterBap ($mode -eq 'continue-bap') "$mode continuation mode recorded"
+        Assert-Equal $report.continuedAfterBap ($mode -in @('continue-bap', 'window-delay')) "$mode continuation mode recorded"
         if ($mode -eq 'continue-bap') {
             Assert-Equal $report.progress.BapFrames 2 'continued observation includes a frame received after initial BAP connection'
         }
+        if ($mode -eq 'window-delay') {
+            Assert-Equal @(Get-Content -LiteralPath (Join-Path $fixtureLogs 'window-attempts.txt')).Count 2 'missing game window is retried within original boot budget'
+            Assert-Equal @(Get-Content -LiteralPath (Join-Path $fixtureLogs 'window-input.txt')).Count 1 'delayed readiness posts exactly one input'
+            Assert-Equal $report.presses 1 'missing game window does not count as a press'
+        }
         $captureStatus = if ($mode -eq 'retained-exclusive') { 'deferred' }
+            elseif ($mode -eq 'stale-log') { 'failed' }
             elseif ($mode -in @('preflight-failure', 'interrupted-hung')) { 'not_started' }
             else { 'captured' }
         Assert-Equal $report.logCapture.status $captureStatus "$mode log capture status"
+        if ($mode -eq 'stale-log') {
+            Assert-Equal (Test-Path -LiteralPath $report.logCapture.destination) $false 'failed launch does not publish previous emulator evidence'
+            Assert-Equal ($report.logCapture.error.Contains('refusing to capture a previous run')) $true 'failed capture explains stale shared log'
+        }
         $manifest = Read-D1ProcessManifest (Join-Path $fixtureLogs "$runName-processes.json")
         foreach ($ownedIdentity in @($manifest.processes)) {
             if ($ownedIdentity) {
