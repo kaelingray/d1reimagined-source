@@ -881,8 +881,18 @@ def baseline_list(value):
 
 
 def offset_keys(v):
-    """JSON object keys (decimal or 0x strings) -> int field offsets, recursively."""
+    """Normalize JSON field offsets, retaining a validated typed-value wrapper."""
     if isinstance(v, dict):
+        if set(v) == {"type", "values"}:
+            handle, payload = v["type"], v["values"]
+            if isinstance(handle, bool) or not isinstance(handle, (int, str)):
+                raise ValueError("typed value needs an integer type handle")
+            handle = int(handle, 0) if isinstance(handle, str) else handle
+            if not 0 <= handle < investment.NULL_HANDLE:
+                raise ValueError("typed value needs a non-null 32-bit type handle")
+            if not isinstance(payload, dict):
+                raise ValueError("typed value fields must be a mapping")
+            return {"type": handle, "values": offset_keys(payload)}
         return {int(k, 0): offset_keys(x) for k, x in v.items()}
     if isinstance(v, list):
         return [offset_keys(x) for x in v]
@@ -1125,9 +1135,10 @@ def validate_mission_states(schema, timed, reactive):
             if not isinstance(actual, dict):
                 raise ValueError(f"{path}: expected a struct")
             for offset, value in expected.items():
+                label = f"{offset:#x}" if isinstance(offset, int) else offset
                 if offset not in actual:
-                    raise ValueError(f"{path}/{offset:#x}: field is absent from the encoded state")
-                check(value, actual[offset], f"{path}/{offset:#x}")
+                    raise ValueError(f"{path}/{label}: field is absent from the encoded state")
+                check(value, actual[offset], f"{path}/{label}")
         elif isinstance(expected, list):
             if not isinstance(actual, list) or len(expected) != len(actual):
                 raise ValueError(f"{path}: array length changed during encoding")

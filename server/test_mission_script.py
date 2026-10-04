@@ -1,9 +1,84 @@
+import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 import bap_server as bap
 from mission_script import ReactionQueue, reaction_scope
+
+
+class MissionTypedValues(unittest.TestCase):
+    def setUp(self):
+        from test_investment_typed_values import SCHEMA, field
+
+        self.schema = copy.deepcopy(SCHEMA)
+        self.schema["0x80800a07"] = {"size": 8, "fields": [field(0, 1, nested=bap.OBJECT_ID_TYPE)]}
+        self.objects = {"helper": "0xfc0e45a3:0x18:101:0x8080065c:1"}
+        self.reference = {"0": 0xFC0E45A3, "4": 1, "6": 94}
+        self.values = {"0": True, "4": 1, "8": self.reference,
+                       "0x10": {"type": "0x80800a07", "values": {"0": self.reference}}}
+        self.expected = {0: True, 4: 1, 8: {0: 0xFC0E45A3, 4: 1, 6: 94},
+                         0x10: {"type": 0x80800A07, "values": {0: {0: 0xFC0E45A3, 4: 1, 6: 94}}}}
+
+    def test_object_spec_retains_wrapper_and_encodes_its_nested_reference(self):
+        import investment
+
+        spec = bap.object_spec(self.objects["helper"] + "=" + json.dumps(self.values))
+        self.assertEqual(spec[2], self.expected)
+        encoded = investment.encode(self.schema, spec[1], spec[2])
+        self.assertEqual(investment.decode(self.schema, spec[1], encoded), self.expected)
+        self.assertTrue(spec[3])
+
+    def test_timed_and_reactive_mission_states_pass_encoding_preflight(self):
+        mission = {"objects": self.objects, "steps": [
+            {"at": 0, "set": {"helper": self.values}},
+            {"on": {"type": 18, "regex": "^01"}, "set": {"helper": self.values}}]}
+        timed, reactive = bap.expand_mission(mission, self.schema)
+        self.assertEqual(timed[0][1][2], self.expected)
+        self.assertEqual(reactive[0][3][2], self.expected)
+        self.assertEqual(bap.validate_mission_states(self.schema, timed, reactive), 2)
+
+    def test_live_control_rejects_named_offsets_and_accepts_the_next_typed_line(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "control.jsonl"
+            lines = [{"set": {"helper": {"ordinary_name": 1}}},
+                     {"set": {"helper": self.values}}]
+            path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+            specs, teleports, offset, errors = bap.control_steps(path, 0, self.objects, self.schema)
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(len(specs), 1)
+            self.assertEqual(specs[0][2], self.expected)
+            self.assertEqual(teleports, [])
+            self.assertEqual(offset, path.stat().st_size)
+            self.assertEqual(bap.validate_mission_states(self.schema, [(0, specs[0])], []), 1)
+
+    def test_wrappers_normalize_recursively_in_lists_and_nested_payloads(self):
+        wrapper = {"type": "0x102", "values": {
+            "0": {"type": 0x80800A07, "values": {"0": self.reference}}}}
+        normalized = bap.offset_keys([wrapper])[0]
+        self.assertEqual(normalized, {"type": 0x102, "values": {
+            0: {"type": 0x80800A07, "values": {0: {0: 0xFC0E45A3, 4: 1, 6: 94}}}}})
+        spec = bap.object_spec("1:3:0:0x101=" + json.dumps({"8": wrapper}))
+        self.assertEqual(bap.validate_mission_states(self.schema, [(0, spec)], []), 1)
+
+    def test_only_complete_wrappers_with_nonnull_integer_handles_are_accepted(self):
+        invalid = [{"ordinary_name": 1}, {"type": 1}, {"values": {}},
+                   {"type": 1, "values": {}, "extra": 0},
+                   {"type": 1, "values": []}, {"type": 1, "values": {"bad_offset": 0}}]
+        invalid += [{"type": handle, "values": {}}
+                    for handle in (None, True, 1.5, -1, "0xffffffff", 0x100000000, "unknown")]
+        for value in invalid:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                bap.offset_keys({"0x10": value})
+        self.assertEqual(bap.offset_keys({"type": "0", "values": {}}),
+                         {"type": 0, "values": {}})
+
+    def test_unknown_selected_type_still_fails_schema_preflight(self):
+        values = {"0x10": {"type": "0xdeadbeef", "values": {}}}
+        spec = bap.object_spec(self.objects["helper"] + "=" + json.dumps(values))
+        with self.assertRaisesRegex(ValueError, "unknown type handle"):
+            bap.validate_mission_states(self.schema, [(0, spec)], [])
 
 
 class ReactionScopes(unittest.TestCase):

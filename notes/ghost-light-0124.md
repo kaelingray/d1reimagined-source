@@ -31,7 +31,10 @@ spawns and reports those members when the squad generation and bubble gate work.
 `ho_ghostlight` is **not** a player trigger. Its 0x60-byte state contains a bool at
 `+0`, a biased i32 at `+4`, an object reference at `+8`, and a required field of
 primitive kind `0x22` at `+0x10`. The definition also declares state type
-`0x8080048a`; this does not by itself establish a baseline state-B requirement.
+`0x8080048a`. JOIN92's live record and its actual root component now confirm
+that this is state B and its default baseline requires a B-presence bit.
+The former exporter omission malformed the subsequent object stream; see
+[the baseline investigation](private-host-investigation.md).
 The bool, generation, reference target, and dynamic payload that produce the retail
 torch still need to be confirmed.
 
@@ -73,6 +76,16 @@ present handle. A typed value accepts null or
 `{"type": HANDLE, "values": {OFFSET: VALUE}}`. The type can be an integer or a
 base-prefixed string. Unknown types and malformed mappings fail explicitly.
 Optional absence and present-null remain distinct.
+
+On 4 October, the mission/control offset normalizer was extended to preserve
+exact `type`/`values` wrappers and recursively normalize their payload offsets.
+The preflight checker also accepts those structural path labels. Ordinary named
+field keys and malformed wrappers still fail, and unknown selected handles still
+fail schema validation. Six new regressions cover object specifications, timed
+and reactive steps, live control, nested wrappers and rejection cases. All 155
+server tests pass. A private check with the actual final schema encodes the HO
+state with selector `0x80800a07` and its squad reference in exactly 176 bits;
+encoding success does not establish visible torch behavior.
 
 Eight regression tests cover exact bits, neighboring sentinels, nulls, known
 nested values, optional presence, malformed/unknown values, and truncation.
