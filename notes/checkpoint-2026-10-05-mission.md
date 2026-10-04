@@ -39,6 +39,45 @@ JOIN103's last sampled corridor frame is clean; this does not extend the
 earlier inventory-model evidence to an in-world third-person Guardian.
 The run is stopped by exact process ownership after saving its evidence.
 
+## JOIN104: placed-device lifecycle and reaching the Ghost
+
+The fresh run repeats all 249 ready records, the automatic one-Ghost
+count after manual reset, and the corrected manual filter/helper.
+The public attachment inspector succeeds before and after HO generation
+one: all twelve components remain, and the network binding still targets
+the same Ghost with its unit-mask bit set.
+
+The manual device candidate creates a physical unit within two seconds
+at the actual configured position. Generation two with creation false
+removes it and clears the tracked pair; generation three with creation
+true creates a new datum. Both native creator entries corroborate this
+lifecycle. A controlled comparison retains the nearby orange light
+source in all three states, so this is not accepted as a torch fix.
+
+Following recorded Breach points 72–74 onto the ramp resolves the
+previous blocked approach. A subsequent ordinary-input walk reaches
+height 18.47 near `(390, -792)`. The Ghost's shell and blue core are
+clearly visible about five units away. The exact successful targets,
+camera directions, lifecycle states and native entries are in
+[the JOIN104 light note](ghost-light-0124.md#join104-placed-device-lifecycle-and-a-clear-ghost-view).
+
+From this clear viewpoint, increasing the helper generation reaches
+native handlers `0xc121bc`, `0x12e79c` and `0x431c14`, with the actual
+Ghost and null payload. The state is consumed, but the controlled view
+still does not verify a torch beam. Continue with the handler's first
+type lookup (`0x8080206f`) and subsequent lookup (`0x8080236c`), and the
+configured components' actual activation requirements. Do not infer
+failed execution solely from the unobserved `0x432674` hook.
+
+The 00:30:28 Titan inventory frame again has normal proportions and
+clean armor lighting. The level-zero/loading slots and preview-only
+rifle remain. The combined rendering fix is retained, with no new
+in-world third-person acceptance claim.
+
+Validation: 127 script tests, 156 server tests and the actual final
+schema preflight pass. The owned run and separate proxy are stopped;
+all recorded identities are checked exited. XInput is restored.
+
 Stable Breach return completion, visible torch, durable rifle pickup,
 Fallen encounters, mission rewards/results, Tower arrival and relog
 remain unfinished. Keep those acceptance claims separate from protocol,

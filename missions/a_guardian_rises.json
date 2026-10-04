@@ -19,7 +19,8 @@
     "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5.",
     "01.24 JOIN77/81: player-trigger reports are type-18 incidents. Objective lane phases cancel delayed updates from earlier handovers.",
     "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records.",
-    "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet."
+    "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet.",
+    "01.24 JOIN104: the manual o_device_invis_light alias creates, removes and recreates its placed unit using generation and +4 Boolean; illumination and mission timing remain unverified."
   ],
   "clock": "ready",
   "objects": {

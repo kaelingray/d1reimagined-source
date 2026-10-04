@@ -557,3 +557,94 @@ schema; unsigned 255/65535 fail the value-preservation preflight. The
 candidate round-trips through the actual 5,041-type final schema.
 Native creation, state consumption and a physical unit must be checked
 before attributing any illumination to it or scheduling it automatically.
+
+## JOIN104: placed-device lifecycle and a clear Ghost view
+
+All times below are BST on 5 October. The guarded Wall route reaches
+`(352.345, -796.712, 14.059)` at 00:23:18; its host request is queued only
+after arrival. At 00:23:22, the client reports current slice 24 with all
+249 occupied records baseline-ready. The readiness sample has engine
+state 6, followed later by state 3 with return target 112. It does not
+prove a settled idle Breach transition.
+
+The manual bubble reset and shipped count rule create one Ghost by
+00:23:43. The corrected manual filter/helper sequence again instantiates
+all twelve components. The public inspector, including its component
+header and binding consistency checks, succeeds on the live run: owner
+`0x07fac971`, target `0x7afb82ce`, network binding `0x63fd203c`. The
+binding independently targets the same Ghost and its unit-mask bit is set.
+
+### The manual placed-device candidate works
+
+At 00:24:01, the exact preflighted State A is sent:
+
+```json
+{"set":{"o_device_invis_light":{"0":1,"4":true,"8":{"0":2166136261,"4":-1,"6":-1}}}}
+```
+
+By 00:24:03, requested and reported generations are both one, the
+existence report is true, and variant zero has physical unit
+`0x75fb82cf` at `(428.847, -813.827, 21.841)`. Its unit-mask bit is set.
+Native creator `0x214478` is observed with `lr=0x215bfc`, the exact
+device component and its copied State A; entity creator `0x13f068`
+follows with `lr=0x2145d0`. This independently agrees with the unit pair.
+
+A fixed-view comparison verifies the lifecycle, rather than treating
+accepted input as successful creation:
+
+| Captured BST | Requested generation / Boolean | Reported generation / exists | Tracked unit |
+| --- | --- | --- | --- |
+| 00:27:38 | 1 / true | 1 / true | `0x75fb82cf` |
+| 00:27:45 | 2 / false | 2 / false | Absent; both pair words `0xffffffff` |
+| 00:27:52 | 3 / true | 3 / true | New datum `0x76fb82cf` |
+
+Each later control retains the same absent object reference. Increment
+the generation when testing removal/recreation; simply clearing the
+Boolean after an already consumed generation does not exercise the
+generation-replacement path. The nearby orange source remains visible
+in all three views, at identical yaw 93.79 and pitch 2.45 degrees with
+negligible position drift. This proves creation/removal/recreation,
+not a torch effect or the correct mission phase for this device.
+No automatic device action is added.
+
+### The ramp resolves the earlier blocked approach
+
+The recorded [Breach route](../missions/routes/breach.json) includes the
+turn onto the ramp at points 72–74. A bounded, ordinary-input walk uses
+points `56, 60, 64, 67, 69, 70, 71, 72, 73, 74`, reaching
+`(389.513, -799.540, 16.644)` at 00:25:36. It then follows targets
+`(390, -795)` and `(390, -791)`, reaching
+`(389.943, -792.458, 18.466)` at 00:28:20. The player remains in current
+slice 24, with no cleanup, respawn or guest-memory position writes.
+The previous direct approach toward `(385, -791)` stayed below this ramp.
+
+The 00:28:24 and 00:29:37 frames clearly show the Ghost's shell and blue
+core about five units away. This is an unobstructed Ghost view, extending
+the earlier proximity-only evidence. A fixed orange fixture lights
+nearby geometry; it must not be mistaken for the Ghost's torch.
+
+From that viewpoint, the HO generation is increased from zero to one.
+The 00:29:44 frame has the same actual yaw 86.05 and pitch 0.64 degrees
+as the preceding frame. Requested and consumed generations both reach
+one. The same Ghost and all twelve helper components remain present,
+but no new beam or corridor illumination is verified.
+
+This time the native watch observes `0xc121bc -> 0x12e79c -> 0x431c14`,
+with the actual Ghost datum and null payload. Thus the generation action
+does reach the unit-action handler. `0x432674` is not observed; that
+alone cannot prove whether an inlined call ran. The handler first queries
+type `0x8080206f` through `0x147340` and then type `0x8080236c` through
+`0x109c58`. Identify those lookup results and the attachment's actual
+activation requirements before inventing another light-state value.
+The metadata record's `+8` link is not proven to be an inheritance parent.
+
+The 00:30:28 inventory frame again shows a normally proportioned Titan
+and clean armor lighting. Level zero, loading equipment slots and the
+starter-overlay rifle remain separate unfinished investment work.
+The combined rendering fix remains enabled. This run adds no acceptance
+claim for an in-world third-person Guardian or completed mission.
+
+The owned stack is stopped after preserving the final native log,
+attachment snapshots, device lifecycle samples and controlled views.
+All manifest-owned processes and the separately owned proxy are checked
+exited, and the user's XInput pad profile is restored.
