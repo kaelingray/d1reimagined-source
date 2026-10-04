@@ -200,3 +200,52 @@ and round-trips through the final schema; JOIN99 tests it live. Details are in
 JOIN98 subsequently returned to Orbit for inactivity. The notice was captured
 before its owned stack was stopped. No in-mission Guardian model or completed
 torch check is claimed from this run.
+
+## JOIN99: physical Ghost creation and character preview
+
+JOIN99 repeats the cleared Breach handover with all 249 occupied records
+baseline-ready. At 19:30:58 BST a fresh inactive bubble reset and explicit
+one-variant desired count were published. By 19:31:00 the Ghost squad has
+one live member, an active actor datum and a valid physical unit datum.
+The native creation path agrees with those reads. A generation alone had
+left that same squad empty. The mission now schedules this verified desired
+count on its existing delayed current-slice-24 rule; bubble readiness remains
+a prerequisite, and this does not supply counts for Fallen encounters.
+
+The helper's typed squad selector still creates no attachment. Native tracing
+shows its first-result handler advancing past the sole member before checking
+the bound. JOIN100 therefore tests the actual `of_ghostlight` filter with a
+direct kind-2 member reference. The filter alias alone adds no automatic light
+action. See [squad counts](squad-member-counts-0124.md) and
+[light selection](ghost-light-0124.md).
+
+Normal controller input opens the character screen from the Breach. Frames
+at 19:39:01 and 19:40:55 show a Titan with normal proportions and armor
+lighting, without the earlier magenta distortion. These extend the corrected
+setup preview evidence to the inventory view during a mission. The rifle in
+that preview comes from the starter-gear overlay; it does not prove durable
+pickup or equipment. Loading inventory slots, the in-world third-person
+Guardian and later social-space appearance remain open. The sampled Breach
+frames also remain clean, but none demonstrates the Ghost's torch.
+
+## JOIN100: Ghost unit selection and registered attachment
+
+The fresh run again clears all 249 occupied baselines. One desired count
+creates one Ghost actor, whose unit is returned by actor accessor `0x191960`
+at `+0x30`. The filter's direct member-95 reference finds no network binding;
+the physical Ghost is bound under squad 94 instead. Changing the filter's
+reference to that squad yields the actual Ghost unit, reaches the configured
+attachment creator from the HO caller, and leaves a new HO-101 binding to
+the target. Subsequent creation attempts recognize the existing attachment.
+
+This is a successful native attachment path, beyond the empty selectors in
+JOIN98/99. It is not yet visible torch acceptance: the Ghost is about 65 units
+ahead of the player. A normal guarded walk responds, then stops at client
+cleanup. The screenshot explicitly says the client returned to Orbit for
+inactivity, despite brief movement. JOIN101 tests the automatic desired count
+and repeats the corrected filter promptly before walking closer. The manual
+states and LLVM watch limitations are in [the light note](ghost-light-0124.md).
+
+The changed mission passes the actual 5,041-type schema preflight and all
+156 server tests, including a 72-bit regression for its one-Ghost count and
+required modes. The unchanged script suite previously passed all 115 tests.

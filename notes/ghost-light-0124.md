@@ -167,7 +167,8 @@ independently confirmed their values:
 For `0x80800a07`, `0xc73c80` resolves the payload's object ID through
 `0x155c50`, then initializes iteration with `0x245590`; the next-item path
 uses `0x245504` and `0x24553c`. The helper calls `0xc11dc0` for each selected
-existing member. Referencing squad 94 therefore selects its live members;
+existing member yielded by the iterator. Referencing squad 94 requests
+enumeration of its live members; JOIN99 below records the one-member limit.
 publishing a kind-2 member state is not a prerequisite. The squad must actually
 spawn before the iterator can yield a member. Merely sending a generation
 does not prove that the bubble gate or squad handler accepted it.
@@ -244,3 +245,106 @@ a live member datum, it must not be treated as a top-level member update or a
 verified spawn. JOIN98 timed out for inactivity before the attempted Guardian
 emote check; the notice was captured and the owned stack stopped with evidence
 preserved.
+
+## JOIN99: the one-member selector skips its only member
+
+The desired-count test creates one live Ghost actor with a valid physical
+unit; see [the count evidence](squad-member-counts-0124.md). The same typed
+helper selector still yields no target. Native observations show
+`0xc73c80` initializing index 0 through `0x245590`, followed by
+`0xc73be0` calling `0x245504` to advance to index 1. The bounds check
+then fails against live-member count 1 and returns `0xffffffff`.
+No `0xc11dc0` call follows. This narrows the earlier description of
+`0x80800a07`: its observed first-result path is unsuitable for this
+one-member test. Creating an extra Ghost to evade the bound is not a
+verified retail sequence.
+
+The actual `of_ghostlight` object is `0xfc0e45a3 / 0x21 / 124`, state A
+`0x80800750`. Its typed entry `0x808006d7` dispatches through
+`0x286bac` and `0x211104`, with an explicit object reference. Mode 0
+adds the resolved member to the filter via `0x2867f4`. A kind-2 reference
+uses the member lookup and its unit datum, rather than the squad iterator.
+These handlers support a separate bounded candidate; live resolution and
+attachment creation still require observation.
+
+JOIN100 tests one filter entry targeting member `0xfc0e45a3 / 2 / 95`,
+then an HO state whose reference is filter `0xfc0e45a3 / 0x21 / 124`
+and whose typed selector is absent. The filter and helper states round-trip
+through the actual schema in 94 and 89 bits respectively. The mission's
+filter alias enables that manual test; it adds no automatic light action.
+
+## JOIN100: bound squad reference reaches attachment creation
+
+JOIN100 repeats 249 occupied records with zero pending baselines at 19:55:42
+BST. The explicit desired count creates one actor by 19:55:46. Its actual
+unit accessor is `0x191960`, which returns actor `+0x30`: unit datum
+`0x12fb82cd` resolves to a physical entity at `(390.458, -786.975, 18.948)`.
+Actor `+0x38` is a different component datum and `+0x40` is absent; neither
+should be substituted for the unit accessor.
+
+The direct kind-2 filter decodes correctly and repeatedly reaches
+`0x286bac -> 0x211104`, but returns no unit. The network binding table has
+no entry at member index 95. It **does** have a live entry at squad index 94:
+that entry's `+0x108` equals the actual Ghost unit, and its next link is absent.
+The kind-1 branch of `0x210a20` enumerates that binding list, independently
+of the typed squad iterator that skipped its first member.
+
+At 20:03:41 the filter entry was changed to reference **squad 94**, using
+the same single-result resolver:
+
+```json
+{
+  "set": {
+    "of_ghostlight": {
+      "0": {
+        "0": 1,
+        "0x10": [{
+          "type": "0x808006d7",
+          "values": {"0": 0, "4": {"0": 4228793763, "4": 1, "6": 94}}
+        }]
+      }
+    }
+  }
+}
+```
+
+The HO state for this filter path is:
+
+```json
+{
+  "set": {
+    "ho_ghostlight": {
+      "0": false,
+      "4": 0,
+      "8": {"0": 4228793763, "4": 33, "6": 124},
+      "0x10": null
+    }
+  }
+}
+```
+
+Fresh function-entry observations show mode 0 adding `0x12fb82cd` through
+`0x2867f4`, followed by `0xc11dc0` with that same target. The actual creator
+`0x1f7c94` is called with `lr=0xc11e58`, descriptor `HO+0x180`, the Ghost
+unit as `r5`, and `r6=0xffffffff`. A subsequent read shows a new binding
+under HO index 101 with that target. Later attempts pass descriptor validation
+and recognize the existing attachment. This establishes successful selection
+and registration on the configured attachment path, without creating a second
+Ghost or editing guest memory.
+
+The earlier zero counts at the **mid-function** watches `0xc11e54` and
+`0xc11e5c` do not establish that the call was skipped: those PCs need not be
+LLVM block entries. Prefer the creator's real function entry and its HO return
+address, then confirm the resulting binding. Do not use the four unrelated
+creator calls during player setup as Ghost-light evidence.
+
+The sampled frame at 19:55:53 is a transition fade; frames at 19:56:06,
+19:56:20 and 20:04:08 render the Breach normally. The player was about 65
+units from the Ghost, and these frames do not establish visible torch light.
+A guarded ordinary walk reached `(346.785, -797.305, 14.095)` before the
+client entered cleanup at 20:10:29. The captured notice explicitly reports an
+inactivity return to Orbit, despite brief recent movement. The walk released
+input immediately; the native/protocol evidence was preserved and the owned
+stack stopped. JOIN101 repeats the corrected sequence promptly and tests
+the mission's automatic desired count. No automatic light action is enabled
+until placement and visible illumination are checked.

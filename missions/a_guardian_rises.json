@@ -10,7 +10,8 @@
     "Objectives: 1 = active; 3 = complete (the handler special-cases 3, and the state-3 case of 0x355abc calls into the",
     "character/progress code); 2 looks like 'active with progress counters'. Squads (kind 1): a new +0x44 generation re-runs",
     "the squad; squad_existing_members means +0x5c on 01.00 or +0x74 on 01.24 (0 destroy, 1 release, -1 nothing).",
-    "spawn members is still unknown; the Breach squads are placed 20 s after the client reports slice set 24.",
+    "01.24 JOIN99: sq_nux_ghost desired counts at +0x2c = {0:1,4:[1]} create one physical member after bubble readiness.",
+    "The Breach state changes are scheduled 20 s after current slice set 24; Fallen desired counts remain unverified.",
     "Objective states (01.24, JOIN60): 1 = incoming (the 'NEW MISSION' banner with the activity name, about 4 s), 5 = active:",
     "the title (and on change its description) shows at the left of the HUD. Each objective is set to 1 and 6 s later to 5.",
     "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet.",
@@ -47,6 +48,7 @@
     "sq_ghost": "0xecf574b5:0x1:28:0x8080071e:1",
     "trig_ghostlight": "0xfc0e45a3:0x1d:120:0x80800463",
     "sq_nux_ghost": "0xfc0e45a3:0x1:94:0x8080071e:1",
+    "of_ghostlight": "0xfc0e45a3:0x21:124:0x80800750",
     "ho_ghostlight": "0xfc0e45a3:0x18:101:0x8080065c:1",
     "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463"
   },
@@ -362,6 +364,14 @@
       },
       "delay": 20,
       "set": {
+        "sq_nux_ghost": {
+          "0x2c": {
+            "0": 1,
+            "4": [1]
+          },
+          "0x44": 1,
+          "squad_existing_members": -1
+        },
         "sq_breach_floor_a": {
           "0x44": 1,
           "squad_existing_members": -1

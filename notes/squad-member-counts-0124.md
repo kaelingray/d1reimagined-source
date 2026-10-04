@@ -55,10 +55,30 @@ clear. Then publish, using a fresh squad generation for that session:
 ```
 
 The actual final schema encodes this state in 72 bits and decodes the one
-desired count, generation 2 and existing-member mode -1 exactly. This is
-serialization evidence; live creation is still being tested in JOIN99.
+desired count, generation 2 and existing-member mode -1 exactly.
 
 Require a nonzero live-member count and valid member datum before attributing
-any helper attachment result to a spawned Ghost. The light candidate's selector
-uses that squad's existing members. Keep visible illumination, normal Guardian
+any helper attachment result to a spawned Ghost. Keep visible illumination, normal Guardian
 appearance and stable slice completion as separate checks.
+
+## JOIN99: one physical member created
+
+At 19:30:58 BST on 4 October, after the current-slice and baseline checks and
+the inactive `3:1` reset, the candidate above was sent through live control.
+Two seconds later the Ghost squad has generation 2, desired counts
+`[1, 0, 0, 0, 0, 0, 0, 0]`, and a live-member count of **one**. The native
+trace reaches both `0x248704` and `0x247300` on the creation path.
+
+The member pair is `0x17033651 / 0x28f58000`. Its second word is the actor
+datum: resolving that datum through the actor pool yields an active actor
+with unit datum `0x48fb82cd` at actor `+0x30`, the field returned by the
+retail accessor `0x191960`. The first word is an auxiliary
+lookup ID and must not be used as the actor datum. Subsequent reads retain
+the live actor and unit. These addresses and handles belong to JOIN99 only;
+fresh runs must resolve their own registry and pools.
+
+This is physical creation evidence, beyond the earlier arbitrary-offset
+network ID matches. It does not establish the Ghost's visible placement,
+illumination or dialogue. The typed helper selector `0x80800a07` still
+creates no attachment: its first-result path advances iterator index 0 to
+1 before testing the one-member bound. See [the light investigation](ghost-light-0124.md).
