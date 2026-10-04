@@ -125,4 +125,12 @@ The per-preload rejection set addresses this duplicated work without deleting
 the archived files or admitting rejected shaders. The original 22 standalone
 validation fixtures still pass. The full Release build including memoization
 passed on 4 October and was deployed with its predecessor retained privately.
-A live boot with that additional change remains to be checked.
+JOIN96 and JOIN97 subsequently booted the deployed memoization build using the
+smaller JOIN92 cache. JOIN96 reached PPU execution about 2 minutes 43 seconds
+after launch; JOIN97 reached the Breach and continued rendering after the repaired
+baseline handover. JOIN97 also records the write guard refusing malformed newly
+compiled fragment programs, while sampled exterior and interior frames have no
+magenta blocks. This validates the deployed read/write guard and live boot with
+that cache generation. The full 198,264-pipeline archive has not yet had a complete
+boot with memoization, and these samples do not prove every shader or character
+appearance. The guard does not repair live program bindings.

@@ -213,3 +213,34 @@ created-object datum, or `0xffffffff` on failure; do not treat it as a pointer
 for a memory dump. These observations distinguish an empty selector, a rejected
 spawn and a created attachment. A visible illuminated Breach still requires a
 live frame.
+
+## JOIN98: selector accepted; no attachment created
+
+JOIN98 reproduced Breach readiness with 249 occupied records and zero pending
+baselines, including the Ghost squad, member component and helper. A transient
+empty pool during handover was rejected as a readiness result: zero pending
+records alone is insufficient without the required IDs.
+
+The inactive `3:1` reset at 18:56:47 BST cleared the waiting mask, and the
+explicit Ghost generation was accepted at 18:56:56. At 19:04:00 the helper
+candidate above was accepted through live control. Twelve fresh `0xc11ef0`
+observations show its actual component state containing the absent reference,
+selector `0x80800a07` and squad `0xfc0e45a3 / 1 / 94`, exactly as encoded.
+There are no hits at `0xc12010`, `0xc11dc0`, `0xc11e54`, `0xc11e5c` or the
+shared creator `0x1f7c94` in that bounded capture. Frames at 19:04:04,
+19:04:18 and 19:04:38 show the same windowed Breach interior, with no new
+visible light. The candidate is therefore not an automatic torch action.
+
+Before the helper action, the Ghost squad's live-member count at `+0x1d8`
+was zero. The iterator checks that count at `0x245434..43c`; a generation
+handler hit does not establish a physical member. The final squad state's
+desired member counts at `+0x2c` require a separate check. See
+[the squad-count investigation](squad-member-counts-0124.md).
+
+The type-6 body after the reset contains the Ghost member's exact encoded ID,
+but the current object matcher searches at any bit offset. Such a match can
+also be a reference inside another object. Without decoded message framing or
+a live member datum, it must not be treated as a top-level member update or a
+verified spawn. JOIN98 timed out for inactivity before the attempted Guardian
+emote check; the notice was captured and the owned stack stopped with evidence
+preserved.

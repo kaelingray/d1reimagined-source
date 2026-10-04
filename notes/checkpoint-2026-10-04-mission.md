@@ -159,9 +159,9 @@ The reset's bit 3 remains set in outer SIM `+0x844`, while `+0x850` is clear.
 At 18:31:18 the client's type-6 stream contains the exact final-schema IDs of
 `sq_nux_ghost` and its member `0xfc0e45a3 / 2 / 95`, as well as a floor squad and
 member. A subsequent explicit Ghost generation was accepted at 18:32:22. The
-member report precedes that latter generation; do not attribute its creation to
-the later action. This is protocol-only Breach spawn evidence, not a visible
-torch or completed encounter.
+ID match precedes that latter generation; do not attribute it to the later
+action. JOIN98 below narrows this evidence: the arbitrary-offset matcher does
+not establish a physical Ghost spawn, visible torch or completed encounter.
 
 Opening the character screen at 18:29:48 produced loading placeholders and no
 Guardian model. Those frames cannot verify character-model appearance; inventory
@@ -173,3 +173,30 @@ report. The alias itself adds no automatic mission action.
 Remaining acceptance work is a stable playable Breach, correct Ghost light,
 durable rifle pickup/equipment, encounters, rewards/results, Tower arrival and
 relog. See [acceptance checks](guardian-rises-acceptance.md).
+
+## JOIN98: repeated readiness and the empty Ghost selector
+
+JOIN98 reached the guarded route endpoint at 18:54:41 BST, then reported
+current slice 24 at 18:54:52. The handover briefly cleared its record pool;
+an empty pool was rejected as readiness even though its pending count was zero.
+A subsequent owned snapshot contains all 249 records with zero pending,
+including the required Ghost squad/member/helper IDs.
+
+Reset `3:1` cleared the waiting bit. At 19:04:00 the named helper accepted its
+typed selector, and twelve native creation attempts show the expected absent
+reference and squad reference decoded exactly. None reached member selection
+or attachment creation. The sampled Breach frames show no new visible light.
+The squad had zero live members at `+0x1d8` before the test.
+
+This corrects the earlier interpretation of arbitrary-offset type-6 ID matches
+as spawn evidence: an encoded member reference can occur inside another state.
+Likewise, `0x245204` only clears a bookkeeping byte, despite earlier notes
+calling it a spawn hook. The final squad state has separate desired member
+counts at `+0x2c`. A one-member candidate matches the extracted Ghost variant
+and round-trips through the final schema; JOIN99 tests it live. Details are in
+[the count investigation](squad-member-counts-0124.md) and
+[Ghost-light evidence](ghost-light-0124.md).
+
+JOIN98 subsequently returned to Orbit for inactivity. The notice was captured
+before its owned stack was stopped. No in-mission Guardian model or completed
+torch check is claimed from this run.

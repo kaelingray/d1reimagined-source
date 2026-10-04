@@ -85,7 +85,19 @@ has allowed it to apply immediately. Neither run wrote client RAM.
 The startup reset in slice 113 did not survive the transition. Apply a fresh
 generation after arrival; replaying generation 1 is insufficient. This verifies
 the mechanism for the highway Ghost, not every bubble or retail authority policy.
-Breach illumination and Fallen spawning remain separate acceptance checks.
+Breach illumination and complete Fallen encounters remain separate acceptance checks.
+
+After correcting the baseline stream, JOIN97 extends the reset evidence to the
+Breach. It has 249 occupied records with zero pending baselines. An inactive
+`3:1` reset at 18:31:02 BST leaves bit 3 set at `+0x844` and clear at `+0x850`.
+At 18:31:18, the type-6 stream contains the exact final-schema IDs of the Breach
+Ghost squad/member (`1/94`, `2/95`) and a floor squad/member (`1/28`, `2/29`).
+The later explicit Ghost generation at 18:32:22 must not receive credit for that
+earlier ID match. This establishes a second bubble's reset-mask and message
+evidence. JOIN98 subsequently found zero live Ghost members: an ID match at an
+arbitrary bit offset can be a reference inside another state. A physical spawn
+requires a valid live member datum; see [squad member counts](squad-member-counts-0124.md).
+Visible torch, encounter behavior and retail authority policy remain open.
 
 Validation: seven tests check changed-slot bits,
 inactive records without a peer, unchanged client slot, generation bounds,

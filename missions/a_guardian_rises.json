@@ -3,7 +3,7 @@
     "A Guardian Rises (act_cosmo_m0_highway): the start of the first mission, as a stand-in activity-host script.",
     "Use with bap_server.py --ah-mission missions/a_guardian_rises.json (see notes/mission-director.md).",
     "Order from the reference recording: revival cinematic (third person, then first person), 'Enter the Wall',",
-    "trigger at the Wall, 'Find a Weapon' in The Breach, the Ghost's light (pf_104a_pwr), 'Grab the Rifle'.",
+    "trigger at the Wall, 'Find a Weapon' in The Breach, the Ghost's light, the power beat (pf_104a_pwr), 'Grab the Rifle'.",
     "Field meanings are from the EBOOT handlers; the values marked in the note as guesses are what the runs test.",
     "Triggers (kind 0x1d): +0 true arms the trigger, with the arming time at +4 = \"$now\" and --ah-sim-clock enabled.",
     "01.24 trigger reports are type-18 incidents; repeated reports and the Breach disconnect still need diagnosis.",
@@ -17,7 +17,8 @@
     "Handover (JOIN70): the completed objective goes to 3 (with its completion sequence), 4 s later to 0 while the next",
     "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5.",
     "01.24 JOIN77/81: player-trigger reports are type-18 incidents. Objective lane phases cancel delayed updates from earlier handovers.",
-    "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records."
+    "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records.",
+    "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet."
   ],
   "clock": "ready",
   "objects": {

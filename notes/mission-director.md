@@ -134,6 +134,15 @@ id in any client message type (`"type": "any"`).
 
 ## Mission scripts
 
+**October 4 correction:** the reset masks and generation-handler observations
+above are valid, but they do not independently prove physical member creation.
+`0x245204` clears a bookkeeping byte. The object matcher can find a member ID
+inside another object's payload, and JOIN98's Breach Ghost squad still has zero
+live members after its generation. The final state has separate desired member
+counts at `+0x2c`; see [the count investigation](squad-member-counts-0124.md).
+Kind-2 components in the replication pool must be distinguished from physical
+member datums and visible scene objects.
+
 `bap_server.py --ah-mission FILE` reads the script and expands it into `--ah-object-at` (timed)
 and `--ah-on` (reactive) changes:
 
