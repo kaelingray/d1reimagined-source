@@ -82,3 +82,21 @@ network ID matches. It does not establish the Ghost's visible placement,
 illumination or dialogue. The typed helper selector `0x80800a07` still
 creates no attachment: its first-result path advances iterator index 0 to
 1 before testing the one-member bound. See [the light investigation](ghost-light-0124.md).
+
+## JOIN101: the shipped rule creates one member
+
+The fresh run clears all 249 occupied baselines. A manual inactive `3:1`
+reset at 20:27:16 BST satisfies the bubble gate. The mission's current-24
+rule matches at 20:27:15.587 and emits its desired count at 20:27:36.660;
+no manual count or squad-generation line is sent in this test.
+
+At 20:27:38, generation 1 has one live member, the expected eight desired
+counts and zero internal counters. The pair is `0x62ace605 / 0x02f58000`;
+the actor's `+0x30` gives unit `0x74fb82ce`, with physical position
+`(390.458, -786.975, 19.122)`. Fresh entries at `0x248704` and `0x247300`
+confirm the physical creation path. These handles belong only to JOIN101.
+
+This validates the mission's delayed one-Ghost state after a fresh bubble
+reset and readiness. The reset is still a manual protocol action. Counts
+for other squads, Ghost movement/dialogue and visible torch illumination
+are not established by this result.

@@ -249,3 +249,49 @@ states and LLVM watch limitations are in [the light note](ghost-light-0124.md).
 The changed mission passes the actual 5,041-type schema preflight and all
 156 server tests, including a 72-bit regression for its one-Ghost count and
 required modes. The unchanged script suite previously passed all 115 tests.
+
+## JOIN101: automatic Ghost count, close walk and rendering checks
+
+The guarded route reaches its endpoint at 20:27:06 BST. By 20:27:15 an
+owned snapshot has all 249 occupied records baseline-ready, including the
+required Ghost records. The client subsequently retains current slice 24
+while the engine is in state 3 with return target 112; settled transition
+completion remains open.
+
+After a manual protocol reset `3:1`, the **shipped mission rule** publishes
+the one-variant desired count at 20:27:36.660, twenty seconds after its
+current-24 match. No manual count update is used. By 20:27:38 the squad has
+generation 1, desired counts `[1, 0, 0, 0, 0, 0, 0, 0]` and one live member.
+Actor `0x02f58000` contains unit `0x74fb82ce` at `+0x30`; the unit resolves
+to `(390.458, -786.975, 19.122)`. Both native physical-creation entries agree.
+This validates the automatic count after readiness and reset, not an
+automated bubble reset or complete Ghost behavior.
+
+The corrected squad-94 filter and HO states are then sent manually. The
+creator `0x1f7c94` receives the Ghost unit with `lr=0xc11e58`, followed by
+helper registration at `0x1e5060` with `lr=0xc11ee0` and the exact HO ID.
+Registration's `r4=0x65fac971` is a separate datum; it must not be called the
+selected Ghost unit. The actual filter/helper sequence still requires a
+visible illumination check before it becomes an automatic mission action.
+
+Ordinary guarded input reaches `(382.896, -794.349, 14.162)` at 20:28:36,
+about twelve units from the Ghost. The nearby frame remains dark. The
+20:34:50 inventory frame nevertheless shows a normally proportioned Titan
+with clean armor lighting, extending JOIN99's rendering check. Level 0 and
+loading equipment slots remain; the preview rifle is the starter overlay,
+not a verified weapon grant.
+
+A second guarded walk returns to `(340.888, -795.741, 14.115)` at 20:37:23
+without cleanup or a position jump. The initial view there is dark but
+contains faint geometry. Turning toward the windows produces a clean,
+bright interior at 20:41:25, retained in the final 20:42:55 frame. Thus the
+dark samples do not demonstrate a persistent full-screen fade or recurrence
+of the magenta artifact. They also do not establish the torch: camera
+orientation and local illumination must be checked together near the Ghost.
+The owned run was stopped after preserving the trace and captures.
+
+The next light test should resolve the created helper entity separately
+from its target, inspect its component state/placement, and capture the
+corridor with a controlled view direction. The generation path reaches a
+default-state update through the entity interface; it is not a demonstrated
+light-on setter. See [the light investigation](ghost-light-0124.md).

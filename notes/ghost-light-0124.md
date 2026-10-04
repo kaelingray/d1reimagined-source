@@ -183,7 +183,9 @@ that zero matches the retail sequence's later generation-driven action.
 
 There is a real configured asset behind this action. The actual helper
 definition `0x80cb8244` has its root component at `+0x9e4`; component field
-`+0x44` is tag `0x80a3d8ad`, whose saved class is `0x80800906`.
+`+0x44` is tag `0x80a3d8ad`. Its package entry class is `0x80800734`, while
+its saved header at `+8` and the runtime descriptor contain `0x80800906`.
+Those identifiers must not be conflated with an identified light component.
 Constructor `0xc11924` reads that field and initializes component `+0x180`
 through `0x1f81a0`. For a selected member, `0xc11dc0` checks the descriptor
 and existing attachments before calling `0x1f7c94` with that member as its
@@ -348,3 +350,55 @@ input immediately; the native/protocol evidence was preserved and the owned
 stack stopped. JOIN101 repeats the corrected sequence promptly and tests
 the mission's automatic desired count. No automatic light action is enabled
 until placement and visible illumination are checked.
+
+## JOIN101: repeated attachment path and close-view limit
+
+The shipped mission count creates one physical Ghost after a manual bubble
+reset and the 249-record readiness check. At 20:27:38 BST its unit is
+`0x74fb82ce`, at `(390.458, -786.975, 19.122)`. The same corrected filter
+state is sent manually at 20:27:38, followed by the HO state at 20:27:40.
+The real creator entry again has `lr=0xc11e58` and the actual Ghost as
+`r5`. Registration at `0x1e5060`, `lr=0xc11ee0`, carries the helper's
+`0xfc0e45a3 / 0x18 / 101` ID. Its `r4=0x65fac971` is a distinct datum;
+do not substitute it for the selected target or assume the two refer to
+the same physical entity.
+
+A normal guarded walk reaches within about twelve units of the Ghost,
+without leaving slice 24 or writing guest memory. The nearby corridor
+frames are dark. The player can open a clean Titan inventory preview,
+return along the corridor and turn toward the brightly lit windows.
+Those final views rule out a persistent whole-view fade in this run, but
+do not verify illumination near the Ghost. View direction must accompany
+position in the next comparison; proximity alone is insufficient.
+
+The configured asset contains twelve component references. Their package
+class is `0x80800861`; the six repeated roots carry `0x80801a4e`, and the
+remaining roots include `0x8080222e`, `0x80aad032`, `0x80801b73`,
+`0x8080079a`, `0x80800441` and `0x80800594`. This is structural evidence,
+not a semantic identification of lights or illumination parameters.
+
+## Generation action: default-state path, not a verified light switch
+
+The final HO update at `0xc1238c` first attempts creation, then compares
+state generation at component `+0x114` with the previous `+0x170`.
+An increase calls `0xc121bc`. That function enumerates the HO bindings,
+reads each binding's unit at `+0x108`, and calls `0x12e79c(unit, 0)`
+when the unit-mask bit is set.
+
+The interface target is statically recoverable: `0x2fb2d0` installs object
+`0x1ab9d7c`; initializer `0x2fd958` gives it vtable `0x13e7cf0`.
+Slot `+0xa0` holds descriptor `0x1853ee0`, whose function is `0x2fbc14`.
+It resolves the unit's entity through `0x2ff4b8`, then reaches
+`0x9521e4 -> 0x950eb0 -> 0x431da8 -> 0x431c14`.
+The final handler resolves a component and calls `0x432674` with its
+default-state global when the supplied state value is zero. It marks
+component `+0x2a0` bit 3 and reports the change. This establishes a
+default-state update; its effect on the configured attachment still needs
+a live observation. Increasing the HO generation must not be presented
+as a proven torch-on action.
+
+Next: resolve the newly registered entity independently of the Ghost,
+inspect its configured component/default state and placement, and compare
+controlled corridor views before and after any justified state change.
+The automatic mission still sends only the verified Ghost count; the
+filter and helper remain manual candidates.

@@ -43,13 +43,14 @@ The Ghost that floats beside the player is an **AI squad the host spawns**, not 
   `pm_nux_ghost_light_up_fly_to_gun` is kind `0x1c`/index 123, `of_ghostlight` is kind
   `0x21`/index 124, and performance `nux_ghost` is kind `0x28`/index 125. Their exact state
   behavior is still to trace. IDs and baseline lists were unaffected by the name-decoding bug.
-- Status: the stand-in spawns **no squads** - neither the Ghost nor the Fallen - because the
-  client only runs a squad when its bubble's roster slot is flagged as locally simulated (the
-  authority gate `0x20f858`; see `mission-director.md`, "01.24 runtime"). With that flag set by
-  hand (JOIN79), a new `sq_ghost` generation made the client spawn and report
-  `sq_ghost__ghost`. A wire-only inactive-slot generation experiment is now available as
-  `--ah-bubble-reset`; see `simulation-bubble-reset.md`. Retail ownership semantics and
-  successful spawning through that option remain to verify.
+- Status updated 4 October: the squad gate `0x20f858` needs a fresh inactive bubble
+  reset after the slice transition; see [reset evidence](simulation-bubble-reset.md).
+  A generation alone leaves the Breach Ghost empty. JOIN99 establishes one physical
+  actor from an explicit desired count, and JOIN101 repeats that result from the
+  shipped mission rule after a manual protocol reset. The corrected squad-94 filter
+  reaches configured helper attachment creation and registration. Visible torch,
+  Ghost movement/dialogue and Fallen encounter counts remain open. See
+  [squad counts](squad-member-counts-0124.md) and [light evidence](ghost-light-0124.md).
 
 ## Beat by beat
 
@@ -85,7 +86,8 @@ Dialogue = subtitle text (`0x80cb91bb` unless noted); objective titles/descripti
    `o_breach_doors_lights`, `o_breach_gating_lights`, cinematic `pf_104a_pwr` with trigger
    `0x1d/37`). "What was that?" / "Quiet. They're right above us." (`seq_fallen_above`,
    `tv_fallen_above`). Host: objective 7 **shown** (JOIN70/77); slice switch 112 -> 24 completes
-   with a host teleport finish (JOIN77); Ghost squad, light, power cinematic NOT YET.
+   with a host teleport finish (JOIN77). JOIN101 verifies a physical Ghost from the
+   automatic count after a manual reset; visible torch and power cinematic remain open.
 4. **Grab the Rifle.** "Here! I found a rifle! Grab it." Objective 11; the rifle is in
    `o_chest_primary_weapon` (Ghost flies to it: `pm_nux_ghost_light_up_fly_to_gun`); pickup ->
    first equipped weapon, ammo counter. "I hope you know how to use that thing." Host: objective
