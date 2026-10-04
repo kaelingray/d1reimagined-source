@@ -1,0 +1,385 @@
+diff --git a/rpcs3/Emu/RSX/rsx_cache.h b/rpcs3/Emu/RSX/rsx_cache.h
+index 625311fc1..b6f11e7a2 100644
+--- a/rpcs3/Emu/RSX/rsx_cache.h
++++ b/rpcs3/Emu/RSX/rsx_cache.h
+@@ -10,9 +10,12 @@
+ #include "Emu/Memory/vm.h"
+ #include "Emu/RSX/Program/RSXVertexProgram.h"
+ #include "Emu/RSX/Program/RSXFragmentProgram.h"
++#include "Emu/RSX/Program/CachedFragmentProgramValidation.h"
+ #include "Overlays/Shaders/shader_loading_dialog.h"
+ 
+ #include <chrono>
++#include <mutex>
++#include <unordered_set>
+ 
+ #include "util/sysinfo.hpp"
+ #include "util/fnv_hash.hpp"
+@@ -83,6 +86,10 @@ namespace rsx
+ 		    shader_loading_dialog* dlg)
+ 		{
+ 			atomic_t<u32> processed(0);
++			// One malformed raw FP can be referenced by many pipeline variants. Keep this
++			// negative cache local to this preload, so repaired files are retried next time.
++			std::mutex rejected_fp_mutex;
++			std::unordered_set<u64> rejected_fp_hashes;
+ 
+ 			std::function<void(u32)> shader_load_worker = [&](u32 stop_at)
+ 			{
+@@ -111,7 +118,22 @@ namespace rsx
+ 					pipeline_data pdata{};
+ 					f.read(&pdata, f.size());
+ 
+-					auto entry = unpack(pdata);
++					{
++						std::lock_guard lock(rejected_fp_mutex);
++						if (rejected_fp_hashes.contains(pdata.fragment_program_hash))
++						{
++							continue;
++						}
++					}
++
++					cache_validation::fragment_error fp_rejection = cache_validation::fragment_error::none;
++					auto entry = unpack(pdata, &fp_rejection);
++					if (fp_rejection != cache_validation::fragment_error::none)
++					{
++						std::lock_guard lock(rejected_fp_mutex);
++						rejected_fp_hashes.insert(pdata.fragment_program_hash);
++						continue;
++					}
+ 
+ 					if (std::get<1>(entry).data.empty() || !std::get<2>(entry).ucode_length)
+ 					{
+@@ -300,6 +322,15 @@ namespace rsx
+ 				return;
+ 			}
+ 
++			const auto fp_error = cache_validation::fragment_program({
++				static_cast<const u8*>(fp.get_data()), fp.ucode_length });
++			if (fp_error != cache_validation::fragment_error::none)
++			{
++				// Runtime fallback/discard shaders must not persist their malformed original ucode.
++				rsx_log.error("shaders_cache: malformed fragment program not saved: %s", cache_validation::describe(fp_error));
++				return;
++			}
++
+ 			pipeline_data data = pack(pipeline, vp, fp);
+ 
+ 			std::string fp_name = root_path + "/raw/" + fmt::format("%llX.fp", data.fragment_program_hash);
+@@ -351,8 +382,12 @@ namespace rsx
+ 			return vp;
+ 		}
+ 
+-		RSXFragmentProgram load_fp_raw(u64 program_hash)
++		RSXFragmentProgram load_fp_raw(u64 program_hash, cache_validation::fragment_error* rejection = nullptr)
+ 		{
++			if (rejection)
++			{
++				*rejection = cache_validation::fragment_error::none;
++			}
+ 			fs::file f(fmt::format("%s/raw/%llX.fp", root_path, program_hash));
+ 
+ 			RSXFragmentProgram fp = {};
+@@ -363,21 +398,49 @@ namespace rsx
+ 			{
+ 				return fp;
+ 			}
++			if (size % 16)
++			{
++				if (rejection)
++				{
++					*rejection = cache_validation::fragment_error::empty_or_unaligned;
++				}
++				rsx_log.error("shaders_cache: cached fragment program %llX skipped: unaligned size %u", program_hash, size);
++				fp.ucode_length = 0;
++				return fp;
++			}
+ 
+ 			auto buf = std::make_unique<u8[]>(size);
++			if (f.read(buf.get(), size) != size)
++			{
++				fp.ucode_length = 0;
++				return fp;
++			}
++			const auto fp_error = cache_validation::fragment_program({buf.get(), size});
++			if (fp_error != cache_validation::fragment_error::none)
++			{
++				if (rejection)
++				{
++					*rejection = fp_error;
++				}
++				// Preserve the file for diagnosis; skip it before CFG construction or worker compilation.
++				rsx_log.error("shaders_cache: cached fragment program %llX skipped: %s", program_hash,
++					cache_validation::describe(fp_error));
++				fp.ucode_length = 0;
++				return fp;
++			}
+ 			fp.data = buf.get();
+-			f.read(buf.get(), size);
+ 			fragment_program_data[fragment_program_data.push_begin()] = std::move(buf);
+ 			return fp;
+ 		}
+ 
+-		std::tuple<pipeline_storage_type, RSXVertexProgram, RSXFragmentProgram> unpack(pipeline_data &data)
++		std::tuple<pipeline_storage_type, RSXVertexProgram, RSXFragmentProgram> unpack(pipeline_data &data,
++			cache_validation::fragment_error* fp_rejection = nullptr)
+ 		{
+ 			std::tuple<pipeline_storage_type, RSXVertexProgram, RSXFragmentProgram> result;
+ 			auto& [pipeline, vp, fp] = result;
+ 
+ 			vp = load_vp_raw(data.vertex_program_hash);
+-			fp = load_fp_raw(data.fragment_program_hash);
++			fp = load_fp_raw(data.fragment_program_hash, fp_rejection);
+ 			pipeline = data.pipeline_properties;
+ 
+ 			vp.ctrl = data.vp_ctrl0;
+diff --git a/rpcs3/Emu/RSX/Program/CachedFragmentProgramValidation.h b/rpcs3/Emu/RSX/Program/CachedFragmentProgramValidation.h
+new file mode 100644
+--- /dev/null
++++ b/rpcs3/Emu/RSX/Program/CachedFragmentProgramValidation.h
+@@ -0,0 +1,105 @@
++#pragma once
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string_view>
++
++namespace rsx::cache_validation
++{
++	enum class fragment_error
++	{
++		none,
++		empty_or_unaligned,
++		missing_end,
++		truncated_literal,
++		invalid_source,
++		out_of_range_branch,
++	};
++
++	constexpr std::string_view describe(fragment_error error)
++	{
++		switch (error)
++		{
++		case fragment_error::none: return "valid";
++		case fragment_error::empty_or_unaligned: return "empty or non-16-byte-aligned program";
++		case fragment_error::missing_end: return "no END instruction inside the file";
++		case fragment_error::truncated_literal: return "literal extends past the file";
++		case fragment_error::invalid_source: return "used source register has invalid type 3";
++		case fragment_error::out_of_range_branch: return "flow-control target extends past the file";
++		}
++		return "unknown validation error";
++	}
++
++	// Counts only the ordinary operands consumed by the implemented decompiler. Flow-control
++	// words are offsets/conditions, not registers. Unknown/unimplemented opcodes are not rejected.
++	// TXD consumes coordinates and two gradients in GLSLCommon, despite FP::get_operand_count returning 1.
++	constexpr unsigned consumed_sources(unsigned opcode)
++	{
++		constexpr std::array<unsigned char, 64> counts = {
++			0,1,2,2,3,2,2,2,2,2,2,2,2,2,2,2, // 00..0f
++			1,1,0,1,1,1,1,1,1,3,1,1,1,1,1,3, // 10..1f: TXD=3
++			0,0,1,1,1,1,0,1,1,1,1,3,1,1,3,2, // 20..2f
++			0,2,0,3,3,0,2,0,2,1,2,2,1,0,0,0, // 30..3f
++		};
++		return opcode < counts.size() ? counts[opcode] : 0;
++	}
++
++	inline fragment_error fragment_program(std::span<const std::uint8_t> data)
++	{
++		if (data.empty() || data.size() % 16)
++		{
++			return fragment_error::empty_or_unaligned;
++		}
++
++		const auto instruction_slots = data.size() / 16;
++		for (std::size_t pc = 0; pc < instruction_slots;)
++		{
++			std::array<std::uint32_t, 4> words{};
++			for (unsigned index = 0; index < 4; ++index)
++			{
++				// Decode the same half-word byte shuffle as FPToCFG, without unaligned loads.
++				const auto* p = data.data() + pc * 16 + index * 4;
++				words[index] = (std::uint32_t{p[0]} << 8) | p[1] |
++					(std::uint32_t{p[2]} << 24) | (std::uint32_t{p[3]} << 16);
++			}
++
++			const auto opcode = ((words[0] >> 24) & 0x3f) | ((words[2] >> 31) << 6);
++			for (unsigned operand = 0; operand < consumed_sources(opcode); ++operand)
++			{
++				if ((words[operand + 1] & 3) == 3)
++				{
++					return fragment_error::invalid_source;
++				}
++			}
++
++			// The CFG uses these offsets in units of four bytes, and allows a final merge block
++			// immediately after the last instruction. Do not interpret flow words as literals.
++			if (opcode == 0x42 || opcode == 0x43 || opcode == 0x44)
++			{
++				const auto end = words[3] >> 2;
++				// Empty IF blocks discard the else field before the CFG uses it.
++				if (end > instruction_slots ||
++					(opcode == 0x42 && end != pc + 1 && ((words[2] & 0x7fffffff) >> 2) > instruction_slots))
++				{
++					return fragment_error::out_of_range_branch;
++				}
++			}
++
++			const bool non_literal = (opcode >= 0x40 && opcode <= 0x45) || opcode == 0x3d || opcode == 0x3e;
++			const bool literal = !non_literal &&
++				((words[1] & 3) == 2 || (words[2] & 3) == 2 || (words[3] & 3) == 2);
++			if (literal && pc + 1 >= instruction_slots)
++			{
++				return fragment_error::truncated_literal;
++			}
++			if (words[0] & 1)
++			{
++				return fragment_error::none;
++			}
++			pc += literal ? 2 : 1;
++		}
++		return fragment_error::missing_end;
++	}
++}
+diff --git a/rpcs3/tests/fragment_cache_validation_standalone.cpp b/rpcs3/tests/fragment_cache_validation_standalone.cpp
+new file mode 100644
+--- /dev/null
++++ b/rpcs3/tests/fragment_cache_validation_standalone.cpp
+@@ -0,0 +1,135 @@
++// Standalone C++20 tests and read-only cache scan; does not require private game files.
++// cl /std:c++20 /EHsc /W4 /I rpcs3 rpcs3/tests/fragment_cache_validation_standalone.cpp
++#include <array>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <iterator>
++#include <span>
++#include <stdexcept>
++#include <string_view>
++#include <vector>
++
++// GUI translation units include Qt/Windows macros before rsx_cache.h. Compile the
++// helper under that macro environment too, without changing the caller's macros.
++#define slots
++#define min(a, b) ((a) < (b) ? (a) : (b))
++#define max(a, b) ((a) > (b) ? (a) : (b))
++#include "Emu/RSX/Program/CachedFragmentProgramValidation.h"
++#ifndef slots
++#error Cache validation header changed the caller's Qt macros
++#endif
++#ifndef min
++#error Cache validation header changed the caller's Windows macros
++#endif
++#ifndef max
++#error Cache validation header changed the caller's Windows macros
++#endif
++#undef slots
++#undef min
++#undef max
++
++using rsx::cache_validation::fragment_error;
++using rsx::cache_validation::fragment_program;
++using bytes = std::vector<std::uint8_t>;
++
++static void append(bytes& data, std::array<std::uint32_t, 4> words)
++{
++	for (auto word : words)
++	{
++		data.insert(data.end(), {static_cast<std::uint8_t>(word >> 8), static_cast<std::uint8_t>(word),
++			static_cast<std::uint8_t>(word >> 24), static_cast<std::uint8_t>(word >> 16)});
++	}
++}
++
++static bytes instruction(unsigned opcode, bool end = true, std::uint32_t s0 = 0,
++	std::uint32_t s1 = 0, std::uint32_t s2 = 0)
++{
++	bytes data;
++	append(data, {((opcode & 0x3f) << 24) | unsigned(end), s0, s1 | ((opcode >> 6) << 31), s2});
++	return data;
++}
++
++static void expect(const bytes& data, fragment_error expected, const char* label)
++{
++	if (fragment_program(data) != expected)
++	{
++		throw std::runtime_error(label);
++	}
++}
++
++static void fixtures()
++{
++	expect({}, fragment_error::empty_or_unaligned, "empty file");
++	expect(bytes(15), fragment_error::empty_or_unaligned, "partial instruction");
++	expect(instruction(1), fragment_error::none, "valid MOV END");
++	expect(instruction(1, false), fragment_error::missing_end, "unterminated MOV");
++	expect(instruction(1, true, 2), fragment_error::truncated_literal, "END still needs its literal");
++	auto literal = instruction(1, true, 2);
++	append(literal, {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff});
++	expect(literal, fragment_error::none, "literal contents are not instructions");
++	auto fake_end = instruction(1, false, 2);
++	append(fake_end, {1, 0, 0, 0});
++	expect(fake_end, fragment_error::missing_end, "END in literal data does not terminate");
++	auto nop_literal = instruction(0, false, 0, 2);
++	append(nop_literal, {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff});
++	const auto last = instruction(1);
++	nop_literal.insert(nop_literal.end(), last.begin(), last.end());
++	expect(nop_literal, fragment_error::none, "NOP skips constants even in unused operand");
++	expect(instruction(1, true, 0, 3, 3), fragment_error::none, "unused sources may have unknown bits");
++	expect(instruction(1, true, 3), fragment_error::invalid_source, "used MOV source type3");
++	expect(instruction(0x19), fragment_error::none, "valid TXD coordinates and gradients");
++	expect(instruction(0x19, true, 0, 3), fragment_error::invalid_source, "TXD first gradient type3");
++	expect(instruction(0x19, true, 0, 0, 3), fragment_error::invalid_source, "TXD second gradient type3");
++	expect(instruction(0x30, true, 3, 3, 3), fragment_error::none, "unknown opcode is not an opcode whitelist failure");
++	expect(instruction(0x42, true, 3, 6, 6), fragment_error::none, "flow words with low bits2 are not literals");
++	expect(instruction(0x42, true, 0, 0x7ffffffc, 4), fragment_error::none, "empty IFE ignores else target");
++	expect(instruction(0x3d, true, 2, 2, 2), fragment_error::none, "FENCT ignores unused literal bits");
++	expect(instruction(0x3e, true, 2, 2, 2), fragment_error::none, "FENCB ignores unused literal bits");
++	auto bad_else = instruction(0x42, false, 0, 12, 8);
++	bad_else.insert(bad_else.end(), last.begin(), last.end());
++	expect(bad_else, fragment_error::out_of_range_branch, "nonempty IFE else target past buffer");
++	expect(instruction(0x42, true, 0, 4, 8), fragment_error::out_of_range_branch, "IFE end target past buffer");
++	expect(instruction(0x43, true, 0, 0, 8), fragment_error::out_of_range_branch, "LOOP target past buffer");
++	// Synthetic reconstruction of the observed float-data shader: END is already set, and
++	// one literal follows, so alignment/END/literal bounds alone would incorrectly admit it.
++	bytes corrupted;
++	append(corrupted, {0x999a3f99, 0x66673ee6, 0x18b93f7f, 0x32514269});
++	append(corrupted, {});
++	expect(corrupted, fragment_error::invalid_source, "JOIN91 float-data regression");
++	std::cout << "PASS 22 fragment-cache fixtures\n";
++}
++
++int main(int argc, char** argv)
++{
++	try
++	{
++		fixtures();
++		for (int argument = 1; argument < argc; ++argument)
++		{
++			std::array<std::size_t, 6> counts{};
++			for (const auto& entry : std::filesystem::directory_iterator(argv[argument]))
++			{
++				if (!entry.is_regular_file() || entry.path().extension() != ".fp") continue;
++				std::ifstream stream(entry.path(), std::ios::binary);
++				if (!stream) throw std::runtime_error("cache file could not be opened");
++				bytes data((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
++				const auto error = fragment_program(data);
++				++counts[static_cast<unsigned>(error)];
++				if (error == fragment_error::out_of_range_branch)
++					std::cout << "BRANCH_REJECT " << entry.path().string() << '\n';
++			}
++			std::cout << "SCAN " << argv[argument];
++			for (unsigned error = 0; error < counts.size(); ++error)
++				std::cout << " | " << rsx::cache_validation::describe(static_cast<fragment_error>(error))
++					<< '=' << counts[error];
++			std::cout << '\n';
++		}
++		return 0;
++	}
++	catch (const std::exception& error)
++	{
++		std::cerr << "FAIL " << error.what() << '\n';
++		return 1;
++	}
++}
