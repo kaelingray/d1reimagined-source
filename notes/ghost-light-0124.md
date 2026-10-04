@@ -120,3 +120,91 @@ The activity trigger `0x992bb471 / 0x1d / 37` and cinematic `pf_104a_pwr`
 that cinematic when its trigger reports. It does not arm the two local Ghost-light
 triggers or publish the verified torch/performance action yet. The serializer fix
 removes a prerequisite defect while those action values remain under investigation.
+
+## Helper-object selector candidate — independent check on 4 October
+
+The following is a bounded live-test candidate, not an automatic mission action
+or a confirmed retail torch sequence:
+
+```json
+{
+  "0": false,
+  "4": 0,
+  "8": {"0": 0, "4": -1, "6": -1},
+  "0x10": {
+    "type": "0x80800a07",
+    "values": {"0": {"0": 4228793763, "4": 1, "6": 94}}
+  }
+}
+```
+
+The numeric group value `4228793763` is `0xfc0e45a3`. Numeric payload fields
+require integers; the selected `type` handle separately accepts a hex string.
+This is state A for helper `0xfc0e45a3 / 0x18 / 101`, with its confirmed B
+declaration retained in the object specification. The reference at `+8` is
+explicitly absent: `0x155f60` tests both kind and index against `-1`. A numeric
+zero or a default object mapping is not this absent reference. With it absent,
+`0xc11ef0` takes the typed-selector branch at `0xc11fe0` rather than the
+object-filter branch. There is therefore no need to invent a filter default.
+
+The full private 5,041-type final schema defines `0x80800a07` as eight bytes,
+containing one object ID. Static dispatch at `0xc738b0` compares the typed
+header with values read through `0x18df230`, `0x18df234` and `0x18df238`.
+Those globals lie outside the ELF's saved data. An owned read from JOIN96
+independently confirmed their values:
+
+| Guest global | Selected handle | First-selector handler |
+| --- | --- | --- |
+| `0x1ab1280` | `0x80800a07` | `0xc73c80` |
+| `0x1ab1290` | `0x80800dfe` | `0xc73e68` |
+| `0x1ab12a0` | `0x80800c8f` | `0xc73b1c` |
+
+For `0x80800a07`, `0xc73c80` resolves the payload's object ID through
+`0x155c50`, then initializes iteration with `0x245590`; the next-item path
+uses `0x245504` and `0x24553c`. The helper calls `0xc11dc0` for each selected
+existing member. Referencing squad 94 therefore selects its live members;
+publishing a kind-2 member state is not a prerequisite. The squad must actually
+spawn before the iterator can yield a member. Merely sending a generation
+does not prove that the bubble gate or squad handler accepted it.
+
+The proposed false bool leaves periodic creation attempts enabled:
+`0xc12034` checks the bool at component `+0x110`, and false reaches
+`0xc11ef0`. Applying a changed 0x60-byte state at `0xc12144` marks the
+component dirty; `0xc1238c` then invokes creation before comparing the
+generation at `+0x114` with its previous value. Thus changing the selector can
+reach creation while that generation remains zero. This does not establish
+that zero matches the retail sequence's later generation-driven action.
+
+There is a real configured asset behind this action. The actual helper
+definition `0x80cb8244` has its root component at `+0x9e4`; component field
+`+0x44` is tag `0x80a3d8ad`, whose saved class is `0x80800906`.
+Constructor `0xc11924` reads that field and initializes component `+0x180`
+through `0x1f81a0`. For a selected member, `0xc11dc0` checks the descriptor
+and existing attachments before calling `0x1f7c94` with that member as its
+target. A successful returned object is linked to the helper's existing-object
+list. This proves a configured attachment/spawn path; it does not independently
+identify a named light component, its illumination parameters, or prove visible
+torch light. The asset contains several component definitions, so its resource
+class alone must not be presented as a verified light class.
+
+Useful bounded watches after the helper state is applied are:
+
+```text
+c11ef0 8 r3+0x110:96
+c12010 12
+c11dc0 12 r3+0x110:96
+c11e54 12 r4+0:32
+c11e5c 12
+```
+
+At `0xc11ef0`, `r3` is the HO component and `+0x110` holds its state A.
+At `0xc12010` and `0xc11dc0`, `r3` is that component and `r4` is the selected
+existing-member **datum handle**, not a guest pointer. At `0xc11e54`, `r3`
+points to stack output storage, `r4` is the validated descriptor at component
+`+0x180`, `r5` is the selected member and `r6` is `0xffffffff`. The call
+enters `0x1f7c94` with those same arguments. The HO caller watch avoids counting
+unrelated callers of that shared creator. At `0xc11e5c`, `r4` is the returned
+created-object datum, or `0xffffffff` on failure; do not treat it as a pointer
+for a memory dump. These observations distinguish an empty selector, a rejected
+spawn and a created attachment. A visible illuminated Breach still requires a
+live frame.

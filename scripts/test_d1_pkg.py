@@ -177,6 +177,28 @@ class EntityGroups(unittest.TestCase):
                                                   (0x12345678, 0x1C, 1, True),
                                                   (0x12345678, 0x1D, 3, False)])
 
+    def test_ai_definitions_are_excluded_without_renumbering_replicated_ids(self):
+        data = bytearray(0x100)
+        struct.pack_into(">I", data, 8, 0x12345678)
+        kinds = (0x29, 0x18, 0x2A, 0x4, 0x2D, 0x1D)
+        struct.pack_into(">II", data, 0x10, len(kinds), 0x40)
+        struct.pack_into(">III", data, 0x50, 0x80800184, len(kinds), 0x8080076F)
+        # dyn_array's records start after its class/count/type header.
+        for index, kind in enumerate(kinds):
+            data[0x64 + 8 * index] = kind
+
+        class Package:
+            entries = [{"reference": d1_pkg.GROUP_CLASS, "index": 0}]
+
+            def entry_data(self, index, oodle):
+                return data
+
+        package_set = type("PackageSet", (), {"by_id": {1: Package()}, "oodle": None})()
+        self.assertEqual(d1_pkg.baselines(package_set, {0x12345678}),
+                         [(0x12345678, 0x18, 1, True),
+                          (0x12345678, 0x4, 3, True),
+                          (0x12345678, 0x1D, 5, False)])
+
     def test_helper_object_state_b_keeps_following_baseline_aligned(self):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
         import bap_server

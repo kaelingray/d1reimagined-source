@@ -210,6 +210,19 @@ does not seek back to the declared body end. The defective helper entry is posit
 triggers and other Breach records. This proves a malformed stream; the fresh live
 run must still establish how much of the stalled handover it resolves.
 
+Baseline-file order initially made the six pending activity records appear to
+precede the defective helper. Actual wire order explains the apparent mismatch:
+`bap_server.replace_object()` removes the previous entry and appends the changed
+specification. Replaying JOIN92's 20 logged object changes against its initial
+player/game-mode and default-baseline list puts the helper at wire-list index
+1,999. **All 119 pending records follow it; none precede it.** In particular,
+`obj_investigate` moves from initial index 1,745 to 2,307. The other five pending
+activity records and the three changed Breach floor/wall squads likewise move
+behind the helper. This is consistent with the malformed B framing blocking the
+remaining stream; it does not justify a separate object-ordering fix. The private
+`FINAL124_JOIN92-baseline-order-proof.json` retains the replayed change IDs,
+positions and complete pending-record comparison.
+
 The flag is independently declared by the actual component. In final entity tag
 `0x80cb8244` (class `0x80800861`), the signed link at `+0xc` locates the root
 component at `+0x9e4`. Relative to that component, its replicated ID is at `+0x24`,
@@ -237,3 +250,50 @@ The private list retains exactly 2,311 unique IDs in the same order. Private pro
 reports retain the before/after hashes and the exact changed IDs. Previous catalog
 coverage checks compared two outputs of the same incomplete kind table, so they
 could establish ID coverage while overlooking this framing defect.
+
+## JOIN96: non-replicated AI IDs can resolve to metadata
+
+After repairing the helper's B bit, JOIN96 reached the route endpoint and retained
+correct fresh-delta teleport behavior. The slice-24 baseline reader nevertheless
+faulted. The native log's `0x2785ec` is the reset function's LLVM block entry;
+the faulting null dereference is `lwz r5,8(r5)` at `0x278674`. Reading the preserved
+caller stack establishes the decoded object ID as `0xfc0e45a3 / 0x29 / 141`,
+named `fa_e3_entry` in the final group. Register-bank values left by the LLVM hook
+alone do not reliably establish the active state type.
+
+The actual reader at `0x1df644` calls `0x27a1f8`, which resolves the ID through
+`0x155c50` and reads runtime-object `+0x104` through `0x20f368`. For a replicated
+helper this field resolves to an occupied 0x48-byte pool record with the matching
+ID and A/B types. The firing-area lookup instead resolves to metadata for tag
+`0x80cb8214`, component class `0x808007cf`. Its first words are a tag handle,
+definition offset and class handle, not a replicated object ID. Treating them as
+a record makes state A zero and state B a component class; the default-reset path
+then reads a null descriptor. The metadata's negative value at purported bubble
+`+0x3c` also lets it pass the reader's bubble comparison.
+
+Owned registry samples independently establish the related kinds:
+
+| Kind / sampled index | Registered runtime entry | Replication consequence |
+| --- | --- | --- |
+| `0x18 / 101` | HO component; `+0x104` resolves to its actual pool record | Retain, including state B. |
+| `0x29 / 141` | AI entry, class `0x80800548`; field resolves to definition metadata | Exclude firing-area definitions. |
+| `0x2a / 183` | Same AI entry with its own definition offset | Exclude firing-area-set definitions. |
+| `0x2d / 181` | Position-set definition, class `0x80800962`; field resolves to another definition | Exclude position-set definitions. |
+| `0x2b / 198` | Registry handle `0xffffffff`, no runtime object | This observation alone does not change its classification. |
+
+The 249 occupied records contain none of the three excluded kinds. All of their
+actual B declarations match the corrected private baseline list, but 32 records
+remain pending: 26 Breach and six activity records. The host's old assumption that
+every non-replicated ID would take the unknown-ID skip branch is therefore false:
+some resolve successfully to runtime metadata and cannot safely be included in a
+superset. No emulator null-pointer workaround or guest-memory write is used.
+
+`d1_pkg.KINDS_NOT_REPLICATED` now also includes `0x29`, `0x2a` and `0x2d`, shared
+with the catalog exporter. The new regression interleaves them with a helper,
+prop and trigger and checks that retained IDs keep their original indexes and
+B flags. The private 2,311-entry list loses 345 firing areas, 507 firing-area sets
+and four position sets. Its 1,455 retained entries are unique, preserve relative
+order, keep all 31 groups and still cover all 249 observed records. Private stack,
+registry and before/after reports retain the exact evidence. JOIN97 tests the
+result in a new client; pending-record clearance and visible playability remain
+separate live checks.

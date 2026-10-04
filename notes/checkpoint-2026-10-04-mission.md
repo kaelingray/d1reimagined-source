@@ -53,9 +53,9 @@ The exporter now includes kind `0x18` in its state-B classification. A synthetic
 multi-object wire test independently models the client's declared B types and
 shows the former omission consumed the following object's continuation bit.
 
-The private baseline list was corrected with order, ID uniqueness and count
-preserved. This repairs a demonstrated stream defect; the effect on the black
-handover still requires a new live run. See
+The private baseline list was initially corrected with order, ID uniqueness and
+count preserved. JOIN96's result below identifies a second defect after that
+framing repair. See
 [private-host investigation](private-host-investigation.md).
 
 ## Emulator cache guard
@@ -78,14 +78,60 @@ fragment programs being skipped. This validates the deployed read guard; it
 does not prove live rendering or mission completion. The old executable and
 both cache generations are retained privately.
 
-## Next live check
+JOIN94 made steady preload progress, but 98.02% of the archived cache's 198,264
+pipeline entries referred to rejected raw programs. Repeated reads and logging
+made that archive unsuitable for the launcher's eight-minute sign-in window.
+The owned run was stopped before gameplay and its cache preserved. The loader
+now remembers deterministic rejected fragment hashes for each preload, skipping
+later pipeline variants before their vertex/fragment reads. It retries transient
+I/O failures and rechecks files on the next preload. The full Release build of
+this additional change also passed and was deployed with a separate backup.
 
-JOIN94 starts with the rebuilt emulator, corrected helper baseline, fresh-delta
-teleport handling and latched route arrival. After observed current 112 it resets
-the inactive highway generation, requests the highway Ghost generation, walks
-to the actual entrance and requests the host handover only after route arrival.
-Completion and baseline watches distinguish protocol completion from entity
-creation and a usable visible world.
+JOIN95 used the smaller JOIN92 cache. The stack became ready, but the first
+title-input attempt failed while the Destiny game window was not yet available.
+The wrapper cleaned up the exact owned processes; no sign-in or mission result
+is claimed. Startup now captures real stdout/stderr and distinguishes an actual
+exit from failure to verify process identity. It rejects shared logs older than
+the launched emulator. See [startup evidence](run-startup-evidence.md).
+
+## JOIN96: arrival fixes work; an AI definition crashes baseline decoding
+
+JOIN96 booted with the rebuilt emulator and smaller JOIN92 cache. PPU execution
+started about 2 minutes 43 seconds after launch. Startup retained the actual
+emulator output, and title input waited for the owned game window.
+
+The revival handover completed normally: state 4 at 13:31:49 BST, current slice
+112 at 13:31:56, then inactive highway reset `14:2` and a fresh highway Ghost
+generation. Ordinary controller movement reached the route endpoint at 13:36:15,
+with position `(352.517, -796.696, 14.040)` inside its unchanged 1.5-unit radius.
+The route returned `route_reached`; the arrival latch avoided JOIN92's coasting
+failure. No guest memory was written.
+
+The host request for slice 24 was published at 13:36:17. A target-only state-2
+delta at 13:36:28 did **not** finish it using cached current 24; the next delta
+reported current -1, and state 3 followed. This validates the stale-arrival fix.
+The client then froze while decoding a baseline, before a completed handover or
+playable Breach frame. Both late screenshots show the black loading view.
+
+The preserved stack identifies `0xfc0e45a3 / 0x29 / 141`, `fa_e3_entry`, as the
+object being decoded. Its registry lookup resolves an AI definition's metadata
+instead of a replication record; the reader interprets metadata as state types
+and faults on a null type descriptor. An owned, read-only snapshot still contains
+249 actual records, now with 32 awaiting baseline, compared with JOIN92's 119.
+Their IDs and B flags all match the corrected list. The smaller pending count
+shows progress past the former helper framing defect, not complete readiness.
+
+The baseline exporter now excludes verified non-replicated kinds `0x29`, `0x2a`
+and `0x2d`. Direct registry reads distinguish their metadata from the helper's
+real pool record. The private list drops 856 such entries, retaining 1,455 unique
+IDs in all 31 selected groups and covering all 249 observed records with matching
+B flags. A regression protects both exclusion and original object indexes.
+All **155 server tests and 115 script tests pass**.
+
+JOIN96's sampled title and exterior route frames show no magenta/rainbow blocks.
+It did not provide a new inventory-model or stable Breach rendering check. The
+existing combined flicker/character-lighting fix remains enabled, including
+colour-buffer reads. JOIN97 is the fresh handover check with the filtered list.
 
 Remaining acceptance work is a stable playable Breach, correct Ghost light,
 durable rifle pickup/equipment, encounters, rewards/results, Tower arrival and
