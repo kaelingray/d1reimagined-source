@@ -112,11 +112,20 @@ Current schemas come from `$data/ps3_updates/types_01.24.json` and
 `services_01.24.json`. Use `starter:01.24:titan` for final gear (Generalist Shell
 862, Striker 710); the original shorthand has the 01.00 indexes.
 
-JOIN16's control recipe changes `--ah-bubble-states` to `0`, supplies the
-2,311-record `baselines_highway_0124_all.txt` superset, adds
+JOIN16's historical control recipe changes `--ah-bubble-states` to `0`, supplies the
+then-2,311-record `baselines_highway_0124_all.txt` superset, adds
 `--ah-follow-client-zone`, and omits `--ah-mission`. JOIN17 tests the follow fix
 that ignores a cleared target {index=0, hash=0}. Read the profile checkpoint before
 making this the default: the stable bootflow has not yet produced a playable scene.
+
+The [October 4 checkpoint](checkpoint-2026-10-04-mission.md) supersedes this
+early black-world limit: revival and outdoor walking work. Regenerate current
+baseline exports with the updated `d1_pkg.py`; old catalog lists omit the helper
+object's state-B bit and include unsafe AI definition kinds `0x29`, `0x2a` and
+`0x2d`. The corrected private mission superset has 1,455 entries in the same 31
+groups, retaining all 249 records observed at Breach entry. Do not reuse the old
+2,311-entry list for a fresh handover test. The exact selected group keys remain
+private, and later newly loaded records still need coverage checks.
 
 JOIN20 narrows the advertised states to `-1,0=0,3=0,14=0`, retains final Titan
 gear/follow/superset, and still reaches stage 36/engine 6. It has much lower

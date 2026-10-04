@@ -46,6 +46,7 @@
     "sq_ghost": "0xecf574b5:0x1:28:0x8080071e:1",
     "trig_ghostlight": "0xfc0e45a3:0x1d:120:0x80800463",
     "sq_nux_ghost": "0xfc0e45a3:0x1:94:0x8080071e:1",
+    "ho_ghostlight": "0xfc0e45a3:0x18:101:0x8080065c:1",
     "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463"
   },
   "steps": [

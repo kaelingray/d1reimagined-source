@@ -297,3 +297,11 @@ order, keep all 31 groups and still cover all 249 observed records. Private stac
 registry and before/after reports retain the exact evidence. JOIN97 tests the
 result in a new client; pending-record clearance and visible playability remain
 separate live checks.
+
+JOIN97 provides that fresh readiness check: the native decoder context was
+observed in this exact run, and its occupied pool has all 249 records with zero
+pending baselines. The Breach frame and guarded controller movement survive the
+host handover. Reset `3:1` subsequently leaves bit 3 set at `+0x844` and clear
+at `+0x850`, and the client reports the Breach Ghost member in type 6. The engine's
+separate return-to-112 request remains pending; full idle handover and the visible
+torch must still be verified. See the [October 4 checkpoint](checkpoint-2026-10-04-mission.md).

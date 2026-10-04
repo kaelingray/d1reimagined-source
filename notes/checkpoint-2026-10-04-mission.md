@@ -131,7 +131,44 @@ All **155 server tests and 115 script tests pass**.
 JOIN96's sampled title and exterior route frames show no magenta/rainbow blocks.
 It did not provide a new inventory-model or stable Breach rendering check. The
 existing combined flicker/character-lighting fix remains enabled, including
-colour-buffer reads. JOIN97 is the fresh handover check with the filtered list.
+colour-buffer reads.
+
+## JOIN97: baseline readiness and visible control in the Breach
+
+The filtered-list run reached the route endpoint at 18:22:16 BST. A temporary
+Windows lock on the diagnostic watch file stopped the private helper before it
+queued the handover. The watch update was recovered, with a bounded retry added
+for the next helper, and the host request was queued at 18:24:45.
+
+The client reported state 4 and current 24 at 18:25:05–06. A fresh native
+`0x1df644` observation identified this run's replication context before an owned
+snapshot: **249 occupied records, zero awaiting baseline**, with all four loaded
+groups retained. There was no recurrence of JOIN96's decoder fault. The 18:25:54
+frame shows the Breach's windowed metal walkway and radar, and subsequent frames
+at 18:28:36 and 18:33:43 retain the interior without the prior magenta blocks.
+
+A newly armed player hook identified a current entity at
+`(324.444, -795.639, 14.101)`. A normal 600 ms movement input changed its position
+to `(325.885, -796.227, 14.057)`. This establishes visible controller response
+after the handover, rather than a black view with a deleted unit. The engine is
+still in state 3 with a return target 112 while reporting current 24, so a fully
+settled idle transition is not claimed.
+
+At 18:31:02 an inactive bubble reset `3:1` was sent through the control file.
+The reset's bit 3 remains set in outer SIM `+0x844`, while `+0x850` is clear.
+At 18:31:18 the client's type-6 stream contains the exact final-schema IDs of
+`sq_nux_ghost` and its member `0xfc0e45a3 / 2 / 95`, as well as a floor squad and
+member. A subsequent explicit Ghost generation was accepted at 18:32:22. The
+member report precedes that latter generation; do not attribute its creation to
+the later action. This is protocol-only Breach spawn evidence, not a visible
+torch or completed encounter.
+
+Opening the character screen at 18:29:48 produced loading placeholders and no
+Guardian model. Those frames cannot verify character-model appearance; inventory
+projection remains incomplete. The sampled exterior/interior rendering and the
+earlier corrected Titan preview are distinct evidence. JOIN98 adds the named
+`ho_ghostlight` alias and tests its selector after readiness and the Ghost member
+report. The alias itself adds no automatic mission action.
 
 Remaining acceptance work is a stable playable Breach, correct Ghost light,
 durable rifle pickup/equipment, encounters, rewards/results, Tower arrival and

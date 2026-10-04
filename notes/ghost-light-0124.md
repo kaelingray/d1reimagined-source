@@ -141,7 +141,12 @@ or a confirmed retail torch sequence:
 The numeric group value `4228793763` is `0xfc0e45a3`. Numeric payload fields
 require integers; the selected `type` handle separately accepts a hex string.
 This is state A for helper `0xfc0e45a3 / 0x18 / 101`, with its confirmed B
-declaration retained in the object specification. The reference at `+8` is
+declaration retained in the mission's `ho_ghostlight` alias. For a newly launched
+proxy, wrap these fields in `{"set":{"ho_ghostlight":FIELDS}}` in its live
+control file. The alias adds no automatic state change. An already running proxy
+does not reload the mission's object aliases, and explicit object-head strings
+are not accepted as arbitrary control names.
+The reference at `+8` is
 explicitly absent: `0x155f60` tests both kind and index against `-1`. A numeric
 zero or a default object mapping is not this absent reference. With it absent,
 `0xc11ef0` takes the typed-selector branch at `0xc11fe0` rather than the
