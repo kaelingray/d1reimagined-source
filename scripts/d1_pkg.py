@@ -511,8 +511,11 @@ def cmd_groups(a):
 # object's definition is loaded (objectives and sequences always; triggers, props and squads with
 # their bubble's map containers) and skips ids it has no record for, so a superset of a mission's
 # groups is safe while a missing object blocks everything. State B presence is per kind (TEST350,
-# TEST362: the kinds below); kinds 0x2c/0x37/0x3a/0x3b/0x3c/0x3d are not replicated.
-KINDS_WITH_B = {0x1, 0x2, 0x3, 0x4, 0xC, 0x1C, 0x27}
+# TEST362: the kinds below). JOIN92 also confirms kind 0x18: the helper-object root
+# component declares state B 0x8080048a, matching its live replication record. Omitting
+# its B-presence bit makes the reader consume the next object's continuation bit.
+# Kinds 0x2c/0x37/0x3a/0x3b/0x3c/0x3d are not replicated.
+KINDS_WITH_B = {0x1, 0x2, 0x3, 0x4, 0xC, 0x18, 0x1C, 0x27}
 KINDS_NOT_REPLICATED = {0x2C, 0x37, 0x3A, 0x3B, 0x3C, 0x3D}
 
 

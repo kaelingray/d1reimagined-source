@@ -217,3 +217,32 @@ Reproduce the static checks with `scripts/d1_eboot.py --elf <private-01.24-ELF>`
 `disasm 0x57c458 --count 32`, `disasm 0x391100 --func`, and
 `disasm 0x3adf8c --func`. The compiler may emit calls through descriptors;
 resolve the vtable descriptor before interpreting indirect call targets.
+
+## JOIN90's later departure was reason 0x12
+
+The private `FINAL124_JOIN90-native-resume.log` captures the leave call at
+`0x355d54`, LR `0x35fa80`, with category r3 = `0x19` and reason r4 = **0x12**,
+at emulator time `0:30:19.916960`. Its AH connection ends at 16:55:50,
+approximately 15 minutes after the route's final input at 16:40:51. There are
+no hits on the reason-`0x4d` timeout watches `0x33ab7c/0x33ab98/0x35de40`.
+
+The verified 01.24 leave-condition table `0x12f99e0` maps condition 1 to
+`0x35eb34`. This branch selects reason `0x12` (18 decimal), requires `0x332614(3)` to succeed
+and `0x355d1c()` to return session stage 36, then checks elapsed stage and
+local-input timers. Stage elapsed time comes from `0x3565c0` (clock minus
+the boot-flow object's timestamp `+0x120`), against configuration `+0x7c`.
+Local input elapsed time comes from `0x8b373c` (clock minus input record
+timestamp `+0x118`), against configuration `+0x94/+0x98/+0x9c` selected
+through `0x359f44`. Configuration getter `0x126e64` resolves
+`*0x1a1d2e4 + 0x30e0`. The final success of these checks returns failure code
+2 at `0x35ec48`. This identifies the inactivity leave branch; the observed
+departure does not establish a new initialization-handshake failure.
+
+The earlier slice reversal remains a separate observation. After finishing
+near `351.464, -797.333, 13.929`, the route reported engine 3, current slice
+24 / `0x68935472`, target 112 / empty hash. A bounded `352f88 40u r6:4`
+watch can capture the follow-player request to `0x352138`: r4 is request
+state 3, r5 the selected slice, and r6 its hash pointer. Other direct
+request callers are arrival `0x3526fc`, private-host failure fallback
+`0x353394`, queued host request `0x353760`, and retry `0x353c14`. This is a
+way to distinguish the source of the reversal before changing its behavior.

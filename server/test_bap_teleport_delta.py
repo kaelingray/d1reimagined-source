@@ -1,4 +1,4 @@
-"""Type-21 slice deltas arriving before live host teleports, as observed in JOIN88."""
+"""Encrypted host teleports with retained targets and fresh arrival deltas (JOIN88/92)."""
 
 import json
 import socket
@@ -96,6 +96,72 @@ class TeleportDeltaSession(unittest.TestCase):
         self.assertEqual(finished[0]["version"], initial["version"])
         self.assertTrue(any(world.get("teleport") is None and world["version"] > initial["version"]
                             for world in later), later)
+
+    def test_stale_current_does_not_finish_on_target_only_delta(self):
+        client = self.start()
+        # JOIN92 reported current 24 long before the host requested it again. The
+        # next target/peer delta preceded current -1 while the actual load began.
+        self.report(client, current=self.target, target=[112, 0x811C9DC5], state=3)
+        self.collect(client, 0.02)
+        started = self.queue(client)
+        self.report(client, target=self.target, peer_byte=4)
+        self.report(client, current=[-1, 0x811C9DC5])
+        loading = self.collect(client, 0.1)
+        self.assertTrue(loading)
+        self.assertTrue(all(world.get("teleport") == [1, *self.target] for world in loading), loading)
+        self.assertTrue(all(world["zone"] == 112 and world.get("target") is None
+                            for world in loading), loading)
+
+        self.report(client, state=4)
+        arrived = self.collect(client, 0.15)
+        finished = [world for world in arrived if world.get("teleport") == [3, *self.target]]
+        self.assertTrue(finished, arrived)
+        initial = next(world for world in started if world.get("teleport") == [1, *self.target])
+        # Peer and group updates may advance the version before arrival. The
+        # finish keeps the version of the last loading world rather than adding one.
+        self.assertGreaterEqual(finished[0]["version"], initial["version"])
+        self.assertEqual(finished[0]["version"], loading[-1]["version"])
+        self.assertTrue(any(world.get("teleport") is None and
+                            world["version"] > finished[0]["version"] for world in arrived), arrived)
+
+    def test_fresh_current_can_complete_without_state_four(self):
+        client = self.start()
+        self.queue(client)
+        self.report(client, current=self.target, state=3)
+        arrived = self.collect(client, 0.15)
+        self.assertTrue(any(world.get("teleport") == [3, *self.target] for world in arrived), arrived)
+        self.assertTrue(any(world.get("teleport") is None for world in arrived), arrived)
+
+    def test_stale_current_does_not_finish_on_peer_only_delta(self):
+        client = self.start()
+        self.report(client, current=self.target, target=[112, 0x811C9DC5], state=4)
+        self.collect(client, 0.02)
+        self.queue(client)
+        self.report(client, peer_byte=4)
+        pending = self.collect(client, 0.1)
+        self.assertTrue(pending)
+        self.assertTrue(all(world.get("teleport") == [1, *self.target] for world in pending), pending)
+
+        self.report(client, current=self.target)
+        arrived = self.collect(client, 0.15)
+        self.assertTrue(any(world.get("teleport") == [3, *self.target] for world in arrived), arrived)
+
+    def test_group_switch_waits_for_fresh_current_on_peer_only_delta(self):
+        client = self.start()
+        self.report(client, current=[112, 0x811C9DC5], target=self.target, state=3)
+        switching = self.collect(client, 0.02)
+        self.assertTrue(any(world["zone"] == 112 and world.get("target") == 24
+                            for world in switching), switching)
+        self.report(client, peer_byte=4)
+        pending = self.collect(client, 0.03)
+        self.assertTrue(pending)
+        self.assertTrue(all(world["zone"] == 112 and world.get("target") == 24
+                            for world in pending), pending)
+
+        self.report(client, current=self.target)
+        arrived = self.collect(client, 0.03)
+        self.assertTrue(any(world["zone"] == 24 and world.get("target") is None
+                            for world in arrived), arrived)
 
     def check_invalidated_target(self, invalid):
         client = self.start()

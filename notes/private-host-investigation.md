@@ -175,4 +175,65 @@ The checked final-build reset path is:
    actual resource bubble is therefore necessary before interpreting paired set bits
    as an object-baseline failure.
 
-No specific missing baseline object has been established by this investigation.
+These JOIN89 observations did not identify a specific baseline defect. JOIN92 later
+provided the concrete record and framing evidence below.
+
+## JOIN92: helper-object state-B bit omitted from baseline exports
+
+JOIN92 reached the Breach entrance visibly, then a host teleport to already-current
+slice 24 reloaded the view and deleted the local unit. The resulting idle view was
+black. The live outer simulation was active (`+0x10 = 1`); an owned, read-only
+snapshot found 249 occupied replication records, 119 awaiting a baseline, including
+113 Breach records and six activity records. After the controlled inactive-slot
+reset `3:1`, `0x1df4d0` identified the first readiness blocker as
+`0x992bb471 / 0x20 / 7` (`obj_investigate`), state A `0x80802a1b`, no state B,
+bubble `-1`, pending byte `+0x15 = 1`. This establishes a real baseline-readiness
+failure in that run; it does not establish that every earlier black view had the
+same cause.
+
+Checking only pending records found no missing ID or B-flag mismatch. Checking
+**all 249 instantiated records** exposed one incorrect export:
+
+| Record | Live state A | Live state B | Previous exported baseline |
+|---|---|---|---|
+| `ho_ghostlight`, `0xfc0e45a3 / 0x18 / 101` | `0x8080065c` | `0x8080048a` | `0xfc0e45a3/0x18/101` (no B bit) |
+
+The helper record itself had already cleared its pending byte. That does not make
+its framing safe for the objects that follow it. In the final reader `0x1df644`,
+record `+8 != 0xffffffff` requires a B-presence bit at `0x1df88c`, after the A
+reset/presence bits. The stand-in's previous default baseline for this record had
+only two body bits. The reader therefore consumes the next object's `1`
+continuation bit as B presence and starts reading that following object as B state.
+The per-object length protects the unknown-ID skip path; this known-record path
+does not seek back to the declared body end. The defective helper entry is position
+2,012 in the zero-based 2,311-entry superset, followed by the fly-to-gun marker,
+triggers and other Breach records. This proves a malformed stream; the fresh live
+run must still establish how much of the stalled handover it resolves.
+
+The flag is independently declared by the actual component. In final entity tag
+`0x80cb8244` (class `0x80800861`), the signed link at `+0xc` locates the root
+component at `+0x9e4`. Relative to that component, its replicated ID is at `+0x24`,
+state B at `+0x38`, and state A at `+0x3c`. They match the live record exactly.
+The latest package `025c` chain contains seven kind-`0x18` helper definitions in
+three groups; all declare A `0x8080065c` and B `0x8080048a`. This evidence corrects
+the previous tentative statement that the HO asset alone did not establish a B
+requirement. The disc's base `025c` package independently has ten helper definitions
+with the same A/B declarations, including the same Breach helper ID, supporting
+the shared table correction for both the base and final package readers.
+
+`scripts/d1_pkg.py` now includes verified kind `0x18` in `KINDS_WITH_B`, which is
+also used by `dump_mission_catalog.py`. The narrow correction preserves object IDs,
+ordering and the existing non-replicated kinds. It adds the required **zero**
+B-presence bit; it does not send a new B value or a guessed torch state. Two
+synthetic regressions exercise baseline export and the following-object boundary
+with final seven-bit kind IDs. Both fail against the previous kind table; all 16
+package-tool tests pass with the correction.
+
+Before the next join, the private superset's Breach helper entry was corrected to
+`/1`; all 249 JOIN92 live records then matched its flags. Its five selected later
+helper entries (`0xfe8501fa`, indices 30–34) were corrected too, using their actual
+component declarations. The seventh definition belongs to an unselected group.
+The private list retains exactly 2,311 unique IDs in the same order. Private proof
+reports retain the before/after hashes and the exact changed IDs. Previous catalog
+coverage checks compared two outputs of the same incomplete kind table, so they
+could establish ID coverage while overlooking this framing defect.

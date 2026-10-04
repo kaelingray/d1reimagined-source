@@ -156,6 +156,59 @@ class EntityGroups(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "table is truncated"):
             d1_pkg.entity_group(self.group()[:0x60])
 
+    @classmethod
+    def helper_baselines(cls):
+        data = cls.group()
+        # A helper object followed by a marker, a non-replicated object and a trigger.
+        for index, kind in enumerate((0x18, 0x1C, 0x37, 0x1D)):
+            data[0x54 + 8 * index] = kind
+
+        class Package:
+            entries = [{"reference": d1_pkg.GROUP_CLASS, "index": 0}]
+
+            def entry_data(self, index, oodle):
+                return data
+
+        package_set = type("PackageSet", (), {"by_id": {1: Package()}, "oodle": None})()
+        return d1_pkg.baselines(package_set, {0x12345678})
+
+    def test_helper_object_baseline_has_state_b_without_including_nonreplicated_objects(self):
+        self.assertEqual(self.helper_baselines(), [(0x12345678, 0x18, 0, True),
+                                                  (0x12345678, 0x1C, 1, True),
+                                                  (0x12345678, 0x1D, 3, False)])
+
+    def test_helper_object_state_b_keeps_following_baseline_aligned(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
+        import bap_server
+        import investment
+        from test_ah_session import schema
+
+        types = schema()
+        # Final 01.24 IDs use seven bits for kind; the state-B bit is separate.
+        types[f"{bap_server.OBJECT_ID_TYPE:#x}"]["fields"][1]["width"] = 7
+        rows = self.helper_baselines()
+        packet = bap_server.sim_packet(types, {i: 0 for i in range(8)},
+                                       objects=[bap_server.default_baseline(*row) for row in rows])
+        reader = investment.BitReader(packet)
+        reader.get(8 + 1 + 65 + 1)
+        investment.decode_from(reader, types, bap_server.ROSTER_TYPE)
+        reader.get(32)
+        self.assertEqual(reader.get(1), 1)
+        # Model the client's declared B types, independently of exporter classification.
+        # The helper's actual root component and JOIN92 record use 0x8080048a.
+        declared_b = (0x8080048A, 0x808005C3, 0xFFFFFFFF)
+        for row, state_b in zip(rows, declared_b):
+            self.assertEqual(reader.get(1), 1)
+            ident = investment.decode_from(reader, types, bap_server.OBJECT_ID_TYPE)
+            self.assertEqual((ident[0], ident[4], ident[6]), row[:3])
+            length, start = reader.get(32), reader.position
+            self.assertEqual((reader.get(1), reader.get(1)), (1, 0))
+            if state_b != 0xFFFFFFFF:
+                # With the old kind table this reads the next object's 1 continuation bit.
+                self.assertEqual(reader.get(1), 0)
+            self.assertEqual(reader.position - start, length)
+        self.assertEqual(reader.get(1), 0)
+
 
 class LocalizedStrings(unittest.TestCase):
     def test_split_parts_are_joined_before_hashes_are_assigned(self):

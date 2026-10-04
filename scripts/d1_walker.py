@@ -211,9 +211,13 @@ class Walker:
         except RuntimeError as exc:
             self.log(f"  facing search failed ({exc}); keeping the current vector")
 
-    def face(self, target_heading, tolerance=math.radians(6), tries=12):
+    def face(self, target_heading, tolerance=math.radians(6), tries=12, arrived=None):
         still = 0
         for _ in range(tries):
+            # Released movement keys can still leave the player coasting toward the goal.
+            # Observe that arrival before spending the bounded entry window turning back.
+            if arrived is not None and arrived():
+                return True
             error = angle_diff(self.yaw(), target_heading)
             if abs(error) <= tolerance:
                 return True
@@ -236,9 +240,11 @@ class Walker:
         for key in keys:
             self.pad._post(self.pad.VK[key], down)
 
-    def stride(self, target, seconds=4.0, sprint=True):
+    def stride(self, target, seconds=4.0, sprint=True, arrived=None):
         """Hold W toward the target, steering on the fly. Returns 'arrived', 'stuck', 'drop' or
-        'time'."""
+        'time', or 'goal' when the actual goal is reached between waypoint checks."""
+        if arrived is not None and arrived():
+            return "goal"
         keys = ["W", "G"] if sprint else ["W"]
         self.press(keys, True)
         try:
@@ -247,6 +253,8 @@ class Walker:
             while time.time() - start < seconds:
                 time.sleep(0.1)
                 here = self.player.position()
+                if arrived is not None and arrived(here):
+                    return "goal"
                 if math.dist(here[:2], target[:2]) < 2.0:
                     return "arrived"
                 if here[2] < last_pos[2] - 3.0:
@@ -288,16 +296,33 @@ class Walker:
     def go(self, goal, radius=3.0, budget=600.0):
         """Walk to goal (x, y) re-planning on the grid; returns True when within radius."""
         start = time.time()
+        arrival = None
+
+        def arrived(position=None):
+            nonlocal arrival
+            if arrival is None:
+                position = self.player.position() if position is None else position
+                if math.dist(position[:2], goal[:2]) <= radius:
+                    arrival = position
+            return arrival is not None
+
+        def reached():
+            self.log(f"reached {goal} at {[round(v, 1) for v in arrival]} in {time.time() - start:.0f} s")
+            self.grid.save()
+            return True
+
         while time.time() - start < budget:
             here = self.player.position()
-            if math.dist(here[:2], goal[:2]) <= radius:
-                self.log(f"reached {goal} at {[round(v, 1) for v in here]} in {time.time() - start:.0f} s")
-                self.grid.save()
-                return True
+            if arrived(here):
+                return reached()
             waypoints = self.grid.plan(here[:2], goal)
             target = waypoints[0]
-            self.face(heading(here, target))
-            result = self.stride(target)
+            self.face(heading(here, target), arrived=arrived)
+            if arrived():
+                return reached()
+            result = self.stride(target, arrived=arrived)
+            if arrival is not None:
+                return reached()
             now = self.player.position()
             self.log(f"{result:7s} at {[round(v, 1) for v in now]} -> wp {[round(v, 1) for v in target]} "
                      f"(goal {math.dist(now[:2], goal[:2]):.0f})")

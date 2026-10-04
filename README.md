@@ -2,11 +2,13 @@
 
 This repository tracks an attempt to run a personally owned copy of Destiny 1 without Bungie's retired online services. It started on the Xbox 360 build in Xenia. The active target is now the final PS3 build, **BLES01857 01.24 (Destiny 2.3.1 / The Taken King)**, in RPCS3, with loopback-only stand-ins for every online service the client talks to. Game files, firmware, keys, captures and logs stay out of Git in the ignored `local\` folder (see [Data policy](#data-policy)).
 
-## Current target: 01.24 (2026-10-03)
+## Current target: 01.24 (2026-10-04)
 
 01.24 accepts local sign-in, persists a character and its setup answers, and joins the local activity host. The level-1 intro is activity **229**, with scenario checksum **`0x8fe07299`**. Claude's later runs play both resurrection cinematics, hand control to the Guardian outside the Wall, display the first objectives, and walk into the Wall using a recorded route. The Breach still needs reliable progression, Ghost illumination, weapons, combat and completion. Menu flicker and distorted character lighting are fixed together by reading local colour buffers only when the SPU has written them; later mission scenes still need rendering checks. Follow the [October 2 checkpoint](notes/checkpoint-2026-10-02-mission.md) and [acceptance checks](notes/guardian-rises-acceptance.md). The detailed [profile checkpoint](notes/checkpoint-2026-10-01-profile.md) and 01.00 milestones below retain the earlier evidence.
 
 The [October 3 continuation](notes/checkpoint-2026-10-03-mission.md) records the repaired teleport-delta handling and host reassignment, protocol-only highway Ghost spawning, and the remaining playable Breach check. The private static inventory covers **315 packages, 921 named tags, 183 scenarios and 1,339 entity groups**, with zero extraction errors. These are game-data records, not 183 playable missions. [`dump_mission_catalog.py`](scripts/dump_mission_catalog.py) preserves scenario checksums, group metadata and baselines across the local planet/activity packages. The [runbook](notes/next-session-playbook.md) explains how to reproduce it. Fast state reads use the run's exact emulator identity and do not pause it.
+
+The [October 4 continuation](notes/checkpoint-2026-10-04-mission.md) records visible natural Breach entry in JOIN92, the later black handover, and fixes for stale teleport arrival, route coasting and the Ghost-light helper's missing state-B bit. These changes pass 149 server and 114 script tests; a new live handover check is in progress. A rebuilt [fragment-cache guard](notes/rpcs3-fragment-cache-validation.md) skips malformed persisted programs while preserving their files.
 
 The earlier stage-19 waits were resolved by registering the full package chains, including the shared manifests. The default launcher now builds the 837-entry manifest with `--chains`.
 

@@ -1807,7 +1807,13 @@ def handle(conn, peer, args):
                         # Mirror the client's switch in the world state's group record, as the
                         # host that tracks the fireteam's slice set would (opt-in experiment)
                         wanted = requested_client_zone(record)
-                        current = requested_client_zone({"current": client_slice_fields.get("current", (None, None))})
+                        # Arrival needs a current field from this received delta. A retained
+                        # current can describe the area before the host request (JOIN92:
+                        # cached 24, then target-only 24, then current -1 during the load).
+                        # Keep the target cache for fresh state-4 arrival deltas (JOIN88).
+                        current = requested_client_zone({"current": record.get("current", (None, None))})
+                        routing_current = requested_client_zone({
+                            "current": client_slice_fields.get("current", (None, None))})
                         if (args.ah_group_switch and world_params and "peer_byte" in record
                                 and record["peer_byte"] != world_params[1]):
                             world_params = (world_params[0], record["peer_byte"], *world_params[2:])
@@ -1876,7 +1882,7 @@ def handle(conn, peer, args):
                                                                   bc_notification(AH_ESTABLISH, data, host_id)))
                                 log(f"[{tag}] world state: zone set {zone_now} reached, switch cleared")
                             elif (wanted is not None and wanted >= 0 and wanted != zone_now
-                                  and wanted != switch_target and current != wanted):
+                                  and wanted != switch_target and routing_current != wanted):
                                 switch_target = wanted
                                 data = world_state_delta(args.activity_schema, world_params[0], zone_now,
                                                          *world_params[1:], target=switch_target, teleport=teleport_now, version=(world_version_now := next(world_version)))
