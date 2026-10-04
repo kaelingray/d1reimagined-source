@@ -50,6 +50,7 @@
     "sq_nux_ghost": "0xfc0e45a3:0x1:94:0x8080071e:1",
     "of_ghostlight": "0xfc0e45a3:0x21:124:0x80800750",
     "ho_ghostlight": "0xfc0e45a3:0x18:101:0x8080065c:1",
+    "o_device_invis_light": "0xfc0e45a3:0x4:8:0x808007d9:1",
     "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463"
   },
   "steps": [

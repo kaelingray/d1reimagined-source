@@ -14,6 +14,7 @@ matched against the corrected per-record names in group `0xfc0e45a3`:
 
 | Name | Kind / index | Definition tag | State A |
 | --- | --- | --- | --- |
+| `o_device_invis_light` | `4 / 8` | `0x80cb82a9` | `0x808007d9` |
 | `sq_nux_ghost` | `1 / 94` | `0x80cb82d3` | `0x8080071e` |
 | `sq_nux_ghost__ghost` | `2 / 95` | Member component in `0x80cb8243` | `0x80800868` |
 | `ho_ghostlight` | `0x18 / 101` | `0x80cb8244` | `0x8080065c` |
@@ -493,3 +494,66 @@ the instantiated component semantics and their activation/transform
 requirements, establish an unobstructed corridor viewpoint, then compare
 illumination under a justified state change. The automatic mission still
 sends only the verified Ghost count; the filter and helper remain manual.
+
+## JOIN103: the helper binding targets the physical Ghost
+
+JOIN103 reaches the guarded route endpoint at 23:58:15 BST on 4 October,
+then reports current slice 24 at 23:59:22 with all 249 occupied records
+baseline-ready. The engine remains in state 3 with return target 112;
+this is not an idle-transition result. The manual bubble reset is followed
+by the shipped count rule, which creates one Ghost by 23:59:50. The manual
+filter/helper sequence completes at 00:00:24 on 5 October.
+
+The newly added [attachment inspector](../scripts/rpcs3_final124_attachment.py)
+checks the registered owner, configured asset, bounded component chain,
+each component's owner and target, and the network component's binding
+independently. It uses an owned-process manifest and read-only memory;
+pool/header/link changes during a sample are rejected. Reads remain
+non-atomic, and run-specific datums must come from that same run.
+
+The live sample at 00:00:29 resolves owner `0x4bfac971` to the configured
+`0x80a3d8ad` container and all twelve components. The selected Ghost is
+`0x6bfb82ce`. The network component's binding `0x62fd203c` independently
+resolves to that **same physical Ghost**, with the native unit-mask bit
+set. The owner has a different pool discriminator and an index outside
+the unit pool. This rules out the specific hypothesis that the helper
+binding targets its non-unit container and therefore fails the native
+unit-mask gate. It does not identify a light activation parameter.
+
+A bounded scan of the current Breach group's network bindings finds only
+squad 94 and helper 101, both associated with the Ghost. The placed
+`o_device_invis_light` has no binding or tracked unit pair; its cached
+State A generation is zero and its creation Boolean is false. Missing
+placed-device creation is a separate question from helper attachment.
+Its configured position is approximately `(428.85, -813.83, 21.84)`,
+away from the Ghost. Its name alone does not prove it supplies the torch.
+
+The 00:09:03 capture still shows clean window and corridor geometry.
+The owned stack is stopped with its trace and snapshots preserved.
+Raw observations and assets remain in the private runtime.
+
+## Placed-device creation path in the final executable
+
+The actual device definition declares State A `0x808007d9` and State B
+`0x80800387`. Its mission alias includes B presence and adds no automatic
+state change. The runtime State A descriptor is reached through global
+`0x18def9c`; the State B alias is `0x18defa0`. These are final-build
+addresses, separate from the old 01.00 labels.
+
+Apply handler `0x2151d0` checks definition byte `+0x68`, handles generation
+replacement through `0x215104`, then copies the 0xe0-byte State A to
+component `+0x110`. For the device's observed nonzero definition byte,
+update `0x215b2c` requires reported generation `+0x1f0` to be less than
+requested generation `+0x110`, and creation Boolean `+0x114` to be true.
+It selects a variant via `0x2148a0`, calls creator `0x214478`, stores the
+returned unit pair at `+0x2e0`, and advances the reported generation after
+success. A generation-only state with the Boolean false cannot pass this
+creation path.
+
+The bounded manual candidate requests generation one and creation true,
+preserving the cached absent object reference at State A `+8` as
+`{0:0x811c9dc5, 4:-1, 6:-1}`. Its kind and index are **signed** in the
+schema; unsigned 255/65535 fail the value-preservation preflight. The
+candidate round-trips through the actual 5,041-type final schema.
+Native creation, state consumption and a physical unit must be checked
+before attributing any illumination to it or scheduling it automatically.
