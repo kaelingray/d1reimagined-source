@@ -377,7 +377,7 @@ remaining roots include `0x8080222e`, `0x80aad032`, `0x80801b73`,
 `0x8080079a`, `0x80800441` and `0x80800594`. This is structural evidence,
 not a semantic identification of lights or illumination parameters.
 
-## Generation action: default-state path, not a verified light switch
+## Generation action: default-payload path, not a verified light switch
 
 The final HO update at `0xc1238c` first attempts creation, then compares
 state generation at component `+0x114` with the previous `+0x170`.
@@ -390,15 +390,106 @@ The interface target is statically recoverable: `0x2fb2d0` installs object
 Slot `+0xa0` holds descriptor `0x1853ee0`, whose function is `0x2fbc14`.
 It resolves the unit's entity through `0x2ff4b8`, then reaches
 `0x9521e4 -> 0x950eb0 -> 0x431da8 -> 0x431c14`.
-The final handler resolves a component and calls `0x432674` with its
-default-state global when the supplied state value is zero. It marks
-component `+0x2a0` bit 3 and reports the change. This establishes a
-default-state update; its effect on the configured attachment still needs
-a live observation. Increasing the HO generation must not be presented
-as a proven torch-on action.
+The final handler resolves a component and calls `0x432674` with the
+default payload pointer from global `0x189a0a0` when its payload argument
+is null. The callee copies a structured payload, rather than a numeric
+light state. The handler marks component `+0x2a0` bit 3 and reports the
+change. This establishes a default-payload update; its semantics and
+effect on the configured attachment still need confirmation. Increasing
+the HO generation must not be presented as a proven torch-on action.
 
-Next: resolve the newly registered entity independently of the Ghost,
-inspect its configured component/default state and placement, and compare
-controlled corridor views before and after any justified state change.
-The automatic mission still sends only the verified Ghost count; the
-filter and helper remain manual candidates.
+## JOIN102: registered container and all twelve components resolved
+
+JOIN102 repeats the full 249-record readiness check at 23:17:19 BST.
+After manual bubble reset `3:1`, the shipped delayed count creates one
+physical Ghost by 23:17:42, with unit `0x12fb82ce` at
+`(390.458, -786.975, 19.073)`. The corrected squad-94 filter and HO state
+again reach the actual creator and registration. Registration's distinct
+datum is `0x17fac971`.
+
+A read-only snapshot at 23:19:46 resolves that registered datum to
+`0x604081a0`. Its container header contains configured asset `0x80a3d8ad`,
+component count 12 and header class `0x80800906`. The component pool at
+global `0x1a21cb0` has a 24-byte row stride. Rows 2418–2429 all name the
+registered container at row `+0xc`; each resolved component names the
+actual Ghost unit at runtime `+0x1c`. All configured roots therefore have
+runtime components linked to the selected target:
+
+| Configured type | Runtime header class | Count |
+| --- | --- | ---: |
+| `0x8080222e` | `0x808029c3` | 1 |
+| `0x80aad032` | `0x80aad033` | 1 |
+| `0x80801b73` | `0x80801b6f` | 1 |
+| `0x80801a4e` | `0x80801b21` | 6 |
+| `0x8080079a` | `0x80800610` | 1 |
+| `0x80800441` | `0x808008fb` | 1 |
+| `0x80800594` | `0x808008f6` | 1 |
+
+Resolve a component runtime pointer as `row - u32(row+8)`, modulo 32 bits.
+The owner accessor reads **the pool row's** `+0xc` directly; subtracting
+the relative offset first would read a different field. Row `+0x10` is
+the next component datum and `+0x14` its configured type. The
+`0x80aad032` component also holds a network binding and the exact
+`0xfc0e45a3 / 0x18 / 101` helper ID. This confirms the configured
+components were instantiated, but does not identify their light semantics.
+
+The small accessor `0x1f8c1c` produced no observed entry with the expected
+HO return address, although creator and registration entries did. An
+inspection requiring that accessor hook consequently failed; independent
+registered-container and pool reads succeeded. Small leaf functions can
+be inlined, so that missing hook is not evidence of failed creation.
+
+### Controlled views and camera-tool repair
+
+A bounded ordinary walk toward `(385, -791)` stops at its 120-second
+budget near `(386.173, -795.120, 14.589)`. Corridor obstacles prevent
+arrival; input is released and current slice remains 24. The subsequent
+pitch sweep exposes a tooling error: `facing_from_pointers` rejects the
+valid direction `(-0.004909, 0.997558, -0.069650)` because it assumes a
+horizontal unit vector. All three pointer paths still resolve the same
+camera vector, whose **three-dimensional** length is approximately one.
+
+`d1_walker.py` now accepts finite 3D unit vectors with a usable horizontal
+projection and computes yaw from that projection. Invalid and nearly
+vertical vectors remain rejected. `refind` also retains a valid pointer
+when its address is unchanged; a short camera tap no longer initiates
+unnecessary movement probes. Regressions include the actual pitched
+direction, steep pitch, invalid vectors and same-address recovery. All
+119 script tests pass.
+
+With both fixes, normal camera input captures the following views at
+roughly `(386.7, -795.5, 14.45)` without running a movement search:
+
+| BST | Target | Actual yaw | Actual pitch | Observed view |
+| --- | --- | ---: | ---: | --- |
+| 23:32:10 | Ghost, bearing about 66 degrees | 64.74 | 2.90 | Dark world, HUD visible |
+| 23:32:14 | Same Ghost | 64.74 | 12.65 | Dark world, no visible beam |
+| 23:32:17 | Same Ghost | 64.74 | 29.42 | Dark world, no visible beam |
+| 23:32:22 | Back along corridor | 173.99 | 1.26 | Lit orange corridor geometry |
+
+Earlier 23:17:48/58 frames also show clean, bright window geometry.
+The controlled comparison strengthens the evidence against a persistent
+whole-view fade. It does not establish an unobstructed line of sight to
+the Ghost or a working torch.
+
+### Generation 1 accepted; no visible illumination verified
+
+At 23:33:52, the same manual HO state is sent with generation 1. By
+23:34:02, its current `+0x114` and previous `+0x170` generations both
+equal one. The squad retains one member, the same actor/unit and the
+same desired counts. The registered container remains present. Sampled
+runtime differences are limited to ordinary counters/position fields;
+they do not identify a light activation parameter.
+
+No requested generation-path entry is observed in the bounded native
+trace. The consumed state is independently proven by memory, but these
+missing watches cannot establish whether the statically traced payload
+path ran. Subsequent views at yaw 64.56 and pitches 12.77/28.34 remain
+dark with the HUD visible. Generation 1 therefore remains a diagnostic
+candidate, not a verified light switch or an automatic mission action.
+
+The owned stack is stopped after preserving evidence. Next: identify
+the instantiated component semantics and their activation/transform
+requirements, establish an unobstructed corridor viewpoint, then compare
+illumination under a justified state change. The automatic mission still
+sends only the verified Ghost count; the filter and helper remain manual.

@@ -12,12 +12,15 @@ Start with the [October 4 checkpoint](checkpoint-2026-10-04-mission.md),
 [October 2 run history](checkpoint-2026-10-02-mission.md), and
 [acceptance checks](guardian-rises-acceptance.md). JOIN53–82 supersede the earlier black-scene
 experiments: both resurrection cinematics, the outdoor Guardian, the first objective HUD,
-and a recorded walk to the Wall have live evidence. JOIN97–101 clear the Breach's
-249 live baselines. JOIN101 verifies the automatic one-Ghost count after a manual
-bubble reset and repeats helper attachment creation/registration. Its close corridor
-walk remains dark, but returning and turning toward the windows restores a bright
-view; a persistent full-screen fade is not established. Continue with the created
-helper entity's component state/placement and controlled corridor views. Torch,
+and a recorded walk to the Wall have live evidence. JOIN97–102 clear the Breach's
+249 live baselines. JOIN101/102 verify the automatic one-Ghost count after a manual
+bubble reset and repeat helper attachment creation/registration. JOIN102 resolves
+all twelve configured helper components and their links to the Ghost. Controlled
+views toward the Ghost remain dark while the reverse corridor view is lit;
+a persistent whole-view fade is not established. The walker now accepts pitched
+camera directions and avoids movement probes when a valid pointer is unchanged.
+Generation 1 is consumed without verifying a torch. Continue with component
+activation/transform semantics and an unobstructed corridor viewpoint. Torch,
 Fallen encounters and stable return-slice completion remain open. The mission is not
 complete. Use intro activity **229**, checksum **0x8fe07299**, map `act_cosmo_m0_highway`;
 activity 231 is level 25 and 230 reports no active activity. The JOIN12–20 lobster and
@@ -31,7 +34,7 @@ the cars was not a playable Breach check in JOIN89. After current 24, require a
 nonempty ready pool containing the Ghost squad/member/helper IDs before the fresh
 inactive bubble-3 reset. The mission's delayed desired count then creates one
 physical Ghost; the filter/helper states remain manual candidates. Their generation
-path reaches a default-state update, not a verified light-on setter. See
+path reaches a default-payload update, not a verified light-on setter. See
 [the light investigation](ghost-light-0124.md) and the current checkpoint.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
 magenta blocks and distorted character lighting are fixed together by

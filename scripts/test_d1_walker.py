@@ -1,9 +1,52 @@
 import math
+import struct
 import unittest
 from unittest.mock import patch
 
 from d1_traverse import heading
-from d1_walker import Walker
+from d1_walker import FACING_PATHS, Walker, facing_from_pointers
+
+
+class FacingMemory:
+    def __init__(self, vector):
+        self.address = 0x306E8CFC
+        self.vector = vector
+
+    def read(self, address, size):
+        if address == FACING_PATHS[0][0]:
+            return struct.pack(">I", self.address - FACING_PATHS[0][1][0])
+        if address == self.address:
+            return struct.pack(">3f", *self.vector)[:size]
+        raise OSError("unavailable pointer path")
+
+
+class CameraFacing(unittest.TestCase):
+    def test_join102_pitched_camera_keeps_its_horizontal_heading(self):
+        mem = FacingMemory((-0.00490868697, 0.9975581169, -0.0696500242))
+        self.assertEqual(facing_from_pointers(mem), mem.address)
+        walker = Walker(mem, None, PadReplay(), (0, -1))
+        self.assertAlmostEqual(walker.yaw(), math.atan2(mem.vector[1], mem.vector[0]), places=6)
+        self.assertEqual((walker.facing, walker.sign), (mem.address, 1))
+
+    def test_level_and_steep_pitched_unit_vectors_are_valid(self):
+        for vector in ((1, 0, 0), (0.6, 0, 0.8), (0, -0.6, -0.8)):
+            with self.subTest(vector=vector):
+                mem = FacingMemory(vector)
+                self.assertEqual(facing_from_pointers(mem), mem.address)
+
+    def test_refind_keeps_a_valid_same_address_without_movement_probes(self):
+        mem = FacingMemory((0.6, 0, 0.8))
+        walker = Walker(mem, None, PadReplay(), (mem.address, -1))
+        with patch("d1_walker.find_facing", side_effect=AssertionError("unexpected movement probe")):
+            walker.refind()
+        self.assertEqual((walker.facing, walker.sign), (mem.address, 1))
+
+    def test_invalid_or_near_vertical_vectors_are_rejected(self):
+        vectors = ((0, 0, 0), (1, 1, 0), (0, 0, 1), (0.001, 0, 0.9999995),
+                   (math.nan, 0, 0), (1, math.inf, 0), (1, 0, math.nan))
+        for vector in vectors:
+            with self.subTest(vector=vector):
+                self.assertIsNone(facing_from_pointers(FacingMemory(vector)))
 
 
 class PlayerReplay:

@@ -293,5 +293,44 @@ The owned run was stopped after preserving the trace and captures.
 The next light test should resolve the created helper entity separately
 from its target, inspect its component state/placement, and capture the
 corridor with a controlled view direction. The generation path reaches a
-default-state update through the entity interface; it is not a demonstrated
+default-payload update through the entity interface; it is not a demonstrated
 light-on setter. See [the light investigation](ghost-light-0124.md).
+
+## JOIN102: helper components, controlled view and camera repair
+
+At 23:17:19 BST the fresh run again has 249 occupied records and zero
+pending baselines. Following the manual bubble reset, the shipped
+current-24 rule creates one Ghost by 23:17:42. The corrected manual
+filter/helper sequence again reaches creator and registration. The
+registered container is independently resolved: all twelve configured
+components exist, share that owner and target the actual Ghost unit.
+Their configured types and runtime header classes are recorded in
+[the light investigation](ghost-light-0124.md); none is yet semantically
+identified as a light.
+
+A guarded 120-second walk cannot reach `(385, -791)` through the corridor
+obstacles. The tool releases input on expiry. Subsequent camera input
+reveals that the walker's pointer validator rejects valid pitched unit
+vectors. It now validates their full 3D length and retains a usable
+horizontal heading. Recovery also retains an unchanged valid pointer,
+avoiding unnecessary movement probes after a short turn. All 119 script
+tests pass, including four camera regression tests.
+
+Controlled views from about `(386.7, -795.5, 14.45)` face the Ghost at
+actual yaw 64.74 degrees and pitches 2.90, 12.65 and 29.42 degrees.
+Those views remain dark with visible HUD. Turning back to yaw 173.99,
+pitch 1.26 shows lit orange corridor geometry. Earlier window frames
+are also clean. This further rules against a persistent whole-view fade,
+but does not establish an unobstructed Ghost view or a working torch.
+
+The helper accepts a manual generation-1 state at 23:33:52; both current
+and consumed generations reach one. The same Ghost and all its desired
+counts remain present. Bounded native watches do not observe the
+generation action, so its payload semantics remain unverified. Further
+controlled views stay dark. No automatic helper/light action is added.
+The owned run is stopped after preserving the snapshots and captures.
+
+Continue by identifying the instantiated components' activation and
+transform requirements and finding an unobstructed view. Stable return
+completion, torch, durable weapon pickup, combat and mission completion
+remain open. The earlier combined color-buffer rendering fix is retained.

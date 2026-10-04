@@ -26,12 +26,15 @@ session regressions; they do not prove the client can play the Breach. JOIN92 vi
 entered the Breach with ordinary movement, then became black after a host handover.
 Fresh-delta arrival, route arrival latching, helper state-B framing and unsafe AI
 baseline exclusions are now corrected. The changed mission passes all 156 server tests
-and the actual schema preflight; the unchanged script suite previously passed 115 tests.
-JOIN97–101 clear all 249 live baselines and show the Breach. JOIN101's ordinary
+and the actual schema preflight. The camera-tool repair passes all 119 script tests.
+JOIN97–102 clear all 249 live baselines and show the Breach. JOIN101's ordinary
 walk reaches near the spawned Ghost and returns without cleanup; turning toward
 the windows restores a clean bright view after dark corridor samples. The mission's
 automatic desired count creates one physical Ghost after a manual reset, and the
-manually tested helper reaches attachment registration. Visible torch behavior and
+manually tested helper reaches attachment registration. JOIN102 resolves all twelve
+configured helper components linked to the Ghost. Controlled views toward the Ghost
+remain dark while the reverse corridor is lit. A generation-1 state is consumed
+without verifying illumination. Visible torch behavior and
 stable return-slice completion remain open. See the
 [October 4 checkpoint](checkpoint-2026-10-04-mission.md).
 
@@ -61,7 +64,7 @@ found zero live members in the Breach Ghost squad despite an exact member-ID
 match in its type-6 stream. The matcher can also find references inside other
 states, so these earlier reports alone do not verify a physical spawn.
 JOIN99's explicit one-member desired count subsequently creates an active
-Ghost actor with a valid physical unit datum; JOIN101 repeats physical creation
+Ghost actor with a valid physical unit datum; JOIN101/102 repeat physical creation
 from the automatic mission rule after a manual bubble reset. See
 [squad counts](squad-member-counts-0124.md). The native unit position is known;
 visible Ghost behavior, retail ownership and enemy spawning remain open.
@@ -86,7 +89,7 @@ Later objective labels must not be used to claim that an encounter or item grant
 | Appearance and rendering | The same custom Guardian appears correctly in creation, inventory, revival, mission, and later social space; repeated frames show no flicker or distorted lighting. | Selective SPU-written color-buffer reads eliminated sampled setup magenta frames and restored normal Titan lighting. JOIN99 and JOIN101 show a normal Titan in inventory frames opened from the Breach. JOIN101 can return from the dark corridor and face clean, brightly lit windows. In-world third-person, social-space and other appearance combinations still require captures. Keep color reads enabled as required by the fix. |
 | Account intro and character revival | Account introduction and each character's resurrection have distinct progression. Revival plays with the actual Guardian, then hands control to an unarmed player without a lasting fade. | Both revival cinematic objects and automatic 113 -> 112 hand-off work in JOIN53+. The script currently uses timed start/stop steps, not a verified cinematic-completion acknowledgement. First versus later character intro flags are open. |
 | Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; recorded-route traversal reaches the Wall, reproduced in JOIN88 with extra climb points. Highway Ghost reset/generation and encoded member IDs are observed in JOIN87/88; physical spawn needs separate proof. JOIN90's guarded preload walk reached within 2.51 units of the route endpoint before the local slice changed. JOIN88 posts cleanup reason 0x4d, which maps to three final-build session states; its exact selecting state remains unknown. |
-| Find a Weapon / The Breach | Client-requested slice 24 completes at the actual entrance; correct objective, darkness, Ghost torch, path, power sequence, lights, Fallen reaction, and weapon access occur in order. | JOIN97–101 clear all 249 live baselines and show the interior after host handover. JOIN101's automatic desired count creates one physical Ghost after a manual bubble reset; its manually applied squad-94 filter reaches attachment creation and registration. A normal walk reaches within about twelve units of the Ghost and returns, but does not verify visible torch light. Visible torch/power, stable idle transition and automatic trigger-to-switch progression remain open. JOIN100's earlier walk stopped on an observed inactivity return. |
+| Find a Weapon / The Breach | Client-requested slice 24 completes at the actual entrance; correct objective, darkness, Ghost torch, path, power sequence, lights, Fallen reaction, and weapon access occur in order. | JOIN97–102 clear all 249 live baselines and show the interior after host handover. JOIN101/102's automatic desired count creates one physical Ghost after a manual bubble reset; the manual squad-94 filter reaches attachment creation and registration. JOIN102 resolves all twelve configured helper components linked to the Ghost. Controlled nearby views and a consumed generation-1 state still do not verify torch light. Visible torch/power, stable idle transition and automatic trigger-to-switch progression remain open. |
 | Grab the Rifle | Correct Khvostov 7G-02 instance is granted once, equipped in Primary, and saved. Armed first-person view, ammo, reload, and firing work. Replay/reconnect cannot duplicate or lose the item. | Rifle container and relevant objective/cinematic/trigger objects are identified. HUD display for objective 11, pickup transaction, item definition selection, and durable equip are not verified. A title change is insufficient. |
 | Fight through the Wall | Ordered Fallen encounters run on the expected simulator, with damage, death, radar and ammo behavior. Ghost cues, cache, tripmines, crouching, exit conditions, and ordinary respawn work. | Named squads, cue/trigger objects, firing areas, mines and exit objects are catalogued. Squad authority and spawning are incomplete. Do not invent encounter counts, kill XP, checkpoint transforms, or hazard tuning. |
 | First cache | Cache grants the class-appropriate Special weapon and verified currency once to this character; weapon switching works and survives restart. | Retail reference expects Preacher Mk. 20 for Titan/Warlock and Calcutta-LR2 for Hunter. Target-build reward definition, amount, claim message and persistence are open. The reference's 48 Glimmer is not a confirmed 01.24 constant. |

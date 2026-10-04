@@ -36,7 +36,7 @@ FACING_PATHS = ((0x1ADBCE8, (0x92C,)), (0x1B27FE8, (0x18C,)), (0x1B28210, (0x4, 
 
 
 def facing_from_pointers(mem):
-    """Address of the forward facing vector through the static pointer paths, or None."""
+    """Address of a finite camera unit vector with a usable horizontal heading, or None."""
     for root, offsets in FACING_PATHS:
         try:
             address = struct.unpack(">I", mem.read(root, 4))[0]
@@ -46,7 +46,13 @@ def facing_from_pointers(mem):
             c, s, z = struct.unpack(">3f", mem.read(address, 12))
         except (OSError, ValueError, struct.error):
             continue
-        if abs(z) < 0.01 and abs(c * c + s * s - 1) < 0.02:
+        # These pointers follow camera pitch as well as yaw. JOIN102 returned a valid
+        # unit vector with z=-0.06965 after a pitch tap; requiring z near zero rejected
+        # it and could trigger unnecessary movement probes beside an obstructing wall.
+        # Near-vertical directions have no reliable horizontal heading.
+        horizontal = c * c + s * s
+        if (all(math.isfinite(v) for v in (c, s, z))
+                and horizontal > 1e-4 and abs(horizontal + z * z - 1) < 0.02):
             return address
     return None
 
@@ -202,7 +208,9 @@ class Walker:
 
     def refind(self):
         live = facing_from_pointers(self.mem)
-        if live is not None and live != self.facing:
+        if live is not None:
+            # A short camera tap can leave the same valid vector unchanged. Keep
+            # the live pointer rather than moving the player to scan for a copy.
             self.facing, self.sign = live, 1
             return
         self.log("facing vector went stale; searching again")
