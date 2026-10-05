@@ -447,3 +447,54 @@ short segments and all 38 long caption segments. The long mix measures
 and narration to output frames. All 137 script regressions, PowerShell input
 script parsing and `git diff --check` pass. No new renderer/gameplay fix is
 claimed from producing these videos.
+
+## JOIN117–119: repair missing world armour selections
+
+The [appearance investigation](guardian-appearance-0124.md) identifies a concrete
+profile defect. JOIN117 has correct normalized Titan item indexes, but gear-slot
++0xc defaults to -1. Final conversion `0x46ed4c` resolves that field through
+`0x2a6474`; no arrangement means no normalized model art. All five applied
+armour-model roots are `0xffffffff`. The inventory's normal model preview did
+not prove the world summary was complete.
+
+The final client asset library supplies wildcard-class model arrangement indexes
+for all fifteen starter armour pieces. JOIN118 changes only those five selections
+in a private peer/select overlay. Five valid applied roots replace the invalid
+ones, and the 12:59:28 BST daylight emote shows solid Titan armour. Its 13:01:04
+character preview has normal proportions, with equipment icons still loading and
+level/light zero. The existing SPU colour-read patch and Read Color Buffers setting
+are retained; no shader or emulator change is made for this repair.
+
+The server now includes these model selections in `starter:01.24:CLASS`, preserving
+the 01.00 shorthand, inventory identities and equipped references. A replacement
+item cannot inherit the original item's model. Custom JSON supports an explicitly
+verified signed `arrangement` value, including zero. The four new regressions
+cover all three classes, overrides, validation and the actual separate optional
+wire field. All **160 server tests** and **137 script tests** pass. Peer/select
+objects also roundtrip through the private final schema; the actual final-build
+preflight and `git diff --check` pass.
+
+JOIN119 repeats the normal full mission launcher with the public Titan fixture and
+**no private overlay**. At 13:15:15, the live engine-zero/current-112 sample has
+all five correct item/model pairs and the same five valid model roots. The
+13:15:37 daylight emote visibly repeats the solid Guardian.
+
+The user suggested the armour was stored on an inventory tab. The 13:16:19
+capture confirms all seven starter entries, including armour and Ghost thumbnails,
+are listed under **Materials** on that tab. This is an open inventory-category/UI
+issue; profile model selection alone does not fix it.
+
+JOIN118's RSX thread reports `VK_ERROR_DEVICE_LOST` at approximately 13:01:44.
+JOIN119 reproduces device loss when returning from inventory to character, at
+about 13:16:40, this time surfaced on a PPU job thread. Both reports arise in
+Vulkan event waiting; that site does not identify the originating GPU fault.
+The first successful world-armour views precede the crashes. Both native logs
+are preserved; no crash suppression or speculative renderer change is shipped.
+Combined menu/world stability remains unaccepted.
+
+Native JOIN117/118/119 recordings fully decode without errors. Candidate and
+standard-fixture trims are private under `APPEARANCE/2026-10-05`, retaining actual
+moving game footage for review and future devlogs. No binary media is committed.
+JOIN117/118/119 owned stacks and outer launchers are stopped and XInput restored
+between runs. JOIN120 starts the same public fixture for an indoor appearance
+check, avoiding further menu interaction until that check completes.

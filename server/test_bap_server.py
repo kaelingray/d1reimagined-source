@@ -1,5 +1,6 @@
 import json
 import struct
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -102,6 +103,61 @@ class CharacterGear(unittest.TestCase):
         self.assertEqual(bap.gear_spec("starter:titan")[0]["item"], 776)
         self.assertEqual(bap.gear_spec("starter:01.24:hunter")[0]["item"], 709)
         self.assertEqual(bap.gear_spec("starter:01.24:warlock")[0]["item"], 713)
+
+    def test_final_armour_summaries_include_model_arrangements(self):
+        expected = {"titan": [191, 188, 189, 192, 190],
+                    "hunter": [8, 5, 6, 9, 7],
+                    "warlock": [374, 371, 372, 375, 373]}
+        layout = {**bap.LAYOUT_0100, "progression_items": 0x1e8,
+                  "slot_size": 0x30, "slot_dyes": 0x18}
+        for guardian, arrangements in expected.items():
+            gear = bap.gear_spec(f"starter:01.24:{guardian}")
+            extras = bap.gear_objects(gear, layout)
+            for family, off in (("peer", 0x30), ("select", 0x68)):
+                slots = extras[family][off][0x1e8]
+                self.assertEqual([slots[s * 0x30][0xc] for s in range(1, 6)], arrangements)
+                self.assertEqual([slots[s * 0x30][8] for s in range(1, 6)],
+                                 [gear[s]["item"] for s in range(1, 6)])
+            self.assertNotIn("arrangement", gear[0])  # subclass has no such model
+            self.assertEqual(extras["self"][0x1838][8], 0x101)
+        self.assertTrue(all("arrangement" not in entry for entry in
+                            bap.gear_spec("starter:titan").values()))
+
+    def test_changed_item_does_not_inherit_another_items_model(self):
+        gear = bap.gear_spec("starter:01.24:titan,1=123,2=198")
+        self.assertNotIn("arrangement", gear[1])
+        self.assertEqual(gear[2]["arrangement"], 188)
+
+    def test_custom_arrangement_accepts_zero_and_rejects_invalid_indexes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "gear.json"
+            for value in (0, 123, -1, 32767):
+                path.write_text(json.dumps({"1": {"item": 204, "arrangement": value}}))
+                gear = bap.gear_spec(f"@{path}")
+                self.assertEqual(bap.gear_objects(gear)["peer"][0x30][0x138][0x28][0xc], value)
+            for value in (-2, 32768, True, 1.5, "191", None):
+                path.write_text(json.dumps({"1": {"item": 204, "arrangement": value}}))
+                with self.assertRaisesRegex(ValueError, "arrangement"):
+                    bap.gear_spec(f"@{path}")
+
+    def test_arrangement_is_sent_as_its_own_optional_signed_wire_field(self):
+        # The relevant fields of 01.24 type 0x8080183c. +8 is the item
+        # index, +0xa is a different index, and +0xc selects model art.
+        fields = [{"off": off, "kind": kind, "opt": 1, "arr": 0,
+                   "nested": 0xffffffff, "min": minimum, "width": width}
+                  for off, kind, minimum, width in ((0, 6, 0, 64), (8, 4, 32768, 16),
+                                                   (10, 4, 32768, 16), (12, 4, 32768, 16))]
+        schema = {"0x8080183c": {"fields": fields, "size": 0x30}}
+        gear = bap.gear_spec("starter:01.24:titan")
+        slots = bap.gear_objects(gear)["peer"][0x30][0x138]
+        helmet = slots[0x28]
+        encoded = bap.investment.encode(schema, 0x8080183c, helmet)
+        decoded = bap.investment.decode(schema, 0x8080183c, encoded)
+        self.assertEqual(decoded, {0: 0x101, 8: 204, 12: 191})
+        self.assertNotIn(10, decoded)
+        omitted = {key: value for key, value in helmet.items() if key != 12}
+        self.assertNotIn(12, bap.investment.decode(
+            schema, 0x8080183c, bap.investment.encode(schema, 0x8080183c, omitted)))
 
     def test_gear_objects_fill_all_three_character_objects(self):
         extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},

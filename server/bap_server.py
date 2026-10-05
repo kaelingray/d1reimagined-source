@@ -172,6 +172,17 @@ STARTER_GEAR_0124 = {
     "hunter": {0: 709, 1: 16, 2: 10, 3: 12, 4: 18, 5: 14, 11: 862},
     "warlock": {0: 713, 1: 392, 2: 386, 3: 388, 4: 394, 5: 390, 11: 862},
 }
+# Progression equipment +0xc is an arrangement index, separate from the
+# investment item index at +8. In 01.24, 0x46ed4c resolves this through
+# 0x2a6474 before populating the normalized character's model references.
+# An absent field becomes -1 and leaves equipped armour without a world model.
+# These wildcard-class defaults come from each starter item's 0x8080030a
+# array in the final client asset library (root +0x144), not the item list.
+STARTER_ARRANGEMENTS_0124 = {
+    16: 8, 10: 5, 12: 6, 18: 9, 14: 7,             # hunter
+    204: 191, 198: 188, 200: 189, 206: 192, 202: 190, # titan
+    392: 374, 386: 371, 388: 372, 394: 375, 390: 373, # warlock
+}
 PROGRESSION_ITEMS = 0x138
 PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
 SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
@@ -223,8 +234,9 @@ def gear_spec(value):
     """Parse --character-gear: "SLOT=ITEM[/DYECH:DYE...],..." (item indexes of the investment
     globals item list), "starter:CLASS[,SLOT=ITEM...]" (01.00),
     "starter:01.24:CLASS[,SLOT=ITEM...]" (01.24), or
-    @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]]}}.
-    Returns {slot: {"item", "id", "dyes"}}; instance ids default to 0x100 + slot."""
+    @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]],
+    "arrangement": N}}. The optional arrangement is a build-specific model
+    index, not an item index. Instance ids default to 0x100 + slot."""
     if value.startswith("starter:"):
         kit, _, rest = value[len("starter:"):].partition(",")
         kits = STARTER_GEAR
@@ -233,7 +245,13 @@ def gear_spec(value):
         if kit not in kits:
             raise ValueError(f"unknown starter kit {kit!r} (one of {', '.join(kits)})")
         base = {slot: {"item": item, "id": 0x100 + slot, "dyes": []} for slot, item in kits[kit].items()}
-        return {**base, **(gear_spec(rest) if rest else {})}
+        gear = {**base, **(gear_spec(rest) if rest else {})}
+        if kits is STARTER_GEAR_0124:
+            for entry in gear.values():
+                arrangement = STARTER_ARRANGEMENTS_0124.get(entry["item"])
+                if arrangement is not None:
+                    entry.setdefault("arrangement", arrangement)
+        return gear
     if value.startswith("@"):
         raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))
         entries = {int(k, 0): v if isinstance(v, dict) else {"item": v} for k, v in raw.items()}
@@ -253,17 +271,24 @@ def gear_spec(value):
             raise ValueError(f"gear slot {slot}: at most 6 dyes")
         gear[slot] = {"item": int(entry["item"]), "id": int(entry.get("id", 0x100 + slot)),
                       "dyes": dyes}
+        if "arrangement" in entry:
+            arrangement = entry["arrangement"]
+            if (type(arrangement) is not int or not -1 <= arrangement <= 0x7fff):
+                raise ValueError(f"gear slot {slot}: arrangement must be an integer from -1 to 32767")
+            gear[slot]["arrangement"] = arrangement
     return gear
 
 
 def gear_objects(gear, layout=None):
-    """Field values that equip `gear` ({slot: {"item", "id", "dyes"}}) on the three character
+    """Field values that equip `gear` (optional model arrangement per slot) on the three character
     objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values.
     `layout` is character_layout() of the target build (default 01.00)."""
     L = layout or LAYOUT_0100
     slots = {}
     for slot, g in gear.items():
         item = {0: g["id"], 8: g["item"]}
+        if "arrangement" in g:
+            item[0xc] = g["arrangement"]
         if g["dyes"]:
             item[L["slot_dyes"]] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
         slots[slot * L["slot_size"]] = item
@@ -2290,9 +2315,10 @@ def parse_args(argv=None):
     ap.add_argument("--character-gear", type=gear_spec, metavar="starter:[01.24:]CLASS|SLOT=ITEM,...|@FILE",
                     help="equip the stored character (peer/select summaries and self inventory): "
                          "starter:titan|hunter|warlock for 01.00; starter:01.24:CLASS for 01.24; "
-                         "or item indexes of the investment globals "
-                         "item list per equipment slot 0-19 (scripts/d1_pkg.py items); without gear "
-                         "the guardian renders as the see-through placeholder")
+                         "or investment item indexes per equipment slot 0-19 (scripts/d1_pkg.py items); "
+                         "@FILE accepts an optional build-specific arrangement model index per slot. "
+                         "01.24 starter armour includes these indexes; missing model selections "
+                         "can leave the world guardian as a see-through placeholder")
     ap.add_argument("--character-overlay", type=overlay_spec,
                     metavar="JSON|@FILE",
                     help='raw field values merged into the character objects: {"peer"|"select"|"self": '

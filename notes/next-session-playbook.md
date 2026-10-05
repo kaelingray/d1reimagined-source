@@ -65,9 +65,17 @@ launch; restore XInput after stopping the run. The combined
 `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only) retains clean
 setup menus and normally proportioned inventory previews. Keep Read Color
 Buffers enabled; disabling it distorted the Guardian. JOIN107 daylight emotes
-show a transparent, refractive in-world Guardian. Diagnose its loading/effect
-state and actual shader path before claiming the combined appearance fix.
-Social-space and other appearance combinations remain unverified. The
+show a transparent, refractive in-world Guardian. JOIN117 isolates missing
+model arrangement indexes at progression gear-slot +0xc; JOIN118 supplies
+them and shows solid daylight Titan armour; JOIN119 repeats that view with the
+public fixture and no overlay. The standard 01.24 starter fixture now includes
+the verified selections for all three classes. Check the latest
+[appearance evidence and limits](guardian-appearance-0124.md) before accepting
+other views: JOIN118/119 suffer Vulkan device loss around the character screen.
+JOIN119 also confirms the armour thumbnails appear under Materials on the
+inventory tab, while equipment icons and displayed level/light remain incomplete.
+Resolve inventory categories separately from model selection. Social-space
+and other appearance combinations remain unverified. The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
@@ -91,19 +99,22 @@ automatic performance or torch action is enabled. Do not repeat helper
 generations as proof of a torch.
 
 JOIN111 also verifies the live player's normalized gear records contain
-the final Titan kit. Its transparent appearance cannot be explained by
-an entirely empty equipment summary. Follow final appearance wrapper
-`0x720198`, builder `0x71f86c` and armor assembly `0x71f46c`; resolve the
-current player descriptor and use its reported stride/count. The world
-character fields differ from the peer summary's wire offsets. Model-art
-loading and the effect/shader path remain unverified.
+the final Titan kit. JOIN117 identifies the missing part of that summary:
+the arrangement field is absent and defaults to -1, leaving model art invalid.
+Final conversion `0x46ed4c` resolves it through `0x2a6474` before world
+appearance wrapper `0x720198`, builder `0x71f86c` and armour assembly
+`0x71f46c`. Resolve the current player descriptor and use its reported
+stride/count. The world character fields differ from the wire offsets.
+Do not repeat the missing-field baseline as a shader-only experiment.
 
 For 01.24, add `-BapExtra '--peer-family;--character-gear;starter:01.24:titan'`
 to the join wrapper. This equips Striker, Lightmail, Mark of the Risen and the Generalist
 Shell using final-build item indexes. The original `starter:titan` shorthand belongs to
 01.00. Use `hunter` or `warlock` after `starter:01.24:` for those classes. Equipment
-metadata is verified against scoped package string libraries; visible mission gear still
-needs verification. Movement waits for engine state **0**, not just stage 36.
+metadata is verified against scoped package string libraries, with starter model
+arrangements independently verified against the final client asset library.
+JOIN118 visibly verifies Titan daylight armour; additional mission views remain
+to be checked. Movement waits for engine state **0**, not just stage 36.
 
 Use the imported runtime explicitly on this PC:
 

@@ -63,6 +63,11 @@ packages. The first live 01.24 runs and their remaining loading problem are reco
   stand-in loads. It finds each field by its nested type's handle, so `--character-gear`
   writes 01.24's layout when given a 01.24 schema. With the 01.00 schema (or none) it gives
   the old constants.
+- **2026-10-05:** final gear-slot +0xc selects the armour model arrangement, separately
+  from item index +8. Omitting it left all five world armour roots invalid while the
+  inventory preview remained normally proportioned. `starter:01.24:CLASS` now supplies
+  the verified starter selections; custom JSON accepts `arrangement`. See the
+  [native conversion, mapping and live evidence](guardian-appearance-0124.md).
 - `--self-flags` now finds account tables A/B and character table C in the loaded schema.
   The 01.24 static layout gives A at +0x383c (2,560 flags), B at +0x4f78/+8
   (256), and C at self character +0x5000 (2,048). An unqualified `--self-flags 2`
