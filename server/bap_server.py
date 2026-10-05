@@ -72,6 +72,11 @@ ROOT_OBJECTS = {4: (0x88190FE1, 0x80801803, lambda soid: {0: {0: soid}}),
                 3: (0xA2AC2C74, 0x80801951, lambda soid: {0: soid})}
 SELECT_CHARACTER_OBJECT = (0xF65ABD52, 0x80801954)
 SELF_CHARACTER_OBJECT = (0x242B2F61, 0x80801743)
+# Self-family kind 3 holds individual item instances, separately from the
+# character's inventory summary and equipped IDs. Confirmed in 01.24's
+# 0x482aa0 -> 0x47e3cc lookup and live family-4 pool descriptors.
+SELF_ITEM_TYPE = 0x80801732
+SELF_ITEM_HASHES = {168: 0x0EB6AC38}
 # Peer family (0): up to 20 peers, kind 0 = account summary keyed by the account soid (+8 = its
 # character soid), kind 1 = character summary (id, class, appearance like the self character).
 # The player manager's character cache (0x2998e0) builds a player's appearance and blueprint
@@ -183,6 +188,11 @@ STARTER_ARRANGEMENTS_0124 = {
     204: 191, 198: 188, 200: 189, 206: 192, 202: 190, # titan
     392: 374, 386: 371, 388: 372, 394: 375, 390: 373, # warlock
 }
+# 01.24 investment globals: equipped-slot table (root +0xdc) gives each
+# slot's bucket; bucket ranges (root +0x84) give its fixed inventory start.
+# Inventory +0 is a mutation serial, not the length of a packed item list.
+INVENTORY_SLOTS_0124 = (40, 43, 53, 63, 73, 83, 93, 103, 113,
+                        123, 143, 153, 210, 220, 230, 240, 268)
 PROGRESSION_ITEMS = 0x138
 PEER_PROGRESSION, SELECT_PROGRESSION = 0x30, 0x68
 SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
@@ -193,7 +203,8 @@ SELF_INVENTORY, SELF_EQUIPPED = 0x30, 0x1838
 LAYOUT_0100 = {"progression_items": PROGRESSION_ITEMS, "peer_progression": PEER_PROGRESSION,
                "select_progression": SELECT_PROGRESSION, "self_inventory": SELF_INVENTORY,
                "self_equipped": SELF_EQUIPPED, "slot_size": 0x28, "slot_dyes": 0xe,
-               "inventory_items": 8, "inventory_entry": 0x18}
+               "inventory_items": 8, "inventory_entry": 0x18,
+               "inventory_slots": None}
 
 
 def field_offset(schema, owner, nested=None, after=None):
@@ -227,7 +238,12 @@ def character_layout(schema=None):
              "slot_dyes": field_offset(schema, "0x8080183c", "0x808046bc"),
              "inventory_items": inventory_fields[1]["off"] if len(inventory_fields) > 1 else None,
              "inventory_entry": size("0x808016e0")}
-    return {key: LAYOUT_0100[key] if value is None else value for key, value in found.items()}
+    layout = {key: LAYOUT_0100[key] if value is None else value for key, value in found.items()}
+    layout["inventory_slots"] = (INVENTORY_SLOTS_0124 if
+        size("0x80801714") == 0x6db8 and (inventory or {}).get("size") == 0x2808
+        and layout["self_equipped"] == 0x2900 and layout["inventory_entry"] == 0x20
+        else None)
+    return layout
 
 
 def gear_spec(value):
@@ -293,7 +309,12 @@ def gear_objects(gear, layout=None):
             item[L["slot_dyes"]] = {i * 4: {0: ch, 2: dye} for i, (ch, dye) in enumerate(g["dyes"])}
         slots[slot * L["slot_size"]] = item
     progression = {L["progression_items"]: slots}
-    inventory = {i * L["inventory_entry"]: {0: g["item"], 8: g["id"], 0x10: 1} for i, g in enumerate(gear.values())}
+    positions = L.get("inventory_slots")
+    if positions and any(slot >= len(positions) for slot in gear):
+        raise ValueError("gear slot has no verified inventory bucket in this build")
+    inventory = {(positions[slot] if positions else i) * L["inventory_entry"]:
+                 {0: g["item"], 8: g["id"], 0x10: 1}
+                 for i, (slot, g) in enumerate(gear.items())}
     return {"peer": {L["peer_progression"]: progression},
             "select": {L["select_progression"]: progression},
             "self": {L["self_inventory"]: {0: len(gear), L["inventory_items"]: inventory},
@@ -326,6 +347,38 @@ def character_extras(gear=None, overlay=None, layout=None):
         for name in extras:
             extras[name] = deep_merge(extras[name], part.get(name))
     return extras
+
+
+def character_item_objects(schema, character_id, profile):
+    """Individual items for a character snapshot, using its merged inventory.
+
+    Inventory summaries alone leave equipped instance lookups unresolved. The
+    01.24 item object carries its ID at +0, owner at +8, quantity at +0x18 and
+    item index at +0x24. Other instance attributes remain absent until known.
+    Unknown builds retain their existing payload rather than using a guessed
+    object fingerprint.
+    """
+    handle = SELF_ITEM_TYPE
+    type_hash = SELF_ITEM_HASHES.get((schema.get(f"{handle:#x}") or {}).get("size"))
+    if type_hash is None:
+        return []
+    layout = character_layout(schema)
+    inventory = profile.get(layout["self_inventory"], {})
+    entries = inventory.get(layout["inventory_items"], {})
+    objects, seen = [], set()
+    for offset, item in sorted(entries.items()):
+        if offset < 0 or offset % layout["inventory_entry"]:
+            raise ValueError(f"unaligned inventory entry offset {offset:#x}")
+        instance = item.get(8, 0)
+        if not instance:  # uninstanced/empty summary entries are not qz objects
+            continue
+        if instance in seen:
+            raise ValueError(f"duplicate inventory instance {instance:#x}")
+        seen.add(instance)
+        values = {0: instance, 8: {0: character_id, 8: 0},
+                  0x18: {0: item.get(0x10, 1)}, 0x24: item.get(0, -1)}
+        objects.append(investment.obj(type_hash, instance, investment.encode(schema, handle, values)))
+    return objects
 
 
 def load_store(path):
@@ -502,6 +555,7 @@ def family_blob(schema, family_type, root, character_id=None, character_profile=
                     if i in chosen}
             objects.append(investment.obj(object_hash(schema, type_hash, handle), character_id,
                                           investment.encode(schema, handle, {0: profile})))
+            objects.extend(character_item_objects(schema, character_id, profile))
     if peer and schema and family_type == 0 and character_id is not None and character_profile is not None:
         type_hash, handle = PEER_ACCOUNT_OBJECT
         objects.append(investment.obj(object_hash(schema, type_hash, handle), root, investment.encode(schema, handle, {0: root, 8: character_id})))

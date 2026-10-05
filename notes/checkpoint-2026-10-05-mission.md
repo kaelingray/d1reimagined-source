@@ -513,3 +513,60 @@ through traversal and these indoor samples; the menu crash case is not repeated
 in this run. Its native recording fully decodes without errors. At 13:32:32,
 all eight owned stack identities, the entry observer and outer launcher are
 verified exited, and XInput is restored. No live test stack remains.
+
+## JOIN121–123: equipment records and inventory buckets
+
+The user's inventory-tab observation leads to two concrete profile corrections.
+JOIN121's self-family kind-3 pool has the verified item type `0x80801732`, stride
+0xa8 and capacity 646, but no active instance IDs. The server had supplied
+inventory summaries and equipped IDs without the individual records those IDs
+resolve to. The family builder now emits a minimal record for each populated
+instance in the merged self inventory, on snapshots and deltas.
+
+JOIN122 accepts seven records with the correct owner, item index and quantity.
+Its daylight emote retains solid Titan armour, but character thumbnails still
+load and all entries remain under Materials. An initialized, valid native cache
+rules out receipt/cache validity as sufficient proof of the UI repair. RSX device
+loss follows at approximately 17:00 BST; later native values are frozen evidence,
+not a fresh menu pass. The separate recording fully decodes.
+
+Tracing the final investment globals supplies the second correction: inventory
+is a fixed 320-entry array partitioned into bucket ranges. The fixture's packed
+positions 0–6 are in Materials. Subclass belongs at 40, helmet 43, gauntlets 53,
+chest 63, legs 73, class item 83 and Ghost 153. Inventory +0 is a mutation serial,
+not item count; native insertion writes that serial to entry +0x14 and increments
+it. The server now uses the verified final bucket starts, and its individual-item
+builder scans sparse populated entries independently of the serial. Older layouts
+keep their previous behavior. See [inventory evidence](inventory-items-0124.md)
+for the type, getter, resource and native-update addresses.
+
+JOIN123 uses the public starter fixture with no raw overlay. At 17:17, native
+memory confirms the seven correctly placed entries, seven accepted records and
+matching equipped IDs. At 17:19:23, current 112/engine zero retains the five
+correct model arrangements, valid applied roots and a physical Guardian unit.
+At 17:20:41, the character view shows the subclass, Ghost and all five armour
+icons with a normally proportioned Titan preview. At 17:21:21, Materials is
+**0/20**, with no equipment listed there. These are accepted UI improvements.
+Displayed level/light remain zero, unset weapon slots retain indicators, and
+subclass upgrades remain unverified.
+
+RSX `VK_ERROR_DEVICE_LOST` repeats at approximately 17:21:25. Live fragment
+decompilation logs the same float-looking malformed bytes described by the
+[persisted-cache investigation](rpcs3-fragment-cache-validation.md) before the
+crash. The cache guard protects preload/storage; it does not repair this runtime
+binding. A later screenshot fails. JOIN123's recorder does not finalize before
+that failure interrupts the input sequence; its preserved MP4 lacks `moov` and
+fails decoding. Do not use it as video evidence. The screenshots and native log
+establish the inventory pass, while combined menu/world stability stays open.
+
+Four new family-wire tests cover starter instances, sparse bucket positions,
+matching equipped IDs, snapshots/deltas, merged overrides with serial zero,
+zero-instance entries, duplicate identities and unknown-build handling.
+All **164 server tests** and **137 script tests** pass, along with the actual
+final-build preflight (94 services, flags and 39 mission state changes) and
+`git diff --check`. An earlier full server run under emulator startup load hit
+two socket-timing failures; the focused teleport suite and subsequent full suite
+pass. Both owned stacks and their outer launchers are verified exited, and
+XInput is restored. No renderer configuration or shader patch changes in this
+inventory repair. The next stability task is the malformed live program's
+binding/lifetime, followed by the still-open mission progression.

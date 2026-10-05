@@ -189,7 +189,9 @@ class CharacterGear(unittest.TestCase):
         extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
                                        12: {"item": 200, "id": 0x10c, "dyes": []}}, layout=layout)
         self.assertEqual(extras["peer"][0x30][0x1e8][7 * 0x30], {0: 0x107, 8: 100, 0x18: {0: {0: 2, 2: 5}}})
-        self.assertEqual(extras["self"][0x30][8][0x20], {0: 200, 8: 0x10c, 0x10: 1})
+        self.assertEqual(extras["self"][0x30][8][210 * 0x20], {0: 200, 8: 0x10c, 0x10: 1})
+        self.assertEqual(extras["self"][0x30][8][103 * 0x20], {0: 100, 8: 0x107, 0x10: 1})
+        self.assertNotIn(0, extras["self"][0x30][8])  # first range is Materials
         self.assertEqual(extras["self"][0x2900], {7 * 8: 0x107, 12 * 8: 0x10c})
 
     def test_overlay_merges_over_gear(self):
@@ -199,6 +201,98 @@ class CharacterGear(unittest.TestCase):
         self.assertEqual(extras["select"][0x68][0x138][0], {0: 0x100, 8: 9})
         with self.assertRaises(ValueError):
             bap.overlay_spec('{"player": {}}')
+
+
+class CharacterItemObjects(unittest.TestCase):
+    @staticmethod
+    def schema():
+        def field(off, kind, width=0, nested=0xffffffff, opt=1, minimum=0):
+            return {"off": off, "kind": kind, "width": width, "nested": nested,
+                    "opt": opt, "arr": 0, "min": minimum}
+        return {
+            "0x80801803": {"fields": [field(0, 1, nested=0x808018c7, opt=0)]},
+            "0x808018c7": {"fields": [field(0, 6, 64)]},
+            "0x80801743": {"size": 28088, "fields": [field(0, 1, nested=0x80801714, opt=0)]},
+            "0x80801714": {"size": 0x6db8, "fields": [field(0, 6, 64), field(0xc, 1, nested=0x8080181a),
+                field(0x30, 1, nested=0x80804a18), field(0x2900, 1, nested=0x808045da)]},
+            "0x8080181a": {"fields": []},
+            "0x80804a18": {"size": 0x2808, "fields": [field(0, 5, 32, minimum=0x80000000),
+                                       field(8, 1, nested=0x8080547d)]},
+            "0x8080547d": {"fields": [field(i * 0x20, 1, nested=0x808016e0, opt=0)
+                                       for i in range(320)]},
+            "0x808045da": {"fields": [field(i * 8, 6, 64) for i in range(20)]},
+            "0x808016e0": {"size": 0x20, "fields": [field(0, 4, 16, minimum=0x8000),
+                field(8, 6, 64), field(0x10, 5, 32, minimum=0x80000000)]},
+            "0x80801732": {"size": 168, "fields": [field(0, 6, 64),
+                field(8, 1, nested=0x80801920), field(0x18, 1, nested=0x80801711),
+                field(0x24, 4, 16, minimum=0x8000)]},
+            "0x80801920": {"fields": [field(0, 6, 64, opt=0), field(8, 3, 2, opt=0, minimum=1)]},
+            "0x80801711": {"fields": [field(0, 5, 32, minimum=0x80000000)]},
+        }
+
+    @staticmethod
+    def objects(payload):
+        count = struct.unpack_from(">I", payload, 21)[0]
+        pos, objects = 25, []
+        for _ in range(count):
+            type_hash, soid, size = struct.unpack_from(">IQI", payload, pos)
+            pos += 16
+            objects.append((type_hash, soid, payload[pos:pos + size]))
+            pos += size
+        if pos != len(payload):
+            raise AssertionError("unexpected trailing family data")
+        return objects
+
+    def test_self_family_resolves_every_equipped_starter_instance(self):
+        schema = self.schema()
+        extras = bap.character_extras(bap.gear_spec("starter:01.24:titan"),
+                                       layout=bap.character_layout(schema))
+        payload = bap.family_blob(schema, 4, 7, 9, {0: 9}, extras=extras)
+        objects = self.objects(payload)
+        self.assertEqual(len(objects), 9)  # account, character, seven items
+        items = {soid: bap.investment.decode(schema, bap.SELF_ITEM_TYPE, raw)
+                 for type_hash, soid, raw in objects if type_hash == 0x0eb6ac38}
+        expected = bap.gear_spec("starter:01.24:titan")
+        expected_positions = {0: 40, 1: 43, 2: 53, 3: 63, 4: 73, 5: 83, 11: 153}
+        character = bap.investment.decode(schema, 0x80801714, objects[1][2])
+        inventory = character[0x30][8]
+        for slot, entry in expected.items():
+            position = expected_positions[slot] * 0x20
+            self.assertEqual(inventory[position], {0: entry["item"], 8: entry["id"], 0x10: 1})
+            self.assertEqual(character[0x2900][slot * 8], entry["id"])
+        self.assertTrue(all(not inventory[i * 0x20] for i in range(40)))
+        self.assertEqual(set(items), {entry["id"] for entry in expected.values()})
+        for entry in expected.values():
+            self.assertEqual(items[entry["id"]], {0: entry["id"], 8: {0: 9, 8: 0},
+                                                  0x18: {0: 1}, 0x24: entry["item"]})
+        # Delivering the same snapshot as a delta uses the same item objects.
+        delta = bap.family_blob(schema, 4, 7, 9, {0: 9}, version=2, flags=0, extras=extras)
+        self.assertEqual(self.objects(delta), objects)
+
+    def test_instances_follow_sparse_merged_inventory_not_mutation_serial(self):
+        schema = self.schema()
+        extras = bap.character_extras(bap.gear_spec("starter:01.24:titan"),
+            {"self": {0x30: {0: 0, 8: {43 * 0x20: {0: 16, 8: 0x9001, 0x10: 3},
+                                        53 * 0x20: {8: 0}}}}}, bap.character_layout(schema))
+        objects = self.objects(bap.family_blob(schema, 4, 7, 9, {0: 9}, extras=extras))
+        self.assertEqual(len(objects), 8)  # six instances remain, even with serial zero
+        self.assertNotIn(0x102, [soid for _, soid, _ in objects])
+        item = next(bap.investment.decode(schema, bap.SELF_ITEM_TYPE, raw)
+                    for fingerprint, soid, raw in objects if soid == 0x9001)
+        self.assertEqual((item[0x24], item[0x18][0], item[8][0]), (16, 3, 9))
+
+    def test_duplicate_instance_ids_are_rejected(self):
+        profile = {0x30: {0: 2, 8: {0: {0: 204, 8: 257}, 0x20: {0: 198, 8: 257}}}}
+        with self.assertRaisesRegex(ValueError, "duplicate inventory instance"):
+            bap.character_item_objects(self.schema(), 9, profile)
+
+    def test_unknown_build_or_missing_character_has_no_guessed_item_objects(self):
+        profile = {0x30: {0: 1, 8: {0: {0: 204, 8: 257}}}}
+        schema = self.schema()
+        schema["0x80801732"]["size"] = 1
+        self.assertEqual(bap.character_item_objects(schema, 9, profile), [])
+        self.assertEqual(len(self.objects(bap.family_blob(self.schema(), 4, 7))), 1)
+        self.assertEqual(self.objects(bap.family_blob(self.schema(), 0, 7, 9, profile)), [])
 
 
 class UnlockFlags(unittest.TestCase):

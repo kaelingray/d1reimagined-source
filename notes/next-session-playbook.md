@@ -74,7 +74,7 @@ the verified selections for all three classes. Check the latest
 other views: JOIN118/119 suffer Vulkan device loss around the character screen.
 JOIN119 also confirms the armour thumbnails appear under Materials on the
 inventory tab, while equipment icons and displayed level/light remain incomplete.
-Resolve inventory categories separately from model selection. Social-space
+The later JOIN121–123 results below supersede this inventory-category fault. Social-space
 and other appearance combinations remain unverified. JOIN120 reaches the Wall
 and Breach with the public fixture, retaining five valid model roots after
 handover and no recorded Vulkan fatal through those samples. The indoor emote
@@ -85,6 +85,19 @@ the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
 setup input sequence and the next service boundary. The later 01.00 mission
 experiments in this file remain historical.
+
+JOIN121–123 subsequently isolate and repair the inventory fault. The self
+family lacked its individual item records, and the fixture packed every
+item into the Materials range. The public final fixture now emits seven
+item objects and uses verified fixed bucket starts. JOIN123 shows all five
+armour icons, Ghost and subclass; Materials is empty. See
+[inventory layouts and evidence](inventory-items-0124.md). Zero level/light,
+unset weapon-slot indicators and subclass upgrades remain incomplete.
+The RSX menu crash repeats after this fix, preceded by malformed live fragment
+programs. Trace their runtime binding and lifetime: the existing persisted-cache
+guard does not repair it. Do not infer a healthy emulator from unchanged native
+world state after a fatal entry, and stop/finalize recordings before risky menu
+transitions. JOIN123's interrupted recorder has no usable MP4 metadata.
 
 JOIN106's generation callback fails at the first requested interface, even with
 the verified helper attached. JOIN112 identifies that interface as damage,

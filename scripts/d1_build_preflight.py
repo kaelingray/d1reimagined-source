@@ -79,12 +79,22 @@ def investment_checks(schema):
     character_flags = {field["off"]: values["C"][i] for i, field in enumerate(c["fields"])}
     roundtrip(schema, 0x80801743, {0: {0: 9, c["offset"]: character_flags}}, "character flags")
 
-    gear = bap_server.character_extras(bap_server.gear_spec("starter:titan"),
-                                       layout=bap_server.character_layout(schema))
+    character_layout = bap_server.character_layout(schema)
+    kit = bap_server.gear_spec("starter:01.24:titan" if character_layout["inventory_slots"]
+                              else "starter:titan")
+    gear = bap_server.character_extras(kit, layout=character_layout)
     for label, handle, object_values in (("peer gear", 0x808017FD, gear["peer"]),
                                          ("select gear", 0x80801954, gear["select"]),
                                          ("self gear", 0x80801743, {0: gear["self"]})):
         roundtrip(schema, handle, object_values, label)
+    items = bap_server.character_item_objects(schema, 9, gear["self"])
+    if bap_server.SELF_ITEM_HASHES.get(schema.get(f"{bap_server.SELF_ITEM_TYPE:#x}", {}).get("size")):
+        if len(items) != len(kit):
+            raise ValueError("self item objects do not cover the equipped starter kit")
+        for obj, entry in zip(items, kit.values()):
+            values = investment.decode(schema, bap_server.SELF_ITEM_TYPE, obj[16:])
+            check({0: entry["id"], 8: {0: 9, 8: 0}, 0x18: {0: 1}, 0x24: entry["item"]},
+                  values, "self item instance")
     return counts
 
 

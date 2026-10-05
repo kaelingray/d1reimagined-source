@@ -117,3 +117,10 @@ custom signed indexes, and the actual optional-field wire encoding. Full
 peer/select objects also roundtrip through the private final schema. These
 checks establish serialization and package mappings; live acceptance remains
 scoped to the captured class and views.
+
+JOIN123's separate [inventory repair](inventory-items-0124.md) resolves the
+subclass, Ghost and five armour thumbnails and removes their erroneous Materials
+listing. The normally proportioned character preview is retained, and the native
+current-112 sample retains all five world-model roots. Vulkan device loss still
+occurs after the inventory view. These observations do not accept menu/world
+round trips or indoor appearance.
