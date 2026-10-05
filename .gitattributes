@@ -1,2 +1,3 @@
 patches/rpcs3-destiny-main-memory-blit.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-fragment-leading-nop-literals.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-fragment-binding-probe.patch -text whitespace=-blank-at-eol,-space-before-tab
