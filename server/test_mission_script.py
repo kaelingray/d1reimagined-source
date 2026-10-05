@@ -81,45 +81,45 @@ class MissionTypedValues(unittest.TestCase):
             bap.validate_mission_states(self.schema, [(0, spec)], [])
 
 
-class GhostDesiredCount(unittest.TestCase):
-    def test_breach_rule_encodes_one_scalar_count_and_preserves_required_modes(self):
+class GhostAuthoredMember(unittest.TestCase):
+    def test_breach_rule_activates_the_authored_member_without_a_second_count_path(self):
         import investment
         from test_investment_typed_values import SCHEMA, field
 
-        # A focused layout fixture: absent optional fields retain their wire bits.
-        # Only the count, generation and required modes are used by this state.
-        offsets = [0, 8, 0x10, 0x2c, 0x40, 0x44, 0x48, 0x4c,
-                   0x50, 0x58, 0x60, 0x64, 0x68, 0x6c, 0x70, 0x78]
-        fields = [field(off, 9, 32, optional=True) for off in offsets]
-        fields[3] = field(0x2c, 1, optional=True, nested=0x80805B79)
-        fields[5] = field(0x44, 5, 31, optional=True)
-        fields[-1:-1] = [field(0x74, 3, 2, 1), field(0x75, 3, 3, 1)]
-        array = field(4, 1, minimum=0x1000000, nested=0x80805BA9)
-        array["arr"] = 1
+        # Final member State A: retain the four absent nested-state wire bits.
+        # JOIN109's native gate requires +6 true and +5 outside {1, 3, 4}.
+        fields = [field(0, 5, 31, optional=True), field(4, 3, 2, 1),
+                  field(5, 3, 3, 1), field(6, 2)]
+        fields += [field(off, 1, optional=True, nested=handle) for off, handle in
+                   ((8, 0x808014e7), (0x2c, 0x80800836),
+                    (0xb0, 0x80800512), (0x8c0, 0x808007a9))]
         schema = {
             "0x808004b1": copy.deepcopy(SCHEMA["0x808004b1"]),
-            "0x8080071e": {"size": 0x7c, "fields": fields},
-            "0x80805b79": {"size": 20, "fields": [field(0, 5, 4), array]},
-            "0x80805ba9": {"size": 16, "fields": [
-                field(off, 4, 16, 0x8000) for off in range(0, 16, 2)]},
+            "0x80800868": {"size": 0x908, "fields": fields},
+            "0x8080071e": {"size": 0x7c, "fields": [
+                field(0x44, 5, 31, optional=True),
+                field(0x74, 3, 2, 1), field(0x75, 3, 3, 1)]},
         }
         mission = json.loads((Path(__file__).resolve().parents[1] / "missions" /
                               "a_guardian_rises.json").read_text(encoding="utf-8"))
         _, reactions = bap.expand_mission(mission, schema)
         ghost = [rule for rule in reactions if rule[3][0] ==
-                 {0: 0xFC0E45A3, 4: 1, 6: 94}]
+                 {0: 0xFC0E45A3, 4: 2, 6: 95}]
         self.assertEqual(len(ghost), 1)
         rule = ghost[0]
         self.assertEqual((rule[0], rule[1].index, rule[2]), (21, 24, 20))
         spec = rule[3]
-        self.assertEqual(spec[2], {0x2c: {0: 1, 4: [1]}, 0x44: 1, 0x74: -1})
+        self.assertEqual(spec[1], 0x80800868)
+        self.assertEqual(spec[2], {0: 1, 4: -1, 5: 0, 6: True})
         self.assertTrue(spec[3])
+        self.assertFalse(any("sq_nux_ghost" in step.get("set", {})
+                             for step in mission["steps"]))
         self.assertEqual(bap.validate_mission_states(schema, [(0, spec)], []), 1)
         writer = investment.BitWriter()
         investment.encode_into(writer, schema, spec[1], spec[2])
-        self.assertEqual(len(writer.bits), 72)
+        self.assertEqual(len(writer.bits), 42)
         self.assertEqual(investment.decode(schema, spec[1], writer.data()),
-                         {**spec[2], 0x75: 0})
+                         spec[2])
 
 
 class ReactionScopes(unittest.TestCase):

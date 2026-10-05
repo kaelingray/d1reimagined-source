@@ -4,6 +4,14 @@ Target: BLES01857 01.24. These observations distinguish restarting a squad's
 generation from creating its physical members. Raw definitions and memory
 snapshots remain private.
 
+**October 5 update:** the count-only Ghost path below creates a physical
+unit without the authored-member and performance bindings. JOIN109/111
+verify a replacement kind-2 member State A, producing exactly one bound
+Ghost while all desired counts remain zero. The shipped mission now uses
+that member state; do not enable the historical Ghost count action beside
+it. Counts for other squads retain their separate meaning. See
+[the authored-member investigation](ghost-light-0124.md#join111-the-automatic-rule-creates-and-binds-one-ghost).
+
 ## Why a generation alone is insufficient
 
 JOIN98 reached the Breach with all 249 occupied replication records ready.

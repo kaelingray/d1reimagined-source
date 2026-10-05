@@ -20,7 +20,9 @@
     "01.24 JOIN77/81: player-trigger reports are type-18 incidents. Objective lane phases cancel delayed updates from earlier handovers.",
     "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records.",
     "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet.",
-    "01.24 JOIN104: the manual o_device_invis_light alias creates, removes and recreates its placed unit using generation and +4 Boolean; illumination and mission timing remain unverified."
+    "01.24 JOIN104: the manual o_device_invis_light alias creates, removes and recreates its placed unit using generation and +4 Boolean; illumination and mission timing remain unverified.",
+    "01.24 JOIN109: the authored Ghost member state creates one unit with member/performance bindings while desired counts remain zero; it replaces the count-only Ghost path.",
+    "nux_ghost is a manual performance alias, kind 0x28 (40 decimal)/index 125; no automatic cue or torch action is enabled."
   ],
   "clock": "ready",
   "objects": {
@@ -49,6 +51,8 @@
     "sq_ghost": "0xecf574b5:0x1:28:0x8080071e:1",
     "trig_ghostlight": "0xfc0e45a3:0x1d:120:0x80800463",
     "sq_nux_ghost": "0xfc0e45a3:0x1:94:0x8080071e:1",
+    "sq_nux_ghost__ghost": "0xfc0e45a3:0x2:95:0x80800868:1",
+    "nux_ghost": "0xfc0e45a3:0x28:125:0x80800556",
     "of_ghostlight": "0xfc0e45a3:0x21:124:0x80800750",
     "ho_ghostlight": "0xfc0e45a3:0x18:101:0x8080065c:1",
     "o_device_invis_light": "0xfc0e45a3:0x4:8:0x808007d9:1",
@@ -366,13 +370,11 @@
       },
       "delay": 20,
       "set": {
-        "sq_nux_ghost": {
-          "0x2c": {
-            "0": 1,
-            "4": [1]
-          },
-          "0x44": 1,
-          "squad_existing_members": -1
+        "sq_nux_ghost__ghost": {
+          "0": 1,
+          "4": -1,
+          "5": 0,
+          "6": true
         },
         "sq_breach_floor_a": {
           "0x44": 1,

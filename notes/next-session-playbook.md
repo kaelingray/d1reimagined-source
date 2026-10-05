@@ -5,9 +5,10 @@
 > `git pull --rebase` before you continue; do not re-stage it. Start with
 > [the handoff](HANDOFF-2026-10-01.md).
 
-## Active work: 01.24 (updated 2026-10-04)
+## Active work: 01.24 (updated 2026-10-05)
 
-Start with the [October 4 checkpoint](checkpoint-2026-10-04-mission.md),
+Start with the [October 5 checkpoint](checkpoint-2026-10-05-mission.md),
+[October 4 checkpoint](checkpoint-2026-10-04-mission.md),
 [October 3 checkpoint](checkpoint-2026-10-03-mission.md),
 [October 2 run history](checkpoint-2026-10-02-mission.md), and
 [acceptance checks](guardian-rises-acceptance.md). JOIN53–82 supersede the earlier black-scene
@@ -32,21 +33,50 @@ permits only its verified engine-3 preload while the same player remains in 112.
 Queue the host teleport after reaching the actual entrance; protocol arrival from
 the cars was not a playable Breach check in JOIN89. After current 24, require a
 nonempty ready pool containing the Ghost squad/member/helper IDs before the fresh
-inactive bubble-3 reset. The mission's delayed desired count then creates one
-physical Ghost; the filter/helper states remain manual candidates. Their generation
+inactive bubble-3 reset. The mission's delayed authored-member state then creates one
+physical Ghost with both member and performance bindings; JOIN111 verifies this
+without a manual member state. The old count-only Ghost action is removed to avoid
+a second creation path. The filter/helper states remain manual candidates. Their generation
 path reaches a default-payload update, not a verified light-on setter. See
 [the light investigation](ghost-light-0124.md) and the current checkpoint.
-Run the cycle with `scripts/Invoke-Final124Join.ps1`. The setup-menu
-magenta blocks and distorted character lighting are fixed together by
-`patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only). Keep Read Color Buffers
-enabled; disabling it distorted the Guardian. JOIN99/101 inventory previews from
-the Breach retain normal Titan proportions and lighting. In-world third-person,
-social-space and other appearance combinations still need captures. The
+Run the cycle with `scripts/Invoke-Final124Join.ps1`; add
+`-SkipOpeningCinematic` after watching Mars once to skip that frontend
+prologue on replay runs. The owned keyboard profile is selected before
+launch; restore XInput after stopping the run. The combined
+`patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only) retains clean
+setup menus and normally proportioned inventory previews. Keep Read Color
+Buffers enabled; disabling it distorted the Guardian. JOIN107 daylight emotes
+show a transparent, refractive in-world Guardian. Diagnose its loading/effect
+state and actual shader path before claiming the combined appearance fix.
+Social-space and other appearance combinations remain unverified. The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
 setup input sequence and the next service boundary. The later 01.00 mission
 experiments in this file remain historical.
+
+JOIN106's light query fails at the first requested interface, even with
+the verified helper attached. JOIN107/108's physical squad Ghost has no
+authored-member or performance binding. `nux_ghost` is **kind 0x28 / 40
+decimal**, index 125, not decimal 28. Its configured target is kind-2 member
+95; the final member handler is `0x257aac`, not the 01.00 handler. JOIN109's
+isolated state and JOIN111's automatic rule create one Ghost with both
+bindings while desired counts stay zero. The automatic rule leaves its
+primary cue unset. JOIN111's separate manual performance state uses
+primary `+0 = 0x9b1d6a71`, `+4 = 0x811c9dc5`, generation `+8 = 1` and
+reaches native dispatch, moving that same Ghost about 21 units. The
+configured category comes from `0x1a2772c`, not the state. Continue with
+its completion/timing and actual light controls. No
+automatic performance or torch action is enabled. Do not repeat helper
+generations as proof of a torch.
+
+JOIN111 also verifies the live player's normalized gear records contain
+the final Titan kit. Its transparent appearance cannot be explained by
+an entirely empty equipment summary. Follow final appearance wrapper
+`0x720198`, builder `0x71f86c` and armor assembly `0x71f46c`; resolve the
+current player descriptor and use its reported stride/count. The world
+character fields differ from the peer summary's wire offsets. Model-art
+loading and the effect/shader path remain unverified.
 
 For 01.24, add `-BapExtra '--peer-family;--character-gear;starter:01.24:titan'`
 to the join wrapper. This equips Striker, Lightmail, Mark of the Risen and the Generalist

@@ -114,7 +114,7 @@ query with the actual Ghost; a complete offline bucket scan agrees with
 the live missing result. Successful query accessors are observed for
 other callers during the same bounded watch. Thus consumed HO generation
 does not demonstrate torch activation. Follow `nux_ghost` performance
-kind 28/index 125 and actual light controls next. See the
+kind `0x28` (40 decimal)/index 125 and actual light controls next. See the
 [JOIN106 evidence](ghost-light-0124.md#join106-the-ho-generation-stops-at-the-first-component-lookup).
 
 The 01:26:33 and 01:28:21 BST third-person emote captures show dark,
@@ -135,3 +135,172 @@ identities are verified exited and XInput is restored. Validation for
 this checkpoint remains 130 script tests and 156 server tests, plus
 PowerShell parsing and actual final-build preflight. Raw native captures
 and dumps are preserved privately, with no new automatic mission action.
+
+## JOIN107: daylight Guardian and the authored Ghost member
+
+The second JOIN106 dump is now inspected against its 01:34:25 BST frame.
+Its early albedo/normal buffers contain the environment without the emote
+Guardian; a later target contains the affected Guardian. The sampled
+floating-point buffers are finite. These guest-memory readbacks do not
+prove that every GPU target contains current data or identify a faulty shader.
+
+JOIN107's unobstructed daylight emote frames at 09:11:29 and 09:11:33 show
+scenery through a transparent, refractive Guardian with blue/silver edges.
+That supports investigating invisibility and incomplete character loading;
+it does not establish their cause or exclude a renderer fault. The earlier
+09:10:34/37 attempt is obstructed by the message of the day and is excluded.
+No renderer settings or code are changed. Normal inventory proportions
+still do not verify the in-world Guardian, and combined flicker/character
+acceptance remains open. The private matching outdoor dump is `2052905136`.
+
+The route reaches the Wall at 09:15:10, then all 249 Breach records become
+ready. A manual inactive `3:1` reset at 09:15:48 is followed by the mission's
+one-Ghost count at 09:15:52. Actor `0x26f58000` has physical unit
+`0x67fb82ce`. The ramp and near-Ghost walks reach an unobstructed shell/core
+view at 09:18:37, without a verified torch beam. Current 24 still has engine
+state 3 and return target 112.
+
+Performance `nux_ghost` is kind **0x28 (40 decimal)**, index 125, asset
+`0x80cb825b`, State A `0x80800556`, with no State B. Its configured target
+is the authored kind-2 member 95. The physical actor has no performance
+binding at `+0x48`; the authored member has no actor at `+0x174`. The
+performance's primary cue is also unset. See the
+[native performance investigation](ghost-light-0124.md#join107-authored-member-and-performance-binding).
+At this point the mission exposes manual member and performance aliases,
+with no automatic action for either. JOIN109 below tests the member path.
+Raw assets and live snapshots stay private.
+
+JOIN107 and its separate proxy are stopped by exact manifest ownership.
+All eight identities are verified exited, and XInput is restored before
+starting the next owned run.
+
+## JOIN108: skip only the opening Mars prologue
+
+At the user's request, `Invoke-Final124Join.ps1` gains the opt-in
+`-SkipOpeningCinematic` switch for replay runs. It checks exact process
+ownership and an unchanged frontend stage `24 / character:prologue`,
+then posts one 1.5-second Circle hold. Activity loading, revival and other
+mission stages are ineligible. Omit the switch for a first viewing.
+Future runs also save the eligible pre-input sample privately.
+
+JOIN108 posts the guarded input at 09:35:10 BST; the client requests and
+receives matchmaking at 09:35:10.696/697, rather than playing the remaining
+opening. The first saved post-skip bootflow at 09:35:14 is activity loading.
+The activity joins at 09:35:12; the clear 09:36:38 capture shows the
+letterboxed Cosmodrome revival scene. Current slice 112 and engine state
+zero are observed at 09:39:37, followed by the ordinary Wall route.
+The 09:35:07 image is black during the frontend transition; it does not
+provide an identifiable Mars movie frame. Acceptance is the guarded input,
+immediate matchmaking, and retained mission revival.
+
+Validation: all 130 script tests and 156 server tests pass. The final
+schema preflight accepts all 39 mission state changes, including the
+new manual aliases; PowerShell parsing and `git diff --check` pass.
+
+## JOIN109: authored Ghost creation and binding
+
+A private mission copy removes the automatic count-only Ghost action.
+After ordinary Wall-route arrival at 09:54:49 BST, all 249 records are
+ready. The inactive bubble reset `3:1` clears its blocking mask. At
+09:55:42 the typed member State A is sent once:
+
+```json
+{"set":{"sq_nux_ghost__ghost":{"0":1,"4":-1,"5":0,"6":true}}}
+```
+
+At 09:55:44 the squad has exactly one live member while all eight desired
+counts remain zero. Authored member 95 points to actor `0x71f58000`, with
+physical unit `0x2afb82ce`. The actor has both member owner `0x6bfa20da`
+and performance owner `0x1cfa20f2`, with zero offsets. The native creation
+path passes the actual member component to `0x246df0` and binds that same
+actor through `0x255a18`. The older count-only path passes null and leaves
+these associations absent. See [the detailed trace](ghost-light-0124.md#join109-one-ghost-with-the-authored-member-and-performance-bindings).
+
+The shipped current-24 reaction now uses this authored member State A
+instead of the count-only Ghost state. Its trigger and 20-second delay
+are retained. The regression checks the 42-bit member payload and rejects
+an automatic squad-count path being enabled alongside it. No performance
+cue or torch action is added; those still require visible acceptance.
+JOIN109 is stopped, all eight owned identities are verified exited, and
+XInput is restored.
+
+JOIN109 also repeats the opening skip: its saved 09:48:39.701 pre-input
+sample has current and target 24, `character:prologue`, and an unchanged
+stage. The 09:48:41 input is followed by matchmaking at 09:48:41.908/909;
+player control is subsequently reached. The switch now requires both
+current and target to match, as well as the name and stability check.
+
+JOIN110 fails during sign-in with `centipede`, before any activity host
+or mission rule starts. A Circle dismiss does not recover within the
+eight-minute deadline. All seven owned stack identities and the private
+observers are stopped; XInput is restored before fresh JOIN111. This is
+a sign-in failure, not evidence against the new mission state.
+
+## JOIN111: the in-world character has its starter equipment
+
+The final appearance wrapper `0x720198` calls builder `0x71f86c` with the
+player record's normalized character data at `+0x840`. Final armor assembly
+`0x71f46c` selects five gear records at character `+0x5f0`, stride `0x30`,
+and reads item indexes at each record's `+8`. These are final-build
+addresses and runtime fields, not the older peer-summary offsets.
+
+The read-only 10:17 BST sample resolves the player-pool descriptor at
+`0x1b29450`, whose header reports stride `0x2930` and one record. That live
+record contains subclass 710, armor 204/198/200/206/202 and Ghost shell
+862, with the expected instance IDs. Its weapon/ship/vehicle slots are
+empty. The descriptor and data pointer are unchanged across the sample;
+the sample remains non-atomic. This rules out an entirely empty in-world
+equipment summary in this run. It does not prove armor art finished
+loading or establish a rendering cause. Continue from the appearance
+assembly and model-loading/effect path rather than adding the starter
+equipment again. The private snapshot is `FINAL124_JOIN111-world-gear.json`.
+
+## JOIN111: automatic authored Ghost state verified
+
+The public mission runs with no manual member-state line. The ordinary
+route reaches the Wall at 10:19:45 BST and the client's current-24 report
+matches the rule at 10:20:03.950. All 249 records are ready before the
+manual `3:1` reset. The rule sends the authored state at 10:20:24.150.
+At 10:20:26 one physical Ghost exists with both member and performance
+bindings, while all eight desired counts stay zero. The native trace
+passes the actual member into creation and binds the same resulting actor.
+This verifies the automatic rule after the existing manual reset gate.
+
+The saved Mars pre-input sample again has current/target 24 and
+`character:prologue`. Skip input at 10:13:38 proceeds to activity loading,
+and actual current 112 is reported at 10:16:30. The mission revival is
+retained. At this point the performance cue is unset; visible torch
+behavior remains unverified.
+
+The ordinary ramp walk reaches height 16.56 at 10:21:20. The close walk
+then reaches `(390.099, -792.445, 18.467)` at 10:23:19; the camera
+calibration stops when its pitch input does not move. The 10:23:37 frame
+clearly shows the Ghost shell/core and nearby orange source, without a
+verified beam.
+
+The subsequent manual performance test resolves the actual category/key
+layout before sending a state. Category global `0x1a2772c` matches the
+asset's `0xafb11a12`; primary State A field `+0` must contain its action
+key `0x9b1d6a71`, with empty override at `+4` and generation one at `+8`.
+Native lookup returns true with indexes zero/zero, then reaches the unit
+animation dispatcher. The same Ghost moves about 21 units in twelve
+seconds, retaining both bindings and one live member. The later sample
+still has processed generation zero, so completion is unverified. The
+bright core is visible after dispatch, without a confirmed beam. This
+action remains manual because its mission timing and light behavior are
+not accepted. See [the performance trace](ghost-light-0124.md#join111-configured-performance-action-dispatches-and-moves-the-ghost).
+
+The final 10:31:51 sample remains in-world. The owned JOIN111 stack and
+separate proxy are then stopped; all eight recorded identities are checked
+exited at 10:31:52 and XInput is restored. The join observer reports its
+owned emulator exited after this explicit stop, not a spontaneous client
+disconnect. Private observers have completed; captures and candidate files
+stay outside Git.
+
+Final validation: **130 script tests + 156 server tests = 286 passing**,
+PowerShell parsing, `git diff --check`, and the actual final-build preflight
+(39 intro states, 53 Tower states, 94 services and final starter gear).
+The new member regression checks one authored rule, exact field values,
+42 encoded bits, round-trip equality and absence of an automatic Ghost
+count action. Graphics, visible torch, stable Breach return, rifle pickup,
+combat, mission completion and Tower arrival remain open.

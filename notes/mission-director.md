@@ -126,8 +126,9 @@ id in any client message type (`"type": "any"`).
   - Within a second, the client sent type-6 upstream messages for group `0xecf574b5`: the squad
     (kind 1/28), the six kind-4 spawn slots, and then **`sq_ghost__ghost` (kind 2/29)**, the
     Ghost member.
-  - So the client acts as physics host for bubble 14 and spawns the members itself. Kind 2
-    members are never sent by the host.
+  - This tests client-side creation in bubble 14; it does not establish that host kind-2
+    State A is never needed. The October 5 authored-member test creates and binds the
+    Breach Ghost through kind-2 State A, while the client still creates the physical unit.
   - Not seen on screen yet: the run ended on the inactivity kick a minute later.
 - Encoding: the 01.24 squad state is 0x7c bytes. +0x5c does not exist in 01.24; use
   `squad_existing_members` (+0x74).
@@ -142,6 +143,16 @@ live members after its generation. The final state has separate desired member
 counts at `+0x2c`; see [the count investigation](squad-member-counts-0124.md).
 Kind-2 components in the replication pool must be distinguished from physical
 member datums and visible scene objects.
+
+**October 5 update:** JOIN109 verifies that authored Ghost member State A
+creates one physical unit and supplies the member/performance bindings that
+the count-only path leaves absent. JOIN111 repeats this from the delayed
+current-24 mission reaction, after ready baselines and the manual bubble
+reset, without a manual member state. The shipped Ghost action now uses
+`sq_nux_ghost__ghost`; it does not also send `sq_nux_ghost` desired counts.
+The separate manual performance test reaches native dispatch and moves the
+same Ghost; its timing and torch effect are not enabled automatically. See
+[the detailed evidence](ghost-light-0124.md#join111-the-automatic-rule-creates-and-binds-one-ghost).
 
 `bap_server.py --ah-mission FILE` reads the script and expands it into `--ah-object-at` (timed)
 and `--ah-on` (reactive) changes:

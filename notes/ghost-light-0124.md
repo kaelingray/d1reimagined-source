@@ -25,9 +25,10 @@ matched against the corrected per-record names in group `0xfc0e45a3`:
 | `nux_ghost` | `0x28 / 125` | `0x80cb825b` | `0x80800556` |
 
 The squad-definition tag and the member entity tag are separate; a reference to
-member 95 also appears in the performance definition. Their presence is not a
-reason to send kind-2 member state from the stand-in: the locally simulating client
-spawns and reports those members when the squad generation and bubble gate work.
+member 95 also appears in the performance definition. Definition presence alone
+does not prove an actor binding. The count-only path creates a physical Ghost
+without binding that authored member. JOIN109 below tests the member's native
+State A creation path and establishes both member and performance bindings.
 
 `ho_ghostlight` is **not** a player trigger. Its 0x60-byte state contains a bool at
 `+0`, a biased i32 at `+4`, an object reference at `+8`, and a required field of
@@ -170,7 +171,9 @@ For `0x80800a07`, `0xc73c80` resolves the payload's object ID through
 uses `0x245504` and `0x24553c`. The helper calls `0xc11dc0` for each selected
 existing member yielded by the iterator. Referencing squad 94 requests
 enumeration of its live members; JOIN99 below records the one-member limit.
-publishing a kind-2 member state is not a prerequisite. The squad must actually
+publishing a kind-2 member state is not a prerequisite for this squad-reference
+helper test. Authored-member performance references have a separate binding
+requirement, investigated in JOIN107 onward. The squad must actually
 spawn before the iterator can yield a member. Merely sending a generation
 does not prove that the bubble gate or squad handler accepted it.
 
@@ -697,7 +700,7 @@ it is stronger evidence than an absent light hook alone. The HO update
 still consumes its generation after the call, so consumption does not
 prove a light action succeeded. No automatic HO torch action is added.
 The next investigation should follow the actual `nux_ghost` performance
-(kind 28, index 125) and its light controls rather than repeat this reset.
+(kind `0x28`, 40 decimal, index 125) and its light controls rather than repeat this reset.
 
 The ramp walk again reaches an unobstructed Ghost view at 01:25:51 BST.
 The shell and blue core are visible, with no verified beam. Third-person
@@ -715,3 +718,176 @@ flicker/character acceptance is claimed.
 The owned JOIN106 stack and separate proxy are stopped and every recorded
 identity is checked exited. XInput is restored. Raw traces, screenshots,
 assets and render-target dumps remain outside Git.
+
+## JOIN107: authored member and performance binding
+
+The actual `nux_ghost` definition is `0x80cb825b` (558 bytes). Its configured
+root `0x80800386` starts at asset `+0x174`; the runtime configuration offset
+is `0x178`, not the header's unrelated `0x3c` component view. The replicated
+ID bytes at `+0x1a0` are `28 00 00 7d`: kind **0x28 / 40 decimal**, index 125.
+State A is `0x80800556` and the live record has no State B. Configured target
+`+0x1bc` is `0xfc0e45a3 / 2 / 95`, the authored Ghost member. At JOIN107,
+the new `nux_ghost` and `sq_nux_ghost__ghost` aliases are manual candidates;
+JOIN109 below tests the member before changing the automatic rule.
+
+The final-build apply `0x287230` resolves State A and copies 48 bytes to
+component `+0x108`. Primary state `0x80800538` holds cue hash at `+0`, variant
+hash at `+4` and generation at `+8`. `0x2873c0` returns no primary state while
+the first hash is the empty `0x811c9dc5`. Configured-target handler
+`0x287280` enumerates the target via `0x28a2d8`, then writes the performance
+owner and offset to each actor's `+0x48/+0x4c`. The kind-2 iterator obtains
+its actor via `0x255ba8`, the member component's actor field `+0x174`.
+
+In JOIN107, the created actor `0x26f58000` at `0x609db880` has
+`+0x48 = 0xffffffff` and `+0x4c = 0`. Authored member 95 at `0x607f3380`
+has `+0x174 = 0xffffffff`; its initialized byte `+0x14d` is one. Thus the
+squad's physical Ghost does not by itself supply the authored member or its
+performance binding. Performance component `0x607f61b0` also retains empty
+cue/variant hashes and generation zero. These observations are read without
+pausing or writing guest memory and remain non-atomic, run-specific evidence.
+
+Actor performance update `0x21e730` requires a binding, primary state and a
+generation strictly newer than related component `+0x978`. It resolves the
+**actor's `+0x1c` asset** before looking up the configured cue through
+`0x22fc48`; `0x95e320` forwards a successful selection to the unit interface.
+A failed cue lookup can still advance the processed generation. Do not use
+generation consumption alone as proof of animation or illumination.
+
+The Ghost's actual performance asset is `0x80cc38c7` (1239 bytes), not the
+related component's asset `0x80cc38c4`. It has one configured category key
+`0xafb11a12` and action key `0x9b1d6a71`. A path to
+`act_ghost_chased_by_shanks.sequence.tft` occurs in the asset; at JOIN107,
+no torch or movement meaning is assigned to these numbers and no
+performance state is sent on the unbound actor. JOIN111 below resolves
+the lookup arguments and tests the configured action on the bound actor.
+
+The final authored-member apply is `0x257aac`; its per-frame update is
+`0x256e30`. They resolve State A `0x80800868` through metadata global
+`0x18e92dc`. Map these final addresses independently: 01.00's `0x26c414`
+uses a smaller 0x34-byte prefix and different field offsets; final copies
+0x48 bytes, uses initialized flag `+0x14d`, and actor field `+0x174`.
+
+The creation gate at `0x2575f8` requires State A `+6` true, runtime `+0x14c`
+clear, no actor, and a State A mode at `+5` other than 1, 3 or 4. It calls
+`0x256d04 -> 0x247c88`, which passes the authored member as the optional
+member argument to `0x246df0`. The existing desired-count path
+`0x247300` instead passes **null** in that argument. Successful member
+creation invokes `0x255a18`, which records the actor at member `+0x174`
+and owner/offset at actor `+0x40/+0x44`. This explains why these two
+creation paths need a separate test; it does not yet establish a retail
+host/client responsibility or the mode's name.
+
+A bounded next experiment isolates the member path with the automatic
+squad-count rule removed from a **private** mission copy. After fresh
+249-record readiness and an inactive bubble reset, test State A generation
+one, `+4 = -1`, `+5 = 0`, `+6 = true`. These literal fields round-trip through
+the actual final schema. Require native creation/binding, exactly one unit,
+and fresh performance binding evidence before treating this as a mission fix.
+Do not enable this candidate automatically or create a second Ghost to work
+around an unbound reference.
+
+JOIN108 repeats the count-only result. The route arrives at 09:43:16 BST,
+all 249 records are ready, and reset `3:1` at 09:43:48 is followed by one
+physical Ghost at 09:43:50. At 09:45:09, actor `0x54f58000` has unit
+`0x35fb82ce`, but both member owner `+0x40` and performance owner `+0x48`
+are absent; member 95's actor is absent too. A fresh bounded watch captures
+`0x287280 -> 0x28a2d8`'s kind-2 branch, member `+0x174 = 0xffffffff`, and
+an empty iterator at `0x287368`. This confirms the binding lookup really
+runs after creation and fails on that reference, rather than inferring
+failure from a missing hook. JOIN108 is then stopped with all eight owned
+identities exited and XInput restored.
+
+## JOIN109: one Ghost with the authored member and performance bindings
+
+The isolated private mission removes automatic `sq_nux_ghost` states.
+The ordinary Wall route arrives at 09:54:49 BST. At 09:55:41 all 249
+occupied records are ready; the squad has zero live members, zero desired
+counts and no authored-member actor. The ready records independently show
+member 95 uses State A `0x80800868` and State B `0x808005d9`, while performance
+125 has State A `0x80800556` and no State B. An inactive `3:1` reset clears
+the blocking mask before the test state at 09:55:42:
+
+```json
+{"set":{"sq_nux_ghost__ghost":{"0":1,"4":-1,"5":0,"6":true}}}
+```
+
+At 09:55:44, exactly one live member exists, and desired counts still
+equal eight zeros. Member 95 contains actor `0x71f58000`; that actor has
+unit `0x2afb82ce` at `(390.458, -786.975, 19.156)`. Its member owner is
+`0x6bfa20da` and performance owner `0x1cfa20f2`, both with offset zero.
+The performance primary cue remains unset. The native trace follows
+`0x2575f8 -> 0x256d04 -> 0x247c88 -> 0x246df0`, with the actual member
+component passed as the optional member, then `0x255a18` receives the
+same observed actor. This verifies creation and both bindings, beyond a
+payload round-trip or generation-consumption observation.
+
+The shipped mission's delayed current-24 Ghost action is changed to this
+authored-member State A, replacing its count-only Ghost action. The other
+squad states are unaffected. A fresh automatic run is required before
+accepting the changed rule. No performance cue or torch action is inferred
+from these bindings. JOIN109 is stopped; all eight owned identities are
+verified exited and XInput is restored. Captures remain private.
+
+## JOIN111: the automatic rule creates and binds one Ghost
+
+The public mission is used without a manual member-state line. After the
+ordinary route reaches the Wall at 10:19:45 BST, current 24 is reported
+at 10:20:03.944. Rule 31 matches at 10:20:03.950 and sends the authored
+member state at 10:20:24.150. All 249 occupied records are ready before
+the manual inactive `3:1` reset at 10:20:04.959. The control file contains
+only the highway reset/generation, route-arrival teleport and Breach reset.
+
+At 10:20:26 the squad has exactly one live member and all eight desired
+counts remain zero. Member 95 contains actor `0x69f58000`, whose unit is
+`0x76fb82ce` at `(390.458, -786.975, 19.082)`. Both member owner
+`0x20fa20da` and performance owner `0x70fa20f2` are present, with zero
+offsets. The native trace repeats `0x256d04 -> 0x247c88 -> 0x246df0`,
+passing member component `0x607f3380`, then `0x255a18` receives that
+same actor. This accepts the automatic member rule after the existing
+readiness/reset gate; the reset itself remains manual.
+
+The performance primary cue remains unset. A read-only 10:20:50 root scan
+finds the configured base root `0x80cb82ed` with 45 components. Its complete
+interface buckets still lack both requested light-handler types. No helper
+state is sent in this run at this point, so only the base root is present.
+Binding the authored member does not demonstrate a working HO torch call.
+
+## JOIN111: configured performance action dispatches and moves the Ghost
+
+The lookup arguments need a distinction from the initial category/variant
+description above. At `0x21e978`, the native actor updater reads category
+global **`0x1a2772c`**, then passes primary State A `+0` as the second key
+to `0x22fc48`. Primary `+4` is separately forwarded to the dispatch as an
+override. A first diagnostic used the wrong address `0x1a1772c`; its zero
+value is unrelated and is rejected. The corrected 10:26:10 BST read shows
+category `0xafb11a12`, matching the asset. Its only second key is
+`0x9b1d6a71`. The asset's size and both table extents are checked before
+using these values; the same actor discriminator is rechecked afterward.
+
+After the automatic member test and a close ordinary-input approach, the
+10:23:37 view clearly shows the shell/core, without a verified beam. The
+approach's pitch calibration stops because its input does not move; it
+does not continue guessing camera inputs. At 10:27:31, with the same
+actor/unit, 249 ready records, one live member and both bindings, this
+separate **manual** candidate is sent once:
+
+```json
+{"set":{"nux_ghost":{"0":{"0":2602396273,"4":2166136261,"8":1}}}}
+```
+
+Here `2602396273 = 0x9b1d6a71`; `2166136261 = 0x811c9dc5` is the empty
+override. It round-trips through the actual `0x80800556` schema. Native
+`0x22fc48` receives category/action `0xafb11a12 / 0x9b1d6a71`, returns
+true, and resolves indexes zero/zero. `0x95e320` is then called with those
+indexes and the empty override. This proves dispatch, beyond state copying.
+
+The same physical unit moves from `(390.458, -786.975, 18.957)` before the
+state to `(393.895, -766.120, 18.878)` after twelve seconds. At 10:28:43 it
+remains near `(392.813, -766.245, 18.889)` with the same actor/unit and
+processed generation zero. The post-state frame shows a bright blue core,
+but no verified torch beam. One live member and zero desired counts are
+retained. Dispatch returns zero in the bounded trace; generation remains
+unconsumed, so action completion is not claimed. Mission engine state is
+still 3 with current 24 and return target 112. This establishes a manual
+performance/movement path, not its retail timing, torch behavior or stable
+mission completion. No automatic performance action is added.

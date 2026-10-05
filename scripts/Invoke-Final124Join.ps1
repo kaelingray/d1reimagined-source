@@ -7,6 +7,7 @@
 #
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Local <runtime> -DataRepo <data>
 #   & scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN2 -ProxyExtra '--ah-zone;112:0x811c9dc5'
+#   & scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN3 -SkipOpeningCinematic # after watching the Mars intro
 #   pwsh -NoProfile -File scripts/Invoke-Final124Join.ps1 -Name FINAL124_JOIN1 -Stop
 #
 # Defaults use the level-1 intro activity and the final-build scenario checksum
@@ -27,6 +28,7 @@ param(
     [string]$ProxyExtra = '',
     [ValidateRange(5, 3600)][int]$AfterMatchSeconds = 60,
     [switch]$CaptureTimeline,
+    [switch]$SkipOpeningCinematic,
     [switch]$Stop
 )
 $ErrorActionPreference = 'Stop'
@@ -113,8 +115,27 @@ function Get-JoinEmulatorId {
 & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys W -HoldMs 125 -WaitSeconds 1
 & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys X -WaitSeconds 3
 $deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
+$openingSkipSent = $false
 while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
     if ((Get-Date) -gt $deadline) { 'no mm req within 7 minutes'; break }
+    if ($SkipOpeningCinematic -and -not $openingSkipSent) {
+        Get-JoinEmulatorId | Out-Null
+        $openingState = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" `
+            --process-manifest (Join-Path $logs "$Name-processes.json") | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw 'Could not verify the opening cinematic stage.' }
+        # Only the pre-matchmaking character prologue is eligible. Never post
+        # skip input into an activity's revival, power beat or outro.
+        if ($openingState.current -eq 24 -and $openingState.target -eq 24 -and
+            $openingState.name -eq 'character:prologue' -and
+            $openingState.stage_unchanged_during_sample) {
+            $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
+                (Join-Path $logs "$Name-opening-skip-before.json") -Encoding utf8
+            & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
+                -ProcessIdentity $emulatorIdentity -Keys C -HoldMs 1500 -GapMs 50 | Out-Null
+            $openingSkipSent = $true
+            "$(Get-Date -Format HH:mm:ss) opening Mars cinematic skip input posted"
+        }
+    }
     Start-Sleep 3
 }
 $start = Get-Date
