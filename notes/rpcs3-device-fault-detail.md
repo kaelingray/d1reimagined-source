@@ -45,7 +45,14 @@ The subsequent [presentation ownership repair](rpcs3-present-capture-lifetime.md
 addresses a concrete media-sync lifetime defect found during this investigation;
 native causality and complete graphics acceptance remain unproven.
 
-Next: correlate the confirmed range with Vulkan resource usage/lifetimes and GPU
-command labels, and install a scoped validation-layer setup for the owned renderer.
+JOIN135 subsequently loads privately scoped core validation and reports device loss
+in `0xd06922000–0xd06922fff` without a preceding VUID. JOIN136 enables GPU-assisted
+validation and logs descriptor and depth-layout mismatches without pre-shutdown
+device loss. The longer instrumented runtime is not a repair. Its final GDB socket
+fatal belongs to controlled debugger teardown. See the
+[descriptor binding investigation](rpcs3-descriptor-binding-cache.md).
+
+Next: retest the isolated descriptor cache repair, then trace the remaining depth
+feedback-loop transitions and originating GPU commands.
 Keep recording-enabled and recording-disabled controls separate, and preserve
 world/body/menu acceptance checks independently of absence of malformed shaders.

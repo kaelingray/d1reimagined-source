@@ -94,10 +94,22 @@ def observations(sample, native_lines, backend_lines):
             and sample.get("world", {}).get("engine_state_89") == 0):
         result.append(("world-entry", "OBSERVED", {"summary": "01.24 reached world bootflow 36 with engine state 0.",
                                                    "atomic": False}, "Partially Working"))
-    if re.search(r"(?:·F|VK_ERROR_DEVICE_LOST|Device lost)", native_lines):
+    if re.search(r"(?:·F[^\n]*(?:\{RSX|RSX:|Vulkan|VK_)|VK_ERROR_DEVICE_LOST|Device lost)", native_lines):
         result.append(("renderer-device-loss", "FAILED", {"summary": "The owned run wrote a fatal renderer/device-loss diagnostic."}, "Known Broken"))
     if "malformed fragment program not saved" in native_lines:
         result.append(("live-fragment-validation", "FAILED", {"summary": "Live fragment program failed validation; cache refusal alone does not fix its source."}, "Known Broken"))
+    validation_errors = [line for line in native_lines.splitlines() if
+                         re.search(r"(?:Validation Error:|RSX: ERROR: \[Validation\] Code -?\d+ :)", line)]
+    validation_ids = sorted(set(re.findall(
+        r"\b(VUID-[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+)", "\n".join(validation_errors))))
+    if validation_errors:
+        reported = ", ".join(validation_ids[:3]) if validation_ids else "an error through the native callback"
+        result.append(("renderer-vulkan-validation", "FAILED", {
+            "summary": "The owned Vulkan validation layer reported " + reported +
+                       ". The originating game defect and complete graphics acceptance remain unverified.",
+            "source": "Vulkan validation", "validation_ids": validation_ids[:3],
+            "distinct_ids_in_observation": len(validation_ids),
+            "error_lines_in_observation": len(validation_errors)}, "Known Broken"))
     for service in set(re.findall(r"sent default reply for service (\d+) \(result error_none\)", backend_lines)):
         result.append(("service-" + service + "-stub", "PARTIAL",
                        {"summary": f"Local backend sent its default success-shaped reply for service {service}; client acceptance is unverified."}, "Stubbed / Mocked"))

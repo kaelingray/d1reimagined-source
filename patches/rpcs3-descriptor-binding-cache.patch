@@ -1,0 +1,88 @@
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.h
+@@ -72,7 +72,13 @@
+ 		VkCommandBuffer commands = nullptr;
+ 
+ 		// State cache
+-		mutable std::array<VkDescriptorSet, 2> m_bound_descriptor_sets {{ VK_NULL_HANDLE }};
++		struct descriptor_binding_state
++		{
++			std::array<VkDescriptorSet, 2> sets{{ VK_NULL_HANDLE }};
++			VkPipelineLayout layout = VK_NULL_HANDLE;
++			u32 count = 0;
++		};
++		mutable std::array<descriptor_binding_state, 2> m_bound_descriptor_sets{};
+ 		mutable std::array<VkPipeline, 2> m_bound_pipelines{{ VK_NULL_HANDLE }};
+ 
+ 		void clear_state_cache();
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
+@@ -81,7 +81,10 @@
+ 	{
+ 		m_bound_pipelines[0] = VK_NULL_HANDLE;
+ 		m_bound_pipelines[1] = VK_NULL_HANDLE;
+-		m_bound_descriptor_sets[0] = VK_NULL_HANDLE;
++		for (auto& bindings : m_bound_descriptor_sets)
++		{
++			bindings = {};
++		}
+ 	}
+ 
+ 	void command_buffer::begin()
+@@ -166,15 +169,17 @@
+ 		VkPipelineLayout pipe_layout) const
+ 	{
+ 		const u32 num_sets = ::size32(sets);
+-		ensure(num_sets <= 2);
+-
+-		if (dynamic_offsets.empty() &&
+-			!memcmp(sets.data(), m_bound_descriptor_sets.data(), sets.size_bytes()))
+-		{
+-			return;
+-		}
+-
+-		std::memcpy(m_bound_descriptor_sets.data(), sets.data(), sets.size_bytes());
++		ensure(is_open && num_sets > 0 && num_sets <= 2 && bind_point <= VK_PIPELINE_BIND_POINT_COMPUTE);
++
++		if (dynamic_offsets.empty())
++		{
++			bind_descriptor_sets(sets, bind_point, pipe_layout);
++			return;
++		}
++
++		// Dynamic offsets are consumed by this call. Do not let a subsequent
++		// static bind inherit their cache entry, even when the handles match.
++		m_bound_descriptor_sets[static_cast<int>(bind_point)] = {};
+ 		vkCmdBindDescriptorSets(commands, bind_point, pipe_layout, 0, num_sets, sets.data(), ::size32(dynamic_offsets), dynamic_offsets.data());
+ 	}
+ 
+@@ -184,14 +189,21 @@
+ 		VkPipelineLayout pipe_layout) const
+ 	{
+ 		const u32 num_sets = ::size32(sets);
+-		ensure(is_open && num_sets <= 2);
+-
+-		if (!memcmp(sets.data(), m_bound_descriptor_sets.data(), sets.size_bytes()))
+-		{
+-			return;
+-		}
+-
+-		std::memcpy(m_bound_descriptor_sets.data(), sets.data(), sets.size_bytes());
++		ensure(is_open && num_sets > 0 && num_sets <= 2 && bind_point <= VK_PIPELINE_BIND_POINT_COMPUTE);
++		auto& cached = m_bound_descriptor_sets[static_cast<int>(bind_point)];
++
++		if (cached.layout == pipe_layout && cached.count == num_sets &&
++			!memcmp(sets.data(), cached.sets.data(), sets.size_bytes()))
++		{
++			return;
++		}
++
++		// Layout changes can disturb higher-numbered sets. Cache only the
++		// complete binding operation, independently for graphics and compute.
++		cached.sets.fill(VK_NULL_HANDLE);
++		std::memcpy(cached.sets.data(), sets.data(), sets.size_bytes());
++		cached.layout = pipe_layout;
++		cached.count = num_sets;
+ 		vkCmdBindDescriptorSets(commands, bind_point, pipe_layout, 0, num_sets, sets.data(), 0, nullptr);
+ 	}
+ }

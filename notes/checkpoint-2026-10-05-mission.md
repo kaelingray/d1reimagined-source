@@ -687,3 +687,12 @@ observer supplied its native visual finding. The latter also retains a live menu
 previous user-confirmed shutdown Anteater and does not establish its cause or a
 networking fix. The test stack is fully closed, experimental markers are absent,
 XInput is restored and the normal capture worker is enabled and healthy.
+
+The subsequent [image-usage correction](rpcs3-present-image-usage.md) passes 21
+actual-helper checks but does not resolve the recording-enabled fault. Privately scoped
+core validation reproduces a nonzero GPU write; GPU-assisted validation then exposes
+descriptor and depth-layout disagreements. The [descriptor cache repair](rpcs3-descriptor-binding-cache.md)
+passes 14 actual-source CPU checks against five pre-fix failures. Native comparison
+remains required, and complete world/body/menu graphics acceptance stays open.
+The validator event is automatically packaged with a 112.64-second source clip,
+game audio and two frames, bringing verified 500 GB NAS delivery to eight packages.

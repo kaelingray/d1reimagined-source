@@ -36,11 +36,19 @@ asks the exact matching recorder to finalize before terminating the emulator.
 The monitor keeps persistent capability observations per configured build/context,
 seeds already known behavior from `KNOWN_CAPABILITIES`, and suppresses unchanged
 observations. Current detectors cover world entry, renderer fatal/device loss, malformed
-fragment programs, new default backend responses, native buffer validation and Git
+fragment programs, Vulkan validation errors, new default backend responses, native buffer validation and Git
 revision changes. Default backend replies are labelled **Stubbed / Mocked**; engine
 state is **Partially Working** evidence. Neither establishes playable gameplay. Absence
 of errors is never treated as a crash fix. A failure followed by explicit passing
 acceptance shares a comparison group; a mere observation cannot become `BUG_FIXED`.
+
+Vulkan validation errors preserve up to three distinct normalized VUID identifiers
+and their observed count. The native debug-report callback's explicit error format
+is also recognized when it omits identifiers. Warnings and enabled settings do not trigger bug events.
+Raw object handles, diagnostic context and host paths stay in the private log.
+The event is **Known Broken** and does not identify the cause or claim a repair.
+Device-loss detection requires renderer/Vulkan evidence; a fatal GDB socket message
+during debugger teardown is not classified as a GPU failure.
 
 Additional systems can append explicit finished-clip events to private
 `automatic-events.jsonl` or add evidence detectors in `observations()`. Test, encounter,

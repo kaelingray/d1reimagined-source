@@ -88,9 +88,25 @@ A later diagnostic/status read exposed a transient Windows denial when replacing
 for a bounded 0.77 seconds, preserving the prior file on permanent failure. A process
 lock serializes status read/merge/write so observer and transfer updates do not lose
 each other's fields. Successful processing clears the old processing error. All
-**27 capture tests** pass, including five new recovery/concurrency checks and a real
+**34 capture tests** pass, including five new recovery/concurrency checks and a real
 Windows reader-held destination. The restarted normal worker is healthy and idle,
 with no monitor or processing error; NAS delivery remains verified for seven packages.
+
+The next increment detects explicit Vulkan validation errors as Known Broken BEFORE
+events and retains only bounded, normalized VUID identifiers and error counts.
+The native callback format is also recognized when it omits VUIDs. Five fixtures verify
+deduplication, comparison pairing and private-context exclusion, and reject warnings,
+configuration messages and unrelated errors. Two further fixtures distinguish an
+intentional GDB teardown fatal from device loss reported on RSX, PPU or SPU threads.
+
+JOIN136 supplies native acceptance for the validator detector. It observes the real
+identifier-free callback, preserves a **112.64-second** original game/audio source
+window and two frames, and automatically delivers the Known Broken BEFORE package.
+All seven package files and six payload sizes/SHA-256 hashes are verified on the
+500 GB share. **Eight packages** are now delivered. A brief processing access error
+recovers and the pending queue drains; no user capture or transfer is required.
+This establishes diagnostic capture, not a repaired renderer. The detailed
+[descriptor investigation](rpcs3-descriptor-binding-cache.md) records its limitations.
 
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then

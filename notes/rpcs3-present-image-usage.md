@@ -49,3 +49,21 @@ signature. Only the validation DLL and its manifest are extracted; no SDK instal
 driver replacement, registry change or system environment change is performed. Force
 the layer only in the owned launch's environment and verify both its loaded module
 and actual diagnostics before claiming validation coverage. Raw logs remain private.
+
+JOIN135 corrects the per-game override and verifies the loaded validation module in
+the exact owned process. Core validation logs no VUID error before device loss at
+**3:19.887520**. The fault query succeeds and reports a GPU write in
+`0xd06922000–0xd06922fff`, so the failing address is not consistently near zero.
+Final sampled sources are still borrowed BGRA8 with matching source/capture formats.
+The client freezes before world acceptance; later screenshot timeouts establish no
+input recovery. Ordered cleanup restores the per-game debug setting and markers.
+
+JOIN136 uses the same executable and fixture with scoped GPU-assisted validation and
+safe mode enabled. Instrumentation can suppress invalid accesses and changes timing,
+so extended runtime alone cannot establish a graphics fix. The [Khronos shader
+instrumentation documentation](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/gpu_av_shader_instrumentation.md)
+describes that diagnostic behavior. Automatic capture remains enabled.
+It supplies identifier-free native descriptor and depth-layout errors, automatically
+delivered as a Known Broken BEFORE source package. See the subsequent
+[binding-cache investigation](rpcs3-descriptor-binding-cache.md) for the exact scope
+of the CPU repair and remaining native acceptance.

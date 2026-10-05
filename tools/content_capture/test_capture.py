@@ -258,6 +258,55 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(events[0][3], "Experimental")
         self.assertEqual(observations({}, line.replace("synthetic=1", "synthetic=0"), ""), [])
 
+    def test_vulkan_validation_failure_has_only_normalized_evidence(self):
+        line = "Validation Error: [ VUID-vkCmdDispatch-None-08613 ] | Object = 0x1234 private context"
+        events = observations({}, line + "\n" + line, "")
+        self.assertEqual(events[0][0:2], ("renderer-vulkan-validation", "FAILED"))
+        self.assertEqual(events[0][3], "Known Broken")
+        evidence = events[0][2]
+        self.assertEqual(evidence["validation_ids"], ["VUID-vkCmdDispatch-None-08613"])
+        self.assertNotIn("private context", json.dumps(evidence))
+        self.assertNotIn("0x1234", json.dumps(evidence))
+        detector = Detector(self.capture)
+        event = detector.observe(*events[0])
+        self.assertEqual(event["event_type"], "BUG")
+        self.assertEqual(event["comparison_role"], "BEFORE")
+        self.assertIsNone(detector.observe(*events[0]))
+
+    def test_vulkan_validation_warning_or_configuration_is_not_a_bug_event(self):
+        self.assertEqual(observations({}, "Validation Warning: [ VUID-vkCmdDispatch-None-08613 ]", ""), [])
+        self.assertEqual(observations({}, "enabled Vulkan validation; GPU assisted false", ""), [])
+
+    def test_native_validation_error_without_vuid_is_preserved(self):
+        line = "·E 0:03:00.000000 RSX: ERROR: [Validation] Code 0 : vkCmdDraw(): Object 0xdead private shader text"
+        event = observations({}, line, "")[0]
+        self.assertEqual(event[0:2], ("renderer-vulkan-validation", "FAILED"))
+        self.assertEqual(event[2]["validation_ids"], [])
+        self.assertEqual(event[2]["error_lines_in_observation"], 1)
+        self.assertNotIn("private shader", json.dumps(event[2]))
+        self.assertNotIn("0xdead", json.dumps(event[2]))
+
+    def test_native_validation_warning_does_not_supply_error_ids(self):
+        lines = ("·W RSX: WARNING: [Validation] Code 0 : VUID-vkCmdDraw-warning-12345\n"
+                 "·E RSX: ERROR: [Validation] Code -1 : VUID-vkCmdDraw-None-08613")
+        event = observations({}, lines, "")[0]
+        self.assertEqual(event[2]["validation_ids"], ["VUID-vkCmdDraw-None-08613"])
+        self.assertEqual(event[2]["error_lines_in_observation"], 1)
+
+    def test_native_non_validation_error_is_not_a_validator_event(self):
+        self.assertEqual(observations({}, "·E RSX: ERROR: [Other] Code 0 : private error", ""), [])
+        self.assertEqual(observations({}, "·W RSX: WARNING: [Validation] Code 0 : compiler warning", ""), [])
+
+    def test_debugger_teardown_fatal_is_not_device_loss(self):
+        line = "·F 0:11:47.588403 {GDB Server} SIG: Thread terminated due to fatal error: Error during socket read"
+        self.assertEqual(observations({}, line, ""), [])
+
+    def test_device_loss_is_detected_on_reporting_thread(self):
+        for thread in ("RSX", "PPU", "SPU"):
+            line = ("·F 0:03:19.887520 {" + thread + "} SIG: Thread terminated due to fatal error: "
+                    "Assertion Failed! Vulkan API call failed with unrecoverable error: Device lost (VK_ERROR_DEVICE_LOST)")
+            self.assertEqual(observations({}, line, "")[0][0:2], ("renderer-device-loss", "FAILED"))
+
     def test_log_tail_preserves_probe_bursts_partial_lines_and_rotation(self):
         path = self.root / "RPCS3.log"
         path.write_bytes(b"D1FPBIND " + b"x" * (300 * 1024) + b"\nVK_ERROR_DEVICE")
