@@ -44,10 +44,15 @@ $research = Join-Path $D1Local 'RESEARCH\ps3_updates'
 $proxyManifest = Join-Path $logs "$Name-proxy-process.json"
 
 if ($Stop) {
-    $owned = Read-D1ProcessManifest (Join-Path $logs "$Name-processes.json")
+    $stackManifest = Join-Path $logs "$Name-processes.json"
+    if (-not (Test-Path -LiteralPath $stackManifest) -and -not (Test-Path -LiteralPath $proxyManifest)) {
+        throw "No ownership records for run '$Name' in $logs. Use the exact original -Name."
+    }
+    $owned = Read-D1ProcessManifest $stackManifest
+    if ($owned) { [IO.File]::WriteAllText("$stackManifest.stop", '') }
     $ownedEmulator = $owned.processes | Where-Object tag -EQ 'rpcs3'
     $captureFinal = $ownedEmulator -and (Get-D1OwnedProcess $ownedEmulator)
-    foreach ($process in ($owned.processes | Sort-Object { $_.tag -ne 'gdbd' })) { Stop-D1OwnedProcess $process }
+    foreach ($process in (Get-D1ShutdownOrder $owned.processes)) { Stop-D1OwnedProcess $process }
     if (Test-Path -LiteralPath $proxyManifest) {
         Stop-D1OwnedProcess (Get-Content -LiteralPath $proxyManifest -Raw | ConvertFrom-Json)
     }

@@ -217,7 +217,7 @@ try {
             try {
                 $manifest = Read-D1ProcessManifest $processManifest
                 $cleanupIdentities = @($manifest.processes) + $launcherChildren
-                foreach ($identity in $cleanupIdentities | Sort-Object { $_.tag -ne 'gdbd' }) {
+                foreach ($identity in (Get-D1ShutdownOrder $cleanupIdentities)) {
                     if ($identity) {
                         try { Stop-D1OwnedProcess $identity } catch { Write-Warning "Could not stop owned $($identity.tag): $_" }
                     }

@@ -102,6 +102,19 @@ function Read-D1ProcessManifest {
     }
 }
 
+function Get-D1ShutdownOrder {
+    param([object[]]$Identities)
+    # Detach the debugger, then close the client while its services still exist.
+    # Removing a backend first can leave a visible network error during cleanup.
+    $Identities | Where-Object { $_ } | Sort-Object -Stable {
+        switch ($_.tag) {
+            'gdbd' { 0 }
+            'rpcs3' { 1 }
+            default { 2 }
+        }
+    }
+}
+
 function Read-D1LaunchOutputTail {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }

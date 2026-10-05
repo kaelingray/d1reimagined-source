@@ -110,6 +110,16 @@ metadata start offset and nearby bytes to establish whether it selects either
 block, then trace the binding/writer. Keep the cache write guard and renderer
 settings; no draw suppression is justified by this evidence.
 
+Stop a retained run with its **exact original name**, for example
+`Invoke-Final124Join.ps1 -Name FINAL124_JOIN125 -Local <runtime> -Stop`.
+An unknown/shortened name now fails clearly rather than reporting success.
+Shutdown detaches the debugger and closes the owned client before its backends
+and proxy, so cleanup does not briefly leave an open game without its host.
+Every PID still requires the saved executable and creation time. JOIN125's
+reported Anteater coincides with the earlier manual proxy-first shutdown;
+that timing does not prove all such errors are benign. Preserve the host/client
+logs and classify a drop before cleanup separately.
+
 JOIN106's generation callback fails at the first requested interface, even with
 the verified helper attached. JOIN112 identifies that interface as damage,
 so it is not a proven light gate. JOIN107/108's physical squad Ghost has no

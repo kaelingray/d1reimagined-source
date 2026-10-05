@@ -151,7 +151,7 @@ try {
     $failure = $_.Exception.Message
     try { Save-ProcessManifest } catch { Write-Warning "Could not save failed launch ownership: $_" }
     # Failed launches clean up only processes started by this invocation.
-    foreach ($identity in @($owned.ToArray()) | Sort-Object { $_.tag -ne 'gdbd' }) {
+    foreach ($identity in (Get-D1ShutdownOrder $owned.ToArray())) {
         try { Stop-D1OwnedProcess $identity } catch { Write-Warning "Could not stop owned $($identity.tag): $_" }
     }
     throw

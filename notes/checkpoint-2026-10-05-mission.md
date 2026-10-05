@@ -622,3 +622,30 @@ JOIN124 and JOIN125 owned stacks, proxies and outer launchers are verified
 exited, with XInput restored. Bounded native recording finalization now uses
 `finally`, so a failed screenshot cannot bypass its stop input. No media or
 emulator executable enters Git.
+
+## Shutdown and the reported Anteater
+
+The user reports Anteater around JOIN125 cleanup. The pre-shutdown observer
+still records `activity:in_world` at 17:58:50; the activity host receives client
+traffic through 17:58:57. The manual cleanup incorrectly uses shortened
+`-Name JOIN125` instead of `FINAL124_JOIN125`, and the wrapper previously
+reported that nonexistent run as stopped. Subsequent exact-identity cleanup
+stops the proxy while the client is still briefly open. BAP remains active
+through 17:59:16; the client then exits. This timing supports a shutdown-induced
+disconnect, but the code label alone does not establish its cause or exclude an
+earlier user-observed failure. No renderer fatal appears in the saved pre-stop log.
+
+The stop wrapper now rejects a name without either ownership record, writes the
+cooperative stop marker for a recorded stack, detaches its debugger and closes
+its client before its service processes or proxy. Shared ordering also applies
+to normal run cleanup and failed stack startup. Every stop still checks executable
+and exact creation time, preserving unrelated or reused-PID processes.
+
+`Test-Final124JoinStop.ps1` uses sleeping owned children rather than a game or
+network service. It verifies that an unknown name attempts no stops, the backend
+is alive at client shutdown, the debugger is already gone, both backend and
+proxy stop after client exit, stale identities preserve an unrelated child, the
+cooperative marker is written, and repeat stops preserve the original evidence.
+All these checks and the existing isolated `Test-Final124Run.ps1` suite pass.
+This prevents the cleanup window that can visibly remove the local host from a
+running client; it is not a general networking or Anteater repair.
