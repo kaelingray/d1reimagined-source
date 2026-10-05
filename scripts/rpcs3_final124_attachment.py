@@ -70,9 +70,21 @@ def snapshot(read, owner, target, asset):
 
     _, owner_row, owner_words, runtime, _ = row(owner)
     header = read(runtime, 0x14)
-    actual_asset, count, header_type = struct.unpack_from(">3I", header, 4)
-    if actual_asset != asset or header_type != 0x80800906 or not 0 < count <= 64:
+    actual_asset, configuration_offset, header_type = struct.unpack_from(">3I", header, 4)
+    if actual_asset != asset or header_type != 0x80800906:
         raise ValueError("registered container does not match the configured asset/layout")
+    # Like 0x1fb910, resolve the asset and add the header's configuration
+    # offset. It happens to be 12 for the Ghost helper, independently of its
+    # twelve components; it is not the component count.
+    configuration = resolve_datum(read, asset)
+    file_header = read(configuration, 4)
+    file_size, = struct.unpack(">I", file_header)
+    if not 0x20 <= file_size <= 0x100000 or not 4 <= configuration_offset <= file_size - 0x10:
+        raise ValueError("configured container offset is outside its bounded asset")
+    configured_header = read(configuration + configuration_offset - 4, 0x14)
+    configured_type, _, count = struct.unpack_from(">3I", configured_header)
+    if configured_type != header_type or not 0 < count <= 64:
+        raise ValueError("configured container does not match the component layout/count")
 
     records, seen, rows = [], {owner & 0x1FFF}, [(owner, owner_row)]
     links = []
@@ -112,6 +124,9 @@ def snapshot(read, owner, target, asset):
     if handle != ABSENT:
         raise ValueError("component chain exceeds the configured count")
     if (read(COMPONENT_POOL, 0x40) != pool or read(runtime, 0x14) != header
+            or resolve_datum(read, asset) != configuration
+            or read(configuration, 4) != file_header
+            or read(configuration + configuration_offset - 4, 0x14) != configured_header
             or any(row(handle)[1] != raw for handle, raw in rows)
             or any(read(address, len(raw)) != raw for address, raw in links)):
         raise ValueError("attachment structure changed during the sample")
@@ -119,6 +134,7 @@ def snapshot(read, owner, target, asset):
             "captured_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "owner": f"0x{owner:08x}", "target": f"0x{target:08x}", "asset": f"0x{asset:08x}",
             "runtime": f"0x{runtime:08x}", "component_count": count,
+            "configuration_offset": configuration_offset,
             "owner_unit_membership": unit_membership(read, owner),
             "target_unit_membership": unit_membership(read, target), "components": records}
 

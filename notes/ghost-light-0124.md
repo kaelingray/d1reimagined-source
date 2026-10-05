@@ -410,7 +410,10 @@ datum is `0x17fac971`.
 
 A read-only snapshot at 23:19:46 resolves that registered datum to
 `0x604081a0`. Its container header contains configured asset `0x80a3d8ad`,
-component count 12 and header class `0x80800906`. The component pool at
+configuration offset 12 and header class `0x80800906`. The configured
+asset's component array independently contains twelve entries; the header
+offset was initially mislabeled as a count and is corrected by JOIN106.
+The component pool at
 global `0x1a21cb0` has a 24-byte row stride. Rows 2418–2429 all name the
 registered container at row `+0xc`; each resolved component names the
 actual Ghost unit at runtime `+0x1c`. All configured roots therefore have
@@ -633,8 +636,9 @@ This time the native watch observes `0xc121bc -> 0x12e79c -> 0x431c14`,
 with the actual Ghost datum and null payload. Thus the generation action
 does reach the unit-action handler. `0x432674` is not observed; that
 alone cannot prove whether an inlined call ran. The handler first queries
-type `0x8080206f` through `0x147340` and then type `0x8080236c` through
-`0x109c58`. Identify those lookup results and the attachment's actual
+type `0x8080206f` through `0x147340`, then checks the returned runtime
+view's compatibility with type `0x8080236c` through `0x109c58`.
+Identify the lookup result and the attachment's actual
 activation requirements before inventing another light-state value.
 The metadata record's `+8` link is not proven to be an inheritance parent.
 
@@ -648,3 +652,66 @@ The owned stack is stopped after preserving the final native log,
 attachment snapshots, device lifecycle samples and controlled views.
 All manifest-owned processes and the separately owned proxy are checked
 exited, and the user's XInput pad profile is restored.
+
+## JOIN106: the HO generation stops at the first component lookup
+
+JOIN106 repeats the 249 ready records, manual bubble reset and automatic
+one-Ghost creation. Current slice 24 is observed with engine state 3 and
+return target 112; this still does not establish a settled Breach return.
+The fresh Ghost is `0x1afb82ce`. Its helper owner is `0x71fac971`, and
+binding `0x36fd203c` independently associates with that same Ghost with
+the unit-mask bit set. The corrected public inspector verifies all twelve
+helper components before and after generation one.
+
+The first root attached to the Ghost is `0x7ffac943`, configured from
+base asset `0x80cb82ed` with 45 components. The next root is the helper,
+asset `0x80a3d8ad`, with twelve components. Both runtime headers have
+configuration offset twelve: this independent 45-versus-12 comparison
+confirms that runtime header `+8` is an offset, not a component count.
+
+The native query follows the unit row's `+0x3c` root list. `0x1fc408`
+resolves the requested type and reads its interface name hash at `+4`;
+`0x1fb910` resolves each root's configured asset and adds its configuration
+offset before querying the interface table through `0x2049e0` and
+`0x284e28`. Type `0x8080206f` uses key `0xe52389ae`. Neither the base
+nor helper table contains it. A complete offline scan of their 512 and
+64 buckets independently agrees with the live query. Key `0x1de71ad5`
+for type `0x8080236c` is also absent from both configured tables.
+
+The bounded five-second generation-one trace observes this exact path:
+
+```text
+c121bc (lr c123d4)
+  -> 12e79c (lr c122cc, Ghost 1afb82ce, null payload)
+  -> 431c14 (lr 431dc0, same Ghost)
+  -> 147340 (lr 431c64, unit row 602cfd80, type 8080206f)
+  -> 1fc408 (lr 147398, same unit row and type)
+```
+
+The handler's matching call chain has no successful-view accessor
+`0x1fbaf4`, compatibility check `0x109c58` or light action `0x432674`.
+During the same watch, 787 other calls reach `0x1fbaf4`, providing a
+positive control. Together with the actual missing interface records
+and verified query algorithm, this supports failure of the first lookup;
+it is stronger evidence than an absent light hook alone. The HO update
+still consumes its generation after the call, so consumption does not
+prove a light action succeeded. No automatic HO torch action is added.
+The next investigation should follow the actual `nux_ghost` performance
+(kind 28, index 125) and its light controls rather than repeat this reset.
+
+The ramp walk again reaches an unobstructed Ghost view at 01:25:51 BST.
+The shell and blue core are visible, with no verified beam. Third-person
+emote frames at 01:26:33 and 01:28:21 show dark armor with patchy, bright
+silver shading, while the 01:27:43 inventory model retains normal
+proportions and lighting. Treat in-world Guardian rendering as unresolved.
+The active game-specific configuration still enables color/depth reads
+and writes and RSX memory tiling. The first render-target dump was captured
+after the emote ended, as its 01:29:34 screenshot confirms; its lack of
+a Guardian cannot diagnose the armor. A second dump and matching frame
+were saved at 01:34:24/25 just before the user requested a stop. They
+remain private and await inspection. No rendering change or new combined
+flicker/character acceptance is claimed.
+
+The owned JOIN106 stack and separate proxy are stopped and every recorded
+identity is checked exited. XInput is restored. Raw traces, screenshots,
+assets and render-target dumps remain outside Git.

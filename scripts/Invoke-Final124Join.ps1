@@ -69,6 +69,10 @@ $proxyArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower(), '--ah-j
     '--activity-schema', $types, '--schema', $types, '--services-schema', $services) +
     @($ProxyExtra -split ';' | Where-Object { $_ })
 
+# Every input below uses Send-RpcsKey's keyboard mapping. A previous run's
+# restored XInput profile otherwise leaves this unattended join at the title.
+& "$PSScriptRoot\Set-PadConfig.ps1" -Mode keyboard -Rpcs3Dir $D1Rpcs3
+
 $launch = Start-Job -ScriptBlock { param($script, $n, $l, $d, $b)
     $env:D1_LOCAL = $l
     $ErrorActionPreference = 'Stop'

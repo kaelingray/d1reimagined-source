@@ -38,7 +38,7 @@ class AttachmentSnapshot(unittest.TestCase):
         component_row = self.base + 48
         self.mem.words(owner_row, 0xC0000014, 0, (owner_row - self.runtime) & 0xFFFFFFFF,
                        0xFFFFFFFF, self.component, 0)
-        self.mem.words(self.runtime, 0, self.asset, 1, 0x80800906, 0)
+        self.mem.words(self.runtime, 0, self.asset, 12, 0x80800906, 0)
         self.component_runtime = self.runtime + 0x40
         self.mem.words(component_row, 0xC0000054, 0,
                        (component_row - self.component_runtime) & 0xFFFFFFFF,
@@ -55,6 +55,13 @@ class AttachmentSnapshot(unittest.TestCase):
         binding_row = 0x62000000 + 4 * 0x120
         self.mem.words(binding_row + 8, (binding_row - self.binding_runtime) & 0xFFFFFFFF)
         self.mem.words(self.binding_runtime + 0x104, 0xFFFFFFFF, self.target)
+        asset_descriptor = 0x10000 + 0x51E * 0x40
+        self.mem.words(asset_descriptor + 0x10, 0x64000000)
+        self.mem.words(asset_descriptor + 0x30, 0x18, 0xFFFFFFFF)
+        asset_row = 0x64000000 + (self.asset & 0x1FFF) * 0x18
+        self.configuration = 0x65000000
+        self.mem.words(asset_row + 8, (asset_row - self.configuration) & 0xFFFFFFFF)
+        self.mem.words(self.configuration, 0x80, 8, 0x80800906, 0x811C9DC5, 1, 0x20, 0, 0)
 
     def snapshot(self):
         return attachment.snapshot(self.mem.read, self.owner, self.target, self.asset)
@@ -62,6 +69,7 @@ class AttachmentSnapshot(unittest.TestCase):
     def test_component_and_binding_targets_are_verified_separately(self):
         result = self.snapshot()
         self.assertEqual(result["component_count"], 1)
+        self.assertEqual(result["configuration_offset"], 12)
         binding = result["components"][0]["binding"]
         self.assertTrue(binding["matches_selected_target"])
         self.assertTrue(binding["unit_membership"]["unit_mask_bit"])
@@ -95,14 +103,14 @@ class AttachmentSnapshot(unittest.TestCase):
         self.mem.words(self.base + 48 + 16, self.component)
         with self.assertRaisesRegex(ValueError, "exceeds"):
             self.snapshot()
-        self.mem.words(self.runtime + 8, 2)
+        self.mem.words(self.configuration + 0x10, 2)
         with self.assertRaisesRegex(ValueError, "cycle"):
             self.snapshot()
-        self.mem.words(self.runtime + 8, 65)
+        self.mem.words(self.configuration + 0x10, 65)
         with self.assertRaisesRegex(ValueError, "layout"):
             self.snapshot()
         self.mem.words(self.base + 24 + 16, (0x3D6 << 13) | 9)
-        self.mem.words(self.runtime + 8, 1)
+        self.mem.words(self.configuration + 0x10, 1)
         with self.assertRaisesRegex(ValueError, "outside"):
             self.snapshot()
 
@@ -145,6 +153,38 @@ class AttachmentSnapshot(unittest.TestCase):
         self.mem.words(self.base + 48, 0xC0000020)
         with self.assertRaisesRegex(ValueError, "allocation"):
             self.snapshot()
+
+    def test_configuration_offset_is_not_used_as_the_component_count(self):
+        self.mem.words(self.runtime + 8, 0x30)
+        self.mem.words(self.configuration + 0x2C, 0x80800906, 0x811C9DC5, 1, 0x20, 0)
+        result = self.snapshot()
+        self.assertEqual(result["component_count"], 1)
+        self.assertEqual(result["configuration_offset"], 0x30)
+
+    def test_configuration_bounds_and_type_are_checked_before_chain_reads(self):
+        for offset in (0, 0x80, 0xFFFFFFFF):
+            with self.subTest(offset=offset):
+                self.mem.words(self.runtime + 8, offset)
+                with self.assertRaisesRegex(ValueError, "offset"):
+                    self.snapshot()
+        self.mem.words(self.runtime + 8, 12)
+        self.mem.words(self.configuration + 8, 0x80800907)
+        with self.assertRaisesRegex(ValueError, "layout"):
+            self.snapshot()
+
+    def test_configured_count_changing_during_sample_is_rejected(self):
+        reads = 0
+
+        def read(address, size):
+            nonlocal reads
+            if address == self.configuration + 8 and size == 0x14:
+                reads += 1
+                if reads == 2:
+                    self.mem.words(self.configuration + 0x10, 2)
+            return self.mem.read(address, size)
+
+        with self.assertRaisesRegex(ValueError, "changed"):
+            attachment.snapshot(read, self.owner, self.target, self.asset)
 
 
 if __name__ == "__main__":
