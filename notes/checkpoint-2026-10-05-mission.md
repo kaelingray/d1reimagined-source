@@ -675,7 +675,10 @@ program additions. Recording begins late after a controlled disabled phase. A la
 character preview shows persistent coloured leg-texture noise; the sampled outdoor
 dance remains solid. Recording causality is unproven and the candidate stays disabled
 by default. The [expanded Vulkan fault report](rpcs3-device-fault-detail.md) is built
-and deployed after cleanup, with actual native failure-report execution still pending.
+and deployed after cleanup. JOIN132 exercises its successful query and confirms a
+GPU write in `0x0–0xfff`. The subsequent [presentation ownership repair](rpcs3-present-capture-lifetime.md)
+passes 50 CPU lifetime checks against eight pre-fix failures, but JOIN133 still
+reports the same device loss. Combined rendering acceptance remains open.
 
 Seven source packages are verified on the share, including Experimental depth footage
 and a Known Broken texture clip selected/packaged from the buffer after the development

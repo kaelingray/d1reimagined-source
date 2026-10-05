@@ -33,10 +33,19 @@ The full private Release build completes and is deployed with matching SHA-256
 `e2dd5ad46a008da4bf439e4e5f0afc3dec4af76e0c6f18f1a4d80c28ea906d5a`.
 The prior executable is backed up, the depth experiment is disabled, and all owned
 test stacks are exited. Existing linker/post-build warnings remain. Native fault
-report execution on this new build is still outstanding; compilation alone does not
-validate a driver failure report.
+report execution was outstanding at deployment; compilation alone does not validate
+a driver failure report.
 
-Next: capture the enhanced report during the same controlled failing phase, then
-correlate the address range with Vulkan resource lifetimes and GPU command labels.
+JOIN132 now exercises it at native **3:01.701927**: the detail query succeeds
+(`VkResult=0`, `incomplete=0`) and reports `access_write`, address `0x0`, precision
+`0x1000`, possible range **`0x0–0xfff`**. This confirms a near-zero GPU write report
+without identifying the originating command. The failed run has no accepted world
+or menu interaction. Ordered cleanup is complete and the depth marker is disabled.
+The subsequent [presentation ownership repair](rpcs3-present-capture-lifetime.md)
+addresses a concrete media-sync lifetime defect found during this investigation;
+native causality and complete graphics acceptance remain unproven.
+
+Next: correlate the confirmed range with Vulkan resource usage/lifetimes and GPU
+command labels, and install a scoped validation-layer setup for the owned renderer.
 Keep recording-enabled and recording-disabled controls separate, and preserve
 world/body/menu acceptance checks independently of absence of malformed shaders.

@@ -1,0 +1,160 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRender.h b/rpcs3/Emu/RSX/VK/VKGSRender.h
+--- a/rpcs3/Emu/RSX/VK/VKGSRender.h
++++ b/rpcs3/Emu/RSX/VK/VKGSRender.h
+@@ -229,7 +229,14 @@
+ 	void present(vk::frame_context_t *ctx);
+ 	bool reinitialize_swapchain();
+ 
+-	vk::viewable_image* get_present_source(vk::present_surface_info* info, const rsx::avconf& avconfig);
++	struct present_source
++	{
++		vk::viewable_image* image = nullptr;
++		std::unique_ptr<vk::viewable_image> owned;
++		bool reusable = false;
++	};
++
++	present_source get_present_source(vk::present_surface_info* info, const rsx::avconf& avconfig);
+ 
+ 	void begin_render_pass();
+ 	void close_render_pass();
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -303,9 +303,10 @@
+ 	vk::advance_completed_frame_counter();
+ }
+ 
+-vk::viewable_image* VKGSRender::get_present_source(/* inout */ vk::present_surface_info* info, const rsx::avconf& avconfig)
++VKGSRender::present_source VKGSRender::get_present_source(/* inout */ vk::present_surface_info* info, const rsx::avconf& avconfig)
+ {
+-	vk::viewable_image* image_to_flip = nullptr;
++	present_source result;
++	auto& image_to_flip = result.image;
+ 
+ 	// @FIXME: This entire function needs to be rewritten to go through the texture cache's "upload_texture" routine.
+ 	// That method is not a 1:1 replacement due to handling of insets that is done differently here.
+@@ -390,7 +391,8 @@
+ 		}
+ 
+ 		m_texture_cache.invalidate_range(*m_current_command_buffer, range, rsx::invalidation_cause::read);
+-		image_to_flip = m_texture_cache.upload_image_simple(*m_current_command_buffer, expected_format, info->address, info->width, info->height, info->pitch);
++		result.owned = m_texture_cache.upload_image_simple(*m_current_command_buffer, expected_format, info->address, info->width, info->height, info->pitch);
++		image_to_flip = result.owned.get();
+ 	}
+ 	else if (image_to_flip->format() != expected_format)
+ 	{
+@@ -416,11 +418,12 @@
+ 			}
+ 
+ 			image_to_flip = dst_img.get();
+-			m_texture_cache.dispose_reusable_image(dst_img);
+-		}
+-	}
+-
+-	return image_to_flip;
++			result.owned = std::move(dst_img);
++			result.reusable = true;
++		}
++	}
++
++	return result;
+ }
+ 
+ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+@@ -541,6 +544,7 @@
+ 	}
+ 
+ 	// Scan memory for required data. This is done early to optimize waiting for the driver image acquire below.
++	present_source present_sources[2];
+ 	vk::viewable_image* image_to_flip = nullptr;
+ 	vk::viewable_image* image_to_flip2 = nullptr;
+ 
+@@ -555,7 +559,8 @@
+ 			.pitch = buffer_pitch,
+ 			.eye = 0
+ 		};
+-		image_to_flip = get_present_source(&present_info, avconfig);
++		present_sources[0] = get_present_source(&present_info, avconfig);
++		image_to_flip = present_sources[0].image;
+ 
+ 		if (avconfig.stereo_enabled) [[unlikely]]
+ 		{
+@@ -569,7 +574,8 @@
+ 				present_info.address = rsx::get_address(image_offset, CELL_GCM_LOCATION_LOCAL);
+ 				present_info.eye = 1;
+ 
+-				image_to_flip2 = get_present_source(&present_info, avconfig);
++				present_sources[1] = get_present_source(&present_info, avconfig);
++				image_to_flip2 = present_sources[1].image;
+ 			}
+ 			else
+ 			{
+@@ -716,7 +722,9 @@
+ 
+ 		if (g_cfg.video.record_with_overlays && has_overlay)
+ 		{
+-			const auto key = vk::get_renderpass_key(m_swapchain->get_surface_format());
++			// The capture attachment uses the guest presentation format, which may
++			// differ from the host swapchain format.
++			const auto key = vk::get_renderpass_key(image_to_flip->format());
+ 			single_target_pass = vk::get_renderpass(*m_device, key);
+ 			ensure(single_target_pass != VK_NULL_HANDLE);
+ 
+@@ -1003,6 +1011,18 @@
+ 		vk::change_image_layout(*m_current_command_buffer, target_image, target_layout, present_layout, subresource_range);
+ 	}
+ 
++	// A media capture can hard-sync and complete an earlier submission in this
++	// same flip. Retire temporary sources only after their final presentation use
++	// is recorded, so that completion cannot destroy/recycle them prematurely.
++	for (auto& source : present_sources)
++	{
++		if (!source.owned) continue;
++		if (source.reusable)
++			m_texture_cache.dispose_reusable_image(source.owned);
++		else
++			vk::get_resource_manager()->dispose(source.owned);
++	}
++
+ 	queue_swap_request();
+ 
+ 	m_frame_stats.flip_time = m_profiler.duration();
+diff --git a/rpcs3/Emu/RSX/VK/VKTextureCache.h b/rpcs3/Emu/RSX/VK/VKTextureCache.h
+--- a/rpcs3/Emu/RSX/VK/VKTextureCache.h
++++ b/rpcs3/Emu/RSX/VK/VKTextureCache.h
+@@ -532,7 +532,7 @@
+ 
+ 		void on_frame_end() override;
+ 
+-		vk::viewable_image* upload_image_simple(vk::command_buffer& cmd, VkFormat format, u32 address, u32 width, u32 height, u32 pitch);
++		std::unique_ptr<vk::viewable_image> upload_image_simple(vk::command_buffer& cmd, VkFormat format, u32 address, u32 width, u32 height, u32 pitch);
+ 
+ 		bool blit(const rsx::blit_src_info& src, const rsx::blit_dst_info& dst, bool interpolate, vk::surface_cache& m_rtts, vk::command_buffer& cmd);
+ 
+diff --git a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+--- a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
++++ b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+@@ -1613,7 +1613,7 @@
+ 		reset_frame_statistics();
+ 	}
+ 
+-	vk::viewable_image* texture_cache::upload_image_simple(vk::command_buffer& cmd, VkFormat format, u32 address, u32 width, u32 height, u32 pitch)
++	std::unique_ptr<vk::viewable_image> texture_cache::upload_image_simple(vk::command_buffer& cmd, VkFormat format, u32 address, u32 width, u32 height, u32 pitch)
+ 	{
+ 		bool linear_format_supported = false;
+ 
+@@ -1672,11 +1672,9 @@
+ 
+ 		vk::change_image_layout(cmd, image.get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+ 
+-		// Fully dispose immediately. These immages aren't really reusable right now.
+-		auto result = image.get();
+-		vk::get_resource_manager()->dispose(image);
+-
+-		return result;
++		// The caller retains ownership until every command that uses this image has
++		// been recorded, including presentation after a screenshot/recording sync.
++		return image;
+ 	}
+ 
+ 	bool texture_cache::blit(const rsx::blit_src_info& src, const rsx::blit_dst_info& dst, bool interpolate, vk::surface_cache& m_rtts, vk::command_buffer& cmd)

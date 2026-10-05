@@ -106,7 +106,9 @@ needed. Indoor appearance, temporal flicker and other classes remain unaccepted.
 
 Ordered cleanup is verified, experimental markers are removed, XInput is restored,
 and the normal capture worker remains healthy and enabled. The enhanced diagnostic
-build is deployed afterwards; its fault-report path has not yet been exercised.
+build is deployed afterwards. JOIN132 subsequently exercises its successful fault
+query and confirms a GPU write in `0x0–0xfff`; the [presentation lifetime repair](rpcs3-present-capture-lifetime.md)
+passes its CPU audit but JOIN133 still reproduces the same device loss.
 
 Next: trace the character-preview texture and remaining device loss with the
 [expanded Vulkan report](rpcs3-device-fault-detail.md), then repeat indoor body checks.
