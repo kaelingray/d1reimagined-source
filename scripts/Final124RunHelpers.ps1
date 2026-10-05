@@ -220,6 +220,18 @@ function Copy-D1SharedFileSnapshot {
     }
 }
 
+function Test-D1CharacterLoginRetry {
+    param($State, [int]$Attempts, [double]$SecondsSincePress, [bool]$SelectionAnswered)
+    # Never post a retry into setup, character creation or either cinematic.
+    # State 5/5 is the observed stored-character sign-in wait (0x3694d4).
+    $signin = $State.character_signin
+    return (-not $SelectionAnswered -and $Attempts -lt 3 -and $SecondsSincePress -ge 6 -and
+        $State.current -eq 23 -and $State.target -eq 23 -and
+        $State.name -eq 'character:signin' -and $State.stage_unchanged_during_sample -and
+        $null -ne $signin -and $signin.vtable -eq '0x013e8d58' -and
+        $signin.current -eq 5 -and $signin.target -eq 5 -and $signin.unchanged_during_sample)
+}
+
 function Read-Final124Progress {
     param([Parameter(Mandatory)][string]$LogRoot, [Parameter(Mandatory)][string]$Name)
     function Read-RunLog([string]$Tag) {

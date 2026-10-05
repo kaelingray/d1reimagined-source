@@ -1,0 +1,167 @@
+{
+  "number": "01",
+  "date": "5 October 2026",
+  "short": [
+    {
+      "title": "Ghost existed. The mission couldn't use him.",
+      "status": "Earlier bug / later test capture",
+      "capture": "BLES01857_screenshot_2026_10_05_10_23_37.png",
+      "duration": 6,
+      "caption": "One visible Ghost was only half the job. His mission bindings were missing."
+    },
+    {
+      "title": "Preserving Destiny 1",
+      "status": "PS3 01.24 / local services",
+      "capture": "BLES01857_screenshot_2026_10_05_09_36_38.png",
+      "duration": 6,
+      "caption": "Local sign-in, saved characters and the opening mission are partially working."
+    },
+    {
+      "title": "The wrong spawn path",
+      "status": "Diagnosed in native traces",
+      "duration": 6,
+      "caption": "Increasing the squad count spawned a Ghost without the authored member or performance binding."
+    },
+    {
+      "title": "One Ghost. Both bindings.",
+      "status": "Verified after a manual readiness reset",
+      "capture": "BLES01857_screenshot_2026_10_05_10_23_37.png",
+      "duration": 7,
+      "caption": "The mission now activates the authored member. The automatic rule created exactly one bound Ghost."
+    },
+    {
+      "title": "His configured action runs",
+      "status": "Separate manual experiment",
+      "capture": "BLES01857_screenshot_2026_10_05_10_27_46.png",
+      "duration": 7,
+      "caption": "A manual action moved the same Ghost about 21 game units. Automatic timing and torch light remain unverified."
+    },
+    {
+      "title": "The Guardian still needs fixing",
+      "status": "Known rendering defect",
+      "capture": "BLES01857_screenshot_2026_10_05_09_11_33.png",
+      "duration": 7,
+      "caption": "The in-world Guardian is transparent and refractive. A clean inventory preview does not prove this is fixed."
+    },
+    {
+      "title": "Next: make the first mission work",
+      "status": "Engineering priorities",
+      "capture": "BLES01857_screenshot_2026_10_05_09_39_35.png",
+      "duration": 7,
+      "caption": "Resolve progression and torch behavior, then rifle pickup and combat. Mission completion is still open."
+    },
+    {
+      "title": "A tested step forward",
+      "status": "Experimental preservation project",
+      "duration": 6,
+      "caption": "Ghost binding is a real milestone. The full game is still a long-term goal. Follow the next devlog for progress."
+    }
+  ],
+  "long": [
+    {
+      "title": "The Ghost was there. His mission bindings weren't.",
+      "status": "Development milestone / 5 October 2026",
+      "capture": "BLES01857_screenshot_2026_10_05_10_23_37.png",
+      "captions": [
+        "Today's milestone is a small but useful step in preserving Destiny One: restoring the opening mission's Ghost bindings.",
+        "A visible Ghost can look convincing while the mission still has no usable reference to him.",
+        "This devlog explains that problem, the tested fix, and what still prevents the first mission from being complete."
+      ]
+    },
+    {
+      "title": "What the local build currently does",
+      "status": "Partially working / PS3 01.24",
+      "capture": "BLES01857_screenshot_2026_10_05_09_36_38.png",
+      "captions": [
+        "The active target is the final PS3 build, version zero one point twenty four, running in RPCS3 with local services.",
+        "Recorded tests accept sign-in, restore a saved character, play the revival scenes and hand control to the Guardian.",
+        "The Guardian can walk from the highway into the Wall. That is progress, but the Breach still needs reliable mission progression.",
+        "These visuals are a montage of actual test captures. They are not a continuous, completed playthrough."
+      ]
+    },
+    {
+      "title": "Why spawning a Ghost wasn't enough",
+      "status": "Diagnosed / count-only creation path",
+      "captions": [
+        "The old mission action increased the desired count in the Ghost squad. The client created a physical Ghost.",
+        "Native traces showed that creation path passed no authored member into the actor constructor.",
+        "The resulting actor had no member owner or performance owner. The named mission member still had no actor.",
+        "So seeing the shell on screen did not prove the mission could address the right Ghost or start his authored action."
+      ]
+    },
+    {
+      "title": "Activate the authored member",
+      "status": "Implemented / binding verified",
+      "capture": "BLES01857_screenshot_2026_10_05_10_23_37.png",
+      "captions": [
+        "The replacement activates the specific authored Ghost member instead of increasing the squad count.",
+        "An isolated test created exactly one Ghost and recorded both owner bindings on that same actor.",
+        "A second run used the public mission's automatic rule. It repeated the result after the existing manual readiness reset.",
+        "The reset is still an external test action. This does not yet establish fully automatic mission progression."
+      ]
+    },
+    {
+      "title": "What the regression checks prove",
+      "status": "286 checks passed at the binding checkpoint",
+      "captions": [
+        "The binding change passed two hundred and eighty six script and server regression checks.",
+        "The new test checks the actual final-build state encoding and prevents a competing count-only Ghost action.",
+        "Schema preflight also passed. Those checks establish payload correctness; the live actor observations establish the binding result.",
+        "Neither a passing test suite nor a correct payload proves that weapons, combat or the whole mission work."
+      ]
+    },
+    {
+      "title": "A separate movement experiment",
+      "status": "Experimental / manually triggered",
+      "capture": "BLES01857_screenshot_2026_10_05_10_27_46.png",
+      "captions": [
+        "With the performance binding present, a separate manual probe used the configured action key found in the game's asset.",
+        "The native lookup accepted the key and dispatched the action. The same Ghost moved about twenty one game units.",
+        "That narrows the problem: the authored action can run once the correct actor is bound.",
+        "Its original timing and completion signal remain unresolved. The experiment is not enabled as an automatic mission cue.",
+        "There is also no verified torch beam. A blue Ghost core is not evidence that corridor illumination works."
+      ]
+    },
+    {
+      "title": "Faster repeat tests",
+      "status": "Implemented / opt-in replay skip",
+      "capture": "BLES01857_screenshot_2026_10_05_09_36_38.png",
+      "captions": [
+        "After the first viewing, repeat test runs can opt in to skipping the Mars opening cinematic.",
+        "The harness checks the exact native prologue stage before sending the skip input.",
+        "Successful replay tests still reached the revival scenes and player control. This saves time when testing the same mission repeatedly."
+      ]
+    },
+    {
+      "title": "The rendering fix is still incomplete",
+      "status": "Known broken / in-world Guardian",
+      "capture": "BLES01857_screenshot_2026_10_05_09_11_33.png",
+      "captions": [
+        "The combined graphics changes retain clean setup menus and normal Titan proportions in the inventory preview.",
+        "An in-world emote capture exposes a different problem: the Guardian is transparent and refracts the scenery behind him.",
+        "A live read found the expected starter armor in the normalized world equipment cache, so the cache is not entirely empty.",
+        "That does not identify the rendering cause or prove the armor art loaded correctly. Both gameplay and menu appearance must pass."
+      ]
+    },
+    {
+      "title": "What remains before a playable first mission",
+      "status": "Not yet verified / gameplay work",
+      "capture": "BLES01857_screenshot_2026_10_05_09_39_35.png",
+      "captions": [
+        "The immediate priorities are reliable Breach progression, correct Ghost behavior and a working illumination sequence.",
+        "Rifle pickup, combat, mission completion and arrival at the Tower still need implementation and live validation.",
+        "Broader destinations, progression systems and multiplayer are longer-term work. There is no claim that the full game is playable.",
+        "New backend behavior should preserve a route toward server authority and multiplayer rather than assume one permanent local player."
+      ]
+    },
+    {
+      "title": "A small milestone with useful evidence",
+      "status": "Experimental preservation / work continues",
+      "captions": [
+        "The meaningful result today is one Ghost with the authored references the mission needs, plus a verified manual action dispatch.",
+        "Code, regression checks and development notes are pushed to the repository. Captures and game data remain private.",
+        "The next devlog will follow a tested gameplay improvement. Reports will separate working, experimental and broken behavior."
+      ]
+    }
+  ]
+}

@@ -260,6 +260,11 @@ def sample(read=memory, include_request=False, package_ids=()):
         raise ValueError(f"unexpected 01.24 bootflow state {current}")
     stage_object = u32(bootflow + 0x80 + current * 4)
     stage_fields = read(stage_object + 0x30, 0x10) if stage_object else b""
+    # Character sign-in has its own layout (update 0x3692f4). Only interpret
+    # +0x3c/+0x40 after checking that stage's final-build vtable.
+    signin_vtable = u32(stage_object) if stage_object and current == 23 else None
+    signin_fields = (read(stage_object + 0x3C, 8)
+                     if signin_vtable == 0x013E8D58 else None)
     resources = []
     states = read(RESOURCE_STATES, 8 * 12)
     names = read(RESOURCE_NAMES, 8 * 4)
@@ -293,6 +298,17 @@ def sample(read=memory, include_request=False, package_ids=()):
         result["package_registry"] = package_records(package_ids, read)
     result["stage_unchanged_during_sample"] = (u32(BOOTFLOW_PTR) == bootflow and
                                                 read(bootflow + 0x118, 0x1C) == fields)
+    if signin_fields is not None:
+        signin_current, signin_target = struct.unpack(">II", signin_fields)
+        result["character_signin"] = {
+            "vtable": f"0x{signin_vtable:08x}",
+            "current": signin_current, "target": signin_target,
+            "unchanged_during_sample": (
+                result["stage_unchanged_during_sample"] and
+                u32(bootflow + 0x80 + current * 4) == stage_object and
+                u32(stage_object) == signin_vtable and
+                read(stage_object + 0x3C, 8) == signin_fields),
+        }
     result["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     return result
 

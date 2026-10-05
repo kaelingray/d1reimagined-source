@@ -39,9 +39,24 @@ without a manual member state. The old count-only Ghost action is removed to avo
 a second creation path. The filter/helper states remain manual candidates. Their generation
 path reaches a default-payload update, not a verified light-on setter. See
 [the light investigation](ghost-light-0124.md) and the current checkpoint.
+JOIN112 repeats the automatic authored-member result and identifies the
+generation callback's queried interface as a **damage component**. Its absence
+on the Ghost does not establish a torch blocker; do not redirect the helper
+to the Guardian because that damage interface is present there. Investigate
+the attachment's actual lighting activation/transform path and the unsettled
+return transition. JOIN113 tests the wrapper's bounded character-login retry
+with the initial press withheld; it recovers selection and reaches matchmaking,
+but the deliberately minimal host recipe later displays lobster. Use the
+full current mission recipe for gameplay validation.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`; add
 `-SkipOpeningCinematic` after watching Mars once to skip that frontend
-prologue on replay runs. The owned keyboard profile is selected before
+prologue on replay runs.
+The join wrapper also saves a native pre-input sample before each of at most
+three stored-character login retries, six seconds apart. An answered selection,
+changed stage/layout or cinematic cannot pass its retry policy. Run
+`pwsh -NoProfile -File scripts/Test-Final124CharacterLogin.ps1` to check the
+policy without starting an emulator or sending input.
+The owned keyboard profile is selected before
 launch; restore XInput after stopping the run. The combined
 `patches/rpcs3-destiny-spu-color-reads.patch` (01.24 copy only) retains clean
 setup menus and normally proportioned inventory previews. Keep Read Color
@@ -55,8 +70,9 @@ the updated qz object type hashes. Continue with
 setup input sequence and the next service boundary. The later 01.00 mission
 experiments in this file remain historical.
 
-JOIN106's light query fails at the first requested interface, even with
-the verified helper attached. JOIN107/108's physical squad Ghost has no
+JOIN106's generation callback fails at the first requested interface, even with
+the verified helper attached. JOIN112 identifies that interface as damage,
+so it is not a proven light gate. JOIN107/108's physical squad Ghost has no
 authored-member or performance binding. `nux_ghost` is **kind 0x28 / 40
 decimal**, index 125, not decimal 28. Its configured target is kind-2 member
 95; the final member handler is `0x257aac`, not the 01.00 handler. JOIN109's

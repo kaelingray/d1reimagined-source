@@ -14,6 +14,8 @@ The [October 4 continuation](notes/checkpoint-2026-10-04-mission.md) records the
 
 The earlier stage-19 waits were resolved by registering the full package chains, including the shared manifests. The default launcher now builds the 837-entry manifest with `--chains`.
 
+JOIN112 repeats the authored Ghost bindings after recovering a missed character-login input. The join harness now retries that input only in the verified native sign-in wait; JOIN113 tests one automatic retry with the first press withheld. Package metadata identifies the previously investigated generation interface as a **damage component**, so its absence on the Ghost is not a proven torch blocker. The [devlog material](notes/devlogs/README.md) includes a captioned short and a narrated, captioned longer review cut documenting the tested binding milestone and the remaining gameplay/rendering gaps; media stays private.
+
 The latest gate diagnosis needed correction: `crorc` was interpreted backwards, and the emulator's PPU hook logged before its scheduler status check, allowing retries to consume an entire watch budget. The repaired diagnostic patch and direct bootflow reader are described in the [01.24 audit checkpoint](notes/checkpoint-2026-09-30-final124-audit.md). Read that checkpoint before acting on the older STUN/gate theories in `final-build.md`.
 
 `Invoke-Final124Run.ps1` now uses explicit/runtime-relative paths, records the processes it starts, sends input only to its own emulator, and reports protocol evidence instead of counting listener banners as progress. An imported runtime must be selected with `-Local`; the repeatable commands are in the [runbook](notes/next-session-playbook.md).

@@ -1,6 +1,9 @@
 # 01.24 continuation — 5 October 2026
 
 Continue from the [4 October checkpoint](checkpoint-2026-10-04-mission.md).
+The latest continuation is JOIN112/113 below: repeat Ghost binding evidence,
+a guarded character-login retry, identification of the generation callback's
+damage component, and the first private devlog review edits.
 The active target remains final BLES01857 01.24, character creation through
 A Guardian Rises. The combined SPU surface tracking and color-buffer fix
 is retained; disabling color reads previously distorted Guardian models.
@@ -304,3 +307,78 @@ The new member regression checks one authored rule, exact field values,
 42 encoded bits, round-trip equality and absence of an automatic Ghost
 count action. Graphics, visible torch, stable Breach return, rifle pickup,
 combat, mission completion and Tower arrival remain open.
+
+## JOIN112: recover a missed login and repeat the Ghost bindings
+
+The 10:39:59 BST emulator remains responsive after the join wrapper's
+seven-minute matchmaking wait expires. At 10:45:53 it is still in
+`character:signin` (current/target 23). The verified stage vtable is
+`0x013e8d58`; fields `+0x3c/+0x40` both equal 5. A bounded native watch
+shows `0x3694d4 -> 0x35cbe0` returning 3, while the family manager's
+account ID is present and active-character ID is zero. No matchmaking
+request has arrived. This is a character-selection wait, not proof of
+a crashed emulator or failed activity host.
+
+A fresh Cross at 10:53:25 produces service 504 and a self delta naming
+the active stored character. Matchmaking arrives at 10:54:15. The ordinary
+route reaches the Wall at 11:02:11. After the existing readiness/reset
+gate, the automatic rule creates one Ghost at 11:02:46, with zero desired
+counts, member owner `0x25fa20da` and performance owner `0x21fa20f2`.
+The actor is `0x52f58000`, unit `0x5bfb82ce`. This repeats JOIN111's binding
+result without a manual member state. Current 24 still has engine state 3
+and return target 112; settled progression is not accepted.
+
+The private player-interface probe initially rejects an assumed `0x40`
+unit stride. The actual descriptor has stride **`0xc0`**. After verifying
+that layout, a fresh `0x138e24` hook identifies player entity `0x602cd380`;
+exact datum resolution matches one occupied unit, `0x3dfb8296`. Its base
+root `0x80a6a022` exposes interface `0x8080206f`, unlike the Ghost's base
+and helper roots. Package metadata identifies this interface family as
+**damage**, so it is not evidence that the helper should target the
+Guardian. See [the correction](ghost-light-0124.md#join112-the-generation-interface-is-a-damage-component).
+No helper state targeting the Guardian is sent.
+
+All eight owned JOIN112 identities are verified exited; XInput is restored.
+
+## JOIN113: guarded character-login recovery
+
+`Invoke-Final124Join.ps1` now allows at most three Cross retries, at least
+six seconds apart, only while the exact native character sign-in stage
+is unchanged at 5/5 and no selection/create response is logged. Each
+retry retains the full ownership check and saves its pre-input sample.
+The reader verifies the stage vtable and rechecks its pointer and fields.
+Setup, creation and cinematic stages fail the retry policy; the Mars
+skip retains its separate current/target-24 gate and opt-in flag.
+
+JOIN113 uses a private copy of the wrapper that withholds only the first
+login Cross. At 11:16:02, its saved sample has `character:signin` 23/23,
+the expected vtable, and unchanged 5/5 fields. **One** retry is posted;
+504 answers at 11:16:02.989. A new prologue-24 sample precedes the Circle
+skip; matchmaking answers at 11:16:08.472 and the host proxy is contacted.
+There is no second retry. This exercises the recovery path without
+manual input. This deliberately minimal join recipe subsequently enters
+cleanup and displays **lobster**, so this run proves frontend recovery
+and skip separation, not a successful mission join. The full mission's
+binding evidence comes from JOIN111/112.
+
+The script suite passes **131 tests** and the PowerShell retry policy
+passes **18 cases**, including changing layouts/stages and answered
+selections. The new PowerShell sources parse; `git diff --check` passes.
+JOIN113's eight owned identities are verified exited and XInput restored.
+
+## Devlog review material
+
+The [episode manifest and publishing drafts](devlogs/README.md) document
+the tested Ghost binding milestone and its limitations. Private outputs
+contain a **52-second captioned vertical cut** and a **5:24 narrated,
+captioned landscape cut**, with SRT captions and measured segment timings.
+They use actual test stills, clearly labeled as a capture montage, and
+Windows desktop synthetic draft narration. Both final MP4s fully decode
+without errors; inspected frames have readable captions. The long cut's
+48-kHz mono AAC audio measures -15.9 dB mean and -1.3 dB peak. Nothing is
+uploaded, and no capture/audio/video is committed.
+
+The next engineering task is the helper's actual lighting component
+activation/transform path, alongside settled Breach progression. The
+damage callback is no longer a proposed torch gate. Guardian distortion,
+torch, rifle, combat, completion and Tower arrival remain unresolved.

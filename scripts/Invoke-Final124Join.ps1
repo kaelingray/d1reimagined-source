@@ -116,16 +116,38 @@ function Get-JoinEmulatorId {
 & pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys X -WaitSeconds 3
 $deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
 $openingSkipSent = $false
+$loginRetryAttempts = 0
+$lastLoginPress = Get-Date
 while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
     if ((Get-Date) -gt $deadline) { 'no mm req within 7 minutes'; break }
-    if ($SkipOpeningCinematic -and -not $openingSkipSent) {
+    $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
+    $retryDue = -not $selectionAnswered -and $loginRetryAttempts -lt 3 -and
+        ((Get-Date) - $lastLoginPress).TotalSeconds -ge 6
+    if ($retryDue -or ($SkipOpeningCinematic -and -not $openingSkipSent)) {
         Get-JoinEmulatorId | Out-Null
         $openingState = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" `
             --process-manifest (Join-Path $logs "$Name-processes.json") | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0) { throw 'Could not verify the opening cinematic stage.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Could not verify the join bootflow stage.' }
+        $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
+        # The first Cross can be lost while character select is loading. Retry
+        # only its exact native wait, and stop once the service has answered.
+        if ($retryDue -and (Test-D1CharacterLoginRetry -State $openingState `
+                -Attempts $loginRetryAttempts -SecondsSincePress ((Get-Date) - $lastLoginPress).TotalSeconds `
+                -SelectionAnswered $selectionAnswered)) {
+            $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
+                (Join-Path $logs "$Name-login-retry-$($loginRetryAttempts + 1)-before.json") -Encoding utf8
+            & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
+                -ProcessIdentity $emulatorIdentity -Keys X -HoldMs 500 -GapMs 50 | Out-Null
+            $loginRetryAttempts++
+            $lastLoginPress = Get-Date
+            "$(Get-Date -Format HH:mm:ss) stored-character login retry $loginRetryAttempts posted"
+            # Resample on the next iteration before considering a Mars skip.
+            continue
+        }
         # Only the pre-matchmaking character prologue is eligible. Never post
         # skip input into an activity's revival, power beat or outro.
-        if ($openingState.current -eq 24 -and $openingState.target -eq 24 -and
+        if ($SkipOpeningCinematic -and -not $openingSkipSent -and
+            $openingState.current -eq 24 -and $openingState.target -eq 24 -and
             $openingState.name -eq 'character:prologue' -and
             $openingState.stage_unchanged_during_sample) {
             $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `

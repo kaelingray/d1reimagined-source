@@ -29,6 +29,8 @@ class BootflowTest(unittest.TestCase):
             (0x30000118, 0x1C): fields,
             (0x30000080 + current * 4, 4): struct.pack(">I", 0x01ABDCA0),
             (0x01ABDCD0, 0x10): struct.pack(">4I", stage, 0, 0, 0),
+            (0x01ABDCA0, 4): struct.pack(">I", 0x013E8D58),
+            (0x01ABDCDC, 8): struct.pack(">II", 5, 5),
             (reader.RESOURCE_STATES, 96): b"".join(struct.pack(">III", 1, 0x01878002, 0)
                                                  for _ in range(8)),
             (reader.RESOURCE_STATES + 0x60, 4): struct.pack(">I", 1),
@@ -75,6 +77,34 @@ class BootflowTest(unittest.TestCase):
             return fixture(addr, size)
 
         self.assertFalse(reader.sample(read)["stage_unchanged_during_sample"])
+
+    def test_character_signin_layout_is_vtable_checked_and_rechecked(self):
+        fixture = self.fixture(current=23)
+        result = reader.sample(fixture)
+        self.assertEqual(result["character_signin"], {
+            "vtable": "0x013e8d58", "current": 5, "target": 5,
+            "unchanged_during_sample": True})
+        reads = 0
+
+        def changing(address, size):
+            nonlocal reads
+            if address == 0x01ABDCDC:
+                reads += 1
+                if reads > 1:
+                    return struct.pack(">II", 5, 7)
+            return fixture(address, size)
+
+        self.assertFalse(reader.sample(changing)["character_signin"]["unchanged_during_sample"])
+
+        def wrong_layout(address, size):
+            if address == 0x01ABDCA0:
+                return struct.pack(">I", 0x013E8B74)
+            if address == 0x01ABDCDC:
+                self.fail("must not read an unverified stage layout")
+            return fixture(address, size)
+
+        self.assertNotIn("character_signin", reader.sample(wrong_layout))
+        self.assertNotIn("character_signin", reader.sample(self.fixture(current=24)))
 
     def test_memory_rejects_short_reads_and_daemon_errors(self):
         for reply in (b"0000\n.\n", b"error: TimeoutError()\n.\n", b""):

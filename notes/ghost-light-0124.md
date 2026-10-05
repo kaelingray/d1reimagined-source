@@ -7,6 +7,12 @@ The ELF SHA-256 is
 `e7f100b38bbaf6c23f71b390fdb103d31b427187c38dcfbd47e09c94c4a44206`.
 Raw definitions and game assets remain private.
 
+**October 5 correction:** JOIN112 identifies the generation callback's
+queried interface family as a damage component. Its absence on the Ghost
+does not establish a torch failure. Continue with the configured attachment's
+lighting activation and transforms; do not redirect the helper to the Guardian
+solely because the Guardian exposes this interface. Details at the end.
+
 ## Objects and state types
 
 Each entity definition carries its actual replicated ID. These are independently
@@ -692,7 +698,8 @@ c121bc (lr c123d4)
 ```
 
 The handler's matching call chain has no successful-view accessor
-`0x1fbaf4`, compatibility check `0x109c58` or light action `0x432674`.
+`0x1fbaf4`, compatibility check `0x109c58` or structured update `0x432674`
+(identified below as part of the damage-component path).
 During the same watch, 787 other calls reach `0x1fbaf4`, providing a
 positive control. Together with the actual missing interface records
 and verified query algorithm, this supports failure of the first lookup;
@@ -891,3 +898,38 @@ unconsumed, so action completion is not claimed. Mission engine state is
 still 3 with current 24 and return target 112. This establishes a manual
 performance/movement path, not its retail timing, torch behavior or stable
 mission completion. No automatic performance action is added.
+
+## JOIN112: the generation interface is a damage component
+
+The fresh player comparison uses the actual `0xc0`-byte unit-pool stride,
+occupied-mask bit, full datum and exact resolved player entity. At 11:08:21
+BST, player unit `0x3dfb8296` has ten active root containers. Base asset
+`0x80a6a022` contains 54 components and exposes interface `0x8080206f`
+under key `0xe52389ae`. Its single view record contains configured class
+`0x80aabd3f`, configured data `0x80a6a11f` and runtime class `0x80aabc05`.
+The earlier `0x40` stride assumption fails a guard before traversal and
+is rejected; it is not a valid unit layout.
+
+The latest package-chain extracts identify that configured class as
+`object_bs.damage.damage_component`, with script path
+`bs\object_bs\damage\damage_component.bs`. Its header names type
+`0x8080236c`; the runtime metadata `0x80aabc05` names both interface
+`0x8080206f` and `0x8080236c`. Configured data also contains
+`recent_damage` and `current_damage`. This identifies the queried family
+as damage, rather than an unidentified light component.
+
+The Guardian's root tables do not separately expose key `0x1de71ad5`.
+That **does not** show that `0x109c58` would reject the returned view:
+`0x147340` populates a compound view, and `0x109c58 -> 0x109a48` checks
+the runtime view's type through `0x0f8a0c`, not a second root-table lookup.
+No native generation callback is tested on the Guardian. The earlier
+Ghost trace still proves its first interface lookup returns no view, but
+that absence is no longer evidence of failed torch activation.
+
+No helper target or automatic action is changed from this comparison.
+The six repeated `0x80801a4e` / `0x80801b21` helper components are extracted
+privately for inspection; their count alone does not identify them as
+lights. Continue by identifying the actual lighting components and their
+activation/transform requirements, independently of the damage callback.
+Visible torch behavior, automatic performance timing and settled mission
+progression remain open.
