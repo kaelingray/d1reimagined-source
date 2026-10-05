@@ -53,6 +53,7 @@ function Stop-D1OwnedProcess {
     param([Parameter(Mandatory)]$Identity)
     $process = Get-D1OwnedProcess -Identity $Identity
     if ($process) {
+        if ($Identity.tag -eq 'rpcs3') { Stop-D1NativeRecording $Identity }
         Stop-Process -InputObject $process -Force -Confirm:$false -ErrorAction Stop
         # Stop-Process can return before the OS releases the log's write handle.
         # Final snapshots must wait for termination, rather than treating a
@@ -100,6 +101,28 @@ function Read-D1ProcessManifest {
     if (Test-Path -LiteralPath $Path) {
         Get-Content -LiteralPath $Path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     }
+}
+
+function Stop-D1NativeRecording {
+    param([Parameter(Mandatory)]$EmulatorIdentity)
+    # Drain only a native recorder whose sidecar identifies this exact emulator.
+    # No config/sidecar means no effect on the existing launch and shutdown flows.
+    try {
+        $config=if ($env:D1_CONTENT_CONFIG) { $env:D1_CONTENT_CONFIG } elseif ($env:D1_LOCAL) { Join-Path $env:D1_LOCAL 'content-capture\config.json' } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'local\content-capture\config.json' }
+        if (-not $config -or -not (Test-Path -LiteralPath $config)) { return }
+        $settings=Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
+        $root=[IO.Path]::GetFullPath($settings.CONTENT_LOCAL_PATH,(Split-Path ([IO.Path]::GetFullPath($config)) -Parent))
+        $sidecar=Join-Path $root 'active-recorder-process.json'
+        if (-not (Test-Path -LiteralPath $sidecar)) { return }
+        $owned=Get-Content -LiteralPath $sidecar -Raw | ConvertFrom-Json
+        if ($owned.emulator.id -ne $EmulatorIdentity.id -or
+            $owned.emulator.startTimeUtcTicks -ne $EmulatorIdentity.startTimeUtcTicks -or
+            $owned.emulator.executable -ne $EmulatorIdentity.executable) { return }
+        $recorder=Get-D1OwnedProcess $owned.recorder
+        if (-not $recorder) { return }
+        New-Item -ItemType File -Path (Join-Path $root 'recorder.stop') -Force | Out-Null
+        if (-not $recorder.WaitForExit(20000)) { Write-Warning 'Native recorder did not drain before client exit; incomplete source stays local.' }
+    } catch { Write-Warning "Optional recorder drain: $_" }
 }
 
 function Get-D1ShutdownOrder {

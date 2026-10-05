@@ -17,3 +17,6 @@ __pycache__/
 /local/
 # Stray installer logs from the Qt/QtCreator tooling.
 aqtinstall.log
+# Source footage, machine configuration and NAS queue never belong in Git.
+/content-outbox/
+/tools/content_capture/config.local.json

@@ -1,5 +1,11 @@
 # Development blog material
 
+The workflow changed on October 5: this development machine now supplies original
+source footage and evidence packages through [automatic NAS capture](../../tools/content_capture/README.md).
+The separate content machine owns episode construction, editing, rendering and
+publishing. Existing review cuts and drafts below are historical material, not the
+normal production workflow. New packages state maturity and remaining issues explicitly.
+
 Engineering takes priority. Prepare an episode when a tested change is worth showing;
 do not turn static asset discovery or a passing serializer test into a gameplay claim.
 Use the current checkpoint and acceptance notes as the source of truth.

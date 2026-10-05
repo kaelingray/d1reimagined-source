@@ -24,6 +24,11 @@ $py = $D1Python
 $rpcs3 = $D1Rpcs3
 $usrdir = $D1Usrdir
 
+# Content failure must never prevent a game launch. The independent worker only
+# observes ready run manifests and starts native recording after exact ownership checks.
+try { & "$PSScriptRoot\Start-ContentCapture.ps1" | Out-Null }
+catch { Write-Warning "Optional content capture startup: $_" }
+
 $owned = [System.Collections.Generic.List[object]]::new()
 $launchedProcesses = [System.Collections.Generic.Dictionary[string, System.Diagnostics.Process]]::new()
 $state = 'starting'
