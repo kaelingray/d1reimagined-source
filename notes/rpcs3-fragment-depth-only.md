@@ -78,7 +78,37 @@ preserves full binding details privately and summarizes draw-state combinations.
 Its two regression tests distinguish canonical and original guest sources and
 reject incomplete diagnostic records.
 
-Next: repeat the guarded path through visible world, character, inventory and
-indoor body checks, then isolate the remaining device loss with Vulkan diagnostics.
+## JOIN131 recording control and partial world/menu acceptance
+
+JOIN131 begins with automatic recording disabled only for this owned comparison;
+the default capture configuration is unchanged. It plays the resurrection scenes,
+creates the Guardian in slice 112, and retains the five correct arrangements/model
+roots. At native 13:44 it has zero fatal/malformed-source entries, zero recording
+starts and 2,118 program additions. The captured character preview has normal body
+proportions and solid armour, equipment icons resolve, Materials shows 0/20, and the
+returning outdoor seated emote has solid armour.
+
+Automatic capture is restored late in the same run. Its fresh probe brings the
+total to 800 bindings / 30 canonical zero-local draws, including depth-write-disabled
+query-style draws. All sampled color/alpha/coverage/varying exclusions remain clear.
+The worker automatically detects the Experimental canonical-path observation and
+submits a 60.55-second source window. Available pre-event footage starts late and is
+labelled; no recording command or manual clip selection is needed.
+
+The later character preview at 22:39:05 and 22:40:30 BST has persistent coloured noise
+on the leg texture while its proportions and icons remain correct. The subsequent
+outdoor dance has solid armour in its sampled view. The final native 17:48 snapshot
+has zero fatal/malformed-source entries, 2,119 additions and eight recording starts.
+This is a useful bounded world/menu result, not complete rendering acceptance.
+The timing does not establish recording as the cause of either the texture error or
+earlier device loss; longer independent controls and resource-lifetime tracing are
+needed. Indoor appearance, temporal flicker and other classes remain unaccepted.
+
+Ordered cleanup is verified, experimental markers are removed, XInput is restored,
+and the normal capture worker remains healthy and enabled. The enhanced diagnostic
+build is deployed afterwards; its fault-report path has not yet been exercised.
+
+Next: trace the character-preview texture and remaining device loss with the
+[expanded Vulkan report](rpcs3-device-fault-detail.md), then repeat indoor body checks.
 The cache guard and parser fix remain independent improvements; neither a refusal
 to store bad shaders nor absence of their log messages proves renderer stability.

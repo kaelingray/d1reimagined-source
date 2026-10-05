@@ -2,3 +2,4 @@ patches/rpcs3-destiny-main-memory-blit.patch -text whitespace=-blank-at-eol,-spa
 patches/rpcs3-fragment-leading-nop-literals.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-fragment-binding-probe.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-fragment-depth-only-candidate.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-device-fault-detail.patch -text whitespace=-blank-at-eol,-space-before-tab

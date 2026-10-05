@@ -67,6 +67,22 @@ failed renderer and labelled accordingly. Five packages are now submitted, with 
 copies retained. The owned test stack is fully exited and the worker remains idle
 and healthy for future recording/retries.
 
+JOIN131 later adds two verified packages, bringing the total to **seven**. The
+Experimental canonical-depth observation automatically preserves a 60.55-second
+outdoor source window. A native visual observation from the development observer
+then supplies the persistent character-preview leg corruption and its observed
+timestamp to the same detector/pending queue. The worker selects its existing
+buffer, remuxes a 121.32-second Known Broken BEFORE clip, extracts two frames and
+verifies its NAS package. Both extracted frames visibly show the texture error;
+one also shows a live "Contacting Destiny Servers" warning. This visual observation
+is an engineering signal, not a general automatic pixel classifier. Clip selection,
+naming, packaging and transfer require no user action.
+
+The normal capture configuration is restored after the temporary recording-disabled
+renderer control. The worker is healthy and idle, local packages are retained, and
+all seven packages contain verified source media/context/frame files plus hashes.
+No package claims the graphics or networking issues are fully repaired.
+
 Keep the source-capture worker alongside development. The engineering priority remains
-the [explicit zero-local fragment binding](rpcs3-fragment-zero-binding.md), then reliable
-Ghost illumination, mission transitions, weapon pickup and combat.
+the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
+reliable Ghost illumination, mission transitions, weapon pickup and combat.

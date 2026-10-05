@@ -1,0 +1,61 @@
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+--- a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+@@ -30,7 +30,11 @@
+ 		std::string fault_description;
+ 
+ 		// Retrieve sizes
+-		_vkGetDeviceFaultInfoEXT(*g_render_device, &fault_counts, nullptr);
++		const auto count_result = _vkGetDeviceFaultInfoEXT(*g_render_device, &fault_counts, nullptr);
++		if (count_result != VK_SUCCESS)
++		{
++			return fmt::format("Device fault count query failed: VkResult=%d", static_cast<s32>(count_result));
++		}
+ 
+ 		// Resize arrays and fill
+ 		address_info.resize(fault_counts.addressInfoCount);
+@@ -44,14 +48,21 @@
+ 			.pVendorInfos = vendor_info.data(),
+ 			.pVendorBinaryData = vendor_binary_data.data()
+ 		};
+-		_vkGetDeviceFaultInfoEXT(*g_render_device, &fault_counts, &fault_info);
++		const auto info_result = _vkGetDeviceFaultInfoEXT(*g_render_device, &fault_counts, &fault_info);
++		if (info_result != VK_SUCCESS && info_result != VK_INCOMPLETE)
++		{
++			return fmt::format("Device fault detail query failed: VkResult=%d", static_cast<s32>(info_result));
++		}
++		// The API overwrites counts with the number of records actually written.
++		address_info.resize(std::min<usz>(address_info.size(), fault_counts.addressInfoCount));
++		vendor_info.resize(std::min<usz>(vendor_info.size(), fault_counts.vendorInfoCount));
+ 
+ 		fault_description = fault_info.description;
+ 		std::string fault_message = fmt::format(
+-			"Device Fault Information:\n"
++			"Device Fault Information (VkResult=%d, incomplete=%u):\n"
+ 			"Fault Summary:\n"
+ 			"  %s\n\n",
+-			fault_description);
++			static_cast<s32>(info_result), info_result == VK_INCOMPLETE, fault_description);
+ 
+ 		if (!address_info.empty())
+ 		{
+@@ -81,7 +92,18 @@
+ 					break;
+ 				}
+ 
+-				fmt::append(fault_message, "  - Fault at address 0x%llx caused by %s\n", fault.reportedAddress, access_type);
++				fmt::append(fault_message, "  - Fault at address 0x%llx caused by %s; address_precision=0x%llx\n",
++					fault.reportedAddress, access_type, fault.addressPrecision);
++				if (fault.addressPrecision && !(fault.addressPrecision & (fault.addressPrecision - 1)))
++				{
++					const auto mask = fault.addressPrecision - 1;
++					fmt::append(fault_message, "    possible_address_range=[0x%llx, 0x%llx]\n",
++						fault.reportedAddress & ~mask, fault.reportedAddress | mask);
++				}
++				else
++				{
++					fmt::append(fault_message, "    possible_address_range=unknown (invalid precision)\n");
++				}
+ 			}
+ 		}
+ 

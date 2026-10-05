@@ -133,3 +133,12 @@ These brief returns supersede the missing round-trip evidence above; sustained
 stability, indoor appearance and other classes remain open. Malformed live
 programs persist even with the independently verified
 [NOP-literal parser correction](rpcs3-fragment-start-literals.md).
+
+JOIN131 tests the experimental [bounded depth fragment](rpcs3-fragment-depth-only.md).
+Its recording-disabled phase repeats normal Titan proportions, a solid preview,
+resolved icons, Materials 0/20 and a solid outdoor seated emote after the menu return.
+Late recording and further transitions still produce no fatal/malformed-source entry
+through native 17:48. The later character preview's leg texture becomes coloured
+noise, while a subsequent sampled outdoor dance remains solid. Geometry/profile
+acceptance does not accept that texture, sustained flicker or indoor appearance.
+The observed timing is not proof that recording causes the corruption.

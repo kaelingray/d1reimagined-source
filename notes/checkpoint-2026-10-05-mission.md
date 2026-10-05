@@ -659,11 +659,28 @@ alongside the 12 actual-parser fixtures. The full Release build is deployed with
 the previous executable backed up. JOIN129 samples 15 real canonical draws with
 depth tests/writes enabled, including three stencil draws. Its log has no malformed
 source but still reports Vulkan device loss at 7:55. Keep the marker absent outside
-owned experiments; combined visible world/menu/body acceptance remains outstanding.
+owned experiments; complete world/menu/body graphics acceptance remains outstanding.
 
 The [automatic source pipeline](content-capture-acceptance.md) is now the normal
-devlog workflow, using the 500 GB NAS share. The next increment repairs reading the
+devlog workflow, using the 500 GB NAS share. The latest increment repairs reading the
 open native Windows log, preserves earlier and incomplete diagnostic lines, clears
 recovered sample errors and reduces repository polling. Capture and transfer remain
 independent of the primary development process. Experimental renderer observations
 and persistent crashes must retain distinct maturity labels.
+
+JOIN131 supplies partial native acceptance for the candidate: normal body proportions
+in character and outdoor emote views, resolved equipment, Materials 0/20 and menu/world
+returns, with zero fatal/malformed-source entries through native 17:48 and 2,119
+program additions. Recording begins late after a controlled disabled phase. A later
+character preview shows persistent coloured leg-texture noise; the sampled outdoor
+dance remains solid. Recording causality is unproven and the candidate stays disabled
+by default. The [expanded Vulkan fault report](rpcs3-device-fault-detail.md) is built
+and deployed after cleanup, with actual native failure-report execution still pending.
+
+Seven source packages are verified on the share, including Experimental depth footage
+and a Known Broken texture clip selected/packaged from the buffer after the development
+observer supplied its native visual finding. The latter also retains a live menu
+"Contacting Destiny Servers" warning before shutdown. This is separate from the
+previous user-confirmed shutdown Anteater and does not establish its cause or a
+networking fix. The test stack is fully closed, experimental markers are absent,
+XInput is restored and the normal capture worker is enabled and healthy.
