@@ -625,15 +625,16 @@ emulator executable enters Git.
 
 ## Shutdown and the reported Anteater
 
-The user reports Anteater around JOIN125 cleanup. The pre-shutdown observer
+The user confirms Anteater appeared around 17:59 during JOIN125 shutdown,
+rather than earlier in the menu test. The pre-shutdown observer
 still records `activity:in_world` at 17:58:50; the activity host receives client
 traffic through 17:58:57. The manual cleanup incorrectly uses shortened
 `-Name JOIN125` instead of `FINAL124_JOIN125`, and the wrapper previously
 reported that nonexistent run as stopped. Subsequent exact-identity cleanup
 stops the proxy while the client is still briefly open. BAP remains active
 through 17:59:16; the client then exits. This timing supports a shutdown-induced
-disconnect, but the code label alone does not establish its cause or exclude an
-earlier user-observed failure. No renderer fatal appears in the saved pre-stop log.
+disconnect. The confirmation concerns this cleanup event, not a general
+explanation for Anteater. No renderer fatal appears in the saved pre-stop log.
 
 The stop wrapper now rejects a name without either ownership record, writes the
 cooperative stop marker for a recorded stack, detaches its debugger and closes

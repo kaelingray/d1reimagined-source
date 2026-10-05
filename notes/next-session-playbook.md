@@ -116,7 +116,8 @@ An unknown/shortened name now fails clearly rather than reporting success.
 Shutdown detaches the debugger and closes the owned client before its backends
 and proxy, so cleanup does not briefly leave an open game without its host.
 Every PID still requires the saved executable and creation time. JOIN125's
-reported Anteater coincides with the earlier manual proxy-first shutdown;
+reported Anteater is confirmed by the user to occur at the earlier manual
+proxy-first shutdown around 17:59;
 that timing does not prove all such errors are benign. Preserve the host/client
 logs and classify a drop before cleanup separately.
 
