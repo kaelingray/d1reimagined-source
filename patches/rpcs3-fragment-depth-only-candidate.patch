@@ -1,0 +1,178 @@
+diff --git a/rpcs3/Emu/RSX/RSXThread.cpp b/rpcs3/Emu/RSX/RSXThread.cpp
+--- a/rpcs3/Emu/RSX/RSXThread.cpp
++++ b/rpcs3/Emu/RSX/RSXThread.cpp
+@@ -12,6 +12,7 @@
+ #include "NV47/HW/context.h"
+ #include "NV47/HW/context_accessors.define.h"
+ #include "Program/GLSLCommon.h"
++#include "Program/FragmentDepthOnly.h"
+ #include "rsx_methods.h"
+ 
+ #include "gcm_printing.h"
+@@ -2157,6 +2158,26 @@
+ 	static u64 s_d1_fp_write_gen = 0;
+ 	static u64 s_d1_fp_reloads = 0;
+ 
++	static fragment_depth_only::draw_state depth_only_draw_state(const rsx_state& regs)
++	{
++		const auto [offset, location] = regs.shader_program_address();
++		fragment_depth_only::draw_state state{};
++		state.offset = offset;
++		state.location = location;
++		state.control = regs.shader_control();
++		state.varying_mask = regs.vertex_attrib_output_mask();
++		for (int i = 0; i < 4; ++i) state.color_writes[i] = regs.color_write_enabled(i);
++		state.alpha_test = regs.alpha_test_enabled();
++		state.alpha_to_coverage = regs.msaa_alpha_to_coverage_enabled();
++		state.polygon_stipple = regs.polygon_stipple_enabled();
++		for (const auto& tex : regs.fragment_textures)
++		{
++			state.texture_alpha_kill |= tex.enabled() && tex.alpha_kill_enabled();
++		}
++		return state;
++	}
++
++
+ 	void thread::prefetch_fragment_program()
+ 	{
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
+@@ -2172,7 +2193,9 @@
+ 		const auto [program_offset, program_location] = method_registers.shader_program_address();
+ 		const auto prev_textures_reference_mask = current_fp_metadata.referenced_textures_mask;
+ 
+-		auto data_ptr = vm::base(rsx::get_address(program_offset, program_location));
++		static auto depth_only_program = fragment_depth_only::end_nop();
++		auto data_ptr = m_depth_only_fragment ? reinterpret_cast<u8*>(depth_only_program.data()) :
++			vm::base(rsx::get_address(program_offset, program_location));
+ 		const bool trace_binding = d1diag::fp_logging();
+ 		std::array<u8, 16> first_bound_slot{};
+ 		if (trace_binding)
+@@ -2193,13 +2216,17 @@
+ 			for (u32 i = 0; i < std::min<u32>(current_fragment_program.total_length, 64); i++) fmt::append(prefix, "%02x", raw[i]);
+ 			const auto* parsed = static_cast<const u8*>(current_fragment_program.get_data());
+ 			for (u32 i = 0; i < std::min<u32>(current_fragment_program.ucode_length, 32); i++) fmt::append(code, "%02x", parsed[i]);
+-			d1_log.warning("D1FPBIND offset=0x%x location=%u address=0x%x start=0x%x length=0x%x constants=0x%x before=%s prefix=%s code=%s",
++			const auto draw = depth_only_draw_state(method_registers);
++			d1_log.warning("D1FPBIND offset=0x%x location=%u address=0x%x start=0x%x length=0x%x constants=0x%x before=%s prefix=%s code=%s ctrl=0x%x color=0x%x mrt=0x%x varyings=0x%x alpha=%u a2c=%u stipple=%u texture_kill=%u depth_test=%u depth_write=%u stencil=%u synthetic=%u",
+ 				program_offset, program_location, rsx::get_address(program_offset, program_location), current_fp_metadata.program_start_offset,
+-				current_fragment_program.ucode_length, current_fp_metadata.program_constants_buffer_length, before, prefix, code);
++				current_fragment_program.ucode_length, current_fp_metadata.program_constants_buffer_length, before, prefix, code,
++				draw.control, method_registers.registers[NV4097_SET_COLOR_MASK], method_registers.registers[NV4097_SET_COLOR_MASK_MRT],
++				draw.varying_mask, draw.alpha_test, draw.alpha_to_coverage, draw.polygon_stipple, draw.texture_alpha_kill,
++				method_registers.depth_test_enabled(), method_registers.depth_write_enabled(), method_registers.stencil_test_enabled(), m_depth_only_fragment);
+ 		}
+ 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
+ 		current_fragment_program.valid = true;
+-		s_d1_fp_write_gen = program_location == CELL_GCM_LOCATION_LOCAL ?
++		s_d1_fp_write_gen = !m_depth_only_fragment && program_location == CELL_GCM_LOCATION_LOCAL ?
+ 			rsx::local_mem_write_gen(rsx::get_address(program_offset, program_location), current_fragment_program.total_length) : 0;
+ 
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_state_dirty))
+@@ -2269,11 +2296,23 @@
+ 
+ 	void thread::analyse_current_rsx_pipeline()
+ 	{
++		const auto [offset, location] = method_registers.shader_program_address();
++		const bool depth_only = offset == 0 && location == CELL_GCM_LOCATION_LOCAL &&
++			d1diag::depth_only_enabled() && fragment_depth_only::eligible(depth_only_draw_state(method_registers),
++				CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT | RSX_SHADER_CONTROL_USES_KIL);
++		if (depth_only != m_depth_only_fragment)
++		{
++			m_depth_only_fragment = depth_only;
++			// Color/coverage state may change without rebinding the same shader address.
++			m_graphics_state |= rsx::pipeline_state::fragment_program_ucode_dirty;
++			m_graphics_state |= rsx::pipeline_state::fragment_program_state_dirty;
++		}
++
+ 		// The RSX reads fragment program ucode from memory at draw time. RPCS3 reads it once when the
+ 		// program address is set (or an RSX transfer overwrites it), so a program that an SPU DMA
+ 		// rewrites in place in local memory would keep its stale length and layout (Destiny: garbage
+ 		// ucode, unbalanced flow control). Re-read it when its pages were written since.
+-		if (current_fragment_program.total_length && !m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
++		if (!m_depth_only_fragment && current_fragment_program.total_length && !m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
+ 		{
+ 			const auto [program_offset, program_location] = method_registers.shader_program_address();
+ 			if (program_location == CELL_GCM_LOCATION_LOCAL &&
+diff --git a/rpcs3/Emu/RSX/RSXThread.h b/rpcs3/Emu/RSX/RSXThread.h
+--- a/rpcs3/Emu/RSX/RSXThread.h
++++ b/rpcs3/Emu/RSX/RSXThread.h
+@@ -268,6 +268,7 @@
+ 
+ 		RSXVertexProgram current_vertex_program = {};
+ 		RSXFragmentProgram current_fragment_program = {};
++		bool m_depth_only_fragment = false;
+ 
+ 		vertex_program_texture_state current_vp_texture_state = {};
+ 		fragment_program_texture_state current_fp_texture_state = {};
+diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
+--- a/rpcs3/Emu/RSX/d1diag.h
++++ b/rpcs3/Emu/RSX/d1diag.h
+@@ -81,6 +81,21 @@
+ 			on = is;
+ 		}
+ 		return on.load() && lines.fetch_add(1) < 400;
++	}
++
++
++	// Disabled unless explicitly armed for a controlled depth-only comparison.
++	inline bool depth_only_enabled()
++	{
++		static u64 last_check = 0;
++		static bool enabled = false;
++		const u64 now = get_system_time();
++		if (now - last_check > 500'000)
++		{
++			last_check = now;
++			enabled = fs::is_file(ctl_dir() + "d1depthfp.on");
++		}
++		return enabled;
+ 	}
+ 
+ 	inline bool hit(u32 addr, u32 len)
+diff --git a/rpcs3/Emu/RSX/Program/FragmentDepthOnly.h b/rpcs3/Emu/RSX/Program/FragmentDepthOnly.h
+new file mode 100644
+--- /dev/null
++++ b/rpcs3/Emu/RSX/Program/FragmentDepthOnly.h
+@@ -0,0 +1,42 @@
++#pragma once
++#include <array>
++#include <cstdint>
++
++namespace rsx::fragment_depth_only
++{
++	struct draw_state
++	{
++		std::uint32_t offset = 0;
++		std::uint32_t location = 0;
++		std::uint32_t control = 0;
++		std::uint32_t varying_mask = 0;
++		std::array<bool, 4> color_writes{};
++		bool alpha_test = false;
++		bool alpha_to_coverage = false;
++		bool polygon_stipple = false;
++		bool texture_alpha_kill = false;
++	};
++
++	// Experimental zero-local binding path. Preserve the raster draw and its
++	// fixed-function depth/stencil/occlusion work; only fragment execution is empty.
++	constexpr bool eligible(const draw_state& state, std::uint32_t fragment_effect_mask)
++	{
++		if (state.offset || state.location || state.varying_mask ||
++			(state.control & fragment_effect_mask) || state.alpha_test ||
++			state.alpha_to_coverage || state.polygon_stipple || state.texture_alpha_kill)
++		{
++			return false;
++		}
++		for (bool enabled : state.color_writes)
++		{
++			if (enabled) return false;
++		}
++		return true;
++	}
++
++	constexpr std::array<std::uint32_t, 4> end_nop()
++	{
++		// RSX's half-word-swapped instruction encoding: NOP with END, no literals.
++		return {0x00000100u, 0u, 0u, 0u};
++	}
++}

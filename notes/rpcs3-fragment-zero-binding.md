@@ -46,7 +46,9 @@ run still logged 12,347 invalid-source programs and 31,475 additions, with no fa
 entry in that snapshot. Ordinary world appearance is not sustained renderer acceptance.
 JOIN126 was stopped by exact run identity with the client before its services.
 
-Next: capture the full fragment-affecting draw state, implement and test faithful
-depth-only handling if supported, and compare native menu/world churn and appearance.
+The [guarded depth-only candidate](rpcs3-fragment-depth-only.md) now captures full
+fragment-affecting state and replaces only eligible zero-local draws with an END NOP.
+The first controlled run eliminates the known malformed source in its log, but still
+hits Vulkan device loss. Keep it disabled by default pending world/menu validation.
 The leading-NOP-literal metadata correction remains useful but cannot repair a binding
 whose original memory contains vertices rather than shader instructions.
