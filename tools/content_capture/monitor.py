@@ -18,6 +18,7 @@ import uuid
 from capture import Capture, REPO, atomic_json, check_text, digest, git_context, lock, now
 
 sys.path.insert(0, str(REPO / "scripts"))
+from rpcs3_shared_log import open_shared_read
 
 
 class Detector:
@@ -79,6 +80,16 @@ class Detector:
 
 def observations(sample, native_lines, backend_lines):
     result = []
+    for line in native_lines.splitlines():
+        if "D1FPBIND " not in line:
+            continue
+        fields = dict(re.findall(r"(\w+)=([^\s]+)", line.split("D1FPBIND ", 1)[1]))
+        if all(fields.get(k) == v for k, v in {"offset": "0x0", "location": "0", "start": "0x0",
+                "length": "0x10", "constants": "0x0", "synthetic": "1"}.items()):
+            result.append(("zero-local-depth-fragment", "OBSERVED", {
+                "summary": "Experimental zero-local depth path used a bounded 16-byte END NOP instead of scanning vertex memory. Complete renderer stability remains unverified.",
+                "source": "D1FPBIND", "canonical_length": 16}, "Experimental"))
+            break
     if (sample.get("current") == 36 and sample.get("stage_unchanged_during_sample")
             and sample.get("world", {}).get("engine_state_89") == 0):
         result.append(("world-entry", "OBSERVED", {"summary": "01.24 reached world bootflow 36 with engine state 0.",
@@ -96,19 +107,25 @@ def observations(sample, native_lines, backend_lines):
 class Tail:
     def __init__(self):
         self.offsets = {}
+        self.partial = {}
 
     def read(self, path):
         try:
-            with path.open("rb") as f:
+            with open_shared_read(path) as f:
                 size = os.fstat(f.fileno()).st_size
                 offset = self.offsets.get(str(path), 0)
                 if size < offset:
                     offset = 0
-                # Bound even very noisy RSX logs. Never copy the raw tail to NAS.
-                f.seek(max(offset, size - 256 * 1024))
-                data = f.read(256 * 1024)
+                    self.partial.pop(str(path), None)
+                # Drain bounded chunks in order: jumping to the latest bytes can
+                # silently lose a brief fatal or probe burst. Raw logs stay local.
+                f.seek(offset)
+                data = f.read(4 * 1024 * 1024)
                 self.offsets[str(path)] = f.tell()
-                return data.decode("utf-8", errors="replace")
+                combined = self.partial.get(str(path), b"") + data
+                lines = combined.split(b"\n")
+                self.partial[str(path)] = lines.pop()
+                return b"\n".join(lines).decode("utf-8", errors="replace")
         except OSError:
             return ""
 
@@ -131,6 +148,7 @@ class Monitor:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="content-io")
         self.job = None
         self.last_git = git_context()["git_commit"]
+        self.last_git_check = time.monotonic()
         self.inflight = None
         self.last_maintenance = 0
 
@@ -185,6 +203,7 @@ class Monitor:
         if self.manifest is None:
             self.manifest, self.reader = self.eligible_run()
             if self.manifest:
+                self.tail = Tail()  # the shared native log belongs to this new run
                 self.start_recorder(self.manifest)
         if not self.manifest:
             return
@@ -200,6 +219,7 @@ class Monitor:
         try:
             s = sample(self.reader.read, include_request=False)
             s["world"] = world_snapshot(self.reader.read)
+            self.capture.status(SAMPLE_STATUS="AVAILABLE", SAMPLE_ERROR=None)
         except (OSError, ValueError) as error:
             # Early engine tables and transitions are temporarily unreadable. The
             # still-live process keeps its recorder; this is not a process exit.
@@ -351,11 +371,14 @@ class Monitor:
                             self.finish_events()
                             if not self.job or self.job.done():
                                 self.job = self.pool.submit(self.process)
-                    current = git_context()["git_commit"]
-                    if current != self.last_git:
-                        self.capture.event("IMPROVED", "repository", "Repository revision changed; gameplay acceptance requires separate evidence.",
-                                           previous_commit=self.last_git, new_commit=current)
-                        self.last_git = current
+                    if time.monotonic() - self.last_git_check >= 60:
+                        self.last_git_check = time.monotonic()
+                        current = git_context()["git_commit"]
+                        if current != self.last_git:
+                            self.capture.event("IMPROVED", "repository", "Repository revision changed; gameplay acceptance requires separate evidence.",
+                                               previous_commit=self.last_git, new_commit=current)
+                            self.last_git = current
+                    self.capture.status(MONITOR_ERROR=None)
                 except Exception as error:
                     self.capture.status(MONITOR_ERROR=str(error))
                 time.sleep(2)

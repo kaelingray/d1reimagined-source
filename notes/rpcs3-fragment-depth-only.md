@@ -57,6 +57,20 @@ not accepted. Keep the marker absent outside controlled comparisons.
   recorder drain first and XInput restored. The marker is removed after the test.
   Post-fatal memory reads are not gameplay acceptance.
 
+JOIN130 repeats the candidate and still reports device loss at native **3:04.432329**,
+this time surfaced on an SPU thread. It supplies a valid character-select screenshot
+before the failure; no visible world/menu/body acceptance follows. Its early 400-line
+probe contains ordinary bindings and no zero-local draw, so it adds no canonical-path
+acceptance beyond JOIN129. The same asynchronous device error appearing on different
+CPU threads does not identify the GPU operation that caused it. Ordered cleanup is
+verified complete and the experimental markers are absent afterwards.
+
+The repaired content worker reads that fatal from the open native log, automatically
+preserves its available buffer and submits a **74.65-second** native game/audio source
+package. Metadata labels the renderer Known Broken, links a BEFORE comparison group,
+records the truncated post-event window and requires downstream publication review.
+The package's NAS receipt is SUBMITTED; this is failure documentation, not a crash fix.
+
 `scripts/rpcs3_fragment_depth_audit.py --checkout PRIVATE_RPCS3 --out NEW_PRIVATE_DIR`
 generates the standalone audit. Compile the emitted source as C++20 and run it.
 `scripts/rpcs3_fragment_binding_summary.py --log PRIVATE_LOG --out PRIVATE_JSON`

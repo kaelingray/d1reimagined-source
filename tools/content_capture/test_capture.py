@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from capture import Capture, atomic_json, digest, check_text, lock
-from monitor import Detector, Monitor, observations
+from monitor import Detector, Monitor, Tail, observations
 
 
 class PipelineTests(unittest.TestCase):
@@ -236,6 +236,11 @@ class PipelineTests(unittest.TestCase):
             monitor.detect()
             stop.assert_not_called()
         self.assertEqual(self.capture.status()["SAMPLE_STATUS"], "TRANSITION_UNAVAILABLE")
+        with patch("rpcs3_final124_bootflow.sample", return_value={}), \
+             patch("rpcs3_final124_bootflow.world_snapshot", return_value={}):
+            monitor.detect()
+        self.assertEqual(self.capture.status()["SAMPLE_STATUS"], "AVAILABLE")
+        self.assertIsNone(self.capture.status()["SAMPLE_ERROR"])
         monitor.pool.shutdown()
 
     def test_build_change_does_not_reuse_previous_acceptance(self):
@@ -245,6 +250,56 @@ class PipelineTests(unittest.TestCase):
         event = detector.observe("inventory", "OBSERVED", {"summary": "New build observed"})
         self.assertEqual(event["previous_state"], "UNKNOWN")
         self.assertEqual(event["event_type"], "FEATURE_PARTIAL")
+
+    def test_canonical_depth_observation_is_experimental(self):
+        line = "D1FPBIND offset=0x0 location=0 start=0x0 length=0x10 constants=0x0 synthetic=1"
+        events = observations({}, line, "")
+        self.assertEqual(events[0][0:2], ("zero-local-depth-fragment", "OBSERVED"))
+        self.assertEqual(events[0][3], "Experimental")
+        self.assertEqual(observations({}, line.replace("synthetic=1", "synthetic=0"), ""), [])
+
+    def test_log_tail_preserves_probe_bursts_partial_lines_and_rotation(self):
+        path = self.root / "RPCS3.log"
+        path.write_bytes(b"D1FPBIND " + b"x" * (300 * 1024) + b"\nVK_ERROR_DEVICE")
+        tail = Tail()
+        first = tail.read(path)
+        self.assertTrue(first.startswith("D1FPBIND "))
+        self.assertNotIn("VK_ERROR_DEVICE", first)
+        with path.open("ab") as stream:
+            stream.write(b"_LOST\n")
+        self.assertEqual(tail.read(path), "VK_ERROR_DEVICE_LOST")
+        self.assertEqual(tail.read(path), "")
+        path.write_bytes(b"new run\n")
+        self.assertEqual(tail.read(path), "new run")
+
+    def test_log_tail_does_not_skip_earlier_failure_in_large_backlog(self):
+        path = self.root / "RPCS3.log"
+        path.write_bytes(b"VK_ERROR_DEVICE_LOST\n" + b"ordinary\n" * 600000)
+        tail = Tail()
+        first = tail.read(path)
+        self.assertTrue(first.startswith("VK_ERROR_DEVICE_LOST\n"))
+        self.assertLessEqual(len(first.encode()), 4 * 1024 * 1024)
+        self.assertTrue(tail.read(path).startswith("ordinary"))
+        self.assertEqual(tail.read(path), "")
+
+    @unittest.skipUnless(os.name == "nt", "Windows native sharing semantics")
+    def test_log_tail_reads_while_windows_writer_is_open(self):
+        import ctypes
+        from ctypes import wintypes as wt
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD, ctypes.c_void_p,
+                                      wt.DWORD, wt.DWORD, wt.HANDLE]
+        kernel.CreateFileW.restype = wt.HANDLE
+        kernel.CloseHandle.argtypes = [wt.HANDLE]
+        path = self.root / "locked.log"
+        path.write_bytes(b"VK_ERROR_DEVICE_LOST\n")
+        # Writer permits readers, but a CRT reader that denies writing conflicts.
+        handle = kernel.CreateFileW(str(path), 0x40000000, 1, None, 3, 0x80, None)
+        self.assertNotIn(handle, (None, wt.HANDLE(-1).value))
+        try:
+            self.assertEqual(Tail().read(path), "VK_ERROR_DEVICE_LOST")
+        finally:
+            kernel.CloseHandle(handle)
 
 
 if __name__ == "__main__":

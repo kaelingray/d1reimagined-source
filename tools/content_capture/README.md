@@ -109,6 +109,9 @@ python -m unittest discover -s tools/content_capture -p test_capture.py -v
 
 Tests isolate media packaging, secret filters, native-file closure, event classification,
 failure/fix pairing, buffer bounds, duplicates, multiple machines, corrupted/interrupted
-transfers, backoff, rename recovery, hash verification and safe retention. Live native
+transfers, backoff, rename recovery, hash verification, safe retention and reading an
+open Windows native log. Diagnostic tails drain bounded chunks without discarding
+earlier failures or split lines. The canonical zero-local depth observation remains
+Experimental and does not label renderer device loss fixed. Live native
 recording and actual SMB delivery are separate acceptance checks; unit fixtures alone
 do not establish capture performance or gameplay functionality.

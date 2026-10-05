@@ -30,6 +30,7 @@ from pathlib import Path
 from d1_traverse import Pad, Player
 from d1_walker import Grid, Walker, facing_from_pointers
 from rpcs3_owned_memory import OwnedMemory, emulator_identity
+from rpcs3_shared_log import open_shared_read
 
 ROOT = Path(__file__).resolve().parents[1]
 WALL_ROUTE = ROOT / "missions/routes/enter_the_wall.json"
@@ -76,20 +77,7 @@ class SharedTail:
     def lines(self):
         if not self.path.exists():
             return []
-        if os.name == "nt":
-            import msvcrt
-            from ctypes import wintypes as wt
-            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-            kernel.CreateFileW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD, ctypes.c_void_p,
-                                          wt.DWORD, wt.DWORD, wt.HANDLE]
-            kernel.CreateFileW.restype = wt.HANDLE
-            handle = kernel.CreateFileW(str(self.path), 0x80000000, 7, None, 3, 0x80, None)
-            if handle in (None, wt.HANDLE(-1).value):
-                raise ctypes.WinError(ctypes.get_last_error())
-            stream = os.fdopen(msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY), "rb")
-        else:
-            stream = self.path.open("rb")
-        with stream:
+        with open_shared_read(self.path) as stream:
             size = stream.seek(0, 2)
             if size < self.offset:
                 raise RouteStopped(f"log rotated or truncated: {self.path.name}")

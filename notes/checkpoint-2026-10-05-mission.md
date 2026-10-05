@@ -650,3 +650,20 @@ cooperative marker is written, and repeat stops preserve the original evidence.
 All these checks and the existing isolated `Test-Final124Run.ps1` suite pass.
 This prevents the cleanup window that can visibly remove the local host from a
 running client; it is not a general networking or Anteater repair.
+
+## Zero-local renderer candidate and automatic diagnostic capture
+
+The [bounded depth candidate](rpcs3-fragment-depth-only.md) adds an opt-in END NOP
+for strictly guarded zero-local draws and passes 20 predicate/canonical fixtures
+alongside the 12 actual-parser fixtures. The full Release build is deployed with
+the previous executable backed up. JOIN129 samples 15 real canonical draws with
+depth tests/writes enabled, including three stencil draws. Its log has no malformed
+source but still reports Vulkan device loss at 7:55. Keep the marker absent outside
+owned experiments; combined visible world/menu/body acceptance remains outstanding.
+
+The [automatic source pipeline](content-capture-acceptance.md) is now the normal
+devlog workflow, using the 500 GB NAS share. The next increment repairs reading the
+open native Windows log, preserves earlier and incomplete diagnostic lines, clears
+recovered sample errors and reduces repository polling. Capture and transfer remain
+independent of the primary development process. Experimental renderer observations
+and persistent crashes must retain distinct maturity labels.
