@@ -48,6 +48,10 @@ return transition. JOIN113 tests the wrapper's bounded character-login retry
 with the initial press withheld; it recovers selection and reaches matchmaking,
 but the deliberately minimal host recipe later displays lobster. Use the
 full current mission recipe for gameplay validation.
+JOIN115/116 record actual gameplay for the revised devlogs and repeat the
+one-Ghost bindings/manual movement and broken daylight Guardian appearance.
+Both owned stacks are stopped. Devlog media stays private; use the
+[video workflow](devlogs/README.md) rather than the superseded still-only edits.
 Run the cycle with `scripts/Invoke-Final124Join.ps1`; add
 `-SkipOpeningCinematic` after watching Mars once to skip that frontend
 prologue on replay runs.
@@ -155,6 +159,28 @@ pausing; the legacy GDB path still pauses/resumes. Only stage 19's `+0x30/+0x34`
 layout is interpreted as substates.
 
 ### 01.24 mission join recipe and private catalog
+
+**Current JOIN115/116 recipe:** start in revival slice 113, use the corrected
+1,455-entry private baseline superset, and retain group-switch handover.
+Choose a fresh run name. Any outer launcher stdout/stderr/identity files must
+use a different prefix until the public launcher has reserved the run name.
+
+```powershell
+$runtime = 'F:\d1\lukespc-import\d1xenia\local'
+$run = 'FINAL124_NEXT' # choose a previously unused name
+$control = "$runtime/SIGNON_LOCAL/$run-control.jsonl"
+New-Item -ItemType File -Path $control -ErrorAction Stop | Out-Null
+$proxyOptions = '--ah-bubble-states;-1,0=0,3=0,14=0;--ah-zone;113:0x811c9dc5;--ah-world-state;113:1;--ah-roster;0;--ah-bubble-reset;14:1;--ah-sim-player;0x4786c0e0:5:0x0a3d4a2c8fbea6ba:1;--ah-game-mode;0x4786c0e0:3:3;--ah-baselines;@' + "$runtime/SIGNON_LOCAL/baselines_highway_0124_all.txt" + ';--ah-heartbeat;1;--ah-sim-clock;30;--ah-group-switch;--ah-mission;' + (Resolve-Path missions/a_guardian_rises.json).Path + ';--ah-control;' + $control
+& scripts/Invoke-Final124Join.ps1 -Name $run -Local $runtime `
+  -DataRepo 'F:\d1\d1xenia-data' `
+  -BapExtra '--peer-family;--character-gear;starter:01.24:titan' `
+  -ProxyExtra $proxyOptions -AfterMatchSeconds 1200 -SkipOpeningCinematic
+```
+
+The guarded route/reset/teleport sequence above is still required for the
+current Breach experiment. Neither this launch recipe nor a finished recording
+establishes automatic first-mission completion. The smaller zone-112 recipe
+below is historical reference, not the current gameplay test.
 
 Use PowerShell's script invocation (`&`) for the semicolon-separated extra options.
 Passing a value starting with `--` through `pwsh -File` can be parsed as another

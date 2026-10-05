@@ -1,6 +1,7 @@
 # Post keys to the running Destiny RPCS3 game window (keyboard pad handler), e.g. Cross = X,
 # Circle = C, Start = Return, D-pad = arrows, left stick = WASD; F12 (-Vk 0x7B) takes an
-# in-emulator screenshot. Keys are posted, so the window does not need focus.
+# in-emulator screenshot; F11 starts/stops RPCS3's native gameplay recorder.
+# Keys are posted, so the window does not need focus.
 #   Send-RpcsKey.ps1                      one X press
 #   Send-RpcsKey.ps1 -Keys X,X,Down -GapMs 1500
 #   Send-RpcsKey.ps1 -Keys D -HoldMs 400  hold (e.g. move the menu cursor with the stick)
@@ -30,7 +31,7 @@ public static class RpcsKeys {
 }
 "@
 $named = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28; Return = 0x0D; Enter = 0x0D; Space = 0x20;
-            Escape = 0x1B; F12 = 0x7B }
+            Escape = 0x1B; F11 = 0x7A; F12 = 0x7B }
 $vks = @()
 if ($Vk) { $vks += , $Vk }
 foreach ($k in $Keys) {

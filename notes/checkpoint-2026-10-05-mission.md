@@ -1,9 +1,10 @@
 # 01.24 continuation — 5 October 2026
 
 Continue from the [4 October checkpoint](checkpoint-2026-10-04-mission.md).
-The latest continuation is JOIN112/113 below: repeat Ghost binding evidence,
-a guarded character-login retry, identification of the generation callback's
-damage component, and the first private devlog review edits.
+The latest continuation is JOIN115/116 below: repeated Ghost bindings/manual
+movement and real gameplay recordings replacing the still-only devlog edits.
+JOIN112/113 retain the guarded character-login retry and the identification of
+the generation callback's damage component.
 The active target remains final BLES01857 01.24, character creation through
 A Guardian Rises. The combined SPU surface tracking and color-buffer fix
 is retained; disabling color reads previously distorted Guardian models.
@@ -382,3 +383,67 @@ The next engineering task is the helper's actual lighting component
 activation/transform path, alongside settled Breach progression. The
 damage callback is no longer a proposed torch gate. Guardian distortion,
 torch, rifle, combat, completion and Tower arrival remain unresolved.
+
+## JOIN115/116: record real gameplay for the revised devlogs
+
+The user requested footage and identified empty visual sections in the first
+review cuts. Those still-image edits are superseded by the recorded edits in
+[the devlog material](devlogs/README.md). RPCS3's native F11 recorder captures
+game frames and game audio, including while the window is in the background.
+The encoder's active output can initially be zero bytes; stop once and wait
+for a probeable finalized MP4 before stopping the owned emulator.
+
+JOIN114 stopped before launch: its outer launcher log used the public run
+prefix and correctly tripped the existing duplicate-name guard. No emulator
+or gameplay evidence comes from that attempt. Outer launcher output for the
+fresh JOIN115/116 runs uses a separate prefix.
+
+JOIN115 repeats the full revival-to-Wall recipe. Ordinary controller movement
+returns `route_reached`, then the host teleport is queued at 11:48:08 BST.
+At 11:48:58, all 249 Breach records are ready. After the external inactive
+bubble-3 reset, the unchanged public automatic rule creates exactly one Ghost
+at 11:49:26. Actor `0x61f58000`, unit `0x16fb82ce`, has member owner
+`0x1cfa20da` and performance owner `0x26fa20f2`; all eight desired counts
+remain zero. The camera route reaches a close corridor view using controller
+input, preserving the same player identity.
+
+At 11:55:39, a separate manual action uses the already verified configured
+key `0x9b1d6a71`, empty override `0x811c9dc5`, generation 1. A fresh read
+also verifies global category `0xafb11a12`. The same bound actor moves from
+approximately `(390.458, -786.975, 18.975)` to
+`(393.852, -766.086, 18.908)`—about 21.2 units. The uninterrupted recorded
+view shows the orange Ghost changing to a blue core and moving away. This
+repeats the manual dispatch result, without enabling an automatic cue. The
+processed generation remains zero; no torch beam or completed action is
+established. Native slice 24/engine 3 with target 112 remains unsettled.
+
+JOIN116 records the retained revival after the guarded Mars skip and reaches
+current slice 112 at 12:02:35, with a stable engine-zero appearance sample.
+Daylight emote footage at 12:04:56 and a pitched-down view at 12:05:29 clearly
+retain the transparent/refractive Guardian. JOIN115's inventory recording
+shows normal model proportions. The comparison is across two owned runs,
+and it demonstrates the remaining defect rather than a new rendering fix.
+
+The eight owned identities from each run are verified exited, the private
+JOIN115 observers/outer launchers are stopped, and XInput is restored. Native
+recordings, selected clips and their recording/trim/crop index remain private.
+Ghost close-ups are cropped detail views; traversal and appearance footage
+retain the landscape game view. Some clips repeat as illustrative b-roll.
+
+The renderer now requires video for every section, rejects missing/escaped
+sources and invalid trims, and requires explicit permission in the manifest
+to loop a short source window. Six media-validation regressions pass. PCM
+intermediates and sample/frame clocks replace seeked AAC loops, which caused
+timestamp warnings in the first video review attempt. Native game audio is
+retained, lowered beneath synthetic narration in the longer edit. No video
+is published or committed to the repository.
+
+The final vertical edit is **52 seconds** (1080×1920); the narrated landscape
+edit is **5:26.375** (1920×1080). Both are H.264 at 24 fps with 48-kHz stereo
+AAC, fully decode without errors, and have reviewed frames for every section.
+Image comparisons confined to the video area detect movement in all eight
+short segments and all 38 long caption segments. The long mix measures
+-18.8 dB mean and -1.7 dB peak. Private SRT/timing manifests align captions
+and narration to output frames. All 137 script regressions, PowerShell input
+script parsing and `git diff --check` pass. No new renderer/gameplay fix is
+claimed from producing these videos.
