@@ -104,7 +104,7 @@ python tools/content_capture/capture.py --config <private-config> status
 python tools/content_capture/capture.py --config <private-config> event DISCOVERED renderer "An evidence-backed discovery"
 python tools/content_capture/capture.py --config <private-config> capture BUG "What happened" --video <closed-source.mp4> --recorded-at <timestamp-with-timezone>
 python tools/content_capture/capture.py --config <private-config> sync --force
-python -m unittest discover -s tools/content_capture -p test_capture.py -v
+python -m unittest discover -s tools/content_capture -p 'test_*.py' -v
 ```
 
 Tests isolate media packaging, secret filters, native-file closure, event classification,
@@ -115,3 +115,10 @@ earlier failures or split lines. The canonical zero-local depth observation rema
 Experimental and does not label renderer device loss fixed. Live native
 recording and actual SMB delivery are separate acceptance checks; unit fixtures alone
 do not establish capture performance or gameplay functionality.
+
+Machine-status updates serialize the full read/merge/write across the observer,
+transfer worker and CLI process. Atomic JSON replacement retries only known transient
+Windows sharing/access errors, with a bounded 0.77-second delay; permanent failures
+preserve the previous file and remain visible. Successful processing clears its stale
+error. The five recovery fixtures include a real Windows reader holding the destination
+open and 30 concurrent status updates from independent capture instances.

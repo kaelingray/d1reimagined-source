@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 import os
@@ -55,13 +56,23 @@ def atomic_json(path, value):
             f.write("\n")
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temporary, path)
+        # Windows readers/antivirus can briefly deny rename even though the
+        # finished temporary file is valid. Keep the old JSON intact and retry
+        # only known Windows sharing/access failures, for less than one second.
+        for attempt, delay in enumerate((0.02, 0.05, 0.1, 0.2, 0.4, 0)):
+            try:
+                os.replace(temporary, path)
+                break
+            except OSError as error:
+                if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 5:
+                    raise
+                time.sleep(delay)
     finally:
         temporary.unlink(missing_ok=True)
 
 
 @contextmanager
-def lock(path):
+def lock(path, timeout=0):
     """A process lock released by the OS even if a worker crashes."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as f:
@@ -70,12 +81,21 @@ def lock(path):
             f.write(b"0")
             f.flush()
         f.seek(0)
-        if os.name == "nt":
-            import msvcrt
-            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as error:
+                remaining = deadline - time.monotonic()
+                if error.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK} or remaining <= 0:
+                    raise
+                time.sleep(min(0.05, remaining))
         try:
             yield
         finally:
@@ -455,6 +475,12 @@ class Capture:
         return ready
 
     def status(self, **changes):
+        # The observer and asynchronous transfer job both update this file.
+        # Serialize their entire read/merge/write, including another CLI process.
+        with lock(self.root / "status.lock", timeout=2):
+            return self._status(**changes)
+
+    def _status(self, **changes):
         path = self.root / "machine-status.json"
         old = json.loads(path.read_text()) if path.exists() else {}
         states = [json.loads(p.read_text()) for p in self.states.glob("*.json")]

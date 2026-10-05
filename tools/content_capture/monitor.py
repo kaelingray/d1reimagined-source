@@ -365,6 +365,7 @@ class Monitor:
                                         with lock(self.capture.root / "pending.lock"):
                                             pending = json.loads(self.pending_path.read_text())
                                             atomic_json(self.pending_path, [e for e in pending if e["event_id"] != self.inflight])
+                                    self.capture.status(PROCESSING_ERROR=None)
                                 except Exception as error:
                                     self.capture.status(PROCESSING_ERROR=str(error))
                                 self.inflight = None

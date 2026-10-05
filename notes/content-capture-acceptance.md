@@ -83,6 +83,15 @@ renderer control. The worker is healthy and idle, local packages are retained, a
 all seven packages contain verified source media/context/frame files plus hashes.
 No package claims the graphics or networking issues are fully repaired.
 
+A later diagnostic/status read exposed a transient Windows denial when replacing
+`machine-status.json`. Atomic JSON writes now retry known sharing/access failures
+for a bounded 0.77 seconds, preserving the prior file on permanent failure. A process
+lock serializes status read/merge/write so observer and transfer updates do not lose
+each other's fields. Successful processing clears the old processing error. All
+**27 capture tests** pass, including five new recovery/concurrency checks and a real
+Windows reader-held destination. The restarted normal worker is healthy and idle,
+with no monitor or processing error; NAS delivery remains verified for seven packages.
+
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
 reliable Ghost illumination, mission transitions, weapon pickup and combat.
