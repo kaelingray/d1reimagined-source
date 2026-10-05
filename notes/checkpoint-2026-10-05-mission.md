@@ -693,6 +693,10 @@ actual-helper checks but does not resolve the recording-enabled fault. Privately
 core validation reproduces a nonzero GPU write; GPU-assisted validation then exposes
 descriptor and depth-layout disagreements. The [descriptor cache repair](rpcs3-descriptor-binding-cache.md)
 passes 14 actual-source CPU checks against five pre-fix failures. Native comparison
-remains required, and complete world/body/menu graphics acceptance stays open.
+JOIN137 repeats the descriptor mismatch and device loss at 3:42, now with an
+instrumented instruction-pointer fault and near-zero read. The cache repair does not
+resolve the observed fault, and complete world/body/menu graphics acceptance stays open.
 The validator event is automatically packaged with a 112.64-second source clip,
 game audio and two frames, bringing verified 500 GB NAS delivery to eight packages.
+The owned diagnostic stacks are fully closed; debug flags, experimental markers
+and XInput are restored. Normal capture remains enabled for recording/retries.

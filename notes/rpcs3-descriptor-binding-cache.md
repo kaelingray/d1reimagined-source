@@ -39,7 +39,24 @@ These are CPU binding-contract checks, not executed Vulkan validation or pixel t
 The scoped patch reverse-applies cleanly. The full Release build exits successfully
 with its existing linker/post-build warnings. Deployment matches SHA-256
 `5cd68e01dca9ff6561b406f284339a9923ea7903b2f2f798414b1ff3cb26025f`;
-the prior executable is backed up. Native retest is outstanding.
+the prior executable is backed up.
+
+JOIN137 repeats the same recording, depth candidate and scoped GPU-assisted/safe-mode
+fixture with the repaired cache. The loaded validation module is independently
+verified. At **3:15**, it reports the same persistent-stream dimension/component
+mismatch. Device loss follows at **3:42.958280**, reported by a PPU job thread.
+The fault query succeeds (`VkResult=0`, `incomplete=0`) and identifies an
+instruction-pointer fault in `0x2089608d0–0x2089608df` (precision `0x10`) and a
+near-zero GPU **read** in `0x0–0xfff` (precision `0x1000`). The instrumented fault
+differs from the previous uninstrumented write reports; it does not identify a
+shared originating command. The last view is character selection, with no accepted
+world/menu/body interaction. The cache correction therefore does **not** resolve
+the observed descriptor report or graphics crash. Ordered cleanup is complete,
+title settings and XInput are restored, and experimental markers are absent.
+
+Next: correlate the failing pipeline's declared vertex inputs with the actual
+descriptor writes and retirement, and trace the depth feedback-loop layout changes.
+Keep the CPU cache contract, native descriptor findings and visual acceptance separate.
 
 The automatic worker recognizes the native validation error format despite its
 omitted VUIDs, saves the existing pre/post buffer and supplies a **112.64-second**

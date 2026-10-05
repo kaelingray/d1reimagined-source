@@ -52,7 +52,13 @@ device loss. The longer instrumented runtime is not a repair. Its final GDB sock
 fatal belongs to controlled debugger teardown. See the
 [descriptor binding investigation](rpcs3-descriptor-binding-cache.md).
 
-Next: retest the isolated descriptor cache repair, then trace the remaining depth
-feedback-loop transitions and originating GPU commands.
+JOIN137 repeats that descriptor mismatch after the cache repair and loses the device
+at **3:42.958280**. Its successful query reports an instruction-pointer fault in
+`0x2089608d0–0x2089608df` and an `access_read` fault in `0x0–0xfff`. This is an
+instrumented read report, distinct from the previous write reports. The originating
+GPU command remains unknown.
+
+Next: trace descriptor writes/retirement and remaining depth feedback-loop transitions
+against the failing pipeline's declared inputs.
 Keep recording-enabled and recording-disabled controls separate, and preserve
 world/body/menu acceptance checks independently of absence of malformed shaders.
