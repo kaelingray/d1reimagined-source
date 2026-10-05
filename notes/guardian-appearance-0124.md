@@ -97,6 +97,21 @@ JOIN117, JOIN118 and JOIN119 native recordings fully decode without errors.
 The private appearance directory contains trimmed moving footage for the
 candidate and standard-fixture views; no game media or package data is committed.
 
+JOIN120 repeats the public fixture, walks the recorded controller route to the
+Wall, and returns `route_reached` at 13:28:48 BST. A host teleport follows that
+arrival. The 13:29:00 and 13:30:14 native samples have current slice 24, engine
+3, target 112, and the same five valid applied model roots. The new world unit
+datum is `0x10fac63f`. The sampled indoor views show the lit Breach entrance;
+two Down/emote attempts do not provide a third-person body view. **Indoor body
+rendering remains unaccepted**, despite correct profile/model data. The existing
+return transition remains unsettled; these samples do not establish why the
+emote view is unavailable.
+
+JOIN120 runs through traversal and these indoor samples without a recorded
+Vulkan device-loss/fatal entry. It does not repeat the menu test. Its native
+recording fully decodes, all eight owned stack identities and the private
+observers/outer launcher are verified exited, and XInput is restored.
+
 Regression coverage checks all three starter classes, replacement items,
 custom signed indexes, and the actual optional-field wire encoding. Full
 peer/select objects also roundtrip through the private final schema. These

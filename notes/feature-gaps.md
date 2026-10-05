@@ -31,6 +31,13 @@ order: 3 Enter the Wall, 7 Find a Weapon, 11 Grab the Rifle, 14 Fight through th
 
 ## 1. The see-through ("hologram") guardian: no equipped gear
 
+**01.24 update (2026-10-05):** the analysis below uses historical 01.00
+addresses. Final starter item indexes alone left the world model transparent:
+gear-slot +0xc also needs a model arrangement index. The public final starter
+fixture now supplies the verified selections, and JOIN119 shows solid daylight
+Titan armour. Character-menu Vulkan device loss and misplaced inventory items
+remain open. Use the [current appearance evidence](guardian-appearance-0124.md).
+
 **Symptom:** the guardian spawns but renders translucent, like a hologram. Destiny draws that
 placeholder while a guardian's gear (armour and weapon art) has not loaded.
 

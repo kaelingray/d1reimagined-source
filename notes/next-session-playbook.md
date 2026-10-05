@@ -75,7 +75,11 @@ other views: JOIN118/119 suffer Vulkan device loss around the character screen.
 JOIN119 also confirms the armour thumbnails appear under Materials on the
 inventory tab, while equipment icons and displayed level/light remain incomplete.
 Resolve inventory categories separately from model selection. Social-space
-and other appearance combinations remain unverified. The
+and other appearance combinations remain unverified. JOIN120 reaches the Wall
+and Breach with the public fixture, retaining five valid model roots after
+handover and no recorded Vulkan fatal through those samples. The indoor emote
+attempts leave the sampled view in first person, so indoor body rendering is
+still unaccepted. Its owned stack is stopped and XInput restored. The
 September 30 stage-19 waits were resolved by package-chain registration and
 the updated qz object type hashes. Continue with
 [the profile checkpoint](checkpoint-2026-10-01-profile.md), which records the
@@ -113,7 +117,7 @@ Shell using final-build item indexes. The original `starter:titan` shorthand bel
 01.00. Use `hunter` or `warlock` after `starter:01.24:` for those classes. Equipment
 metadata is verified against scoped package string libraries, with starter model
 arrangements independently verified against the final client asset library.
-JOIN118 visibly verifies Titan daylight armour; additional mission views remain
+JOIN118/119 visibly verify Titan daylight armour; additional mission views remain
 to be checked. Movement waits for engine state **0**, not just stage 36.
 
 Use the imported runtime explicitly on this PC:

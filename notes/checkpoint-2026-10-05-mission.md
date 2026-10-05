@@ -498,3 +498,18 @@ moving game footage for review and future devlogs. No binary media is committed.
 JOIN117/118/119 owned stacks and outer launchers are stopped and XInput restored
 between runs. JOIN120 starts the same public fixture for an indoor appearance
 check, avoiding further menu interaction until that check completes.
+
+JOIN120's ordinary controller route returns `route_reached` at 13:28:48 BST,
+with final position approximately `(352.469, -796.772, 14.064)`. A host teleport
+is then queued for 24. Native samples at 13:29:00 and 13:30:14 retain all five
+correct item/model pairs and applied roots, with current slice 24, engine 3,
+target 112 and fresh unit datum `0x10fac63f`. The sampled Breach entrance is lit.
+Two Down/emote attempts leave the sampled view in first person, so this does
+**not** accept visible indoor body rendering. The return transition remains
+unsettled, and why the emote view is unavailable is not established.
+
+The uninterrupted JOIN120 native log has no recorded device-loss/fatal entry
+through traversal and these indoor samples; the menu crash case is not repeated
+in this run. Its native recording fully decodes without errors. At 13:32:32,
+all eight owned stack identities, the entry observer and outer launcher are
+verified exited, and XInput is restored. No live test stack remains.
