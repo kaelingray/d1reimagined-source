@@ -99,6 +99,17 @@ guard does not repair it. Do not infer a healthy emulator from unchanged native
 world state after a fatal entry, and stop/finalize recordings before risky menu
 transitions. JOIN123's interrupted recorder has no usable MP4 metadata.
 
+JOIN124/125 repeat the repaired inventory and brief world/menu returns with
+usable native video. The [leading-NOP literal correction](rpcs3-fragment-start-literals.md)
+passes 12 actual-parser fixtures and is deployed, but JOIN125 still compiles
+malformed live programs and rapidly creates programs. Its final pre-shutdown
+sample has no fatal entry; that is not sustained-stability acceptance. A
+read-only scan finds the float prefix at `0xc01f1c20` and `0xc01f3f20` amid
+changing float data. Capture the bound program's original address/location,
+metadata start offset and nearby bytes to establish whether it selects either
+block, then trace the binding/writer. Keep the cache write guard and renderer
+settings; no draw suppression is justified by this evidence.
+
 JOIN106's generation callback fails at the first requested interface, even with
 the verified helper attached. JOIN112 identifies that interface as damage,
 so it is not a proven light gate. JOIN107/108's physical squad Ghost has no

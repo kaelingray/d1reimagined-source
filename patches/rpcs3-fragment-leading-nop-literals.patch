@@ -1,0 +1,23 @@
+diff --git a/rpcs3/Emu/RSX/Program/ProgramStateCache.cpp b/rpcs3/Emu/RSX/Program/ProgramStateCache.cpp
+index 6a3f8ea50..54afe7ade 100644
+--- a/rpcs3/Emu/RSX/Program/ProgramStateCache.cpp
++++ b/rpcs3/Emu/RSX/Program/ProgramStateCache.cpp
+@@ -626,12 +626,16 @@ fragment_program_utils::fragment_program_metadata fragment_program_utils::analys
+ 		if ((inst._u32[0] >> 8) & 0x1)
+ 		{
+ 			result.program_start_offset = index * 16;
+-			result.program_ucode_length = 16;
++			const bool has_literal = is_any_src_constant(inst);
++			result.program_ucode_length = has_literal ? 32 : 16;
++			result.program_constants_buffer_length = has_literal ? 16 : 0;
+ 			result.is_nop_shader = true;
+ 			return result;
+ 		}
+ 
+-		index++;
++		// NOP source fields can reserve a following literal just like an
++		// ordinary instruction. Never interpret that literal as program code.
++		index += is_any_src_constant(inst) ? 2 : 1;
+ 	}
+ 
+ 	while (true)

@@ -138,3 +138,23 @@ preflight also roundtrips the individual records.
 Keep the SPU colour-read patch, Read Color Buffers and the existing
 [world-armour arrangements](guardian-appearance-0124.md). This server change
 does not alter the renderer or establish a fix for Vulkan device loss.
+
+## Repeat views and usable footage
+
+JOIN124 repeats the repaired public fixture before the new shader parser patch.
+Its 17:35:35 native recording shows solid outdoor armour, resolved equipment
+icons and Materials 0/20, and is finalized before the next tab return. At
+17:38:35 the world emote again shows solid armour after the menu. The native
+log has no fatal entry through native time 13:16.760, but malformed programs and
+program growth remain. A brief successful return does not settle the crash.
+
+JOIN125 repeats these views with the [NOP-literal parser correction](rpcs3-fragment-start-literals.md),
+including further tab cycles and a fresh world/movement view. Its own malformed
+programs persist; the two changes must not be conflated.
+
+The reviewed private before/after clips are `join122-inventory-before.mp4`
+(18 seconds) and `join124-inventory-after.mp4` (17.77 seconds), under
+`APPEARANCE/2026-10-05`. They retain real rendered motion and native game audio,
+export as H.264/AAC and pass full decoding. JOIN125's bounded 24.50-second native
+round-trip recording also fully decodes. See the [Episode 02 draft](devlogs/02-2026-10-05-inventory.md)
+for the milestone and honest remaining limits. No binary media is committed.

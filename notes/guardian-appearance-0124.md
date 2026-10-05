@@ -124,3 +124,12 @@ listing. The normally proportioned character preview is retained, and the native
 current-112 sample retains all five world-model roots. Vulkan device loss still
 occurs after the inventory view. These observations do not accept menu/world
 round trips or indoor appearance.
+
+JOIN124 subsequently captures solid outdoor armour both before the menu and
+after returning to the world, with resolved equipped thumbnails and Materials
+0/20. JOIN125 repeats the same views and further tab/world transitions with
+fresh movement frames. All five arrangements and applied roots are retained.
+These brief returns supersede the missing round-trip evidence above; sustained
+stability, indoor appearance and other classes remain open. Malformed live
+programs persist even with the independently verified
+[NOP-literal parser correction](rpcs3-fragment-start-literals.md).

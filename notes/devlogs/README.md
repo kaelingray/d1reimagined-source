@@ -52,6 +52,11 @@ Episode 01's revised private outputs are a 52-second 1080×1920 short and a
 5:26.375 1920×1080 narrated edit, both H.264/24-fps with stereo AAC. Full decoding,
 section frame review and video-area motion checks pass for all 8/38 segments.
 
+The [Episode 02 inventory draft](02-2026-10-05-inventory.md) covers the user's
+Materials-tab observation and the tested equipment-record/bucket repair.
+Reviewed before/after video with native audio is retained privately. This is an
+outline and selected footage, not a finished episode or a renderer-stability claim.
+
 ## Episode 01 publishing drafts
 
 **Short title:** Ghost existed. Destiny's mission couldn't use him.

@@ -570,3 +570,55 @@ pass. Both owned stacks and their outer launchers are verified exited, and
 XInput is restored. No renderer configuration or shader patch changes in this
 inventory repair. The next stability task is the malformed live program's
 binding/lifetime, followed by the still-open mission progression.
+
+## JOIN124–125: repeat inventory footage and parser boundary
+
+JOIN124 repeats the public repaired fixture with the existing emulator. Native
+video at 17:35:35 shows solid exterior armour, all equipped thumbnails and
+Materials 0/20, and is finalized before the tab return. A 17:38:35 world emote
+retains the solid Guardian after the menu. There is no fatal entry through
+native time 13:16.760, but 7,374 invalid-source messages and program count
++19,606/-0 remain. A brief successful return does not settle menu stability.
+The 18-second JOIN122 before clip and 17.77-second JOIN124 after clip are
+reviewed H.264/AAC exports with native audio and full decoding passes. The
+[Episode 02 draft](devlogs/02-2026-10-05-inventory.md) documents this inventory
+milestone without claiming a completed mission or a stable renderer.
+
+Source inspection finds a separate proven parser defect: the fragment metadata
+scan skips leading NOPs without advancing over their declared literal data.
+An END NOP also omits a declared literal from its reported lengths. The CFG
+assembler already follows the correct layout. The
+[parser patch and audit](rpcs3-fragment-start-literals.md) correct both cases.
+The audit extracts the actual production functions/declarations; the original
+fails 8 of 12 constructed fixtures and the corrected source passes all 12.
+The full incremental Release build links, its output hash matches the deployed
+copy, and the previous executable is preserved. Unrelated private emulator
+changes and renderer settings are retained.
+
+JOIN125 uses this parser with the same fixture/cache generation. Its 24.50-second
+native recording at 17:54:15 fully decodes and shows world → Character → Inventory
+→ Character → world. A roughly 49-second Character hold and two additional
+tab cycles also return to fresh world frames with movement; the 17:57:26 sample
+retains current 112/engine zero and all five correct arrangements/model roots.
+No fatal/device-loss entry is recorded through native time 17:04.145.
+
+However, the malformed TXD pattern starts at native 5:41.759, before the recorded
+menu sequence. The final pre-shutdown log has 19,991 invalid-source messages,
+51,037 refused malformed cache stores and program count +52,945/-0. The parser
+repair is accepted independently; **the live binding fault and sustained menu
+stability remain open**. Longer observation and different work prevent comparing
+program-growth rates directly with JOIN124.
+
+A non-atomic read-only RSX-memory scan finds the float prefix at `0xc01f1c20`
+and `0xc01f3f20`, surrounded by float data with a changing fourth word. These
+are candidates to correlate with the bound-program address, not established
+shader bindings. Twenty-four one-MiB chunks were unreadable. The next renderer
+probe should log original program location/address, metadata start offset and
+nearby bytes at the malformed draw, then trace the writer/binding. The existing
+persisted-cache guard continues to reject malformed storage; it cannot repair
+the live source.
+
+JOIN124 and JOIN125 owned stacks, proxies and outer launchers are verified
+exited, with XInput restored. Bounded native recording finalization now uses
+`finally`, so a failed screenshot cannot bypass its stop input. No media or
+emulator executable enters Git.
