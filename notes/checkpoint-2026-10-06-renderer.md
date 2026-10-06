@@ -159,3 +159,13 @@ three distinct source segments is automatically delivered; seven files and six p
 hashes/sizes are verified. The earlier duplicate-segment package is preserved as
 superseded. Ten ready packages are now delivered and the normal worker is healthy,
 idle and drained. GPU and character/mission acceptance remain open.
+
+JOIN146 repeats bounded function-entry publication tracing on the rebuilt recorder
+executable. It reaches active 113, verifies an open activity-context publication gate
+and the corresponding client report, then loses the device at **3:38.689770** on an
+SPU thread. The queried fault is again a write in **0x0–0xfff**, without an instruction
+pointer. The fault precedes the mission handoff and cannot establish its missing link.
+All owned test processes close, the original watch hash and title configuration match
+after cleanup, and XInput is restored. The automatic capture worker is healthy and
+idle with ten ready NAS packages and no pending work. Return to the GPU fault before
+attempting another handoff acceptance; keep context handles distinct from slice indices.

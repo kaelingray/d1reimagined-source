@@ -81,3 +81,24 @@ Next: follow the changed engine snapshot through the event, client-state dirty m
 and transport. Then obtain outdoor, body/equipment and indoor frames. Keep this
 handoff investigation separate from the unresolved GPU write fault and guarded
 depth experiment.
+
+JOIN146 adds bounded context/publication watches to the rebuilt recorder executable.
+It reaches active slice **113** with engine state 0, world version 1, local peer slot 0
+and group 0 naming 113 with state 1 and peer byte 1. The sent/pending client records
+also publish 113. The manager's call to `0x8fed64` is observed with return address
+`0x33bfb0`; its context has state 6 and a valid record handle. That record's handle
+is not a slice-set index.
+
+The verified manager path (`0x33bde0`) permits context states 4–10, then requires a
+nonzero context state and a nonnegative record handle at `+0x408`. Its fresh-state
+update is `0x273e50`; sender `0x2720e4` publishes it. Selected/opposite context banks
+follow `0x349634`/`0x349adc`, a `0x12208` slot stride and `0x9100` bank stride.
+These gates are open during the initial join. A unique-content watch reaches its
+48-hit bound during startup, so its later silence cannot prove a stopped function.
+
+At **3:38.689770**, before the mission handoff, JOIN146 reports SPU-side GPU device
+loss. The fault query returns a write in **0x0–0xfff** with no instruction-pointer
+hint. This supplies initial-join gate evidence, no stalled-handoff gate observation.
+The owned client/services/observer/launcher close; original watches, XInput and
+title configuration are preserved. Capture drains without error or a queued event.
+Renderer stability remains necessary before this particular handoff trace can finish.
