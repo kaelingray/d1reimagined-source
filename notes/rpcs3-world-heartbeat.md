@@ -40,7 +40,44 @@ sample has zero fatal/device-loss/malformed entries. This locates a handoff fail
 it does not attribute every stalled transition to empty heartbeats.
 
 JOIN143 repeats the same server/gear/mission fixture and executable with the new
-default. Native acceptance is pending. Compare request retention and group/version
-exchange before judging gameplay, then obtain outdoor, body/equipment and indoor
-frames. Keep this handoff investigation separate from the unresolved GPU write
-fault and guarded depth experiment.
+default. The host request persists, but **native handoff still fails**. At
+**07:38:47 UTC** the request changes to 112; by 07:38:49 it is loaded with no active
+slice. A second connection reproduces this at **07:43:14–07:43:15**. Both retain
+engine state 6, target 112, peer byte 2 and empty copied groups, without a target-112
+client report. Each disconnects about two minutes after the request and rejoins.
+
+A bounded PPU watch verifies the live simulation pointer from the function's own
+argument. At native **11:58**, three consecutive calls to `0x3adf8c` retain pending
+copy state 2 and host-request state 1 for slice 112. The outer update and engine
+pending-request handler also continue. This rules out a stopped request tick in
+that sample; it does not establish why publication or acknowledgement is missing.
+Unique-content watches alone cannot establish that a function stopped running.
+
+The **16:12** pre-stop log has zero fatal, device-loss or malformed-program entries,
+with 2,125 program additions, 9,560 descriptor-set first initializations and 9,487
+idle releases. This is a bounded renderer observation, not repaired pixel or mission
+acceptance. Ordered cleanup closes the exactly owned stack and restores the original
+watch file, XInput and byte-identical title configuration. Normal capture remains
+healthy, with nine verified NAS deliveries and no queued work or errors.
+
+Static comparison maps the type-21 sender and encoder from 01.00 to **01.24**:
+`0x2720e4` calls `0x27203c`, which passes host `+0x66e0` and `+0x6900` to
+`0x1db1cc`; the sender's indirect transport call uses subtype 21. The engine update
+compares its `+0x88` state with `+0x1f0` and posts event `0x4f` through `0x92c5b8`.
+The event adapter is `0x104aff0`. JOIN144 observes the engine event, adapter,
+client-state update and sender during the initial 113 join. The state offsets need
+careful naming: `+0x66e0` is the sent baseline, `+0x6900` the pending state; a
+successful send copies pending to baseline at `0x27241c`. Its private early
+timeline labels were reversed and are corrected before the intended handoff trace.
+
+JOIN144 ends in **RSX GPU device loss at 3:27.678568**, before the mission teleport.
+The device-fault query reports a write hint in **0x0–0xfff**. It therefore supplies
+initial-join publication evidence, **no failing-handoff trace**. Original watches,
+XInput and title configuration are restored and all exact owned processes close.
+These mappings do not yet prove the missing link or justify manufacturing peer-byte
+acknowledgements.
+
+Next: follow the changed engine snapshot through the event, client-state dirty mask
+and transport. Then obtain outdoor, body/equipment and indoor frames. Keep this
+handoff investigation separate from the unresolved GPU write fault and guarded
+depth experiment.

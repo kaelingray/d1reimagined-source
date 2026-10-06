@@ -134,3 +134,21 @@ NAS deliveries. That run does not establish a settled Guardian or repaired graph
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
 reliable Ghost illumination, mission transitions, weapon pickup and combat.
+
+The [fragmented recording repair](rpcs3-recording-fragments.md) now covers interrupted
+MOV/MP4 writers. All **58 tests** pass. Twelve checks of the actual native header block
+pass, and both interrupted synthetic formats recover 120 clean frames with audio;
+the baseline recovers none. JOIN145 separately verifies the rebuilt native recorder,
+including its two B-frames: **688 clean frames / 23.83 seconds** survive deliberate
+termination without a trailer. Recovery shortens only the private buffer copy, verifies
+its exact prefix hash and preserves the unfinished original unchanged.
+
+The worker records recovery evidence, uses the footage end for delayed observations,
+deduplicates retried segments and includes recovery provenance in package metadata.
+The first integration package repeated its final segment and is preserved as
+`.superseded`, excluded from ready ingestion. Its replacement references that package
+and automatically delivers **84.25 seconds**, three distinct segments and two source
+frames. All seven files and six payload hashes/sizes are independently verified on
+the configured 500 GB share. **Ten ready packages** are delivered. The queue is empty
+and the worker remains healthy and idle. This intentional recording test establishes
+source-capture recovery; GPU, character and mission acceptance remain open.

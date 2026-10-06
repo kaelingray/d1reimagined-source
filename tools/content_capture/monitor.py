@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 
-from capture import Capture, REPO, atomic_json, check_text, digest, git_context, lock, now
+from capture import Capture, REPO, atomic_json, check_text, closed_source_hashes, digest, git_context, lock, now
 
 sys.path.insert(0, str(REPO / "scripts"))
 from rpcs3_shared_log import open_shared_read
@@ -334,18 +334,41 @@ class Monitor:
                 continue
             try:
                 buffer_info = self.capture.add_buffer(info["file"], info["recorded_at"])
-                buffer_info.update(ended_at=info["ended_at"], run=info["run"], source="native rendered game and audio")
+                buffer_info.update(ended_at=info["ended_at"], run=info["run"], source="native rendered game and audio",
+                                   source_segment=receipt.stem)
+                recovery = buffer_info.get("source_recovery")
+                buffer_path = self.capture.buffer / buffer_info["file"]
+                try:
+                    proof = closed_source_hashes(info["file"], recovery["retained_bytes"] if recovery else None)
+                    if (buffer_path.stat().st_size != proof["retained_bytes"]
+                            or digest(buffer_path) != proof["retained_sha256"]
+                            or (recovery and recovery["original_bytes"] != proof["original_bytes"])):
+                        raise ValueError("Native buffer copy differs from its retained source bytes")
+                except (OSError, ValueError):
+                    # An unverified candidate cannot be selected for an event.
+                    buffer_path.with_suffix(".json").unlink(missing_ok=True)
+                    buffer_path.unlink(missing_ok=True)
+                    raise
+                if recovery:
+                    # Termination time includes the discarded tail, which must not
+                    # inflate the available post-event footage window.
+                    decoded_end = datetime.fromisoformat(info["recorded_at"]) + timedelta(seconds=buffer_info["duration_seconds"])
+                    buffer_info["source_ended_at"] = info["ended_at"]
+                    buffer_info["ended_at"] = min(decoded_end, datetime.fromisoformat(info["ended_at"])).isoformat()
+                    recovery.update(proof)
                 atomic_json(self.capture.buffer / Path(buffer_info["file"]).with_suffix(".json"), buffer_info)
-                atomic_json(done, {"source_sha256": digest(Path(info["file"])), "indexed_at": now()})
-                if digest(self.capture.buffer / buffer_info["file"]) != digest(Path(info["file"])):
-                    raise ValueError("Native buffer copy differs from its original")
-                # Delete only this controller's original after a byte-identical closed copy is verified.
-                # Meaningful event segments are subsequently remuxed losslessly into retained packages.
-                Path(info["file"]).unlink()
-                self.detector.observe("native-buffer-validation", "PASSED",
-                    {"summary": "Automated RPCS3 game/audio recording finalized, fully decoded and copied with matching SHA-256."},
-                    "Experimental", run=info["run"])
+                feature = "native-recording-recovery" if recovery else "native-buffer-validation"
+                summary = ("Interrupted RPCS3 recording recovered through complete fragments, fully decoded and verified against its original prefix; the unfinished original is preserved."
+                           if recovery else "Automated RPCS3 recording finalized, fully decoded and copied with matching SHA-256.")
+                self.detector.observe(feature, "PASSED",
+                    {"summary": summary, "contains_audio": buffer_info["contains_audio"], "source_recovery": recovery},
+                    "Experimental", run=info["run"], observed_at=buffer_info["ended_at"])
                 self.queue_observations()
+                atomic_json(done, {**proof, "source_recovery": recovery, "indexed_at": now()})
+                if not recovery:
+                    # Delete only the controller's byte-identical original. Keep
+                    # interrupted originals intact for inspection or later recovery.
+                    Path(info["file"]).unlink()
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 atomic_json(failure, {"error": str(error), "next_attempt": time.time() + 300})
                 continue
@@ -366,6 +389,17 @@ class Monitor:
             if when > cutoff or (self.job and not self.job.done()):
                 continue
             entries = [json.loads(p.read_text()) for p in self.capture.buffer.glob("*.json")]
+            # Retried imports represent the same recorder segment. Prefer its
+            # verified recovery metadata, without repeating footage in a clip.
+            unique = {}
+            for entry in entries:
+                key = (entry.get("run"), datetime.fromisoformat(entry["recorded_at"]))
+                quality = (bool(entry.get("source_recovery", {}).get("retained_sha256")),
+                           bool(entry.get("source_segment")))
+                prior = unique.get(key)
+                if prior is None or quality > prior[0]:
+                    unique[key] = (quality, entry)
+            entries = [entry for quality, entry in unique.values()]
             start = when - timedelta(seconds=float(self.capture.cfg.get("PRE_EVENT_BUFFER", 60)))
             end = when + timedelta(seconds=float(self.capture.cfg.get("POST_EVENT_BUFFER", 30)))
             selected = [e for e in entries if e.get("run") == event.get("run")
@@ -380,7 +414,7 @@ class Monitor:
                                        "actual_start": min(e["recorded_at"] for e in selected), "actual_end": latest.isoformat(),
                                        "post_event_truncated": latest < end,
                                        "segmented_native_recording": True,
-                                       "note": "Recorder rotation can introduce small gaps; clip contains complete original segments."}
+                                       "note": "Recorder rotation can introduce small gaps; clip contains finalized segments or verified complete fragments."}
             event["recorded_at"] = min(e["recorded_at"] for e in selected)
             event["development_session"] = self.capture.cfg.get("CURRENT_SESSION")
             event["suggested_content_types"] = ["youtube-devblog", "tiktok", "before-after"]
@@ -396,6 +430,7 @@ class Monitor:
             output = self.capture.buffer / (token + ".mp4")
             try:
                 selected.sort(key=lambda e: e["recorded_at"])
+                metadata["buffer_segments"] = selected
                 playlist.write_text("".join(f"file '{s['file']}'\n" for s in selected), encoding="utf-8")
                 r = subprocess.run([self.capture.ffmpeg, "-v", "error", "-nostdin", "-f", "concat", "-safe", "1",
                                     "-i", str(playlist), "-c", "copy", "-movflags", "+faststart", str(output)],

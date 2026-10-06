@@ -146,7 +146,18 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **44 tests**, including callback continuations, native exception
-classification and durable observation-to-capture handoff. An abrupt native crash can
-leave the active media segment unfinished: only fully decoded source segments are
-submitted, and the actual window plus missing post-event tail remain explicit in metadata.
+The current suite has **58 tests**, including callback continuations, native exception
+classification, durable observation-to-capture handoff and interrupted-fragment recovery.
+The [native recorder patch](../../patches/rpcs3-recording-fragments.patch) writes initial
+MOV/MP4 metadata and bounded fragments. After a writer exits, the worker can recover
+complete fragments into a private buffer copy; the unfinished original stays intact.
+Strict full decoding and a SHA-256 comparison with the original prefix precede its
+index receipt. Failure preserves retry eligibility. Regular unfinished recordings
+without initial metadata are not recoverable through this path.
+
+Recovery byte counts and source/prefix hashes follow the selected segments into package
+metadata. Delayed imports use the recording end for their event timestamp; discarded
+tail coverage remains excluded. Retried copies of one native segment are selected once,
+preferring verified recovery provenance. Actual/truncated coverage stays explicit.
+The [native acceptance](../../notes/rpcs3-recording-fragments.md) verifies interruption,
+recovery and automatic NAS delivery separately from synthetic tests and gameplay.

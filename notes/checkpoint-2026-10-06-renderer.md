@@ -130,7 +130,32 @@ restores XInput with no active experimental controls.
 JOIN142 uses default controls with recording enabled. Its read-only timeline captures
 slice 112 loaded but inactive after the host request, followed by a dropped connection
 and rejoin. It has no GPU fault before ordered shutdown. The
-[world-heartbeat increment](rpcs3-world-heartbeat.md) changes the seconds-only default
+[world-heartbeat repair](rpcs3-world-heartbeat.md) changes the seconds-only default
 to resend the owned state with unchanged version; numeric diagnostic subtypes remain
-explicit. All affected CPU checks pass. JOIN143 is the native comparison in progress.
+explicit. All affected CPU checks pass. JOIN143 preserves the request but repeats
+the loaded/inactive handoff twice, followed by live connection drops about two minutes
+after each request. A bounded non-unique trace proves that the request and engine
+ticks still run in the stalled state. No target-112 report reaches the host.
+
+The 16:12 pre-stop log has zero fatal/device-loss/malformed entries, 2,125 program
+additions, 9,560 descriptor-set initializations and 9,487 idle releases. All owned
+processes are closed, the original PPU watch file and XInput are restored, and title
+configuration hashes match. Capture is healthy and idle with nine NAS packages.
 The renderer executable remains unchanged and the depth candidate stays disabled.
+JOIN144 observes the verified 01.24 publication chain at compiled function entries
+during the initial join, then reports RSX device loss at 3:27.678568, before the
+mission teleport. The write hint again spans 0x0–0xfff. It supplies no failed-handoff
+trace. Its exactly owned stack is closed and original controls/input are restored.
+
+The [recording-fragment repair](rpcs3-recording-fragments.md) retains complete MOV/MP4
+fragments after an interrupted writer and recovers only validated prefixes in private
+buffer copies. Twelve actual-block C++ checks and all 58 capture checks pass; killed
+synthetic writers recover 120 clean video frames and audio, while the previous
+format recovers none. The native Release build succeeds. JOIN145 deliberately
+interrupts the owned recorder before its trailer and recovers 688 clean video frames,
+23.83 seconds with audio, while preserving the unfinished original. Import verification,
+timestamps and retry deduplication are fixed. A corrected 84.25-second package with
+three distinct source segments is automatically delivered; seven files and six payload
+hashes/sizes are verified. The earlier duplicate-segment package is preserved as
+superseded. Ten ready packages are now delivered and the normal worker is healthy,
+idle and drained. GPU and character/mission acceptance remain open.

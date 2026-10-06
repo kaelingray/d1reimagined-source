@@ -19,6 +19,8 @@ import subprocess
 import time
 import uuid
 
+from fragmented_media import completed_fragment_prefix
+
 REPO = Path(__file__).resolve().parents[2]
 EVENT_TYPES = {
     "BREAKTHROUGH", "FEATURE_WORKING", "FEATURE_PARTIAL", "BUG", "BUG_FIXED",
@@ -45,6 +47,26 @@ def digest(path):
         for block in iter(lambda: f.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def closed_source_hashes(path, retained_bytes=None):
+    """Hash an original and its retained prefix under the same closed-source handle."""
+    with closed_source(Path(path)) as stream:
+        before = os.fstat(stream.fileno())
+        retained = before.st_size if retained_bytes is None else retained_bytes
+        if not isinstance(retained, int) or not 0 < retained <= before.st_size:
+            raise ValueError("Retained prefix exceeds the closed source")
+        original, prefix = hashlib.sha256(), hashlib.sha256()
+        offset = 0
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            original.update(block)
+            prefix.update(block[:max(0, retained - offset)])
+            offset += len(block)
+        after = os.fstat(stream.fileno())
+        if offset != before.st_size or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            raise ValueError("Source changed during verification")
+        return {"source_sha256": original.hexdigest(), "retained_sha256": prefix.hexdigest(),
+                "original_bytes": before.st_size, "retained_bytes": retained}
 
 
 def atomic_json(path, value):
@@ -503,11 +525,19 @@ class Capture:
             path = self.buffer / (uuid.uuid4().hex + ".mp4")
             copy_closed(Path(video), path, self.cfg.get("BUFFER_MAX_BYTES", 2 * 1024**3))
             try:
+                recovery = completed_fragment_prefix(path)
+                if recovery:
+                    # Only this closed, private buffer copy is shortened. The
+                    # original remains available for inspection or later recovery.
+                    with path.open("r+b") as stream:
+                        stream.truncate(recovery["retained_bytes"])
                 media = validate_video(path, self.ffmpeg)
                 recorded = datetime.fromisoformat(recorded_at)
                 if recorded.tzinfo is None:
                     raise ValueError("Buffer timestamp requires a timezone")
                 info = {"file": path.name, "recorded_at": recorded.isoformat(), **media}
+                if recovery:
+                    info["source_recovery"] = recovery
                 atomic_json(path.with_suffix(".json"), info)
                 self.trim_buffer()
                 return info

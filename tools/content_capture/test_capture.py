@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 
-from capture import Capture, atomic_json, digest, check_text, lock
+from capture import Capture, atomic_json, closed_source_hashes, digest, check_text, lock
+from test_fragmented_media import box
 from monitor import Detector, Monitor, Tail, ValidationErrors, native_exception_observation, observations
 
 
@@ -42,6 +43,124 @@ class PipelineTests(unittest.TestCase):
     def metadata(self, **extra):
         return {"recorded_at": "2026-10-05T17:20:00+01:00", "description": "Resolved inventory slots are visible.",
                 "event_type": "AFTER", "previous_state": "Materials 7/20", "current_state": "Materials 0/20", **extra}
+
+    def test_fragment_recovery_changes_only_private_buffer_copy(self):
+        prefix = box(b"ftyp") + box(b"moov") + box(b"moof") + box(b"mdat", b"complete")
+        source = prefix + box(b"moof") + b"unfinished"
+        self.video.write_bytes(source)
+        info = self.capture.add_buffer(self.video, "2026-10-05T17:20:00+01:00")
+        self.assertEqual(self.video.read_bytes(), source)
+        self.assertEqual((self.capture.buffer / info["file"]).read_bytes(), prefix)
+        self.assertEqual(info["source_recovery"]["retained_bytes"], len(prefix))
+        self.assertEqual(info["source_recovery"]["discarded_tail_bytes"], len(source) - len(prefix))
+
+    def native_receipt(self, monitor):
+        receipt = monitor.segments / "segment.json"
+        atomic_json(receipt, {"file": str(self.video), "run": "owned-run",
+                             "recorded_at": "2026-10-05T16:20:00+00:00",
+                             "ended_at": "2026-10-05T16:20:40+00:00"})
+        return receipt
+
+    def test_interrupted_segment_is_verified_indexed_and_original_retained(self):
+        prefix = box(b"ftyp") + box(b"moov") + box(b"moof") + box(b"mdat", b"complete")
+        original = prefix + box(b"moof") + b"unfinished"
+        self.video.write_bytes(original)
+        monitor = Monitor(self.config)
+        try:
+            receipt = self.native_receipt(monitor)
+            monitor.process()
+            self.assertEqual(self.video.read_bytes(), original)
+            self.assertFalse(receipt.with_suffix(".failed").exists())
+            proof = json.loads(receipt.with_suffix(".indexed").read_text())
+            self.assertEqual(proof["source_sha256"], digest(self.video))
+            copy = next(monitor.capture.buffer.glob("*.mp4"))
+            self.assertEqual(copy.read_bytes(), prefix)
+            self.assertEqual(proof["retained_sha256"], digest(copy))
+            entry = json.loads(copy.with_suffix(".json").read_text())
+            self.assertEqual(entry["ended_at"], "2026-10-05T16:20:30+00:00")
+            self.assertEqual(entry["source_ended_at"], "2026-10-05T16:20:40+00:00")
+            event = json.loads(monitor.pending_path.read_text())[0]
+            self.assertEqual(event["feature"], "native-recording-recovery")
+            self.assertEqual(event["maturity"], "Experimental")
+            self.assertEqual(event["at"], entry["ended_at"])
+            monitor.process()
+            self.assertEqual(len(list(monitor.capture.buffer.glob("*.mp4"))), 1)
+        finally:
+            monitor.pool.shutdown()
+
+    def test_corrupt_buffer_copy_is_retryable_and_never_indexed(self):
+        monitor = Monitor(self.config)
+        try:
+            receipt = self.native_receipt(monitor)
+            add = monitor.capture.add_buffer
+            def corrupt(*args):
+                entry = add(*args)
+                (monitor.capture.buffer / entry["file"]).write_bytes(b"corrupted copy")
+                return entry
+            with patch.object(monitor.capture, "add_buffer", side_effect=corrupt):
+                monitor.process()
+            self.assertTrue(self.video.exists())
+            self.assertFalse(receipt.with_suffix(".indexed").exists())
+            failure = json.loads(receipt.with_suffix(".failed").read_text())
+            self.assertIn("differs", failure["error"])
+            self.assertGreater(failure["next_attempt"], 0)
+            self.assertFalse(monitor.pending_path.exists())
+            self.assertEqual(list(monitor.capture.buffer.glob("*.json")), [])
+            atomic_json(receipt.with_suffix(".failed"), {**failure, "next_attempt": 0})
+            monitor.process()
+            self.assertTrue(receipt.with_suffix(".indexed").exists())
+            self.assertFalse(self.video.exists())
+        finally:
+            monitor.pool.shutdown()
+
+    def test_finished_segment_is_byte_identical_before_original_retirement(self):
+        original = self.video.read_bytes()
+        monitor = Monitor(self.config)
+        try:
+            receipt = self.native_receipt(monitor)
+            monitor.process()
+            self.assertFalse(self.video.exists())
+            copy = next(monitor.capture.buffer.glob("*.mp4"))
+            self.assertEqual(copy.read_bytes(), original)
+            proof = json.loads(receipt.with_suffix(".indexed").read_text())
+            self.assertEqual(proof["source_sha256"], digest(copy))
+            self.assertIsNone(proof["source_recovery"])
+        finally:
+            monitor.pool.shutdown()
+
+    def test_closed_source_prefix_hash_crosses_chunk_boundary(self):
+        import hashlib
+        original = b"a" * (1024 * 1024 + 37) + b"discarded tail"
+        self.video.write_bytes(original)
+        length = 1024 * 1024 + 37
+        proof = closed_source_hashes(self.video, length)
+        self.assertEqual(proof["source_sha256"], hashlib.sha256(original).hexdigest())
+        self.assertEqual(proof["retained_sha256"], hashlib.sha256(original[:length]).hexdigest())
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            closed_source_hashes(self.video, len(original) + 1)
+
+    def test_event_window_does_not_repeat_retried_recording_segment(self):
+        monitor = Monitor(self.config)
+        try:
+            common = {"run": "owned-run", "recorded_at": "2026-10-05T16:20:00+00:00",
+                      "duration_seconds": 30, "contains_audio": True, "full_decode": "PASS"}
+            stale = {**common, "file": "stale.mp4", "ended_at": "2026-10-05T16:20:40+00:00",
+                     "source_recovery": {"retained_bytes": 100}}
+            verified = {**common, "file": "verified.mp4", "ended_at": "2026-10-05T16:20:30+00:00",
+                        "source_recovery": {"retained_bytes": 100, "retained_sha256": "proof"}}
+            for entry in (stale, verified):
+                atomic_json(monitor.capture.buffer / Path(entry["file"]).with_suffix(".json"), entry)
+            atomic_json(monitor.pending_path, [{"event_id": "recovery", "run": "owned-run",
+                                               "at": "2026-10-05T16:20:30+00:00"}])
+            with patch.object(monitor, "package_window", return_value="package") as package:
+                monitor.finish_events()
+                self.assertEqual(monitor.job.result(timeout=5), "package")
+            selected, metadata = package.call_args.args
+            self.assertEqual([e["file"] for e in selected], ["verified.mp4"])
+            self.assertEqual(metadata["capture_window"]["actual_end"], verified["ended_at"])
+            self.assertTrue(metadata["capture_window"]["post_event_truncated"])
+        finally:
+            monitor.pool.shutdown()
 
     def package(self, reviewed=True):
         return self.capture.package(self.video, self.metadata(), reviewed)

@@ -702,8 +702,11 @@ ROSTER_TYPE, ROSTER_SLOTS = 0x80800CF7, 65
 AH_SIMULATION = 5
 OBJECT_ID_TYPE, SIM_PLAYER_TYPE, GAME_MODE_TYPE = 0x808004B1, 0x808022A5, 0x808008A3
 AH_MACHINES, MACHINES_TYPE = 43, 0x80800F1A
-# Client -> host type 21 (sent by 0x257d28): one present bit + a delta of the client's 0x220-byte
-# state 0x80800c56 (host +0x6498 against the last sent copy at +0x66b8, encoder 0x1ca00c). Its
+# Client -> host type 21: one present bit + a delta of the client's 0x220-byte state
+# 0x80800c56. On 01.24 the sender is 0x2720e4; host +0x66e0 is the sent baseline and
+# +0x6900 the pending state encoded by 0x1db1cc. A successful send copies pending state
+# to the baseline at 0x27241c. The earlier 01.00 addresses are 0x257d28,
+# +0x6498/+0x66b8 and 0x1ca00c; they must not be used as 01.24 trace points. Its
 # +0xb8 is the world controller's slice-set record 0x80800d9f: current record @0, target record
 # @0xa0 (0x80800d82: i32 slice-set index, u32 hash, i32), i8 @0x140/0x141, u3 state @0x142. The
 # client is the authority over its slice set and reports switches here (TEST366: target 112,
