@@ -248,6 +248,22 @@ validation reproduces these fields with full decode PASS and audio present.
 The tested worker is deployed while no game is active; existing ready packages
 remain immutable.
 
+## Attachment layout cache/binding candidate
+
+JOIN156 repeats the prior executable with descriptor tracing off. It completes the
+fixture and later input phases at 11:56.782564 with no validation IDs or device loss.
+Final inspected views remain black loading screens, including one contacting-servers
+banner. Posted inputs and an in-world reader label supply no body/menu acceptance.
+Exact-owner cleanup, original settings, XInput and inactive controls pass.
+
+The [attachment-layout increment](../patches/rpcs3-attachment-layout.patch) refreshes
+the render-pass key at use and restores sampleable depth layout immediately before
+emulated depth-compare binding. Actual source control flow exposes late transitions
+after the cached key was chosen. All 31 CPU checks pass against 15 baseline failures;
+scoped one-file reproduction and full Release build pass. The candidate is built but
+not deployed or run natively. JOIN156 does not validate it. See the
+[handoff](HANDOFF-2026-10-06.md) for hashes, scope, sources and next acceptance.
+
 ## Remaining acceptance
 
 Require no concurrent queue-use or query-scope callbacks during the same native

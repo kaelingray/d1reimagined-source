@@ -37,7 +37,7 @@ if ($Local) { $env:D1_LOCAL = (Resolve-Path -LiteralPath $Local).Path }
 $env:D1_RPCS3 = $D1Rpcs3 = Join-Path $D1Local 'RPCS3_FINAL124_SMOKE001'
 $D1Shots = Join-Path $D1Rpcs3 'screenshots\BLES01857'
 . "$PSScriptRoot\Final124RunHelpers.ps1"
-if (-not $DataRepo) { $DataRepo = if ($env:D1_DATA_REPO) { $env:D1_DATA_REPO } else { Join-Path (Split-Path $D1Repo) 'd1xenia-data' } }
+if (-not $DataRepo) { $DataRepo = if ($env:D1_DATA_REPO) { $env:D1_DATA_REPO } else { Get-D1DefaultDataRepo -Repository $D1Repo } }
 $DataRepo = (Resolve-Path -LiteralPath $DataRepo).Path
 $logs = Join-Path $D1Local 'SIGNON_LOCAL\logs'
 $research = Join-Path $D1Local 'RESEARCH\ps3_updates'

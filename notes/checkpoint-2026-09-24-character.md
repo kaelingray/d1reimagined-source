@@ -34,7 +34,7 @@ change and is a separate issue.
   DNS/STUN restart logs have the `TEST053_RESTART-` prefix. The SignOn helper currently
   runs in a direct terminal session, so restart it if that session closes.
 - The user authorized pushing work to the private
-  `https://github.com/p3n1cillin/d1xenia` repository. `gh auth status` showed the
+  `https://github.com/p3n1cillin/d1reimagined` repository. `gh auth status` showed the
   `p3n1cillin` account active with `repo` scope. Current changes still need committing
   and pushing once the checkpoint is documented and verified.
 

@@ -1,9 +1,12 @@
-# Next session on the PC: ordered runbook (written 2026-09-27)
+# D1 Reimagined — ordered runbook (historical recipes retained)
 
-> **2026-10-01, for Codex:** your staged 2026-09-30 audit work is committed as `951222b`
-> (unchanged from the staged index) and pushed, on top of the main PC's handoff commits. Run
-> `git pull --rebase` before you continue; do not re-stage it. Start with
-> [the handoff](HANDOFF-2026-10-01.md).
+> **2026-10-06:** start with the [current handoff](HANDOFF-2026-10-06.md),
+> [renderer checkpoint](checkpoint-2026-10-06-renderer.md) and
+> [project README](../README.md). Repositories are now `d1reimagined` and
+> `d1reimagined-data`; existing runtime/checkout folders remain supported. The
+> attachment-layout candidate is built but not deployed or natively accepted.
+> The private engineering record supplies exact runtime identities and paths.
+> Older recipes below are history, not instructions to reset current work.
 
 ## Active work: 01.24 (updated 2026-10-05)
 

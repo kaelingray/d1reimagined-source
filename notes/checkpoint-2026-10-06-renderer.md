@@ -295,3 +295,25 @@ tested observer is deployed at idle and remains asynchronous. Earlier NAS packag
 stay immutable. Next: reproduce descriptor errors with tracing disabled, then arm
 later to preserve the trace budget for the failure; continue recorder source-state
 and character/mission rendering work without claiming either is repaired.
+
+
+## JOIN156 and renamed-repository handoff
+
+JOIN156 repeats the 500-second post-match fixture on the earlier executable with
+descriptor tracing disabled and the core validation DLL verified. Its final native
+log reaches 11:56.782564 with no validation IDs, queue/query/descriptor-reset or
+device-loss entries. Four later input/screenshot phases are completed, but inspected
+images are black loading views, one with the contacting-servers banner. Successful
+key posts and an in-world label do not establish a settled scene or body/menu proof.
+Exact-owner cleanup restores original title/watch bytes, XInput and inactive controls.
+The normal capture observer remains healthy, idle and drained.
+
+An attachment-layout cache/binding candidate now passes 31 actual-source CPU checks
+against 15 original-flow failures. Full Release build and scoped one-file patch
+reproduction pass; it is built but not deployed and native/visual acceptance is NOT
+RUN. The tested runtime remains unchanged. Both GitHub repositories are renamed,
+origins updated and private visibility retained. Six READMEs now distinguish working,
+partial and unverified behavior. Read the [current handoff](HANDOFF-2026-10-06.md)
+for hashes, validation scope and the next controlled deployment. Current source
+launchers accept both new and legacy companion checkout names. No graphics or
+complete-preservation acceptance is implied by this handoff.

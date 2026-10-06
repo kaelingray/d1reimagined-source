@@ -60,7 +60,7 @@ try {
     $repo = $D1Repo
     $Local = (Resolve-Path -LiteralPath $D1Local).Path
     if (-not $DataRepo) {
-        $DataRepo = if ($env:D1_DATA_REPO) { $env:D1_DATA_REPO } else { Join-Path (Split-Path $repo -Parent) 'd1xenia-data' }
+        $DataRepo = if ($env:D1_DATA_REPO) { $env:D1_DATA_REPO } else { Get-D1DefaultDataRepo -Repository $repo }
     }
     $DataRepo = (Resolve-Path -LiteralPath $DataRepo).Path
     if (-not $Rpcs3Dir) {

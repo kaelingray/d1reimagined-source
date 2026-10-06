@@ -21,7 +21,6 @@ import struct
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "d1xenia" / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     from d1_eboot import Eboot  # noqa: E402

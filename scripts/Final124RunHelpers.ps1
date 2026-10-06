@@ -1,6 +1,17 @@
 # Shared process ownership and evidence readers for the 01.24 run wrapper.
 # Dot-sourcing this file starts no processes and changes no environment variables.
 
+function Get-D1DefaultDataRepo {
+    param([Parameter(Mandatory)][string]$Repository)
+    $parent = Split-Path $Repository -Parent
+    $current = Join-Path $parent 'd1reimagined-data'
+    $legacy = Join-Path $parent 'd1xenia-data'
+    if (Test-Path -LiteralPath $current -PathType Container) { return $current }
+    if (Test-Path -LiteralPath $legacy -PathType Container) { return $legacy }
+    # Let the caller's existing Resolve-Path report a missing checkout.
+    return $current
+}
+
 function ConvertTo-D1ProcessArgument {
     param([AllowEmptyString()][string]$Value)
     # Start-Process joins ArgumentList with spaces on Windows. Apply the Windows

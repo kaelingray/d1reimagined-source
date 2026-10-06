@@ -7,6 +7,13 @@ from pathlib import Path
 import bap_server as bap
 
 
+def final124_schema_path():
+    parent = Path(__file__).resolve().parents[2]
+    paths = [parent / name / "ps3_updates" / "types_01.24.json"
+             for name in ("d1reimagined-data", "d1xenia-data")]
+    return next((path for path in paths if path.exists()), paths[0])
+
+
 class ClientZoneRequest(unittest.TestCase):
     def test_cleared_target_does_not_request_skywatch(self):
         self.assertIsNone(bap.requested_client_zone({"target": (0, 0)}))
@@ -644,7 +651,7 @@ class GroupSwitch(unittest.TestCase):
     """Group record 1 carries a slice-set switch in progress (--ah-group-switch)."""
 
     def test_target_goes_to_group_record_one(self):
-        path = Path(__file__).resolve().parents[2] / "d1xenia-data" / "ps3_updates" / "types_01.24.json"
+        path = final124_schema_path()
         if not path.exists():
             self.skipTest("01.24 schema not available")
         schema = json.loads(path.read_text(encoding="utf-8"))
@@ -664,7 +671,7 @@ class GroupSwitch(unittest.TestCase):
 class ClientSliceRecord(unittest.TestCase):
     def test_peer_byte_is_reported(self):
         # JOIN38: target 112 with the client's i8 @0x140 (engine +0x1d0) = 2
-        path = Path(__file__).resolve().parents[2] / "d1xenia-data" / "ps3_updates" / "types_01.24.json"
+        path = final124_schema_path()
         if not path.exists():
             self.skipTest("01.24 schema not available")
         schema = json.loads(path.read_text(encoding="utf-8"))

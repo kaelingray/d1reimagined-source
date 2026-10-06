@@ -1,4 +1,4 @@
-# Automatic development source capture
+# D1 Reimagined — automatic development source capture
 
 This subsystem supplies original game footage and context to the separate content
 machine. It does not edit episodes, add captions/music, or publish. Game development
@@ -15,6 +15,25 @@ exists. `scripts/Start-ContentCapture.ps1 -InstallStartup` also installs a curre
 Startup shortcut so queued transfers recover after login without starting a game.
 The worker has an OS process lock and an exact process-identity receipt. No config
 means no capture side effects. `-Stop` requests cooperative shutdown, preserving files.
+
+## Verified state — 2026-10-06
+
+The capture suite passes **77 tests**. Live acceptance includes native game/audio
+segments, interrupted-fragment recovery, durable event/outbox handling, full decoding,
+verified SMB transfer and atomic ready transitions. Status-lock contention is repaired
+and tested with the live worker during recording. Source-start identification still
+fails intermittently in some runs; diagnostics now record shortcut results, source
+timing and cleanup. Do not claim uninterrupted coverage or a complete zero-touch
+solution for every failure. Recorder failure preserves sources and does not stop
+engineering. New metadata uses inspected media properties, including distinct rounded
+average/base rates, instead of assuming the configured frame rate was achieved.
+
+Current detectors are described below. Mission completion, AI, rewards and multiplayer
+require reliable acceptance signals before automatic milestone classification can be
+added. Missing footage and unverified tests remain explicit. Normal capture/transfer
+is automatic; final editorial and publication review happens on the production machine.
+See the [project status](../../README.md) and
+[October 6 evidence](../../notes/checkpoint-2026-10-06-renderer.md).
 
 ## Normal operation
 
@@ -112,8 +131,8 @@ Local receipts track waiting, transferring, verifying, submitted and failed-retr
 states, attempts, retry deadline and successful transfer time. NAS failures back off
 exponentially and preserve timestamps/content. Local packages are retained 30 days by
 default. `prune-submitted` is an explicit maintenance command and re-verifies the NAS
-copy before removing an expired local package. The automatic worker runs this maintenance
-hourly while no owned game is active. Failed transfers and important originals
+copy before removing an expired local package. When enabled by the private retention policy, the worker runs this maintenance
+hourly while no owned game is active. Do not enable deletion without an agreed archive policy. Failed transfers and important originals
 are never silently discarded. Inspect `machine-status.json`, `monitor.err`,
 `native-recorder.log`, state receipts and `development-events.jsonl` for diagnostics.
 
