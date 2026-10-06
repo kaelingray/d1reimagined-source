@@ -115,3 +115,22 @@ Next: repeat the recording-enabled comparison with the candidate marker in the a
 correlate the loaded-but-inactive slice transition with the host group/version exchange,
 and obtain stable outdoor, character/equipment and indoor appearance samples. Keep
 validator ambiguity, CPU lifetime contracts and native pixel acceptance distinct.
+
+## JOIN141–143: device loss and slice-handoff isolation
+
+JOIN141 places controls in the correct `d1/` directory and verifies the media probe
+with native lines, including `recording=1`. At **4:09.139203** it reports device loss
+on an SPU thread, with a write hint in **0x0–0xfff** and six instruction-pointer hints.
+The last memory sample has 550 descriptor-set initializations and 348 idle releases.
+The 400 binding diagnostics contain no synthetic bind: the candidate is armed,
+but its execution is not established by this trace. Do not call this a completed
+candidate-on pixel comparison. Ordered cleanup closes all owned processes and
+restores XInput with no active experimental controls.
+
+JOIN142 uses default controls with recording enabled. Its read-only timeline captures
+slice 112 loaded but inactive after the host request, followed by a dropped connection
+and rejoin. It has no GPU fault before ordered shutdown. The
+[world-heartbeat increment](rpcs3-world-heartbeat.md) changes the seconds-only default
+to resend the owned state with unchanged version; numeric diagnostic subtypes remain
+explicit. All affected CPU checks pass. JOIN143 is the native comparison in progress.
+The renderer executable remains unchanged and the depth candidate stays disabled.

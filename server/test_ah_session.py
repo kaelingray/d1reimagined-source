@@ -150,6 +150,13 @@ class ActivityHostSession(unittest.TestCase):
         self.assertEqual(response[0][0], 7)
         self.assertEqual(objects_in(self.schema, pushes[1][2]), {(0x10, 3, 0): None})
 
+    def test_default_heartbeat_without_world_state_keeps_empty_type_eleven(self):
+        c = self.start("--ah-heartbeat", "0.01")
+        _, pushes = self.run_client(c, 0.1)
+        heartbeats = [data for _, subtype, data in pushes if subtype == b.AH_ESTABLISH]
+        self.assertGreaterEqual(len(heartbeats), 2)
+        self.assertTrue(all(data == b"" for data in heartbeats))
+
     def test_heartbeats_keep_their_interval_across_object_steps(self):
         # TEST361: an --ah-object-at step delayed the next heartbeat by the step's time (baboon)
         c = self.start("--ah-heartbeat", "0.2:-1", "--ah-baselines", "0x10/3/0",

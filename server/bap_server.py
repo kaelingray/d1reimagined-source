@@ -2082,12 +2082,13 @@ def handle(conn, peer, args):
                 # crashed (status 36, reason 0x67, "baboon") once the time since the host's last
                 # message (0x25b210, host +0xba8) exceeds the configured timeout (config +0x2d10).
                 seconds, subtype = args.ah_heartbeat
-                if subtype == WORLD_HEARTBEAT and world_params:
+                if subtype == WORLD_HEARTBEAT:
                     # the current world state, unchanged version: keeps the group request
                     # (@0x2e48+0x21c8) alive, which an empty type-11 message resets to "none"
-                    data = world_state_delta(args.activity_schema, world_params[0], zone_now,
-                                             *world_params[1:], target=switch_target, teleport=teleport_now,
-                                             version=world_version_now)
+                    # Without an owned world state, retain the original empty keepalive.
+                    data = (world_state_delta(args.activity_schema, world_params[0], zone_now,
+                                              *world_params[1:], target=switch_target, teleport=teleport_now,
+                                              version=world_version_now) if world_params else b"")
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(AH_ESTABLISH, data, host_id)))
                 elif subtype >= 0:  # -1: only the machines/simulation repeats below
                     conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0, bc_notification(subtype, b"", host_id)))
@@ -2492,11 +2493,12 @@ def parse_args(argv=None):
     ap.add_argument("--ah-echo-incidents", action="store_true",
                     help="EXPERIMENT: send every client incident (type 18) straight back to the client")
     ap.add_argument("--ah-heartbeat", type=lambda v: (float(v.split(":")[0]),
-                                                      WORLD_HEARTBEAT if (v.split(":") + ["11"])[1] == "world"
-                                                      else int((v.split(":") + ["11"])[1], 0)),
+                                                      WORLD_HEARTBEAT if (v.split(":") + ["world"])[1] == "world"
+                                                      else int((v.split(":") + ["world"])[1], 0)),
                     metavar="SECONDS[:SUBTYPE|world]",
-                    help="with --ah-join, push an empty host message (default type 11; -1 = none; 'world' = the "
-                         "current world state) plus the machines/simulation repeats every SECONDS")
+                    help="with --ah-join, resend the current world state (default; empty type 11 when absent) "
+                         "plus machines/simulation every SECONDS; an explicit numeric subtype sends an empty "
+                         "message, -1 sends none, and 'world' selects the default state-preserving mode")
     ap.add_argument("--ah-after-join", nargs="*", default=[], metavar="SUBTYPE:HEX",
                     help="experiment: further b->c not pushes after the join response")
     ap.add_argument("--ah-join-fields", default=[],

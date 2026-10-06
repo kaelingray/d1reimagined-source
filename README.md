@@ -120,6 +120,7 @@ One cycle takes 8–10 minutes. Useful companions:
 - `scripts/d1_pkg.py`: offline reader for the disc's Tiger packages (named tags, entries, blocks, extraction; compressed blocks need an Oodle decoder). Public Destiny networking and package research applied to the stand-in: [`notes/public-research.md`](notes/public-research.md).
 - `scripts/stun_scan.py`: searches a decrypted EBOOT for the immediates that shape the STUN packets (`--li`, `--word`, `--cmpwi`, scoped to the Demonware code range); used for the 01.24 STUN format hunt ([01.24 checkpoint](notes/checkpoint-2026-09-28-final124-run.md)).
 - `scripts/d1_offset_scan.py`: finds every access to a struct field (`--offset 0x4460`), for questions of the form "what else touches this field?". Used to locate the SignOn field-13 consumer in 01.24.
+- `scripts/rpcs3_final124_transition.py`: reads the 01.24 slice handoff, copied host groups and active/loading/loaded state without pausing or writing guest memory. See the [state-preserving heartbeat investigation](notes/rpcs3-world-heartbeat.md).
 - `scripts/Set-PadConfig.ps1 -Mode keyboard|xinput`: switch the RPCS3 copy between the keyboard pad the scripts drive and the user's XInput controller. Restore XInput after stopping an owned test run.
 - `scripts/Invoke-Final124Join.ps1 ... -SkipOpeningCinematic`: after watching the opening Mars cinematic, opt out of replaying it in a scripted 01.24 join. This posts one Circle hold only in the verified frontend `character:prologue` stage; mission cinematics still play. Omit the switch to watch the opening again.
 

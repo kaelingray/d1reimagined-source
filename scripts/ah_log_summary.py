@@ -48,7 +48,8 @@ def summarize(lines, since=None, body_bytes=None, pushes=True, out=sys.stdout):
                 shown = body if len(body) <= 96 else body[:96] + f"... ({len(body) // 2} bytes)"
                 print(f"{clock} NEW  type {ah_type:3d} len {length:5d} host {host} {shown}", file=out)
         elif pushes and ("pushed" in message or "zone" in message or "object" in message
-                         or "slice set" in message):
+                         or "slice set" in message or "world state:" in message
+                         or "connection" in message or "host join request" in message):
             print(f"{clock}      {message[:160]}", file=out)
     print("\nper type: count, distinct bodies, first .. last", file=out)
     for ah_type in sorted(counts):

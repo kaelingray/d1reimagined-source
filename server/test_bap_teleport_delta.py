@@ -69,7 +69,7 @@ class TeleportDeltaSession(unittest.TestCase):
             client.notify(15, b"\0")
             for _, subtype, data in client.pushes(0.002):
                 if subtype == bap.AH_ESTABLISH:
-                    worlds.append(json.loads(data))
+                    worlds.append(json.loads(data) if data else {"empty": True})
             if until and any(until(world) for world in worlds):
                 break
         return worlds
@@ -96,6 +96,20 @@ class TeleportDeltaSession(unittest.TestCase):
         self.assertEqual(finished[0]["version"], initial["version"])
         self.assertTrue(any(world.get("teleport") is None and world["version"] > initial["version"]
                             for world in later), later)
+
+    def test_default_heartbeat_retains_pending_request_and_version(self):
+        self.args.ah_heartbeat = bap.parse_args(["--ah-heartbeat", "0.005"]).ah_heartbeat
+        client = self.start()
+        started = self.queue(client)
+        pending = self.collect(client, 0.04)
+        self.assertGreaterEqual(len(pending), 2)
+        initial = next(world for world in started if world.get("teleport") == [1, *self.target])
+        self.assertTrue(all(world.get("teleport") == [1, *self.target]
+                            and world["version"] == initial["version"] for world in pending), pending)
+
+    def test_explicit_numeric_heartbeat_retains_empty_diagnostic_mode(self):
+        self.assertEqual(bap.parse_args(["--ah-heartbeat", "1:11"]).ah_heartbeat, (1, 11))
+        self.assertEqual(bap.parse_args(["--ah-heartbeat", "1:6"]).ah_heartbeat, (1, 6))
 
     def test_stale_current_does_not_finish_on_target_only_delta(self):
         client = self.start()

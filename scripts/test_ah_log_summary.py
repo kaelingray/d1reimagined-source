@@ -32,6 +32,22 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(counts, {15: 2})
         self.assertEqual(out.getvalue().count("NEW"), 1)
 
+    def test_transition_and_connection_lifecycle_remain_visible(self):
+        lines = [
+            "2026-10-06T08:00:00.000 [a] world state: teleport to 112 reached (state 3)\n",
+            "2026-10-06T08:00:02.000 [a] world state: finished teleport request dropped\n",
+            "2026-10-06T08:00:04.000 [a] [WinError 10054] An existing connection was forcibly closed by the remote host\n",
+            "2026-10-06T08:00:06.000 [b] host join request 0x123 / 0x1 ids {}\n",
+        ]
+        out = io.StringIO()
+        self.assertEqual(ah_log_summary.summarize(lines, out=out), {})
+        text = out.getvalue()
+        for expected in ("state 3", "request dropped", "connection was forcibly closed", "host join request"):
+            self.assertIn(expected, text)
+        quiet = io.StringIO()
+        ah_log_summary.summarize(lines, pushes=False, out=quiet)
+        self.assertNotIn("world state", quiet.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
