@@ -1,0 +1,195 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+index f4b8308..9d331a8 100644
+--- a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
++++ b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+@@ -100,6 +100,17 @@ namespace vk
+ 
+ 		auto dma_sync_region = valid_range;
+ 		dma_mapping_handle dma_mapping = { 0, nullptr };
++		diagnostic_readback_info readback
++		{
++			.source_image = std::bit_cast<u64>(src->value),
++			.destination_length = valid_range.length(),
++			.width = transfer_width,
++			.height = transfer_height,
++			.pitch = pitch,
++			.format = static_cast<u32>(src->format()),
++			.transforms = u32(require_format_conversion) | (u32(pack_unpack_swap_bytes) << 1) | (u32(require_tiling) << 2)
++		};
++		cmd.checkpoint_readback("dma-readback.before", readback);
+ 
+ 		auto dma_sync = [&](bool load, bool force = false)
+ 		{
+@@ -109,6 +120,11 @@ namespace vk
+ 			}
+ 
+ 			dma_mapping = vk::map_dma(dma_sync_region.start, dma_sync_region.length());
++			readback.destination_buffer = std::bit_cast<u64>(dma_mapping.second->value);
++			readback.destination_offset = dma_mapping.first;
++			readback.destination_length = dma_sync_region.length();
++			readback.destination_capacity = dma_mapping.second->size();
++			cmd.checkpoint_readback("dma-readback.mapped", readback);
+ 			if (load)
+ 			{
+ 				vk::load_dma(dma_sync_region.start, dma_sync_region.length());
+@@ -369,6 +385,7 @@ namespace vk
+ 
+ 		// Set cb flag for queued dma operations
+ 		cmd.set_flag(vk::command_buffer::cb_has_dma_transfer);
++		cmd.checkpoint_readback("dma-readback.after", readback);
+ 
+ 		if (get_context() == rsx::texture_upload_context::dma)
+ 		{
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/commands.cpp b/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
+index b6c00dd..11fac7c 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
+@@ -80,6 +80,7 @@ namespace vk
+ 
+ 	void command_buffer::clear_state_cache()
+ 	{
++		m_checkpoint_context = {};
+ 		m_bound_pipelines[0] = VK_NULL_HANDLE;
+ 		m_bound_pipelines[1] = VK_NULL_HANDLE;
+ 		for (auto& bindings : m_bound_descriptor_sets)
+@@ -92,8 +93,21 @@ namespace vk
+ 	{
+ 		if (!pool->get_owner().get_diagnostic_checkpoint_support()) return;
+ 		ensure(is_open && (bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS || bind_point == VK_PIPELINE_BIND_POINT_COMPUTE));
++		m_checkpoint_context.graphics_pipeline = std::bit_cast<u64>(m_bound_pipelines[0]);
++		m_checkpoint_context.compute_pipeline = std::bit_cast<u64>(m_bound_pipelines[1]);
++		if (operation && !std::strcmp(operation, "graphics-draw.before")) ++m_checkpoint_context.graphics_batches;
++		if (operation && !std::strcmp(operation, "compute-dispatch.before")) ++m_checkpoint_context.compute_dispatches;
+ 		pool->get_owner().record_checkpoint(commands, operation,
+-			std::bit_cast<u64>(m_bound_pipelines[static_cast<int>(bind_point)]));
++			std::bit_cast<u64>(m_bound_pipelines[static_cast<int>(bind_point)]), m_checkpoint_context);
++	}
++
++	void command_buffer::checkpoint_readback(const char* operation, const diagnostic_readback_info& readback) const
++	{
++		if (!pool->get_owner().get_diagnostic_checkpoint_support()) return;
++		ensure(is_open);
++		m_checkpoint_context.readback = readback;
++		if (operation && !std::strcmp(operation, "dma-readback.before")) ++m_checkpoint_context.readbacks;
++		checkpoint(operation, VK_PIPELINE_BIND_POINT_COMPUTE);
+ 	}
+ 
+ 	void command_buffer::begin()
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/commands.h b/rpcs3/Emu/RSX/VK/vkutils/commands.h
+index 153c507..b474d59 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.h
+@@ -80,6 +80,7 @@ namespace vk
+ 		};
+ 		mutable std::array<descriptor_binding_state, 2> m_bound_descriptor_sets{};
+ 		mutable std::array<VkPipeline, 2> m_bound_pipelines{{ VK_NULL_HANDLE }};
++		mutable diagnostic_checkpoint_context m_checkpoint_context{};
+ 
+ 		void clear_state_cache();
+ 
+@@ -118,6 +119,7 @@ namespace vk
+ 		// Abstractions with caching
+ 		void bind_pipeline(VkPipeline pipeline, VkPipelineBindPoint bind_point) const;
+ 		void checkpoint(const char* operation, VkPipelineBindPoint bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS) const;
++		void checkpoint_readback(const char* operation, const diagnostic_readback_info& readback) const;
+ 		void bind_descriptor_sets(const std::span<VkDescriptorSet>& sets, VkPipelineBindPoint bind_point, VkPipelineLayout pipe_layout) const;
+ 		void bind_descriptor_sets(const std::span<VkDescriptorSet>& sets, const std::span<u32>& dynamic_offsets, VkPipelineBindPoint bind_point, VkPipelineLayout pipe_layout) const;
+ 
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/device.cpp b/rpcs3/Emu/RSX/VK/vkutils/device.cpp
+index bfe61b8..1071f26 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/device.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/device.cpp
+@@ -25,12 +25,14 @@ namespace vk
+ 		VkCommandBuffer commands = VK_NULL_HANDLE;
+ 		std::array<char, 48> operation{};
+ 		u64 pipeline = 0;
++		diagnostic_checkpoint_context context{};
+ 	};
+ 	static std::array<diagnostic_checkpoint_record, 65536> g_checkpoint_records{};
+ 	static std::mutex g_checkpoint_mutex;
+ 	static u64 g_checkpoint_sequence = 0;
+ 
+-	void render_device::record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline) const
++	void render_device::record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline,
++		const diagnostic_checkpoint_context& context) const
+ 	{
+ 		if (!get_diagnostic_checkpoint_support()) return;
+ 		u64 sequence;
+@@ -38,7 +40,7 @@ namespace vk
+ 			std::lock_guard lock(g_checkpoint_mutex);
+ 			sequence = ++g_checkpoint_sequence;
+ 			auto& record = g_checkpoint_records[sequence % g_checkpoint_records.size()];
+-			record = {sequence, commands, {}, pipeline};
++			record = {sequence, commands, {}, pipeline, context};
+ 			std::strncpy(record.operation.data(), operation ? operation : "unknown", record.operation.size() - 1);
+ 		}
+ 		m_set_checkpoint(commands, reinterpret_cast<const void*>(static_cast<uptr>(sequence)));
+@@ -72,9 +74,21 @@ namespace vk
+ 					fmt::append(result, "    stage=0x%x marker=%llu expired-or-unknown\n", static_cast<u32>(checkpoint.stage), sequence);
+ 					continue;
+ 				}
+-				fmt::append(result, "    stage=0x%x marker=%llu operation=%s command_buffer=0x%llx pipeline=0x%llx\n",
++				fmt::append(result, "    stage=0x%x marker=%llu operation=%s command_buffer=0x%llx pipeline=0x%llx",
+ 					static_cast<u32>(checkpoint.stage), sequence, record.operation.data(),
+ 					std::bit_cast<u64>(record.commands), record.pipeline);
++				const auto& context = record.context;
++				const auto& readback = context.readback;
++				fmt::append(result, " graphics_pipeline=0x%llx compute_pipeline=0x%llx graphics_batches=%u compute_dispatches=%u readbacks=%u",
++					context.graphics_pipeline, context.compute_pipeline, context.graphics_batches, context.compute_dispatches, context.readbacks);
++				if (context.readbacks)
++				{
++					fmt::append(result, " readback_image=0x%llx readback_buffer=0x%llx readback_offset=%llu readback_length=%llu readback_capacity=%llu readback_width=%u readback_height=%u readback_pitch=%u readback_format=%u readback_transforms=%u",
++						readback.source_image, readback.destination_buffer, readback.destination_offset,
++						readback.destination_length, readback.destination_capacity, readback.width, readback.height,
++						readback.pitch, readback.format, readback.transforms);
++				}
++				result += '\n';
+ 			}
+ 		}
+ 		return result;
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/device.h b/rpcs3/Emu/RSX/VK/vkutils/device.h
+index 161696e..fa6936a 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/device.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/device.h
+@@ -13,6 +13,31 @@
+ 
+ namespace vk
+ {
++	// Private diagnostics only. Snapshots do not own or dereference GPU resources.
++	struct diagnostic_readback_info
++	{
++		u64 source_image = 0;
++		u64 destination_buffer = 0;
++		u64 destination_offset = 0;
++		u64 destination_length = 0;
++		u64 destination_capacity = 0;
++		u32 width = 0;
++		u32 height = 0;
++		u32 pitch = 0;
++		u32 format = 0;
++		u32 transforms = 0; // bit 0: format conversion, 1: byte swap, 2: tiling
++	};
++
++	struct diagnostic_checkpoint_context
++	{
++		u64 graphics_pipeline = 0;
++		u64 compute_pipeline = 0;
++		u32 graphics_batches = 0;
++		u32 compute_dispatches = 0;
++		u32 readbacks = 0;
++		diagnostic_readback_info readback{};
++	};
++
+ 	struct gpu_formats_support
+ 	{
+ 		bool d24_unorm_s8 : 1;
+@@ -195,7 +220,8 @@ namespace vk
+ 		bool get_synchronization2_support() const { return pgpu->optional_features_support.synchronization_2; }
+ 		bool get_extended_device_fault_support() const { return pgpu->optional_features_support.extended_device_fault; }
+ 		bool get_diagnostic_checkpoint_support() const { return m_set_checkpoint && m_get_checkpoints; }
+-		void record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline) const;
++		void record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline,
++			const diagnostic_checkpoint_context& context = {}) const;
+ 		std::string retrieve_checkpoint_info() const;
+ 		bool get_texture_compression_bc_support() const { return pgpu->optional_features_support.texture_compression_bc; }
+ 		bool get_provoking_vertex_last_support() const { return pgpu->optional_features_support.provoking_vertex_last; }

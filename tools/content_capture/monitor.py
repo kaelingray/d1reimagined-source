@@ -134,7 +134,8 @@ class ValidationErrors:
 class CheckpointEvidence:
     """Normalize bounded device-loss checkpoint continuations; retain no raw handles."""
     OPERATIONS = {"command-buffer.begin", "command-buffer.end", "graphics-draw.before",
-                  "graphics-draw.after", "compute-dispatch.before", "compute-dispatch.after"}
+                  "graphics-draw.after", "compute-dispatch.before", "compute-dispatch.after",
+                  "dma-readback.before", "dma-readback.mapped", "dma-readback.after"}
 
     def __init__(self):
         self.remaining = 0

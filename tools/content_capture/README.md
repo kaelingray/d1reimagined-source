@@ -146,12 +146,29 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **63 tests**, including callback continuations, native exception
+The current suite has **70 tests**, including callback continuations, native exception
 classification, durable observation-to-capture handoff and interrupted-fragment recovery.
 The [GPU checkpoint detector](../../notes/rpcs3-gpu-checkpoints.md) also preserves
 normalized stage/operation hints from a bounded native device-loss report. Raw marker,
 pipeline and command-buffer handles stay private. The event is Experimental and cannot
 claim a renderer fix; unknown or expired records do not establish a command region.
+DMA readback operation labels are recognized; resource handles and range details remain
+private. Package importance uses the importer values `LOW_VALUE` and `REJECT`; the
+older CLI spelling `LOW` is accepted and normalized to `LOW_VALUE` in new packages.
+Existing submitted packages are immutable.
+
+Engineering reports can use the same outbox, retries, payload verification and atomic
+ready transition without requiring or duplicating video. The `report` command accepts
+a closed Markdown report, an events-array JSON file and context metadata JSON. It
+creates schema-1 `metadata.json`, `daily-report.md`, `events.json` and `hashes.json`.
+Earlier media packages can be referenced by identity in the events/context. No media
+decode check is claimed for a text-only report. Text is scanned again before transfer;
+empty payloads are rejected. Reports stay private and require downstream publication
+review. This text-only transfer exception cannot submit additional unreviewed footage.
+Report metadata may supply `reporting_date` as `YYYY-MM-DD` for its destination date
+folder; original event instants stay in UTC. Before transfer the worker records NAS
+free space and required bytes. Insufficient capacity retains the durable package for
+automatic retry and exposes `NAS_CAPACITY_ERROR` in machine status.
 The [native recorder patch](../../patches/rpcs3-recording-fragments.patch) writes initial
 MOV/MP4 metadata and bounded fragments. After a writer exits, the worker can recover
 complete fragments into a private buffer copy; the unfinished original stays intact.

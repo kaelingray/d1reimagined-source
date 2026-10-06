@@ -77,5 +77,67 @@ A newly observed command-region hint creates an **Experimental** development eve
 with automatic footage packaging and the existing verified NAS transfer path. It
 cannot classify the renderer as fixed. The full capture suite has **63 passing tests**;
 five added checks cover privacy, deduplication, split reports, invalid/expired records,
-bounded context and important-log-entry reset. Actual NAS delivery of this new event
-type remains pending until a native device-loss report returns recognized markers.
+bounded context and important-log-entry reset. Actual NAS delivery is verified below.
+
+## JOIN148: returned native markers and automatic delivery
+
+JOIN148 activates the deployed probe and reports RSX device loss at **3:50.961315**,
+before the mission handoff. The fault query again reports a write in **0x0–0xfff**.
+Queue 0 returns two records, at stages `0x1` and `0x2000`, both attributed to the same
+`command-buffer.end` marker with cached graphics pipeline zero. Queue 1 returns none.
+This accepts the real lost-device query, registry attribution and stage reporting.
+It does not identify the faulting operation: the end marker selected only the graphics
+binding, so it omitted any compute binding and DMA work within that recording.
+
+The automatic worker detects the recognized hints, creates an **Experimental /
+FEATURE_PARTIAL** event, and delivers its package without a user capture or transfer
+action. All seven files and six payload sizes/SHA-256 hashes are independently checked
+on the configured 500 GB share. Eleven ready packages are now present. The package
+contains **60.42 seconds** of native game/audio context; its final segment ends **3.45
+seconds before** event detection. Truncated coverage is explicit. Inspected source
+frames show preparing/message UI, not a playable Guardian, a repaired character or
+the crash itself. No raw GPU handles or private native logs enter the package.
+
+Ordered cleanup closes the exactly owned stack and launcher. Original watch bytes,
+title configuration and XInput are preserved, experimental controls are inactive,
+shared RPCN remains running and capture returns healthy, idle and drained.
+
+## Readback context increment
+
+`patches/rpcs3-gpu-readback-context.patch` extends the saved checkpoint-enabled
+private baseline in five files. Every marker copies both pipeline bindings, recording
+counts for graphics batches, compute dispatches and texture readbacks, plus the latest
+readback's source image, mapped buffer, offset, length, capacity, dimensions, pitch,
+format and transformation flags. Buffer begin clears this context. Readbacks are
+bracketed at entry, mapping and completion; entry explicitly has no mapped destination.
+Only copied numbers are retained, with no resource ownership or pointer dereference.
+The existing bounded registry and lost-device-only query remain in place. The larger
+record increases registry memory; instrumented timing remains unbenchmarked.
+
+These details remain private diagnostics. Automatic capture accepts the three new
+operation labels but retains only stage/operation hints. Pipeline/resource handles,
+offsets and capacities are excluded from content evidence. Thirty checks of actual
+C++ registry/query/command-helper code pass, including retained compute bindings at
+buffer end, independent snapshots, recording reset and disabled/closed-buffer paths.
+All **70 capture tests** pass, including DMA-context privacy and importer importance
+labels. The full Release build succeeds; scoped patch application reproduces all five
+compiled files after newline normalization. The deployed executable matches SHA-256
+`090cf2ff657ed6a745e734b0a07bbd29262533626dc2f5f655f3f08e380d7808`;
+the checkpoint-only executable is preserved.
+
+JOIN149 activates the increment and reports SPU-side device loss at **3:54.671530**,
+before the handoff, while waiting for a fence. Both queue-0 stages again return the
+same buffer-end marker; queue 1 returns none. The new context records no graphics
+batch, **two compute dispatches and one readback**, with a nonzero compute binding.
+The latest readback is 384 × 624, pitch 8192, format 97 and byte-swap flag 2. Its
+destination offset 5120 plus length 5,106,688 is within capacity 5,177,344. This
+validates native context retention and does not establish an out-of-bounds DMA
+destination or identify the faulting shader/descriptor. The latest completed region
+need not be the originating fault. No shader, geometry or rendering policy is changed.
+
+Exactly owned test processes close, XInput is restored, watch bytes and title
+configuration hashes match, controls are inactive and shared RPCN remains running.
+The capture worker is healthy, idle and drained. No duplicate event is generated for
+the unchanged observed checkpoint capability. Next: correlate the retained compute
+pipeline with its kernel and descriptor resources, then obtain stable character,
+equipment, outdoor and mission views after a demonstrated repair.

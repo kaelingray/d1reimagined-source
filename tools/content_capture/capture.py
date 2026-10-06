@@ -29,7 +29,7 @@ EVENT_TYPES = {
     "UI_PROGRESS", "CHARACTER_PROGRESS", "AI_PROGRESS", "CONTENT_RESTORATION",
     "PERFORMANCE", "MILESTONE", "GENERAL_PROGRESS",
 }
-IMPORTANCE = {"CRITICAL", "MAJOR", "USEFUL", "SUPPORTING", "LOW"}
+IMPORTANCE = {"CRITICAL", "MAJOR", "USEFUL", "SUPPORTING", "LOW_VALUE", "REJECT", "LOW"}
 SECRET = re.compile(
     r"(?im)(?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|"
     r"authorization|client[_-]?secret|nas[_-]?credential)\s*[\"']?\s*[:=]\s*\S+"
@@ -265,13 +265,16 @@ class Capture:
         # Metadata cannot supply identifiers, hashes or claim verified media/transfer.
         reserved = {"clip_id", "source_machine", "sha256", "duration_seconds", "full_decode",
                     "schema_version", "project", "git_commit", "git_branch", "dirty_worktree", "repository",
-                    "contains_sensitive_information", "requires_manual_review", "contains_audio"}
+                    "contains_sensitive_information", "requires_manual_review", "contains_audio", "package_kind"}
         if reserved & metadata.keys():
             raise ValueError("Metadata supplies reserved traceability fields")
         if not metadata.get("description", "").strip():
             raise ValueError("Describe what happened and why it matters")
         event_type = metadata.get("event_type", "GENERAL_PROGRESS").upper()
         importance = metadata.get("importance", "USEFUL").upper()
+        # Accept the older CLI/config spelling, but emit the importer vocabulary.
+        if importance == "LOW":
+            importance = "LOW_VALUE"
         if event_type not in EVENT_TYPES or importance not in IMPORTANCE:
             raise ValueError("Unknown event type or importance")
         recorded = datetime.fromisoformat(metadata["recorded_at"])
@@ -307,6 +310,7 @@ class Capture:
                     "suggested_use": ["youtube-devblog", "tiktok"], "contains_voice": False,
                     "contains_debug_information": True,
                     **metadata, **git_context(), **media,
+                    "recorded_at": recorded.astimezone(timezone.utc).isoformat(),
                     "event_type": event_type, "importance": importance, "sha256": video_hash,
                     "contains_sensitive_information": not reviewed,
                     "requires_manual_review": not reviewed}
@@ -366,6 +370,57 @@ class Capture:
                 files[path.relative_to(package).as_posix()] = {"size": path.stat().st_size, "sha256": digest(path)}
         atomic_json(package / "hashes.json", {"schema_version": 1, "files": files})
 
+    def package_report(self, report, events, metadata):
+        """Queue a private engineering handoff without resending referenced media."""
+        if not self.cfg.get("CONTENT_CAPTURE_ENABLED", True):
+            raise ValueError("Content capture is disabled")
+        reserved = {"schema_version", "clip_id", "source_machine", "project", "git_commit", "git_branch",
+                    "dirty_worktree", "repository", "sha256", "package_kind", "contains_sensitive_information",
+                    "requires_manual_review", "contains_voice", "full_decode"}
+        if reserved & metadata.keys():
+            raise ValueError("Metadata supplies reserved traceability fields")
+        if not metadata.get("description", "").strip():
+            raise ValueError("Describe the engineering result")
+        recorded = datetime.fromisoformat(metadata["recorded_at"])
+        if recorded.tzinfo is None:
+            raise ValueError("recorded_at requires a timezone")
+        if not isinstance(events, list) or any(not isinstance(event, dict) for event in events):
+            raise ValueError("Report events must be an array of objects")
+        event_type = metadata.get("event_type", "GENERAL_PROGRESS").upper()
+        importance = metadata.get("importance", "USEFUL").upper()
+        importance = "LOW_VALUE" if importance == "LOW" else importance
+        if event_type not in EVENT_TYPES or importance not in IMPORTANCE:
+            raise ValueError("Unknown event type or importance")
+        clip_id = self.machine + "-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex
+        work, package = self.outbox / (clip_id + ".building"), self.outbox / clip_id
+        work.mkdir()
+        try:
+            copy_closed(Path(report), work / "daily-report.md")
+            check_text((work / "daily-report.md").read_text(encoding="utf-8-sig"))
+            meta = {**metadata, **git_context(), "schema_version": 1, "clip_id": clip_id,
+                    "source_machine": self.machine, "project": "destiny1-preservation",
+                    "package_kind": "engineering-report", "devblog": None,
+                    "recorded_at": recorded.astimezone(timezone.utc).isoformat(),
+                    "game_build": self.cfg.get("CURRENT_GAME_BUILD", "01.24"),
+                    "event_type": event_type, "importance": importance, "contains_voice": False,
+                    "contains_sensitive_information": True, "requires_manual_review": True,
+                    "automatic_security_check": {"target": "private engineering report only",
+                                                 "text_scan": "PASS", "publication_review_required": True}}
+            check_text(json.dumps(meta, allow_nan=False))
+            check_text(json.dumps(events, allow_nan=False))
+            atomic_json(work / "metadata.json", meta)
+            atomic_json(work / "events.json", events)
+            self.make_hashes(work)
+            self.verify(work)
+            work.rename(package)
+            self.state(clip_id, status="WAITING_FOR_NAS", attempts=0, next_attempt=0, destination=None)
+            self.event("ADDED", meta.get("feature", "engineering-report"), meta["description"], clip_id=clip_id)
+            self.status()
+            return package
+        finally:
+            if work.exists():
+                shutil.rmtree(work)
+
     @staticmethod
     def verify(package, expected=None):
         if package.is_symlink():
@@ -374,9 +429,31 @@ class Capture:
         if manifest_path.is_symlink():
             raise ValueError("Symlink hash manifests are not supported")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1:
+            raise ValueError("Unsupported hash manifest schema")
         if expected is not None and manifest != expected:
             raise ValueError("Destination hash manifest differs from the source")
-        if not {"clip.mp4", "metadata.json", "notes.md"} <= manifest["files"].keys():
+        metadata_path = package / "metadata.json"
+        if metadata_path.is_symlink():
+            raise ValueError("Symlink metadata is not supported")
+        meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if type(meta.get("schema_version")) is not int or meta["schema_version"] != 1:
+            raise ValueError("Unsupported metadata schema")
+        for name in ("clip_id", "source_machine"):
+            if not isinstance(meta.get(name), str) or not meta[name].strip():
+                raise ValueError("Missing package identity")
+        for name in ("recorded_at", "topic", "feature", "event_type", "description", "previous_state",
+                     "current_state", "remaining_issue", "git_commit", "game_build"):
+            if name in meta and not isinstance(meta[name], str):
+                raise ValueError("Importer metadata field must be a string: " + name)
+        for name in ("contains_sensitive_information", "requires_manual_review", "contains_voice"):
+            if name in meta and type(meta[name]) is not bool:
+                raise ValueError("Importer metadata field must be a boolean: " + name)
+        report = meta.get("package_kind") == "engineering-report"
+        if meta.get("package_kind") not in {None, "engineering-report"}:
+            raise ValueError("Unsupported package kind")
+        required = {"metadata.json", "daily-report.md", "events.json"} if report else {"clip.mp4", "metadata.json", "notes.md"}
+        if not required <= manifest["files"].keys():
             raise ValueError("Required package files are missing")
         for relative, info in manifest["files"].items():
             if "\\" in relative or ":" in relative or relative.startswith("/") or ".." in Path(relative).parts:
@@ -384,13 +461,13 @@ class Capture:
             path = package / relative
             if any(p.is_symlink() for p in [path, *path.parents][:len(Path(relative).parts)]):
                 raise ValueError("Symlinks are not supported")
-            if not path.is_file() or path.stat().st_size != info["size"] or digest(path) != info["sha256"]:
+            if (type(info["size"]) is not int or info["size"] <= 0 or not path.is_file()
+                    or path.stat().st_size != info["size"] or digest(path) != info["sha256"]):
                 raise ValueError("Package size or SHA-256 verification failed: " + relative)
         actual = {p.relative_to(package).as_posix() for p in package.rglob("*") if p.is_file()}
         if actual != set(manifest["files"]) | {"hashes.json"}:
             raise ValueError("Package contains unexpected files")
-        meta = json.loads((package / "metadata.json").read_text(encoding="utf-8"))
-        if meta["sha256"] != manifest["files"]["clip.mp4"]["sha256"]:
+        if not report and meta["sha256"] != manifest["files"]["clip.mp4"]["sha256"]:
             raise ValueError("Clip hash and metadata disagree")
         return manifest
 
@@ -458,9 +535,17 @@ class Capture:
         native_review = (auto_security.get("target") == "owned RPCS3 native game and audio only"
                          and auto_security.get("text_scan") == "PASS"
                          and auto_security.get("publication_review_required") is True)
-        if uncertain and not native_review:
+        report_review = (meta.get("package_kind") == "engineering-report"
+                         and set(manifest["files"]) == {"metadata.json", "daily-report.md", "events.json"}
+                         and auto_security.get("target") == "private engineering report only"
+                         and auto_security.get("text_scan") == "PASS"
+                         and auto_security.get("publication_review_required") is True)
+        if uncertain and not (native_review or report_review):
             raise ValueError("Review footage and support files before NAS submission")
         check_text(json.dumps(meta))
+        if report_review:
+            for relative in manifest["files"]:
+                check_text((package / relative).read_text(encoding="utf-8-sig"))
         for source in (package / "support").glob("*"):
             if source.suffix not in {".png", ".jpg"}:
                 check_text(source.read_text(encoding="utf-8-sig"))
@@ -471,12 +556,24 @@ class Capture:
         if not nas.is_absolute() or not nas.is_dir():
             raise OSError("Configured NAS root is unavailable")
         recorded = datetime.fromisoformat(meta["recorded_at"])
-        parent = nas / "incoming" / self.machine / recorded.strftime("%Y/%m/%d")
+        folder_date = recorded.strftime("%Y/%m/%d")
+        if meta.get("package_kind") == "engineering-report" and "reporting_date" in meta:
+            reporting_date = meta["reporting_date"]
+            if not isinstance(reporting_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reporting_date):
+                raise ValueError("Reporting date must be YYYY-MM-DD")
+            folder_date = datetime.strptime(reporting_date, "%Y-%m-%d").strftime("%Y/%m/%d")
+        parent = nas / "incoming" / self.machine / folder_date
         parent.mkdir(parents=True, exist_ok=True)
         ready = parent / (package.name + ".ready")
         if ready.exists():
             self.verify(ready, manifest)
             return ready  # crash after rename, before local receipt: idempotent recovery
+        needed = sum(info["size"] for info in manifest["files"].values()) + (package / "hashes.json").stat().st_size
+        free = shutil.disk_usage(nas).free
+        self.status(AVAILABLE_NAS_SPACE=free, NAS_TRANSFER_REQUIRED_BYTES=needed, NAS_CAPACITY_ERROR=None)
+        if free < needed:
+            self.status(NAS_CAPACITY_ERROR="Insufficient NAS free space; source package retained for retry.")
+            raise OSError("Insufficient NAS free space")
         staging = parent / (package.name + "." + uuid.uuid4().hex + ".uploading")
         staging.mkdir()  # unique, no overwriting another worker's partial transfer
         # On failure, leave uploading evidence ignored by the receiver; retry uses a new name.
@@ -660,6 +757,10 @@ def main(argv=None):
     syn.add_argument("--events", type=Path, help="Optional explicit finished-clip events JSONL")
     rev = sub.add_parser("review", help="Mark a locally inspected package as safe to submit")
     rev.add_argument("clip_id")
+    report = sub.add_parser("report", help="Queue a private engineering report through the existing verified outbox")
+    report.add_argument("report", type=Path)
+    report.add_argument("--events", type=Path, required=True)
+    report.add_argument("--metadata", type=Path, required=True)
     buf = sub.add_parser("buffer-add", help="Add a finalized native recording segment to the bounded local buffer")
     buf.add_argument("video", type=Path)
     buf.add_argument("--recorded-at", required=True)
@@ -696,6 +797,9 @@ def main(argv=None):
     elif args.command == "review":
         capture.review(args.clip_id)
         result = capture.status()
+    elif args.command == "report":
+        result = str(capture.package_report(args.report, json.loads(args.events.read_text(encoding="utf-8-sig")),
+                                           json.loads(args.metadata.read_text(encoding="utf-8-sig"))))
     elif args.command == "buffer-add":
         result = capture.add_buffer(args.video, args.recorded_at)
     elif args.command == "event":

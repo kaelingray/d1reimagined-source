@@ -29,11 +29,15 @@ def generate(source):
         raise ValueError("Checkpoint queries must occur only in the device-loss branch")
     registry = device[device.index("struct diagnostic_checkpoint_record"):
                       device.index("void render_device::record_checkpoint")]
+    context = function(header, "struct diagnostic_readback_info") + ";\n"
+    context += function(header, "struct diagnostic_checkpoint_context") + ";\n"
     native = registry + "\n" + function(device, "void render_device::record_checkpoint")
     native += "\n" + function(device, "std::string render_device::retrieve_checkpoint_info")
+    native += "\n" + function(commands, "void command_buffer::clear_state_cache")
     native += "\n" + function(commands, "void command_buffer::checkpoint")
+    native += "\n" + function(commands, "void command_buffer::checkpoint_readback")
     getter = function(header, "bool get_diagnostic_checkpoint_support() const")
-    return FIXTURE.replace("ACTUAL_GETTER", getter).replace("ACTUAL_NATIVE", native)
+    return FIXTURE.replace("ACTUAL_CONTEXT", context).replace("ACTUAL_GETTER", getter).replace("ACTUAL_NATIVE", native)
 
 
 FIXTURE = r'''
@@ -62,18 +66,23 @@ template<class... T> void append(std::string& out,const char* format,T... args) 
     std::snprintf(buf.data(),buf.size(),format,args...); out.append(buf.data(),n);
 }}
 namespace vk {
+ACTUAL_CONTEXT
 struct render_device {
     VkQueue m_graphics_queue=1, m_transfer_queue=1;
     SetCheckpoint m_set_checkpoint=nullptr; GetCheckpoints m_get_checkpoints=nullptr;
     ACTUAL_GETTER
-    void record_checkpoint(VkCommandBuffer,const char*,u64) const;
+    void record_checkpoint(VkCommandBuffer,const char*,u64,const diagnostic_checkpoint_context& = {}) const;
     std::string retrieve_checkpoint_info() const;
 };
 struct command_pool {render_device* device; render_device& get_owner() const {return *device;}};
 struct command_buffer {
     bool is_open=true; command_pool* pool; VkCommandBuffer commands=10;
     std::array<VkPipeline,2> m_bound_pipelines{0x111,0x222};
+    std::array<int,2> m_bound_descriptor_sets{};
+    mutable diagnostic_checkpoint_context m_checkpoint_context{};
+    void clear_state_cache();
     void checkpoint(const char*,VkPipelineBindPoint=0) const;
+    void checkpoint_readback(const char*,const diagnostic_readback_info&) const;
 };
 ACTUAL_NATIVE
 }
@@ -107,6 +116,33 @@ int main() {
     cmd.checkpoint("compute.before",VK_PIPELINE_BIND_POINT_COMPUTE);reset_query();markers[0]=last_marker;
     report=dev.retrieve_checkpoint_info();
     check("compute uses its independent actual bound pipeline",report.find("pipeline=0x222")!=std::string::npos);
+    cmd.checkpoint("graphics-draw.before");cmd.checkpoint("graphics-draw.after");
+    cmd.checkpoint("compute-dispatch.before",1);cmd.checkpoint("compute-dispatch.after",1);
+    vk::diagnostic_readback_info readback{0x444,0,0,256,0,8,8,32,44,3};
+    cmd.checkpoint_readback("dma-readback.before",readback);const auto before=last_marker;
+    readback.destination_buffer=0x555;readback.destination_offset=64;readback.destination_capacity=512;
+    cmd.checkpoint_readback("dma-readback.mapped",readback);const auto mapped=last_marker;
+    cmd.checkpoint_readback("dma-readback.after",readback);
+    cmd.m_bound_pipelines[0]=0;cmd.checkpoint("command-buffer.end");const auto end=last_marker;
+    reset_query();markers[0]=end;report=dev.retrieve_checkpoint_info();
+    check("buffer end retains compute binding even with no graphics pipeline",report.find("graphics_pipeline=0x0 compute_pipeline=0x222")!=std::string::npos);
+    check("command region counts before operations once",report.find("graphics_batches=1 compute_dispatches=1 readbacks=1")!=std::string::npos);
+    check("buffer end retains mapped DMA range and capacity",report.find("readback_image=0x444 readback_buffer=0x555 readback_offset=64 readback_length=256 readback_capacity=512")!=std::string::npos);
+    check("DMA format dimensions and transformations survive buffer end",report.find("readback_width=8 readback_height=8 readback_pitch=32 readback_format=44 readback_transforms=3")!=std::string::npos);
+    reset_query();markers[0]=before;report=dev.retrieve_checkpoint_info();
+    check("beginning DMA snapshot remains explicitly unmapped",report.find("readback_buffer=0x0 readback_offset=0 readback_length=256 readback_capacity=0")!=std::string::npos);
+    readback.destination_buffer=0x666;cmd.m_checkpoint_context.readback=readback;
+    reset_query();markers[0]=mapped;
+    check("mapped snapshot does not alias later CPU context",dev.retrieve_checkpoint_info().find("readback_buffer=0x555")!=std::string::npos);
+    cmd.clear_state_cache();cmd.checkpoint("command-buffer.begin");reset_query();markers[0]=last_marker;
+    report=dev.retrieve_checkpoint_info();
+    check("new recording clears both pipelines and all diagnostic counts",report.find("graphics_pipeline=0x0 compute_pipeline=0x0 graphics_batches=0 compute_dispatches=0 readbacks=0")!=std::string::npos);
+    check("new recording cannot inherit previous readback resources",report.find("readback_image=")==std::string::npos);
+    check("new recording clears the stored DMA details",cmd.m_checkpoint_context.readback.source_image==0 && cmd.m_checkpoint_context.readback.destination_buffer==0);
+    dev.m_get_checkpoints=nullptr;const auto calls_before=set_calls;
+    cmd.checkpoint_readback("dma-readback.before",readback);
+    check("disabled readback path neither emits markers nor changes context",set_calls==calls_before && cmd.m_checkpoint_context.readbacks==0 && cmd.m_checkpoint_context.readback.source_image==0);
+    dev.m_get_checkpoints=query;
     char name[]="original.operation";dev.record_checkpoint(10,name,0x333);reset_query();markers[0]=last_marker;name[0]='X';
     check("operation name survives caller storage mutation",dev.retrieve_checkpoint_info().find("operation=original.operation")!=std::string::npos);
     dev.record_checkpoint(10,nullptr,0);reset_query();markers[0]=last_marker;
@@ -133,6 +169,8 @@ int main() {
     check("negative bind point never indexes outside pipeline state",refused);
     refused=false;cmd.is_open=false;try{cmd.checkpoint("closed");}catch(const std::runtime_error&){refused=true;}
     check("closed command buffer is refused",refused);
+    refused=false;try{cmd.checkpoint_readback("dma-readback.before",readback);}catch(const std::runtime_error&){refused=true;}
+    check("closed readback cannot mutate diagnostic context",refused && cmd.m_checkpoint_context.readbacks==0);
     std::cout<<checks<<" checkpoint checks, "<<failures<<" failed\n";return failures?1:0;
 }
 '''

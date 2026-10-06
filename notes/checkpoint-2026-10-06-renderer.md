@@ -192,3 +192,31 @@ remains running. Capture is healthy, idle and drained with the 500GB NAS connect
 Ten prior ready packages remain delivered; this run creates no duplicate milestone
 for unchanged capabilities. The checkpoint event's native/NAS acceptance awaits a
 recognized returned marker. Continue transport diagnosis and GPU/visual acceptance.
+
+## JOIN148–149: native checkpoint queries and retained compute context
+
+JOIN148 loses the device at **3:50.961315**, before the mission handoff. The real
+checkpoint query returns two queue-0 stages pointing to a buffer-end marker with
+graphics binding zero. Automatic detection creates an Experimental event and delivers
+**60.42 seconds** of native game/audio context to the configured 500 GB share. Seven
+files and six payload hashes/sizes are independently verified; eleven ready packages
+are present. Coverage ends 3.45 seconds before event detection and is explicitly
+truncated. Inspected frames are preparing/message UI, not repaired body/mission proof.
+
+The [readback-context increment](rpcs3-gpu-checkpoints.md) now retains both pipeline
+bindings, recording counts and the latest DMA readback details in the bounded
+registry. Thirty checks of actual C++ diagnostics pass, the full Release build succeeds,
+and the five-file scoped patch reproduces compiled sources after newline normalization.
+JOIN149 verifies the new path, then loses the device at **3:54.671530** on an SPU
+fence wait. Returned end markers retain a compute binding, two dispatches and one
+byte-swapped readback. Its recorded destination span fits the buffer allocation.
+This accepts the additional diagnostics, not a rendering fix or faulting-kernel claim.
+
+Both tests close their exactly owned stacks. Watch bytes and title configuration
+hashes match, XInput is restored, experimental controls are inactive and shared RPCN
+is preserved. Capture is healthy, idle and drained. All **70 capture tests** pass,
+including normalized DMA operation privacy, importer importance compatibility and
+text-only report transfer through the existing outbox. No new event is fabricated
+for the unchanged checkpoint capability. Next: correlate the retained compute kernel
+and descriptor resources, then demonstrate the repair in stable body/equipment,
+outdoor and mission views. The slice-handoff trace remains a separate open task.

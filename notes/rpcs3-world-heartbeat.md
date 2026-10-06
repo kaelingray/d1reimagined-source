@@ -131,3 +131,16 @@ buffers with the received frames, and determine why publication copies advance w
 the corresponding proxy report. Do not fabricate a target acknowledgement or change
 world-peer state to bypass that missing exchange. GPU fault-query execution and full
 outdoor/body/menu/mission acceptance remain separate outstanding checks.
+
+JOIN148 restricts diagnostic dump keys to initialized transport/header bytes so short
+messages cannot consume their watch budget through unrelated stack tails. During the
+initial join, five subtype-21 messages reach wrapper **`0x48e7f0`**, queue **`0x47676c`**
+and serializer entry **`0x479fa8`**. Payload lengths 163, 10, 13, 2 and 22 become queue
+lengths 176, 23, 26, 15 and 35, matching the internal 13-byte header. These are initial
+join controls; GPU device loss at **3:50** precedes the failed-handoff scenario.
+
+The 01.24 wrapper unconditionally returns **1** after its queue call, without testing
+the lower return. A baseline copy following that return therefore establishes wrapper
+acceptance, not wire delivery. The lower queue and serializer have rejection paths;
+their return values and the actual network queue remain the needed handoff evidence.
+No world acknowledgement or backend peer state is changed from these observations.

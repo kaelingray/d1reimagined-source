@@ -156,7 +156,21 @@ source-capture recovery; GPU, character and mission acceptance remain open.
 The [bounded GPU checkpoint detector](rpcs3-gpu-checkpoints.md) raises an Experimental
 event only for recognized stage/operation pairs from a native device-loss report.
 It preserves split-read context and rejects expired/unknown records; raw marker values,
-pipeline handles and command-buffer handles stay private. All **63 capture tests**
+pipeline handles and command-buffer handles stay private. All **70 capture tests**
+pass, including DMA-context privacy and importer importance compatibility. JOIN148
+executes the real lost-device query and automatically delivers an Experimental event.
+Its **60.42-second** game/audio package ends 3.45 seconds before event detection, with
+truncated coverage recorded explicitly. Inspected frames show preparing/message UI.
+All seven files and six payload hashes/sizes are independently verified on the 500 GB
+share. Eleven ready packages are present; this does not establish repaired graphics.
+
+Text-only engineering reports now reuse the same schema-1 outbox and NAS transfer
+path. Integration fixtures verify required report/event payloads, UTC timestamps,
+full payload hashing, safe transfer, untouched source reports and immutable submitted
+packages. Secrets, empty files, traceability overrides and an additional unreviewed
+video are rejected. Reporting-day folders preserve UTC event timestamps, and
+insufficient NAS capacity retains the source with automatic retry and an explicit
+space/error status. These fixtures do not establish a real NAS report delivery.
 pass. JOIN147 verifies native probe activation and normal recording through 13:26,
 but produces no device-loss report; delivery of this new event type remains unverified.
 The worker automatically recovers from a transient processing permission error and

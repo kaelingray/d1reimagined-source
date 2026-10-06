@@ -44,6 +44,84 @@ class PipelineTests(unittest.TestCase):
         return {"recorded_at": "2026-10-05T17:20:00+01:00", "description": "Resolved inventory slots are visible.",
                 "event_type": "AFTER", "previous_state": "Materials 7/20", "current_state": "Materials 0/20", **extra}
 
+    def test_importer_importance_vocabulary_and_legacy_alias(self):
+        for supplied, expected in (("LOW", "LOW_VALUE"), ("LOW_VALUE", "LOW_VALUE"), ("REJECT", "REJECT")):
+            with self.subTest(importance=supplied):
+                self.video.write_bytes(supplied.encode())
+                package = self.capture.package(self.video, self.metadata(importance=supplied), False)
+                self.assertEqual(json.loads((package / "metadata.json").read_text())["importance"], expected)
+
+    def test_engineering_report_reuses_verified_outbox_without_media_or_publication_clearance(self):
+        report = self.root / "daily-report.md"
+        report.write_text("Graphics fault persists. CPU diagnostics pass; gameplay acceptance is not established.")
+        events = [{"id": "observed-event", "maturity": "Experimental", "earlier_package_id": "already-delivered"}]
+        package = self.capture.package_report(report, events, self.metadata())
+        meta = json.loads((package / "metadata.json").read_text())
+        self.assertEqual(meta["recorded_at"], "2026-10-05T16:20:00+00:00")
+        self.assertIsNone(meta["devblog"])
+        self.assertTrue(meta["contains_sensitive_information"] and meta["requires_manual_review"])
+        self.assertNotIn("full_decode", meta)
+        self.assertEqual(set(Capture.verify(package)["files"]), {"metadata.json", "daily-report.md", "events.json"})
+        self.assertFalse((package / "clip.mp4").exists())
+        original = report.read_bytes()
+        result = self.capture.sync()[0]
+        self.assertEqual(result["status"], "SUBMITTED")
+        ready = Path(result["destination"])
+        self.assertEqual(Capture.verify(ready), Capture.verify(package))
+        self.assertEqual(report.read_bytes(), original)
+        with self.assertRaisesRegex(ValueError, "immutable"):
+            self.capture.review(package.name)
+
+    def test_engineering_report_rejects_secrets_empty_payloads_and_traceability_overrides(self):
+        report = self.root / "daily-report.md"
+        for text in ("", "api_key=secret"):
+            report.write_text(text)
+            with self.assertRaises(ValueError):
+                self.capture.package_report(report, [], self.metadata())
+        report.write_text("Known failure; fix acceptance remains open.")
+        with self.assertRaises(ValueError):
+            self.capture.package_report(report, {}, self.metadata())
+        with self.assertRaises(ValueError):
+            self.capture.package_report(report, [], self.metadata(git_commit="invented"))
+        with self.assertRaises(ValueError):
+            self.capture.package_report(report, [], self.metadata(full_decode="PASS"))
+        self.assertFalse(list(self.capture.outbox.glob("*.building")))
+
+    def test_report_clearance_cannot_submit_unreviewed_visual_payload(self):
+        report = self.root / "daily-report.md"
+        report.write_text("Private engineering notes.")
+        package = self.capture.package_report(report, [], self.metadata())
+        (package / "unreviewed.mp4").write_bytes(b"not reviewed footage")
+        self.capture.make_hashes(package)
+        result = self.capture.sync()[0]
+        self.assertEqual(result["status"], "WAITING_FOR_NAS")
+        self.assertIn("Review footage", self.capture.state(package.name)["error"])
+        self.assertFalse(list(self.nas.rglob("*.ready")))
+
+    def test_report_uses_reporting_day_without_changing_event_timestamp(self):
+        report = self.root / "daily-report.md"
+        report.write_text("Late London event retains its original UTC timestamp.")
+        package = self.capture.package_report(report, [], self.metadata(
+            recorded_at="2026-10-05T23:20:00+00:00", reporting_date="2026-10-06", reporting_timezone="Europe/London"))
+        ready = Path(self.capture.sync()[0]["destination"])
+        self.assertEqual(ready.parent.relative_to(self.nas).as_posix(), "incoming/test-machine-a/2026/10/06")
+        self.assertEqual(json.loads((package / "metadata.json").read_text())["recorded_at"], "2026-10-05T23:20:00+00:00")
+
+    def test_insufficient_nas_space_keeps_durable_source_and_retry(self):
+        package = self.package()
+        original = (package / "clip.mp4").read_bytes()
+        import shutil
+        disk_usage = shutil.disk_usage
+        with patch("capture.shutil.disk_usage", side_effect=lambda path:
+                   SimpleNamespace(free=1) if Path(path) == self.nas else disk_usage(path)):
+            self.assertEqual(self.capture.sync()[0]["status"], "WAITING_FOR_NAS")
+        status = self.capture.status()
+        self.assertEqual(status["AVAILABLE_NAS_SPACE"], 1)
+        self.assertIn("Insufficient", status["NAS_CAPACITY_ERROR"])
+        self.assertEqual((package / "clip.mp4").read_bytes(), original)
+        self.assertGreater(self.capture.state(package.name)["next_attempt"], 0)
+        self.assertFalse(list(self.nas.rglob("*.ready")))
+
     def test_fragment_recovery_changes_only_private_buffer_copy(self):
         prefix = box(b"ftyp") + box(b"moov") + box(b"moof") + box(b"mdat", b"complete")
         source = prefix + box(b"moof") + b"unfinished"
@@ -186,6 +264,21 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(parser.observe(line), [{"queue": 1, "stage": "0x2000", "operation": "compute-dispatch.before"}])
         self.assertEqual(parser.observe("·! unrelated log entry\n" + line), [])
         self.assertEqual(CheckpointEvidence().observe(line), [])
+
+    def test_dma_checkpoint_context_keeps_only_normalized_region_hints(self):
+        text = ("NVIDIA diagnostic checkpoints (bounded command-region hints):\n"
+                "  queue=0 records=3 capacity=3\n")
+        for operation in ("before", "mapped", "after"):
+            text += (f"    stage=0x2000 marker=123 operation=dma-readback.{operation} "
+                     "command_buffer=0xsecret pipeline=0xhidden graphics_pipeline=0xprivate "
+                     "compute_pipeline=0xother readback_image=0xsensitive readback_buffer=0xraw "
+                     "readback_offset=64 readback_length=256 readback_capacity=512\n")
+        event = observations({}, text, "")[0]
+        self.assertEqual((event[0], event[1], event[3]), ("gpu-command-checkpoints", "OBSERVED", "Experimental"))
+        self.assertEqual(event[2]["checkpoint_hints"], [
+            {"queue": 0, "stage": "0x2000", "operation": f"dma-readback.{operation}"}
+            for operation in ("before", "mapped", "after")])
+        self.assertNotRegex(json.dumps(event[2]), r"private|secret|hidden|sensitive|pipeline|readback_buffer|readback_offset")
 
     def test_checkpoint_expired_or_invalid_records_never_claim_a_command_region(self):
         header = "NVIDIA diagnostic checkpoints (bounded command-region hints):\n"
