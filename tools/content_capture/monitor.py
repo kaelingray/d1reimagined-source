@@ -120,7 +120,7 @@ class ValidationErrors:
             if is_error:
                 errors += 1
                 self.remaining = 64
-            elif re.search(r"^(?:·[A-Za-z]|Validation (?:Warning|Info):)", line):
+            elif re.search(r"^(?:·[!A-Za-z]|Validation (?:Warning|Info):)", line):
                 self.remaining = 0
             elif self.remaining:
                 self.remaining -= 1
@@ -131,7 +131,41 @@ class ValidationErrors:
         return errors, sorted(identifiers)
 
 
-def observations(sample, native_lines, backend_lines, validation=None):
+class CheckpointEvidence:
+    """Normalize bounded device-loss checkpoint continuations; retain no raw handles."""
+    OPERATIONS = {"command-buffer.begin", "command-buffer.end", "graphics-draw.before",
+                  "graphics-draw.after", "compute-dispatch.before", "compute-dispatch.after"}
+
+    def __init__(self):
+        self.remaining = 0
+        self.queue = None
+
+    def observe(self, text):
+        hints = []
+        for line in text.splitlines():
+            if line.strip() == "NVIDIA diagnostic checkpoints (bounded command-region hints):":
+                self.remaining, self.queue = 132, None
+                continue
+            if not self.remaining:
+                continue
+            if re.match(r"^·[!A-Za-z]", line):
+                self.remaining, self.queue = 0, None
+                continue
+            self.remaining -= 1
+            queue = re.fullmatch(r"\s+queue=([01]) records=(\d{1,10}) capacity=(\d{1,10})", line)
+            if queue:
+                index, count, capacity = map(int, queue.groups())
+                self.queue = index if 0 < count <= capacity <= 64 else None
+                continue
+            record = re.match(r"\s+stage=0x([0-9a-fA-F]{1,8}) marker=[1-9]\d{0,19} operation=([^\s]+)\s", line)
+            if record and self.queue is not None and int(record[1], 16) and record[2] in self.OPERATIONS:
+                hint = {"queue": self.queue, "stage": f"0x{int(record[1], 16):x}", "operation": record[2]}
+                if hint not in hints:
+                    hints.append(hint)
+        return hints
+
+
+def observations(sample, native_lines, backend_lines, validation=None, checkpoints=None):
     result = []
     for line in native_lines.splitlines():
         if "D1FPBIND " not in line:
@@ -160,6 +194,12 @@ def observations(sample, native_lines, backend_lines, validation=None):
             "source": "Vulkan validation", "validation_ids": validation_ids[:3],
             "distinct_ids_in_observation": len(validation_ids),
             "error_lines_in_observation": validation_errors}, "Known Broken"))
+    hints = (checkpoints or CheckpointEvidence()).observe(native_lines)
+    if hints:
+        result.append(("gpu-command-checkpoints", "OBSERVED", {
+            "summary": "The owned device-loss report returned GPU checkpoint stage/operation hints. They narrow a command region; the faulting shader/resource and renderer fix remain unverified.",
+            "source": "native lost-device checkpoint query", "checkpoint_hints": hints[:4],
+            "distinct_hints_in_observation": len(hints)}, "Experimental"))
     for service in set(re.findall(r"sent default reply for service (\d+) \(result error_none\)", backend_lines)):
         result.append(("service-" + service + "-stub", "PARTIAL",
                        {"summary": f"Local backend sent its default success-shaped reply for service {service}; client acceptance is unverified."}, "Stubbed / Mocked"))
@@ -201,6 +241,7 @@ class Monitor:
         self.segments.mkdir(exist_ok=True)
         self.tail = Tail()
         self.validation = ValidationErrors()
+        self.checkpoints = CheckpointEvidence()
         self.pending_path = self.capture.root / "pending-observations.json"
         self.pending = json.loads(self.pending_path.read_text()) if self.pending_path.exists() else []
         self.recorder = None
@@ -281,6 +322,7 @@ class Monitor:
             if self.manifest:
                 self.tail = Tail()  # the shared native log belongs to this new run
                 self.validation = ValidationErrors()
+                self.checkpoints = CheckpointEvidence()
                 self.start_recorder(self.manifest)
         if not self.manifest:
             return
@@ -313,7 +355,7 @@ class Monitor:
         emulator = next(p for p in m["processes"] if p["tag"] == "rpcs3")
         native = self.tail.read(Path(emulator["executable"]).parent / "log" / "RPCS3.log")
         backend = self.tail.read(self.manifest.parent / (m["name"] + "-bap.log"))
-        for feature, value, evidence, maturity in observations(s, native, backend, self.validation):
+        for feature, value, evidence, maturity in observations(s, native, backend, self.validation, self.checkpoints):
             self.detector.observe(feature, value, evidence, maturity, run=m["name"])
         self.queue_observations()
         if self.recorder and self.recorder.poll() is not None:

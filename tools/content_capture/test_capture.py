@@ -9,7 +9,7 @@ from unittest.mock import patch, Mock
 
 from capture import Capture, atomic_json, closed_source_hashes, digest, check_text, lock
 from test_fragmented_media import box
-from monitor import Detector, Monitor, Tail, ValidationErrors, native_exception_observation, observations
+from monitor import CheckpointEvidence, Detector, Monitor, Tail, ValidationErrors, native_exception_observation, observations
 
 
 class PipelineTests(unittest.TestCase):
@@ -161,6 +161,52 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue(metadata["capture_window"]["post_event_truncated"])
         finally:
             monitor.pool.shutdown()
+
+    def test_gpu_checkpoint_evidence_is_experimental_and_excludes_raw_handles(self):
+        text = ("NVIDIA diagnostic checkpoints (bounded command-region hints):\n"
+                "  queue=0 records=2 capacity=2\n"
+                "    stage=0x1 marker=123 operation=graphics-draw.before command_buffer=0xsecret pipeline=0xprivate\n"
+                "    stage=0x2000 marker=122 operation=compute-dispatch.after command_buffer=0xother pipeline=0xhidden\n")
+        events = observations({}, text, "")
+        self.assertEqual(len(events), 1)
+        feature, status, evidence, maturity = events[0]
+        self.assertEqual((feature, status, maturity), ("gpu-command-checkpoints", "OBSERVED", "Experimental"))
+        self.assertEqual(evidence["checkpoint_hints"][1], {"queue": 0, "stage": "0x2000", "operation": "compute-dispatch.after"})
+        self.assertNotIn("pipeline", json.dumps(evidence))
+        self.assertNotIn("marker", json.dumps(evidence))
+        detector = Detector(self.capture)
+        event = detector.observe(*events[0], run="owned-run")
+        self.assertNotEqual(event["event_type"], "BUG_FIXED")
+        self.assertIsNone(detector.observe(*events[0], run="owned-run"))
+
+    def test_checkpoint_context_survives_split_read_and_ends_at_next_log_entry(self):
+        parser = CheckpointEvidence()
+        self.assertEqual(parser.observe("NVIDIA diagnostic checkpoints (bounded command-region hints):\n  queue=1 records=1 capacity=1"), [])
+        line = "    stage=0x2000 marker=321 operation=compute-dispatch.before command_buffer=0x1 pipeline=0x2"
+        self.assertEqual(parser.observe(line), [{"queue": 1, "stage": "0x2000", "operation": "compute-dispatch.before"}])
+        self.assertEqual(parser.observe("·! unrelated log entry\n" + line), [])
+        self.assertEqual(CheckpointEvidence().observe(line), [])
+
+    def test_checkpoint_expired_or_invalid_records_never_claim_a_command_region(self):
+        header = "NVIDIA diagnostic checkpoints (bounded command-region hints):\n"
+        expired = "  queue=0 records=1 capacity=1\n    stage=0x1 marker=99 expired-or-unknown"
+        self.assertEqual(CheckpointEvidence().observe(header + expired), [])
+        for queue, record in (("  queue=0 records=100 capacity=100", "stage=0x1 marker=1 operation=graphics-draw.before"),
+                              ("  queue=0 records=1 capacity=1", "stage=0x0 marker=1 operation=graphics-draw.before"),
+                              ("  queue=0 records=1 capacity=1", "stage=0x1 marker=0 operation=graphics-draw.before"),
+                              ("  queue=0 records=1 capacity=1", "stage=0x1 marker=1 operation=arbitrary-secret")):
+            self.assertEqual(CheckpointEvidence().observe(header + queue + "\n    " + record + " pipeline=0x1"), [])
+
+    def test_checkpoint_continuation_length_is_bounded(self):
+        parser = CheckpointEvidence()
+        parser.observe("NVIDIA diagnostic checkpoints (bounded command-region hints):\n  queue=0 records=1 capacity=1")
+        parser.observe("\n".join("continuation" for _ in range(132)))
+        self.assertEqual(parser.observe("    stage=0x1 marker=1 operation=graphics-draw.before pipeline=0x2"), [])
+
+    def test_validation_context_ends_at_native_important_log_entry(self):
+        parser = ValidationErrors()
+        self.assertEqual(parser.observe("Validation Error: callback"), (1, []))
+        self.assertEqual(parser.observe("·! unrelated native entry\nSee VUID-vkCmdDraw-None-08613"), (0, []))
 
     def package(self, reviewed=True):
         return self.capture.package(self.video, self.metadata(), reviewed)

@@ -146,8 +146,12 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **58 tests**, including callback continuations, native exception
+The current suite has **63 tests**, including callback continuations, native exception
 classification, durable observation-to-capture handoff and interrupted-fragment recovery.
+The [GPU checkpoint detector](../../notes/rpcs3-gpu-checkpoints.md) also preserves
+normalized stage/operation hints from a bounded native device-loss report. Raw marker,
+pipeline and command-buffer handles stay private. The event is Experimental and cannot
+claim a renderer fix; unknown or expired records do not establish a command region.
 The [native recorder patch](../../patches/rpcs3-recording-fragments.patch) writes initial
 MOV/MP4 metadata and bounded fragments. After a writer exits, the worker can recover
 complete fragments into a private buffer copy; the unfinished original stays intact.

@@ -102,3 +102,32 @@ hint. This supplies initial-join gate evidence, no stalled-handoff gate observat
 The owned client/services/observer/launcher close; original watches, XInput and
 title configuration are preserved. Capture drains without error or a queued event.
 Renderer stability remains necessary before this particular handoff trace can finish.
+
+JOIN147 enables the [bounded GPU checkpoint probe](rpcs3-gpu-checkpoints.md) and
+survives through a **13:26** pre-stop snapshot without device loss. This permits a
+read-only trace of both failing handoffs. The first request reaches the host at
+**13:03:32 UTC**; by 13:03:42, target 112 is loaded with no active/loading slice.
+The engine remains in state 6 with peer byte 2, version 2 and empty copied groups.
+The publication cache and host pending/sent client records progress through load
+states **2, 3 and 4**. Selected context gates retain phase 6 and valid record handles;
+the publication-inhibition flag/gate combination does not inhibit this sample.
+
+The proxy receives no target-112 client report. The first connection resets at
+13:05:30 and rejoins 113. A second request at **13:08:15 UTC** repeats the stall and
+resets at 13:10:14, before controlled shutdown. These are live resets, distinct from
+shutdown errors; the displayed game error code has not been independently checked.
+
+Watches armed before the second request observe fresh-state updater **`0x273e50`**,
+sender **`0x2720e4`**, wrapper **`0x27203c`** and encoder **`0x1db1cc`**, including
+pending records naming target 112 and nonzero dirty masks. This establishes that the
+publication path reaches encoding in this failed handoff. It does not establish that
+the transport successfully sends those bytes. The transport procedure resolves to
+**`0x48e7f0`**, but its 40-hit bound is exhausted by routine traffic before the relevant
+send; subsequent silence is inconclusive. All watch bytes are restored after cleanup.
+Raw state/packet captures and account text remain private.
+
+Next: trace only subtype-21 transport calls and their return values, correlate encoded
+buffers with the received frames, and determine why publication copies advance without
+the corresponding proxy report. Do not fabricate a target acknowledgement or change
+world-peer state to bypass that missing exchange. GPU fault-query execution and full
+outdoor/body/menu/mission acceptance remain separate outstanding checks.

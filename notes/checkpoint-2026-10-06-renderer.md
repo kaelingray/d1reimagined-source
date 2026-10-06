@@ -169,3 +169,26 @@ All owned test processes close, the original watch hash and title configuration 
 after cleanup, and XInput is restored. The automatic capture worker is healthy and
 idle with ten ready NAS packages and no pending work. Return to the GPU fault before
 attempting another handoff acceptance; keep context handles distinct from slice indices.
+
+## JOIN147: checkpoint activation and stalled-handoff publication
+
+The [GPU checkpoint increment](rpcs3-gpu-checkpoints.md) brackets command buffers,
+graphics batches and compute dispatches with bounded opaque markers. It is opt-in,
+queries only after device loss and retains no raw GPU handles in automatic content
+metadata. Nineteen checks of the actual C++ code and all **63 capture tests** pass;
+the private Release build and scoped patch reproduction also pass.
+
+JOIN147 verifies the extension and active instrumentation while normal game/audio
+recording runs. The **13:26** pre-stop snapshot contains no fatal/device-loss entry
+or checkpoint report. Native query execution remains unverified; this is not evidence
+of fixed flicker or character distortion. Both slice-112 handoffs still stall.
+The [publication trace](rpcs3-world-heartbeat.md) now follows changed client records
+through the sender and encoder, while the proxy receives no corresponding target
+report. Subtype-specific transport tracing is the next missing observation.
+
+All owned test processes close. The original watch file and title configuration
+hashes match, XInput is restored, experimental controls are inactive and shared RPCN
+remains running. Capture is healthy, idle and drained with the 500GB NAS connected.
+Ten prior ready packages remain delivered; this run creates no duplicate milestone
+for unchanged capabilities. The checkpoint event's native/NAS acceptance awaits a
+recognized returned marker. Continue transport diagnosis and GPU/visual acceptance.

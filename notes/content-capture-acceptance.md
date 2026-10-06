@@ -152,3 +152,14 @@ frames. All seven files and six payload hashes/sizes are independently verified 
 the configured 500 GB share. **Ten ready packages** are delivered. The queue is empty
 and the worker remains healthy and idle. This intentional recording test establishes
 source-capture recovery; GPU, character and mission acceptance remain open.
+
+The [bounded GPU checkpoint detector](rpcs3-gpu-checkpoints.md) raises an Experimental
+event only for recognized stage/operation pairs from a native device-loss report.
+It preserves split-read context and rejects expired/unknown records; raw marker values,
+pipeline handles and command-buffer handles stay private. All **63 capture tests**
+pass. JOIN147 verifies native probe activation and normal recording through 13:26,
+but produces no device-loss report; delivery of this new event type remains unverified.
+The worker automatically recovers from a transient processing permission error and
+is healthy, idle and drained after exact cleanup, with the NAS connected. No duplicate
+package is created for unchanged capabilities, and ten prior ready packages remain
+delivered. Mission/body/menu graphics acceptance is still open.

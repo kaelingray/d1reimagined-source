@@ -8,3 +8,4 @@ patches/rpcs3-present-image-usage.patch -text whitespace=-blank-at-eol,-space-be
 patches/rpcs3-descriptor-binding-cache.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-descriptor-pool-retirement.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-recording-fragments.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-gpu-checkpoints.patch -text whitespace=-blank-at-eol,-space-before-tab

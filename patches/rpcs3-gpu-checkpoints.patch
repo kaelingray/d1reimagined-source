@@ -1,0 +1,187 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKCompute.cpp b/rpcs3/Emu/RSX/VK/VKCompute.cpp
+--- a/rpcs3/Emu/RSX/VK/VKCompute.cpp
++++ b/rpcs3/Emu/RSX/VK/VKCompute.cpp
+@@ -146,3 +146,5 @@
+ 		load_program(cmd);
++		cmd.checkpoint("compute-dispatch.before", VK_PIPELINE_BIND_POINT_COMPUTE);
+ 		vkCmdDispatch(cmd, invocations_x, invocations_y, invocations_z);
++		cmd.checkpoint("compute-dispatch.after", VK_PIPELINE_BIND_POINT_COMPUTE);
+ 	}
+diff --git a/rpcs3/Emu/RSX/VK/VKDraw.cpp b/rpcs3/Emu/RSX/VK/VKDraw.cpp
+--- a/rpcs3/Emu/RSX/VK/VKDraw.cpp
++++ b/rpcs3/Emu/RSX/VK/VKDraw.cpp
+@@ -1156,2 +1156,3 @@
+ 	m_frame_stats.setup_time += m_profiler.duration();
++	m_current_command_buffer->checkpoint("graphics-draw.before");
+ 
+@@ -1236,2 +1237,3 @@
+ 
++	m_current_command_buffer->checkpoint("graphics-draw.after");
+ 	m_frame_stats.draw_exec_time += m_profiler.duration();
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/commands.cpp b/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.cpp
+@@ -5,2 +5,3 @@
+ #include "util/logs.hpp"
++#include <bit>
+ 
+@@ -89,2 +90,10 @@
+ 
++	void command_buffer::checkpoint(const char* operation, VkPipelineBindPoint bind_point) const
++	{
++		if (!pool->get_owner().get_diagnostic_checkpoint_support()) return;
++		ensure(is_open && (bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS || bind_point == VK_PIPELINE_BIND_POINT_COMPUTE));
++		pool->get_owner().record_checkpoint(commands, operation,
++			std::bit_cast<u64>(m_bound_pipelines[static_cast<int>(bind_point)]));
++	}
++
+ 	void command_buffer::begin()
+@@ -115,2 +124,3 @@
+ 		clear_state_cache();
++		checkpoint("command-buffer.begin");
+ 	}
+@@ -125,2 +135,3 @@
+ 
++		checkpoint("command-buffer.end");
+ 		CHECK_RESULT(vkEndCommandBuffer(commands));
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/commands.h b/rpcs3/Emu/RSX/VK/vkutils/commands.h
+--- a/rpcs3/Emu/RSX/VK/vkutils/commands.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/commands.h
+@@ -119,2 +119,3 @@
+ 		void bind_pipeline(VkPipeline pipeline, VkPipelineBindPoint bind_point) const;
++		void checkpoint(const char* operation, VkPipelineBindPoint bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS) const;
+ 		void bind_descriptor_sets(const std::span<VkDescriptorSet>& sets, VkPipelineBindPoint bind_point, VkPipelineLayout pipe_layout) const;
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/device.cpp b/rpcs3/Emu/RSX/VK/vkutils/device.cpp
+--- a/rpcs3/Emu/RSX/VK/vkutils/device.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/device.cpp
+@@ -4,2 +4,7 @@
+ #include "Emu/system_config.h"
++#include "Emu/RSX/d1diag.h"
++#include <array>
++#include <bit>
++#include <cstring>
++#include <mutex>
+ #include <vulkan/vulkan_core.h>
+@@ -13,2 +18,65 @@
+ 	const render_device* g_render_device = nullptr;
++
++	// Checkpoint markers are opaque sequence values, never dereferenced pointers.
++	// Copied operation names and a bounded registry survive command-buffer resets.
++	struct diagnostic_checkpoint_record
++	{
++		u64 sequence = 0;
++		VkCommandBuffer commands = VK_NULL_HANDLE;
++		std::array<char, 48> operation{};
++		u64 pipeline = 0;
++	};
++	static std::array<diagnostic_checkpoint_record, 65536> g_checkpoint_records{};
++	static std::mutex g_checkpoint_mutex;
++	static u64 g_checkpoint_sequence = 0;
++
++	void render_device::record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline) const
++	{
++		if (!get_diagnostic_checkpoint_support()) return;
++		u64 sequence;
++		{
++			std::lock_guard lock(g_checkpoint_mutex);
++			sequence = ++g_checkpoint_sequence;
++			auto& record = g_checkpoint_records[sequence % g_checkpoint_records.size()];
++			record = {sequence, commands, {}, pipeline};
++			std::strncpy(record.operation.data(), operation ? operation : "unknown", record.operation.size() - 1);
++		}
++		m_set_checkpoint(commands, reinterpret_cast<const void*>(static_cast<uptr>(sequence)));
++	}
++
++	std::string render_device::retrieve_checkpoint_info() const
++	{
++		// Called only after VK_ERROR_DEVICE_LOST. This API is invalid on a live device.
++		if (!get_diagnostic_checkpoint_support()) return {};
++		std::string result = "NVIDIA diagnostic checkpoints (bounded command-region hints):\n";
++		const std::array<VkQueue, 2> queues{m_graphics_queue, m_transfer_queue};
++		for (usz queue_index = 0; queue_index < queues.size(); ++queue_index)
++		{
++			if (!queues[queue_index] || (queue_index && queues[queue_index] == queues[0])) continue;
++			u32 count = 0;
++			m_get_checkpoints(queues[queue_index], &count, nullptr);
++			const u32 capacity = std::min(count, 64u);
++			std::vector<VkCheckpointDataNV> checkpoints(capacity);
++			for (auto& checkpoint : checkpoints) checkpoint.sType = VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV;
++			count = capacity;
++			if (capacity) m_get_checkpoints(queues[queue_index], &count, checkpoints.data());
++			fmt::append(result, "  queue=%u records=%u capacity=%u\n", queue_index, std::min(count, capacity), capacity);
++			for (u32 index = 0; index < std::min(count, capacity); ++index)
++			{
++				const auto& checkpoint = checkpoints[index];
++				const u64 sequence = static_cast<u64>(reinterpret_cast<uptr>(checkpoint.pCheckpointMarker));
++				std::lock_guard lock(g_checkpoint_mutex);
++				const auto& record = g_checkpoint_records[sequence % g_checkpoint_records.size()];
++				if (!sequence || record.sequence != sequence)
++				{
++					fmt::append(result, "    stage=0x%x marker=%llu expired-or-unknown\n", static_cast<u32>(checkpoint.stage), sequence);
++					continue;
++				}
++				fmt::append(result, "    stage=0x%x marker=%llu operation=%s command_buffer=0x%llx pipeline=0x%llx\n",
++					static_cast<u32>(checkpoint.stage), sequence, record.operation.data(),
++					std::bit_cast<u64>(record.commands), record.pipeline);
++			}
++		}
++		return result;
++	}
+ 
+@@ -133,2 +201,3 @@
+ 		optional_features_support.synchronization_2        = device_extensions.is_supported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
++		optional_features_support.diagnostic_checkpoints = device_extensions.is_supported(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+ 		optional_features_support.unrestricted_depth_range = device_extensions.is_supported(VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME);
+@@ -586,2 +655,9 @@
+ 
++		const bool checkpoints_requested = pgpu->optional_features_support.diagnostic_checkpoints &&
++			fs::is_file(d1diag::ctl_dir() + "d1checkpoint");
++		if (checkpoints_requested)
++		{
++			requested_extensions.push_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
++		}
++
+ 		if (pgpu->optional_features_support.provoking_vertex_last)
+@@ -857,2 +933,8 @@
+ 		// Initialize queues
++		if (checkpoints_requested)
++		{
++			m_set_checkpoint = reinterpret_cast<PFN_vkCmdSetCheckpointNV>(vkGetDeviceProcAddr(dev, "vkCmdSetCheckpointNV"));
++			m_get_checkpoints = reinterpret_cast<PFN_vkGetQueueCheckpointDataNV>(vkGetDeviceProcAddr(dev, "vkGetQueueCheckpointDataNV"));
++			rsx_log.notice("D1CKP checkpoint instrumentation active=%u (registry capacity=65536)", get_diagnostic_checkpoint_support());
++		}
+ 		vkGetDeviceQueue(dev, graphics_queue_idx, 0, &m_graphics_queue);
+@@ -899,2 +981,4 @@
+ 			dev = nullptr;
++			m_set_checkpoint = nullptr;
++			m_get_checkpoints = nullptr;
+ 			memory_map = {};
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/device.h b/rpcs3/Emu/RSX/VK/vkutils/device.h
+--- a/rpcs3/Emu/RSX/VK/vkutils/device.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/device.h
+@@ -103,2 +103,3 @@
+ 			bool extended_device_fault = false;
++			bool diagnostic_checkpoints = false;
+ 			bool texture_compression_bc = false;
+@@ -151,2 +152,4 @@
+ 		VkQueue m_transfer_queue = VK_NULL_HANDLE;
++		PFN_vkCmdSetCheckpointNV m_set_checkpoint = nullptr;
++		PFN_vkGetQueueCheckpointDataNV m_get_checkpoints = nullptr;
+ 
+@@ -193,2 +196,5 @@
+ 		bool get_extended_device_fault_support() const { return pgpu->optional_features_support.extended_device_fault; }
++		bool get_diagnostic_checkpoint_support() const { return m_set_checkpoint && m_get_checkpoints; }
++		void record_checkpoint(VkCommandBuffer commands, const char* operation, u64 pipeline) const;
++		std::string retrieve_checkpoint_info() const;
+ 		bool get_texture_compression_bc_support() const { return pgpu->optional_features_support.texture_compression_bc; }
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+--- a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+@@ -156,2 +156,7 @@
+ 			extra_info = retrieve_device_fault_info();
++			if (g_render_device)
++			{
++				if (auto checkpoints = g_render_device->retrieve_checkpoint_info(); !checkpoints.empty())
++					extra_info += "\n" + checkpoints;
++			}
+ 			break;
