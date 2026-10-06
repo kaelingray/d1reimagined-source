@@ -30,7 +30,7 @@ class Detector:
             "capabilities": dict(capture.cfg.get("KNOWN_CAPABILITIES", {})), "comparisons": {}, "seen": [],
             "build": capture.cfg.get("CURRENT_GAME_BUILD")}
 
-    def observe(self, feature, value, evidence, maturity="Experimental"):
+    def observe(self, feature, value, evidence, maturity="Experimental", *, run=None, observed_at=None):
         with lock(self.capture.root / "project-state.lock"):
             if self.path.exists():
                 self.state = json.loads(self.path.read_text())
@@ -40,10 +40,11 @@ class Detector:
                 atomic_json(archive, self.state)
                 self.state = {"capabilities": dict(self.capture.cfg.get("KNOWN_CAPABILITIES", {})),
                               "comparisons": {}, "seen": [], "build": build}
+                self.state["unsubmitted_events"] = json.loads(archive.read_text()).get("unsubmitted_events", [])
             self.state["build"] = build
-            return self._observe(feature, value, evidence, maturity)
+            return self._observe(feature, value, evidence, maturity, run, observed_at)
 
-    def _observe(self, feature, value, evidence, maturity):
+    def _observe(self, feature, value, evidence, maturity, run=None, observed_at=None):
         previous = self.state["capabilities"].get(feature, "UNKNOWN")
         if previous == value:
             return None
@@ -62,20 +63,48 @@ class Detector:
         else:
             kind, importance, role = ("FEATURE_WORKING" if value == "PASSED" else "FEATURE_PARTIAL"), "USEFUL", None
             description = f"{feature}: new {value.lower()} evidence. {evidence['summary']}"
-        event = {"event_id": uuid.uuid4().hex, "at": now(), "feature": feature,
+        event = {"event_id": uuid.uuid4().hex, "at": observed_at or now(), "feature": feature,
+                 "game_build": self.capture.cfg.get("CURRENT_GAME_BUILD"),
                  "event_type": kind, "importance": importance, "description": description,
                  "previous_state": previous, "current_state": value,
                  "maturity": maturity, "evidence": evidence,
                  "comparison_group_id": comparison, "comparison_role": role,
                  "remaining_issue": "An observed engine state or stub response does not establish playable gameplay.",
                  "milestone_group": f"{self.capture.cfg.get('CURRENT_GAME_BUILD')}/{feature}"}
+        if run is not None:
+            event["run"] = run
         self.state["capabilities"][feature] = value
+        # Commit the transition and its capture intent together. Pending queue contention
+        # or a worker restart must not leave a deduplicated transition with no footage job.
+        if run is not None:
+            self.state.setdefault("unsubmitted_events", []).append(event)
         atomic_json(self.path, self.state)
         self.capture.event("REGRESSED" if kind == "REGRESSION" else "DISCOVERED", feature, description,
                            build=self.capture.cfg.get("CURRENT_GAME_BUILD"), event_type=kind,
                            importance=importance, previous_state=previous, new_state=value,
                            associated_clip_ids=[], observation_id=event["event_id"])
         return event
+
+    def unsubmitted_events(self):
+        with lock(self.capture.root / "project-state.lock"):
+            state = json.loads(self.path.read_text()) if self.path.exists() else self.state
+            return state.get("unsubmitted_events", [])
+
+    def acknowledge_events(self, identifiers):
+        with lock(self.capture.root / "project-state.lock"):
+            self.state = json.loads(self.path.read_text())
+            self.state["unsubmitted_events"] = [event for event in self.state.get("unsubmitted_events", [])
+                                                if event["event_id"] not in identifiers]
+            atomic_json(self.path, self.state)
+
+
+def native_exception_observation(exit_code):
+    # Known native exception statuses; ordinary/forced exits alone cannot prove a crash.
+    if exit_code not in {0xC0000005, 0xC000001D, 0xC0000374, 0xC0000409, 0xC00000FD, 0x80000003}:
+        return None
+    return ("native-process-exception", "FAILED", {
+        "summary": f"The exact owned emulator exited with native exception status 0x{exit_code:08x}; the faulting subsystem remains unverified.",
+        "source": "owned process handle", "exception_status": f"0x{exit_code:08x}"}, "Known Broken")
 
 
 class ValidationErrors:
@@ -232,6 +261,19 @@ class Monitor:
         self.manifest = None
         self.capture.status(RECORDER_STATUS="IDLE", ACTIVE_RUN=None, RECORDER_EXIT=None)
 
+    def queue_observations(self):
+        events = self.detector.unsubmitted_events()
+        if not events:
+            return
+        identifiers = {event["event_id"] for event in events}
+        with lock(self.capture.root / "pending.lock"):
+            pending = json.loads(self.pending_path.read_text()) if self.pending_path.exists() else []
+            existing = {event["event_id"] for event in pending}
+            pending.extend(event for event in events if event["event_id"] not in existing)
+            atomic_json(self.pending_path, pending)
+        # A failed acknowledgement is harmless: the next pass merges by event identity.
+        self.detector.acknowledge_events(identifiers)
+
     def detect(self):
         from rpcs3_final124_bootflow import sample, world_snapshot
         if self.manifest is None:
@@ -248,8 +290,15 @@ class Monitor:
         import ctypes
         exit_code = ctypes.c_ulong()
         self.reader.kernel.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-        if not self.reader.kernel.GetExitCodeProcess(self.reader.handle, ctypes.byref(exit_code)) or exit_code.value != 259:
+        if not self.reader.kernel.GetExitCodeProcess(self.reader.handle, ctypes.byref(exit_code)):
+            raise OSError("Could not query the retained emulator handle; process exit is unproven")
+        if exit_code.value != 259:
+            exception = native_exception_observation(exit_code.value)
+            if exception:
+                m = json.loads(self.manifest.read_text(encoding="utf-8-sig"))
+                self.detector.observe(*exception, run=m["name"])
             self.stop_recorder()
+            self.queue_observations()
             return
         try:
             s = sample(self.reader.read, include_request=False)
@@ -264,17 +313,9 @@ class Monitor:
         emulator = next(p for p in m["processes"] if p["tag"] == "rpcs3")
         native = self.tail.read(Path(emulator["executable"]).parent / "log" / "RPCS3.log")
         backend = self.tail.read(self.manifest.parent / (m["name"] + "-bap.log"))
-        new_events = []
         for feature, value, evidence, maturity in observations(s, native, backend, self.validation):
-            event = self.detector.observe(feature, value, evidence, maturity)
-            if event:
-                event["run"] = m["name"]
-                new_events.append(event)
-        if new_events:
-            with lock(self.capture.root / "pending.lock"):
-                pending = json.loads(self.pending_path.read_text()) if self.pending_path.exists() else []
-                pending.extend(new_events)
-                atomic_json(self.pending_path, pending)
+            self.detector.observe(feature, value, evidence, maturity, run=m["name"])
+        self.queue_observations()
         if self.recorder and self.recorder.poll() is not None:
             self.capture.status(RECORDER_STATUS="FAILED", RECORDER_EXIT=self.recorder.returncode)
             # No endless toggles after a recorder error. Next owned run retries.
@@ -301,14 +342,10 @@ class Monitor:
                 # Delete only this controller's original after a byte-identical closed copy is verified.
                 # Meaningful event segments are subsequently remuxed losslessly into retained packages.
                 Path(info["file"]).unlink()
-                event = self.detector.observe("native-buffer-validation", "PASSED",
-                    {"summary": "Automated RPCS3 game/audio recording finalized, fully decoded and copied with matching SHA-256."}, "Experimental")
-                if event:
-                    event["run"] = info["run"]
-                    with lock(self.capture.root / "pending.lock"):
-                        pending = json.loads(self.pending_path.read_text()) if self.pending_path.exists() else []
-                        pending.append(event)
-                        atomic_json(self.pending_path, pending)
+                self.detector.observe("native-buffer-validation", "PASSED",
+                    {"summary": "Automated RPCS3 game/audio recording finalized, fully decoded and copied with matching SHA-256."},
+                    "Experimental", run=info["run"])
+                self.queue_observations()
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 atomic_json(failure, {"error": str(error), "next_attempt": time.time() + 300})
                 continue
@@ -391,6 +428,7 @@ class Monitor:
             while not stop.exists():
                 try:
                     if self.capture.cfg.get("CONTENT_CAPTURE_ENABLED", True):
+                        self.queue_observations()
                         self.detect()
                         if not self.job or self.job.done():
                             if self.job:

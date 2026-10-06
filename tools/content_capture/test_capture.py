@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from capture import Capture, atomic_json, digest, check_text, lock
-from monitor import Detector, Monitor, Tail, ValidationErrors, observations
+from monitor import Detector, Monitor, Tail, ValidationErrors, native_exception_observation, observations
 
 
 class PipelineTests(unittest.TestCase):
@@ -333,6 +333,66 @@ class PipelineTests(unittest.TestCase):
             line = ("·F 0:03:19.887520 {" + thread + "} SIG: Thread terminated due to fatal error: "
                     "Assertion Failed! Vulkan API call failed with unrecoverable error: Device lost (VK_ERROR_DEVICE_LOST)")
             self.assertEqual(observations({}, line, "")[0][0:2], ("renderer-device-loss", "FAILED"))
+
+    def test_native_exception_status_is_separate_from_gpu_loss(self):
+        for code in (0xC0000005, 0xC000001D, 0xC0000374, 0xC0000409, 0xC00000FD, 0x80000003):
+            event = native_exception_observation(code)
+            self.assertEqual(event[0:2], ("native-process-exception", "FAILED"))
+            self.assertEqual(event[3], "Known Broken")
+        for code in (0, 1, 259, 0xFFFFFFFF):
+            self.assertIsNone(native_exception_observation(code))
+
+    def test_observation_capture_intent_survives_queue_failure_and_restart(self):
+        monitor = Monitor(self.config)
+        try:
+            event = monitor.detector.observe(*native_exception_observation(0xC0000005), run="owned-run")
+            with patch("monitor.atomic_json", side_effect=PermissionError("pending queue busy")):
+                with self.assertRaises(PermissionError):
+                    monitor.queue_observations()
+            recovered = Detector(self.capture)
+            self.assertEqual(recovered.unsubmitted_events()[0]["event_id"], event["event_id"])
+            self.assertIsNone(recovered.observe(*native_exception_observation(0xC0000005), run="owned-run"))
+            monitor.detector = recovered
+            monitor.queue_observations()
+            pending = json.loads(monitor.pending_path.read_text())
+            self.assertEqual([(e["event_id"], e["run"]) for e in pending], [(event["event_id"], "owned-run")])
+            self.assertEqual(recovered.unsubmitted_events(), [])
+        finally:
+            monitor.pool.shutdown()
+
+    def test_failed_journal_acknowledgement_does_not_duplicate_queue(self):
+        monitor = Monitor(self.config)
+        try:
+            event = monitor.detector.observe(*native_exception_observation(0xC0000005), run="owned-run")
+            original = atomic_json
+            def fail_ack(path, data):
+                if Path(path) == monitor.detector.path:
+                    raise PermissionError("state file busy")
+                return original(path, data)
+            with patch("monitor.atomic_json", side_effect=fail_ack):
+                with self.assertRaises(PermissionError):
+                    monitor.queue_observations()
+            monitor.queue_observations()
+            self.assertEqual([e["event_id"] for e in json.loads(monitor.pending_path.read_text())], [event["event_id"]])
+            self.assertEqual(monitor.detector.unsubmitted_events(), [])
+        finally:
+            monitor.pool.shutdown()
+
+    def test_journal_acknowledgement_preserves_newer_observations(self):
+        detector = Detector(self.capture)
+        first = detector.observe("first", "FAILED", {"summary": "first"}, run="owned-run")
+        second = detector.observe("second", "FAILED", {"summary": "second"}, run="owned-run")
+        detector.acknowledge_events({first["event_id"]})
+        self.assertEqual([e["event_id"] for e in detector.unsubmitted_events()], [second["event_id"]])
+
+    def test_build_change_preserves_previous_capture_intent_and_build(self):
+        detector = Detector(self.capture)
+        first = detector.observe("first", "FAILED", {"summary": "first"}, run="old-run")
+        self.capture.cfg["CURRENT_GAME_BUILD"] = "next-build"
+        second = detector.observe("second", "FAILED", {"summary": "second"}, run="new-run")
+        events = detector.unsubmitted_events()
+        self.assertEqual([e["event_id"] for e in events], [first["event_id"], second["event_id"]])
+        self.assertEqual([e["game_build"] for e in events], ["01.24", "next-build"])
 
     def test_log_tail_preserves_probe_bursts_partial_lines_and_rotation(self):
         path = self.root / "RPCS3.log"

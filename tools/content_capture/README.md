@@ -53,6 +53,18 @@ The event is **Known Broken** and does not identify the cause or claim a repair.
 Device-loss detection requires renderer/Vulkan evidence; a fatal GDB socket message
 during debugger teardown is not classified as a GPU failure.
 
+Native exception exits are detected through the retained emulator handle even when
+the native log has no fatal line. Known exception statuses are labelled **Known Broken**
+under a separate process-exception feature; ordinary exits and forced-termination
+codes do not prove a crash. A failed exit query preserves the live observation handle.
+An intentional run-stop marker still takes precedence.
+
+An observation tied to a run commits its capture intent in the same atomic project-state
+write as the capability transition. The pending queue merges by event ID before
+acknowledging that intent. Queue contention, failed acknowledgement or worker restart
+therefore leaves a recoverable job, while unchanged capabilities remain deduplicated.
+Queued intents retain their original build when configuration changes.
+
 Additional systems can append explicit finished-clip events to private
 `automatic-events.jsonl` or add evidence detectors in `observations()`. Test, encounter,
 reward and multiplayer acceptance still need concrete project signals before they can
@@ -133,3 +145,8 @@ Windows sharing/access errors, with a bounded 0.77-second delay; permanent failu
 preserve the previous file and remain visible. Successful processing clears its stale
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
+
+The current suite has **42 tests**, including callback continuations, native exception
+classification and durable observation-to-capture handoff. An abrupt native crash can
+leave the active media segment unfinished: only fully decoded source segments are
+submitted, and the actual window plus missing post-event tail remain explicit in metadata.

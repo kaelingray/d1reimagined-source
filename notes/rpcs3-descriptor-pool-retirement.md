@@ -54,6 +54,12 @@ The public patch contains only the four scoped renderer edits; prior unrelated
 private source changes are not included. It reverse-applies to the tested private
 checkout. Native build and run results are recorded separately below.
 
+The Release build succeeds and deploys SHA-256
+`b5eba7b0da6984c03bd739b37b1661d2e38275502f50db3a845a0dd411813660`.
+The [October 6 checkpoint](checkpoint-2026-10-06-renderer.md) records JOIN138's startup
+failure, JOIN139's native reclamation and separate host validation-DLL access violation,
+plus the control with that layer absent. No combined graphics repair is established.
+
 The earlier full validation messages contain VUIDs in continuation-line specification
 links even when the first callback line has none. Capture now recognizes bounded
 continuations across log reads and resets their context per owned run. It retains

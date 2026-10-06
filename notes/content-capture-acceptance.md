@@ -115,6 +115,15 @@ fixtures cover normalized extraction, warning/unrelated-context exclusion and
 bounded split reads. All **37 capture tests** pass. The already delivered JOIN136
 package remains unchanged; its IDs were omitted by the previous first-line parser.
 
+The [October 6 continuation](checkpoint-2026-10-06-renderer.md) adds native exception
+exit detection and atomically retained observation-to-capture intents. All **42 tests**
+pass, including recovery after queue/acknowledgement failures and restart. The ninth
+NAS package supplies **60.42 seconds** of pre-crash game/audio context for the
+identity-matched Windows validation-DLL exception. Its last complete source frame
+predates the exception by 28.4 seconds; actual/truncated coverage is explicit.
+All seven files and six payload hashes/sizes are independently verified. The worker
+is active for the subsequent control and requires no user recording or transfer action.
+
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
 reliable Ghost illumination, mission transitions, weapon pickup and combat.

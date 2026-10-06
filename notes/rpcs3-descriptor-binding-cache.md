@@ -69,3 +69,9 @@ The full callback contains VUIDs in continuation-line specification links. The
 initial package parser only inspected the first error line. The follow-up
 [pool retirement investigation](rpcs3-descriptor-pool-retirement.md) corrects that
 extraction without changing the existing delivered package.
+
+The [October 6 investigation](checkpoint-2026-10-06-renderer.md) also reproduces a
+cross-stage resource lookup ambiguity in the SDK-series validator. Its persistent-stream
+dimension/type report is therefore not a reliable originating-defect diagnosis without
+shader/descriptor correlation. JOIN139 ends in a separately verified host access
+violation inside that DLL. Uninstrumented GPU faults remain independent evidence.
