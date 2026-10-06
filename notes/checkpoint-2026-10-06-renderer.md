@@ -14,8 +14,11 @@ at that instant. The stack's owned processes are subsequently verified absent.
 This does not establish a graphics regression; the reason for that transient identity
 failure remains unproven. The uniquely named JOIN139 retry launches successfully.
 
-JOIN139 runs with the same privately scoped core/GPU-assisted/safe-mode fixture as
-JOIN137, native recording enabled and the guarded depth candidate. The validation
+JOIN139 runs with privately scoped core/GPU-assisted/safe-mode validation and
+native recording enabled. A marker-location error leaves the guarded depth candidate
+and media probe **disabled**: the markers were written beside the executable, but
+the source polls the `d1/` control subdirectory. This differs from JOIN137 and
+invalidates a matching-fixture comparison. The validation
 DLL is verified in the exact client process. Boot includes cache compilation, so
 absolute native runtimes are not comparable as a performance claim. At **4:52** it
 repeats the persistent-stream dimension/component report, including an image-sampling
@@ -59,7 +62,10 @@ Run-associated capability changes atomically retain their capture intents in pro
 state. Queue publication merges by event ID before acknowledging the intent. A busy
 queue, failed acknowledgement or restart can no longer discard a newly deduplicated
 failure. Selective acknowledgement preserves newer observations, and build changes
-preserve older queued intents with their original build. All **42 capture tests** pass.
+preserve older queued intents with their original build. All **44 capture tests** pass.
+The last two exercise a real retained Windows process handle with a controlled
+exception-status exit, and a failed exit query that must preserve the live reader
+and recorder. The controlled status fixture does not cause or diagnose a native crash.
 
 The identity-matched JOIN139 Windows record is fed back to that automatic pipeline,
 which selects existing source segments, packages them and verifies NAS delivery.
@@ -74,6 +80,38 @@ preparing-screen views, not footage of the crash itself or a repaired character.
 Metadata records the actual window and truncated post-event coverage. Recovering
 the final native segment after an abrupt host crash remains capture follow-up work.
 
-JOIN140 is the same deployed renderer with the validation DLL absent, title debug
-output restored and normal capture active. Its native result follows below. Complete
-mission/body/menu visual acceptance, Ghost illumination and combat remain unverified.
+## JOIN140: default candidate-off native control
+
+JOIN140 uses the same deployed renderer with the validation DLL absent, title debug
+output restored and normal capture active. The depth candidate and media probe are
+also **off**, due to the same misplaced markers. No `D1MEDIA` lines appear; the
+marker-path source audit establishes why. Retain that configuration difference when
+comparing earlier candidate-enabled runs. The misplaced inactive markers are renamed
+after cleanup; neither directory contains an active experimental marker.
+
+The last native memory sample is **17:09**: **2,123** program additions, **9,699**
+descriptor-set first initializations and **9,625** idle-table releases. There are zero
+device-loss or malformed-program entries. The only final fatal line is the GDB socket
+at **17:08** during ordered debugger teardown; it is not a GPU failure. The pre-stop
+15:36 snapshot has zero fatal entries. Thus recording and reclamation operate through
+this bounded run, without establishing the repair as the cause of its longer survival.
+
+Visible frames show the revival/world background and local urgent/MOTD dialogs,
+interspersed with loading. Dismissing a dialog does not yield accepted body or equipment
+views in this run. The client returns to engine state 0 and displays the outdoor scene,
+then re-enters state 6. A read-only snapshot at **07:04:50 UTC** finds current slice -1,
+target 112, 112 loaded but no active/loading slice, and an empty engine world-state
+group copy. This is consistent with the known slice-transition handshake problem;
+an in-world bootflow label does not establish a settled Guardian.
+
+All exact owned client/service/proxy/launcher identities are closed. XInput and the
+byte-identical title configuration are restored; normal capture is healthy and idle,
+with nine delivered packages and no queued work or errors. The deployed renderer
+remains the tested build. Complete mission/body/menu visual acceptance, Ghost
+illumination and combat remain unverified.
+
+Next: repeat the recording-enabled comparison with the candidate marker in the actual
+`d1/` control directory and verify its activation before interpreting results. Then
+correlate the loaded-but-inactive slice transition with the host group/version exchange,
+and obtain stable outdoor, character/equipment and indoor appearance samples. Keep
+validator ambiguity, CPU lifetime contracts and native pixel acceptance distinct.

@@ -124,6 +124,13 @@ predates the exception by 28.4 seconds; actual/truncated coverage is explicit.
 All seven files and six payload hashes/sizes are independently verified. The worker
 is active for the subsequent control and requires no user recording or transfer action.
 
+Two Windows handle checks bring the suite to **44 passing tests**. A controlled child
+exception-status exit verifies durable capture intent before handle closure; a failed
+exit query preserves the live reader and recorder. The seventeen-minute JOIN140
+control keeps capture running, then drains during ordered shutdown. Afterward the
+normal worker is healthy and idle, with no errors or pending queue and nine verified
+NAS deliveries. That run does not establish a settled Guardian or repaired graphics.
+
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
 reliable Ghost illumination, mission transitions, weapon pickup and combat.

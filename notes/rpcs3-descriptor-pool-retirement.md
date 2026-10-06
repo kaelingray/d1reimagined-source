@@ -58,7 +58,9 @@ The Release build succeeds and deploys SHA-256
 `b5eba7b0da6984c03bd739b37b1661d2e38275502f50db3a845a0dd411813660`.
 The [October 6 checkpoint](checkpoint-2026-10-06-renderer.md) records JOIN138's startup
 failure, JOIN139's native reclamation and separate host validation-DLL access violation,
-plus the control with that layer absent. No combined graphics repair is established.
+plus the 17-minute control with that layer absent. Both new runs have the optional
+depth/media markers misplaced, so those features are off; this setup difference is
+explicitly recorded. No combined graphics repair is established.
 
 The earlier full validation messages contain VUIDs in continuation-line specification
 links even when the first callback line has none. Capture now recognizes bounded

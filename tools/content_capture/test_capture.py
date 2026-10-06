@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 
@@ -341,6 +342,52 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(event[3], "Known Broken")
         for code in (0, 1, 259, 0xFFFFFFFF):
             self.assertIsNone(native_exception_observation(code))
+
+    @unittest.skipUnless(os.name == "nt", "Windows retained process handle")
+    def test_real_windows_exception_status_retains_capture_intent_before_handle_close(self):
+        import ctypes
+        import sys
+        monitor = Monitor(self.config)
+        child = subprocess.Popen([sys.executable, "-c",
+            "import ctypes; ctypes.WinDLL('kernel32').ExitProcess(0xc0000005)"],
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            self.assertEqual(child.wait(timeout=10), 0xC0000005)
+            manifest = self.root / "owned-run.json"
+            manifest.write_text(json.dumps({"name": "owned-run"}))
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            def before_close():
+                self.assertEqual(monitor.detector.unsubmitted_events()[0]["run"], "owned-run")
+            reader = SimpleNamespace(kernel=kernel, handle=int(child._handle), close=Mock(side_effect=before_close))
+            monitor.manifest, monitor.reader = manifest, reader
+            monitor.detect()
+            reader.close.assert_called_once()
+            event = json.loads(monitor.pending_path.read_text())[0]
+            self.assertEqual(event["evidence"]["exception_status"], "0xc0000005")
+            self.assertEqual(event["comparison_role"], "BEFORE")
+            self.assertIsNone(monitor.reader)
+        finally:
+            if child.poll() is None:
+                child.terminate()
+                child.wait(timeout=10)
+            monitor.pool.shutdown()
+
+    def test_failed_exit_query_preserves_live_reader_and_recorder(self):
+        monitor = Monitor(self.config)
+        try:
+            monitor.manifest = self.root / "owned-run.json"
+            reader = SimpleNamespace(kernel=Mock(), handle=123, close=Mock())
+            reader.kernel.GetExitCodeProcess.return_value = 0
+            recorder = Mock()
+            monitor.reader, monitor.recorder = reader, recorder
+            with self.assertRaisesRegex(OSError, "exit is unproven"):
+                monitor.detect()
+            self.assertIs(monitor.reader, reader)
+            self.assertIs(monitor.recorder, recorder)
+            reader.close.assert_not_called()
+            recorder.terminate.assert_not_called()
+        finally:
+            monitor.pool.shutdown()
 
     def test_observation_capture_intent_survives_queue_failure_and_restart(self):
         monitor = Monitor(self.config)

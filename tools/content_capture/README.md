@@ -146,7 +146,7 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **42 tests**, including callback continuations, native exception
+The current suite has **44 tests**, including callback continuations, native exception
 classification and durable observation-to-capture handoff. An abrupt native crash can
 leave the active media segment unfinished: only fully decoded source segments are
 submitted, and the actual window plus missing post-event tail remain explicit in metadata.
