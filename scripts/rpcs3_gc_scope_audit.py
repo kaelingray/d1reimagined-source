@@ -27,6 +27,8 @@ PREAMBLE = r'''
 #include <utility>
 #include <vector>
 using u64=std::uint64_t;
+namespace d1diag { bool descriptor_logging() { return false; } }
+struct diagnostic_logger { template<class... T> void notice(const char*, T...) {} } d1_log;
 struct test_mutex {
     bool exclusive=false,reader=false;
     std::function<void()> before_exclusive;

@@ -1,0 +1,204 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKCommandStream.cpp b/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
+index cf9ea23..18e2fbe 100644
+--- a/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
++++ b/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
+@@ -54,6 +54,12 @@ namespace vk
+ 			};
+ 
+ 			result = vkQueueSubmit(submit_info.queue, 1, &info, submit_info.pfence->handle);
++			if (d1diag::descriptor_logging())
++			{
++				d1_log.notice("D1DESC submit order=%llu queue=%016llx cmd=%016llx fence=%016llx result=%d",
++					d1diag::next_descriptor_submit_order(), std::bit_cast<u64>(submit_info.queue),
++					std::bit_cast<u64>(submit_info.commands), std::bit_cast<u64>(submit_info.pfence->handle), static_cast<int>(result));
++			}
+ 		}
+ 
+ 		// Failure does not establish submitted GPU work. Release the queue lock
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+index 8d839f9..49e9f98 100644
+--- a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
++++ b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+@@ -63,6 +63,11 @@ namespace vk
+ 		inline void tag()
+ 		{
+ 			eid_tag = vk::get_event_id();
++			if (d1diag::descriptor_logging())
++			{
++				d1_log.notice("D1DESC tag eid=%llu cmd=%016llx fence=%016llx", eid_tag,
++					std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle));
++			}
+ 		}
+ 
+ 		void reset()
+@@ -98,6 +103,11 @@ namespace vk
+ 
+ 				if (is_pending)
+ 				{
++					if (d1diag::descriptor_logging())
++					{
++						d1_log.notice("D1DESC completed path=poke eid=%llu cmd=%016llx fence=%016llx", eid_tag,
++							std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle));
++					}
+ 					m_submit_fence->reset();
+ 					vk::on_event_completed(eid_tag);
+ 
+@@ -129,6 +139,11 @@ namespace vk
+ 
+ 			if (is_pending)
+ 			{
++				if (d1diag::descriptor_logging())
++				{
++					d1_log.notice("D1DESC completed path=wait eid=%llu cmd=%016llx fence=%016llx", eid_tag,
++						std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle));
++				}
+ 				m_submit_fence->reset();
+ 				vk::on_event_completed(eid_tag);
+ 
+diff --git a/rpcs3/Emu/RSX/VK/VKResourceManager.h b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+index 8730f08..31af8bc 100644
+--- a/rpcs3/Emu/RSX/VK/VKResourceManager.h
++++ b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+@@ -5,6 +5,7 @@
+ #include "vkutils/sampler.h"
+ 
+ #include "Utilities/mutex.h"
++#include "Emu/RSX/d1diag.h"
+ 
+ #include <list>
+ #include <memory>
+@@ -140,7 +141,13 @@ namespace vk
+ 		void dispose(vk::disposable_t& disposable) override
+ 		{
+ 			std::lock_guard lock(m_eid_map_lock);
+-			get_current_eid_scope().m_disposables.emplace_back(std::move(disposable));
++			auto& scope = get_current_eid_scope();
++			if (d1diag::descriptor_logging())
++			{
++				d1_log.notice("D1DESC dispose object=%016llx scope=%llu current=%llu completed=%llu",
++					std::bit_cast<u64>(disposable.debug_handle()), scope.eid, current_event_id(), last_completed_event_id());
++			}
++			scope.m_disposables.emplace_back(std::move(disposable));
+ 		}
+ 
+ 		inline void dispose(std::unique_ptr<vk::gpu_debug_marker>& object)
+@@ -187,6 +194,11 @@ namespace vk
+ 					return;
+ 				}
+ 
++				if (d1diag::descriptor_logging())
++				{
++					d1_log.notice("D1DESC collect cutoff=%llu first=%llu last=%llu", eid,
++						m_eid_map.front().eid, std::prev(newest_it)->eid);
++				}
+ 				// Take all of the entries in one sweep
+ 				discarded_scopes.splice(
+ 					discarded_scopes.end(),
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index 873d0f9..fbe8566 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -2,6 +2,7 @@
+ #include "Emu/IdManager.h"
+ #include "descriptors.h"
+ #include "garbage_collector.h"
++#include "../VKResourceManager.h"
+ #include "util/logs.hpp"
+ 
+ namespace vk
+@@ -173,6 +174,11 @@ namespace vk
+ 	{
+ 		std::lock_guard lock(m_subpool_lock);
+ 
++		if (d1diag::descriptor_logging())
++		{
++			d1_log.notice("D1DESC reset pool=%016llx index=%u current=%llu completed=%llu",
++				std::bit_cast<u64>(m_device_subpools[subpool_id].handle), subpool_id, current_event_id(), last_completed_event_id());
++		}
+ 		CHECK_RESULT(vkResetDescriptorPool(*m_owner, m_device_subpools[subpool_id].handle, flags));
+ 		m_device_subpools[subpool_id].busy = VK_FALSE;
+ 	}
+@@ -249,6 +255,12 @@ namespace vk
+ 			};
+ 
+ 			auto cleanup_obj = std::make_unique<gc_callback_t>(release_func);
++			if (d1diag::descriptor_logging())
++			{
++				d1_log.notice("D1DESC retire object=%016llx pool=%016llx index=%u current=%llu completed=%llu",
++					std::bit_cast<u64>(cleanup_obj.get()), std::bit_cast<u64>(m_current_pool_handle),
++					m_current_subpool_index, current_event_id(), last_completed_event_id());
++			}
+ 			vk::get_gc()->dispose(cleanup_obj);
+ 		}
+ 
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/garbage_collector.h b/rpcs3/Emu/RSX/VK/vkutils/garbage_collector.h
+index f1e814c..74e7f2d 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/garbage_collector.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/garbage_collector.h
+@@ -1,3 +1,5 @@
++#pragma once
++
+ #include <util/types.hpp>
+ 
+ #include <functional>
+@@ -30,6 +32,9 @@ namespace vk
+ 			}
+ 		}
+ 
++		// Read-only identity for bounded lifetime diagnostics; no ownership transfer.
++		const void* debug_handle() const { return ptr; }
++
+ 		template <typename T>
+ 		static disposable_t make(T* raw)
+ 		{
+diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
+index 9572062..497b3d8 100644
+--- a/rpcs3/Emu/RSX/d1diag.h
++++ b/rpcs3/Emu/RSX/d1diag.h
+@@ -3,6 +3,7 @@
+ // the SPU lighting reads (0x44000000-0x46000000). Throttled.
+ #include "util/types.hpp"
+ #include <atomic>
++#include <bit>
+ #include <mutex>
+ #include <vector>
+ #include <string>
+@@ -22,6 +23,38 @@ namespace d1diag
+ 		return dir;
+ 	}
+ 
++	// Opt-in descriptor lifetime trace. One process-wide budget, including toggles;
++	// each successful call reserves one record. Runtime handles are private evidence.
++	inline bool descriptor_logging()
++	{
++		static std::atomic<u64> last_check{0};
++		static std::atomic<bool> on{false};
++		static std::atomic<u64> records{0};
++		static std::mutex poll_mutex;
++		const u64 now = get_system_time();
++		if (now - last_check.load() > 500'000)
++		{
++			std::lock_guard lock(poll_mutex);
++			if (now > last_check.load() && now - last_check.load() > 500'000)
++			{
++				on = fs::is_file(ctl_dir() + "d1descriptor");
++				last_check = now;
++			}
++		}
++		if (!on.load()) return false;
++		constexpr u64 limit = 262'144;
++		const u64 record = records.fetch_add(1);
++		if (record == limit) d1_log.notice("D1DESC cap=%llu", limit);
++		return record < limit;
++	}
++
++	// Called inside the queue-submit guard to identify physical submission order.
++	inline u64 next_descriptor_submit_order()
++	{
++		static std::atomic<u64> order{0};
++		return order.fetch_add(1) + 1;
++	}
++
+ 	// Timeline tracing, active while the marker file d1/d1trace.on exists (checked every
+ 	// 200 ms), limited to 400000 lines per activation.
+ 	inline bool tracing()

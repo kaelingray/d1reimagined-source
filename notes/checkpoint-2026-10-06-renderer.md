@@ -272,3 +272,26 @@ query or device-loss entries, but two descriptor resets and layout errors remain
 No unsuccessful command-buffer wait is observed, so this does not identify their
 native cause or establish a character/flicker repair. Automatic cleanup restores
 original settings and XInput. The native recorder's missing-source exit persists.
+
+## Descriptor trace and inspected capture properties
+
+The opt-in descriptor timeline links submission order, fence completion and actual
+cleanup scope assignment. Seventeen checks of the actual C++ helpers pass; queue,
+GC and fence audits retain 48/14/71 passing checks. Full Release build and scoped
+six-file reproduction pass. JOIN155 completes at 11:21.772973 with no validation
+IDs or device loss, but trace coverage ends at its 262,144-record cap at 3:43.081868.
+No failing pool is correlated. Its inspected final frame shows visibly distorted
+outdoor scenery behind the urgent message; full-body and mission acceptance are
+still absent. Automatic exact-owner cleanup and settings restoration pass.
+
+Timestamped recorder/input diagnostics preserve normal boolean results. The
+missing-source failure does not reproduce in JOIN155. At 18:39 UTC, 20 of 22 native
+receipts have decode/hash acceptance; an initial unusable segment and a permission
+failure remain unverified and queued for retry. Rotation gaps are explicit.
+New validated media metadata records inspected dimensions and distinct rounded
+average/base rates. The actual final source reports 1280x720, about 9 fps average
+and 30 fps base, with audio and full decode PASS. All 77 capture tests pass. The
+tested observer is deployed at idle and remains asynchronous. Earlier NAS packages
+stay immutable. Next: reproduce descriptor errors with tracing disabled, then arm
+later to preserve the trace budget for the failure; continue recorder source-state
+and character/mission rendering work without claiming either is repaired.

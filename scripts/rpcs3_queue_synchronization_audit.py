@@ -28,6 +28,7 @@ def generate(root):
 PREAMBLE = r'''
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstdint>
 #include <iostream>
 #include <mutex>
@@ -35,6 +36,12 @@ PREAMBLE = r'''
 #include <string>
 #include <thread>
 using u32 = std::uint32_t;
+using u64 = std::uint64_t;
+namespace d1diag {
+bool descriptor_logging() { return false; }
+u64 next_descriptor_submit_order() { return 0; }
+}
+struct diagnostic_logger { template<class... T> void notice(const char*, T...) {} } d1_log;
 using VkQueue = std::uint64_t;
 using VkSemaphore = std::uint64_t;
 using VkCommandBuffer = std::uint64_t;

@@ -14,3 +14,4 @@ patches/rpcs3-queue-synchronization.patch -text whitespace=-blank-at-eol,-space-
 patches/rpcs3-query-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-gc-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-fence-completion.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-descriptor-timeline.patch -text whitespace=-blank-at-eol,-space-before-tab

@@ -146,7 +146,7 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **73 tests**, including callback continuations, native exception
+The current suite has **77 tests**, including callback continuations, native exception
 classification, durable observation-to-capture handoff and interrupted-fragment recovery.
 The [GPU checkpoint detector](../../notes/rpcs3-gpu-checkpoints.md) also preserves
 normalized stage/operation hints from a bounded native device-loss report. Raw marker,
@@ -194,3 +194,21 @@ failed status I/O. The live worker survives six-second held status locks both id
 and during native recording, then resumes fresh status updates. Its recorder also
 survives the recording contention test. This repairs an observed worker exit;
 it does not claim uninterrupted coverage for the earlier capture gap.
+
+The native recorder appends timestamped JSON phases to its stderr log: start
+request, shortcut result, source identification/missing deadline, stop request,
+source finalization/timeout and any unidentified-source cleanup toggle. These
+diagnostics preserve boolean input results and do not restart unknown recording
+state automatically. A source file appearing later is not a decoded segment
+receipt. Failed runs keep their originals; missing coverage stays explicit until
+the actual source is verified and associated with the owned run.
+
+Every newly validated buffer segment and video package includes inspected
+`video_properties`: pixel width/height and distinct reported average/base frame
+rates. These values reuse the existing full-decode input description, adding no
+second encoding or probe job. Missing properties remain null. The rates are
+rounded banner values: FFmpeg prints `avg_frame_rate` as `fps` and `r_frame_rate`
+as `tbr`, as shown in its [stream inspection implementation](https://ffmpeg.org/doxygen/trunk/dump_8c_source.html).
+They do not establish constant frame pacing or gameplay performance. Decode
+failure cannot receive passing media metadata, and caller-supplied metadata cannot
+replace inspected properties. Earlier ready packages remain immutable.

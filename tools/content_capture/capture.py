@@ -186,6 +186,32 @@ def ensure_local(path):
             raise ValueError("Mapped NAS drives cannot be used for recording or outbox storage")
 
 
+def inspect_video_properties(stderr):
+    # Reuse the input description from full decoding; no second media job.
+    # FFmpeg prints avg_frame_rate as fps and r_frame_rate as tbr. Both are rounded.
+    video = ""
+    for line in stderr.splitlines():
+        if line.startswith("Output #"):
+            break
+        if re.match(r"\s*Stream #0:\d+.*: Video:", line):
+            video = line
+            break
+    dimensions = re.search(r",\s*(\d+)x(\d+)(?:\s|,|$)", video)
+    width, height = map(int, dimensions.groups()) if dimensions else (None, None)
+
+    def rate(label):
+        match = re.search(r",\s*(\d+(?:\.\d+)?)([kM]?)\s+" + label + r"\b", video)
+        if not match:
+            return None
+        value = float(match[1]) * {"": 1, "k": 1000, "M": 1000000}[match[2]]
+        return value if value > 0 else None
+
+    return {"inspection": "AVAILABLE" if video else "NOT_DETERMINED",
+            "width": width or None, "height": height or None,
+            "average_fps_reported": rate("fps"), "base_fps_reported": rate("tbr"),
+            "frame_rate_precision": "Rounded FFmpeg input-stream values; not a gameplay performance measurement"}
+
+
 def validate_video(path, ffmpeg):
     result = subprocess.run(
         [ffmpeg, "-hide_banner", "-nostdin", "-xerror", "-threads", "2", "-i", str(path),
@@ -198,7 +224,7 @@ def validate_video(path, ffmpeg):
     h, m, s = map(float, match.groups())
     return {"duration_seconds": h * 3600 + m * 60 + s,
             "contains_audio": "Audio:" in result.stderr,
-            "full_decode": "PASS"}
+            "full_decode": "PASS", "video_properties": inspect_video_properties(result.stderr)}
 
 
 def git_context():
@@ -269,7 +295,8 @@ class Capture:
         # Metadata cannot supply identifiers, hashes or claim verified media/transfer.
         reserved = {"clip_id", "source_machine", "sha256", "duration_seconds", "full_decode",
                     "schema_version", "project", "git_commit", "git_branch", "dirty_worktree", "repository",
-                    "contains_sensitive_information", "requires_manual_review", "contains_audio", "package_kind"}
+                    "contains_sensitive_information", "requires_manual_review", "contains_audio", "package_kind",
+                    "video_properties"}
         if reserved & metadata.keys():
             raise ValueError("Metadata supplies reserved traceability fields")
         if not metadata.get("description", "").strip():
@@ -380,7 +407,7 @@ class Capture:
             raise ValueError("Content capture is disabled")
         reserved = {"schema_version", "clip_id", "source_machine", "project", "git_commit", "git_branch",
                     "dirty_worktree", "repository", "sha256", "package_kind", "contains_sensitive_information",
-                    "requires_manual_review", "contains_voice", "full_decode"}
+                    "requires_manual_review", "contains_voice", "full_decode", "video_properties"}
         if reserved & metadata.keys():
             raise ValueError("Metadata supplies reserved traceability fields")
         if not metadata.get("description", "").strip():

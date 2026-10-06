@@ -34,6 +34,7 @@ def generate(root):
 
 PREAMBLE = r'''
 #include <cstdint>
+#include <bit>
 #include <deque>
 #include <functional>
 #include <iostream>
@@ -43,6 +44,9 @@ PREAMBLE = r'''
 #include <utility>
 #include <vector>
 using u32=std::uint32_t; using u64=std::uint64_t; using VkResult=int;
+using VkCommandBuffer=u64;
+namespace d1diag { bool descriptor_logging() { return false; } }
+struct diagnostic_logger { template<class... T> void notice(const char*,T...) {} } d1_log;
 constexpr VkResult VK_SUCCESS=0, VK_NOT_READY=1, VK_TIMEOUT=2;
 constexpr VkResult VK_ERROR_OUT_OF_HOST_MEMORY=-1, VK_ERROR_OUT_OF_DEVICE_MEMORY=-2;
 constexpr VkResult VK_ERROR_DEVICE_LOST=-4, VK_ERROR_UNKNOWN=-13;
@@ -67,7 +71,7 @@ int unsafe_fence_destruction=0, trims=0, globals_reset=0, heap_restores=0, frame
 VkResult poke_status=VK_NOT_READY;
 namespace vk {
 struct fence {
-    bool flushed=true, gpu_pending=false, track_destruction=false; int handle=1;
+    bool flushed=true, gpu_pending=false, track_destruction=false; u64 handle=1;
     fence()=default;
     explicit fence(int):track_destruction(true){}
     ~fence(){if(track_destruction && gpu_pending)++unsafe_fence_destruction;}
@@ -77,6 +81,7 @@ struct fence {
 struct command_pool { int get_owner()const{return 1;} };
 struct queue_submit_t { int queue; fence* pfence; };
 struct command_buffer {
+    operator VkCommandBuffer() const { return 17; }
     bool is_pending=false;
     fence own_fence; fence* m_submit_fence=&own_fence; fence* external_fence=nullptr;
     command_pool own_pool; command_pool* pool=&own_pool;
@@ -102,7 +107,7 @@ VkResult wait_for_fence(fence* value,u64 timeout=0){
 u64 get_event_id(){return 42;}
 void on_event_completed(u64 value){completed.push_back(value);}
 }
-VkResult vkGetFenceStatus(int,int){return poke_status;}
+VkResult vkGetFenceStatus(int,u64){return poke_status;}
 namespace vk {
 '''
 

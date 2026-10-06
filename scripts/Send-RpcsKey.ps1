@@ -13,7 +13,8 @@ param(
     [int]$GapMs = 600,
     [int]$ProcessId = 0,         # 0 = all matching RPCS3 windows (legacy behavior)
     [object]$ProcessIdentity,   # optional exact manifest identity, checked before posting
-    [switch]$IfWindowReady      # bool result; no input when compilation has no game window yet
+    [switch]$IfWindowReady,     # bool result; no input when compilation has no game window yet
+    [switch]$InputDiagnostics  # private stderr JSON; never changes the success stream
 )
 . "$PSScriptRoot\Final124RunHelpers.ps1"
 Add-Type @"
@@ -60,6 +61,16 @@ $script:game = @()
         if ($sb.ToString() -match 'FPS|Destiny|BLES') { $script:game += $h } }
     $true }, [IntPtr]::Zero) | Out-Null
 Assert-RpcsKeyOwnership
+if ($InputDiagnostics) {
+    try {
+        $windows=@($script:game | ForEach-Object {
+            $title=New-Object Text.StringBuilder 256
+            [void][RpcsKeys]::GetWindowText($_,$title,256)
+            @{ handle=$_.ToInt64(); title=$title.ToString() }
+        })
+        [Console]::Error.WriteLine(([ordered]@{ component='rpcs-input'; at=[DateTimeOffset]::UtcNow.ToString('o'); process_id=$ProcessId; windows=$windows; keys=$vks } | ConvertTo-Json -Depth 4 -Compress))
+    } catch { }
+}
 if (-not $script:game) {
     if ($IfWindowReady) { return $false }
     throw "Destiny game window not found"
@@ -79,13 +90,18 @@ foreach ($h in $script:game) {
             $ext = if ($v -ge 0x21 -and $v -le 0x28) { 1 -shl 24 } else { 0 }
             $down = 1 -bor ($scan -shl 16) -bor $ext
             $up = $down -bor (1 -shl 30) -bor (1 -shl 31)
-            [void][RpcsKeys]::PostMessage($h, 0x100, [IntPtr]$v, [IntPtr][int64]$down)
+            $downPosted=[RpcsKeys]::PostMessage($h, 0x100, [IntPtr]$v, [IntPtr][int64]$down)
             Start-Sleep -Milliseconds $HoldMs
             Assert-RpcsKeyOwnership
             $windowProcessId = 0
             [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$windowProcessId)
             if ($ids -notcontains $windowProcessId) { throw 'RPCS3 game window ownership changed before key release.' }
-            [void][RpcsKeys]::PostMessage($h, 0x101, [IntPtr]$v, [IntPtr][int64]([uint32]$up))
+            $upPosted=[RpcsKeys]::PostMessage($h, 0x101, [IntPtr]$v, [IntPtr][int64]([uint32]$up))
+            if ($InputDiagnostics) {
+                try {
+                    [Console]::Error.WriteLine(([ordered]@{ component='rpcs-input'; at=[DateTimeOffset]::UtcNow.ToString('o'); process_id=$ProcessId; window=$h.ToInt64(); key=$v; down_posted=$downPosted; up_posted=$upPosted } | ConvertTo-Json -Compress))
+                } catch { }
+            }
             Start-Sleep -Milliseconds $GapMs
         }
     }

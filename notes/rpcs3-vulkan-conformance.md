@@ -192,6 +192,62 @@ watch/title bytes and XInput, and disables diagnostic controls without errors.
 The observer remains alive, but this run's recorder exits before producing a
 segment receipt: later source coverage is unproved and requires separate repair.
 
+## Descriptor lifetime diagnostics
+
+[rpcs3-descriptor-timeline.patch](../patches/rpcs3-descriptor-timeline.patch)
+adds an opt-in trace linking command-buffer event tags, physical queue submission
+order, confirmed fence completion, disposable scope assignment, pool retirement
+and pool reset. The private `d1/d1descriptor` marker is polled at most every
+500 ms. A shared process budget permits 262,144 records and one exhaustion notice;
+toggling the marker cannot reset that budget. Runtime handles remain private.
+Submission ordinals are allocated under the existing queue guard. Cleanup and
+submission behavior are unchanged when tracing is disabled. The cleanup header
+also gains an include guard for its additional include path.
+
+[rpcs3_descriptor_timeline_audit.py](../scripts/rpcs3_descriptor_timeline_audit.py)
+extracts the actual gate, ordinal helper and disposable class. All **17 CPU checks
+pass**, covering concurrent reservations, throttled polling, budget exhaustion,
+reactivation and unchanged resource ownership. Queue, GC and fence audits still
+pass **48, 14 and 71 checks** with tracing disabled. These mocks do not establish
+native submission order or repair rendering. The six-file patch reproduces the
+normalized changed sources. The complete MSVC x64 Release build passes after
+repairing the missing include guard; executable SHA-256 is
+`5d94e44f96007beb94a9b542b7283056533b553e863de573c8857636098e0735`.
+JOIN155 completes the same fixture at **11:21.772973**, with no queue, query,
+descriptor-reset, layout or device-loss entries. The trace reaches its budget at
+**3:43.081868**, before the earlier comparisons' first descriptor failures.
+Diagnostic timing differs, and no failing pool is correlated in this run, so this
+does not establish a fix or its cause. The final inspected image has the urgent
+message over visibly distorted outdoor scenery. Full-body/mission acceptance is
+still absent. Automatic cleanup closes the owned stack, restores original
+watch/title bytes and XInput, and disables both diagnostic controls. Next: compare
+with tracing disabled and reserve a later trace window for the failing scene.
+Trace overhead is unmeasured; coverage beyond exhaustion is unavailable.
+
+The recorder now logs timestamped start/stop requests, shortcut results, source
+identification and finalization through stderr. Diagnostic logging does not add
+values to PowerShell's success stream or alter the eight-second source deadline.
+It records an unidentified-source cleanup toggle explicitly. These phases help
+distinguish delayed native output from a failed shortcut; they do not themselves
+repair missing footage or prove a closed, decoded recording. Input diagnostics
+also record eligible windows and the actual key-down/key-up post results. A
+zero-count enumeration selects exactly one game window during JOIN155; it posts
+no input. The recorder's missing-source failure does not reproduce in this run.
+At 18:39 UTC, **20 of 22** receipts have full-decode and matching retained/source
+hash acceptance. One initial segment is unusable; another has a permission error
+and remains eligible for automatic retry. These intervals are unverified, and
+rotation gaps remain explicit. The observer stays alive and returns to idle.
+
+The accepted final native source reports **1280×720**, an approximately **9 fps**
+average and a **30 fps** base rate. New automatic buffer/package metadata retains
+these inspected properties rather than assuming the configured recorder rate.
+The rounded banner values are not a gameplay performance measurement. The full
+capture suite passes **77 tests**, including average/base-rate separation,
+fractional rates, missing input properties and failed decoding. Actual native
+validation reproduces these fields with full decode PASS and audio present.
+The tested worker is deployed while no game is active; existing ready packages
+remain immutable.
+
 ## Remaining acceptance
 
 Require no concurrent queue-use or query-scope callbacks during the same native
