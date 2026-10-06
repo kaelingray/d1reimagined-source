@@ -152,6 +152,46 @@ not uninterrupted encoder operation. Cleanup leaves the observer idle with no
 monitor/processing error. No new milestone or duplicate NAS package is fabricated
 for this repeated fixture.
 
+## Fence completion increment
+
+[rpcs3-fence-completion.patch](../patches/rpcs3-fence-completion.patch) retains
+command-buffer pending state, event identity and its fence when a wait returns
+anything other than success. It previously reset the fence and notified collection
+even on timeout. Reuse and frame cleanup now retry an expired bounded wait through
+the existing indefinite completion path, and propagate real failures before
+resetting the command buffer or releasing the frame's heap/resources. DMA restart
+also confirms completion and defers its submitted fence through the existing
+collector if waiting throws.
+
+The [fence wait contract](https://docs.vulkan.org/refpages/latest/refpages/source/vkWaitForFences.html)
+distinguishes timeout from a signaled fence. Vulkan forbids resetting a
+[pending command buffer](https://docs.vulkan.org/refpages/latest/refpages/source/vkResetCommandBuffer.html)
+or a [fence still associated with pending work](https://docs.vulkan.org/refpages/latest/refpages/source/vkResetFences.html).
+The change repairs these lifetime contracts; the descriptor-reset cause remains
+unproved. A stalled GPU can keep the completion path waiting longer than the
+previous bounded wait. Timing/performance acceptance remains unmeasured.
+
+[rpcs3_fence_completion_audit.py](../scripts/rpcs3_fence_completion_audit.py)
+extracts the full command-buffer chunk and frame-cleanup method, plus the actual
+DMA submission/wait/restart block. Mock result sequences cover timeout, five
+failure statuses, later successful completion, idle/reused buffers, frame heap
+retention and DMA fence ownership. All **71 checks pass**; the exact pre-change
+source fails **51**. This proves the injected completion/error contracts, not
+native GPU fidelity. The three-file patch reproduces normalized changed sources.
+The full MSVC x64 Release build passes; executable SHA-256 is
+`051e8eb5d7e53ab322918111c51c707f00a0a05e5ed09354372edc59b44026c8`.
+JOIN154 repeats the matching native fixture, with automatic final snapshot and
+cleanup. It completes the same 500-second post-match scenario and reaches
+**11:22.537209**, with zero queue/query/device-loss entries. Two descriptor-reset
+callbacks and feedback/draw-layout errors remain; no unsuccessful command-buffer
+wait is logged. The timeout path therefore has CPU acceptance and no demonstrated
+native trigger in this comparison. Overall conformance still fails. The inspected
+final screenshot is the urgent-message dialog over a dark world, not full-body or
+mission proof. Automatic cleanup closes the exactly owned stack, restores original
+watch/title bytes and XInput, and disables diagnostic controls without errors.
+The observer remains alive, but this run's recorder exits before producing a
+segment receipt: later source coverage is unproved and requires separate repair.
+
 ## Remaining acceptance
 
 Require no concurrent queue-use or query-scope callbacks during the same native

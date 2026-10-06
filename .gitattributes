@@ -13,3 +13,4 @@ patches/rpcs3-gpu-readback-context.patch -text whitespace=-blank-at-eol,-space-b
 patches/rpcs3-queue-synchronization.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-query-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-gc-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-fence-completion.patch -text whitespace=-blank-at-eol,-space-before-tab

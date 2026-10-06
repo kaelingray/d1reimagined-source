@@ -259,3 +259,16 @@ telemetry. The earlier coverage gap is recorded honestly. JOIN153 subsequently h
 exits separately; later recording coverage is unproved. The observer remains alive
 and returns to idle after test cleanup. Previously delivered NAS packages remain
 immutable.
+
+## Pending fence work now retains its resources
+
+The [fence completion increment](rpcs3-vulkan-conformance.md) prevents unsuccessful
+waits from notifying collection or resetting a pending command buffer. Frame and
+DMA cleanup also require confirmed completion; DMA wait failures retain the fence
+through the existing collector. All **71 actual-code CPU checks pass**, compared
+with 51 baseline failures. Full Release build and scoped three-file reproduction
+pass. JOIN154 completes the same native fixture at **11:22.537209** without queue,
+query or device-loss entries, but two descriptor resets and layout errors remain.
+No unsuccessful command-buffer wait is observed, so this does not identify their
+native cause or establish a character/flicker repair. Automatic cleanup restores
+original settings and XInput. The native recorder's missing-source exit persists.
