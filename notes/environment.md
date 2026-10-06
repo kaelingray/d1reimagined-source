@@ -1,26 +1,20 @@
-# Prepared environment
+# RPCS3 development environment
 
-Checked: 2026-09-21
+Current target: Destiny 1 PS3 BLES01857 01.24. See the
+[October 6 handoff](HANDOFF-2026-10-06.md) for build identities and acceptance.
 
-| Component | Observed |
-| --- | --- |
-| OS | Windows 11 Pro, 64-bit |
-| CPU | AMD Ryzen 5 7600X, 6 cores / 12 threads |
-| GPU | NVIDIA GeForce RTX 5070 |
-| RAM | Approximately 32 GB |
-| Visual C++ x64 runtime | v14.51.36247.00 installed |
-| D: free before setup | Approximately 172.8 GB |
-| Xenia release tag | `74c4e4a` |
-| Xenia internal build | `canary_experimental@74c4e4acb`, 2026-09-21 |
-| Xenia directory | `D:\Destiny360\XENIA` |
-| Generated config file | `D:\Destiny360\XENIA\xenia-canary.config.toml` |
-| Initial `mount_cache` | `true` |
+Native tests use a private patched RPCS3 tree based on commit
+`b5a174e933a083389e2f851005e474ccb3e676d9`, Windows, MSVC x64 Release and Vulkan.
+Core validation uses the Khronos validation layer; GPU-assisted shader
+instrumentation is disabled for the current comparison. A completed CPU audit
+or successful build does not establish correct character/world rendering.
 
-Official release: <https://github.com/xenia-canary/xenia-canary/releases/tag/74c4e4a>
+`D1_LOCAL` selects the private runtime and `-DataRepo` / `D1_DATA_REPO` select
+the private data checkout. Keep game dumps, updates, firmware, keys, recordings,
+certificates and machine settings outside this source repository.
 
-| File | SHA-256 |
-| --- | --- |
-| `xenia_canary_windows_74c4e4a.7z` | `6F44124682BDBEDCC409C5896D68146AB9A01C638B029DE6C3CCA414633384D8` |
-| `xenia_canary.exe` | `3C62E3CF3AF82982BCB29E4E702A3240E16CB6B688FD948365D8881039541B71` |
-
-Xenia was launched once without a game to generate its config and stopped after verifying its initial log. No Destiny boot test has been run.
+Use exact process identities from run manifests for input, inspection and
+cleanup. Back up the deployed executable before an idle replacement. Restore
+the original title/watch files, disable diagnostic controls and return to
+XInput after each automated keyboard test. The companion capture worker must
+remain enabled; recording failures must preserve sources without stopping the game.

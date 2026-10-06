@@ -4,7 +4,8 @@
 > [renderer checkpoint](checkpoint-2026-10-06-renderer.md) and
 > [project README](../README.md). Repositories are now `d1reimagined` and
 > `d1reimagined-data`; existing runtime/checkout folders remain supported. The
-> attachment-layout candidate is built but not deployed or natively accepted.
+> attachment-layout candidate is deployed and completes JOIN157 without validation
+> errors, but inspected outdoor shading still corrupts and visual acceptance is open.
 > The private engineering record supplies exact runtime identities and paths.
 > Older recipes below are history, not instructions to reset current work.
 

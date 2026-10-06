@@ -317,3 +317,37 @@ partial and unverified behavior. Read the [current handoff](HANDOFF-2026-10-06.m
 for hashes, validation scope and the next controlled deployment. Current source
 launchers accept both new and legacy companion checkout names. No graphics or
 complete-preservation acceptance is implied by this handoff.
+
+## JOIN157: candidate conformance passes; visible corruption remains
+
+After idle backup/deployment, the attachment-layout candidate completes the same
+500-second post-match fixture with core validation and descriptor tracing off.
+The final log reaches **11:48.007191**, with no validation IDs, queue/query or
+descriptor-reset callbacks, or device loss. The native layer is verified. This
+supports the bounded conformance comparison; JOIN156 also had no errors, so it
+does not isolate a native causal repair.
+
+Inspected outdoor images alternate between normal shading and black/green
+corruption. A dismiss input advances an urgent warning to a second startup
+dialog. The following phases remain behind that dialog and establish no accepted
+character or movement views. Malformed fragment-program messages are present;
+their relation to the corruption requires investigation. The user's combined
+flicker/character/mission fix remains **KNOWN BROKEN / unaccepted**.
+
+Exact-owner cleanup closes the complete stack and restores original title/watch
+bytes, XInput and inactive controls without errors. The deployed executable is
+`55efc9072019124be3e880ca8c881339d057390c47d3bf77c799ccb6de920259`;
+the previous tested executable has a verified backup.
+
+The [recorder controller](rpcs3-recorder-controller.md) now keeps timed-out sources
+pending and avoids further blind toggles. Eleven actual-function writer-lock
+checks and all 81 capture tests pass. JOIN157 verifies the missing-source guard,
+but still supplies no indexed footage from its start attempt. Background shortcut
+constraints need a native control path. The observer remains healthy and idle.
+
+At the owner's request, obsolete Xbox emulator scripts/patches and research have
+been removed from the source tree, while PS3 results and their updated links remain.
+The local cleanup removes 106 retired targets / 49,964 files / 87,344,341,166 logical
+bytes. Current runtime, title/watch files, 01.24 EBOOT and companion hash manifest
+match their pre-cleanup hashes. Existing RPCS3 compatibility folder names remain.
+Backend and script regressions pass 167 and 145 tests respectively.

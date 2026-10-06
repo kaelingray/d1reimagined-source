@@ -110,7 +110,6 @@ sparrows, social. Each moves to INVESTIGATING when its research note is opened.
 | Diagnostics build (PPU hooks, screenshots, traces) | WORKING | `patches/rpcs3-destiny-main-memory-blit.patch` | - |
 | Input (keyboard pad profile, scripted input) | WORKING | `Set-PadConfig.ps1`, `Send-RpcsKey.ps1` | - |
 | Long-session stability | PARTIAL | memory leak fixed on 01.00; 01.24 soak not run | soak test on 01.24 |
-| Xenia (Xbox 360) route | NOT INVESTIGATED recently | `Start-XeniaTest.ps1` | - |
 
 ## 9. Multiplayer readiness by subsystem
 

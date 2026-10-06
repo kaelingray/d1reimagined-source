@@ -18,7 +18,7 @@ means no capture side effects. `-Stop` requests cooperative shutdown, preserving
 
 ## Verified state — 2026-10-06
 
-The capture suite passes **77 tests**. Live acceptance includes native game/audio
+The capture suite passes **81 tests**. Live acceptance includes native game/audio
 segments, interrupted-fragment recovery, durable event/outbox handling, full decoding,
 verified SMB transfer and atomic ready transitions. Status-lock contention is repaired
 and tested with the live worker during recording. Source-start identification still
@@ -165,7 +165,7 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **77 tests**, including callback continuations, native exception
+The current suite has **81 tests**, including callback continuations, native exception
 classification, durable observation-to-capture handoff and interrupted-fragment recovery.
 The [GPU checkpoint detector](../../notes/rpcs3-gpu-checkpoints.md) also preserves
 normalized stage/operation hints from a bounded native device-loss report. Raw marker,

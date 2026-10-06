@@ -9,10 +9,10 @@ failure step/code where it was traced. Add rows as new errors appear; keep the s
 | Error | Build | Shown when | Cause (OBSERVED unless marked) | Fix / status | Origin | Source |
 | --- | --- | --- | --- | --- | --- | --- |
 | **buffalo** | 01.00/01.24 | startup | PSN check unreachable: RPCN's UDP helper bound to `[::1]` only, IPv4 probe unanswered | RPCN on IPv4 (`rpcn_local_account.py`) - fixed | NETWORK | `ps3-route.md`, `test-log.md` |
-| **marionberry** | 01.00/01.24 | startup / after Verifying Content | Demonware STUN (`dev-stun.demonware.net:3074`) unanswered; also seen with a disc-only manifest (160 packages, no BAP) | `stun_stub.py` answers IP/NAT discovery - fixed for 01.00; 01.24 STUN reply format still unknown | NETWORK | `network-blocker.md`, audit checkpoint |
+| **marionberry** | 01.00/01.24 | startup / after Verifying Content | Demonware STUN (`dev-stun.demonware.net:3074`) unanswered; also seen with a disc-only manifest (160 packages, no BAP) | `stun_stub.py` answers IP/NAT discovery - fixed for 01.00; 01.24 STUN reply format still unknown | NETWORK | `ps3-route.md`, audit checkpoint |
 | **termite** | 01.24 | content manifest step | title configuration without the content-manifest URL (SignOn binary config) | SignOn field 13/14 config with URL - fixed | BACKEND | `ps3-route.md`, `final-build.md` |
 | **nightingale** | 01.00 | manifest fetch | manifest request answered 503 | serve the manifest - fixed | BACKEND | `ps3-route.md` (test 019) |
-| **cattle** | 01.00 (lobby) | Demonware lobby auth | `client_auth` frame left unanswered (~10 s) | `lobby_probe.py` answers - fixed (01.24 has no lobby step) | BACKEND | `network-trace.md` |
+| **cattle** | 01.00 (lobby) | Demonware lobby auth | `client_auth` frame left unanswered (~10 s) | `lobby_probe.py` answers - fixed (01.24 has no lobby step) | BACKEND | `ps3-route.md` |
 | **centipede** | 01.00/01.24 | after BAP sign-in | BAP replies out of order: an unanswered request (acct id trans) made later replies unmatched; failure (0x18, 0xa0) | answer requests oldest-first (`acct_id_trans_reply`) - fixed | BACKEND | `bap_server.py` comment, `ps3-route.md` |
 | **chicken** | 01.00 | investment sign-in | sign-in (service 503) failure (0x18, 0xa1) from `0x32d070` | typed sign-in response - fixed | BACKEND | `ps3-route.md` |
 | **pigeon** | 01.24 | profile fetch | qz object type hashes differ per build | build-specific type hashes - fixed (2026-10-01) | BACKEND | `checkpoint-2026-10-01-profile.md` |

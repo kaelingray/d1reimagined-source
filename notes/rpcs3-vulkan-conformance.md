@@ -266,6 +266,15 @@ not deployed or run natively. JOIN156 does not validate it. See the
 
 ## Remaining acceptance
 
+JOIN157 now tests the deployed attachment-layout increment in the same fixture,
+with tracing off and the core layer verified. Its final log reaches 11:48.007191
+with zero validation IDs, queue/query/descriptor-reset callbacks or device loss.
+Because JOIN156 already has a clean bounded comparison, this does not isolate
+the increment as the native cause of improvement. Inspected outdoor images
+continue to alternate between normal shading and black/green corruption, and
+startup dialogs obstruct the character check. Malformed fragment-program entries
+need further investigation. Exact-owner cleanup and configuration restoration pass.
+
 Require no concurrent queue-use or query-scope callbacks during the same native
 scenario before accepting those repairs. Record other validation failures
 separately and investigate their exact resource lifetimes/layouts. A short run

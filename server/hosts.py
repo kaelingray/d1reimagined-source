@@ -2,8 +2,9 @@
 
 The PS3 sign-on client sends no SNI, so each hostname gets its own loopback IP and the
 listener picks the certificate from the address that was dialled. Names were observed in
-PS3 tests 003 and 006 (www1/www2/www8 on both domains) and in the Xbox 360 console
-capture (www6.signon.gravityshavings.net); www1-www9 are reserved on each domain.
+PS3 tests 003 and 006 (www1/www2/www8 on both domains); the historical reference
+capture also supplied www6.signon.gravityshavings.net. www1-www9 remain reserved
+on each domain for compatibility with the existing local service configuration.
 """
 
 STUN_HOST, STUN_IP = "dev-stun.demonware.net", "127.0.0.2"
