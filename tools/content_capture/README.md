@@ -44,7 +44,10 @@ acceptance shares a comparison group; a mere observation cannot become `BUG_FIXE
 
 Vulkan validation errors preserve up to three distinct normalized VUID identifiers
 and their observed count. The native debug-report callback's explicit error format
-is also recognized when it omits identifiers. Warnings and enabled settings do not trigger bug events.
+is also recognized when its first line omits identifiers. Bounded continuation lines
+can supply identifiers from the callback's specification links, including across log
+reads. The next log entry or 64 continuation lines ends that context; it resets for
+each owned run. Warnings and enabled settings do not trigger bug events.
 Raw object handles, diagnostic context and host paths stay in the private log.
 The event is **Known Broken** and does not identify the cause or claim a repair.
 Device-loss detection requires renderer/Vulkan evidence; a fatal GDB socket message

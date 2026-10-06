@@ -59,8 +59,13 @@ descriptor writes and retirement, and trace the depth feedback-loop layout chang
 Keep the CPU cache contract, native descriptor findings and visual acceptance separate.
 
 The automatic worker recognizes the native validation error format despite its
-omitted VUIDs, saves the existing pre/post buffer and supplies a **112.64-second**
+identifier-free first line, saves the existing pre/post buffer and supplies a **112.64-second**
 Known Broken BEFORE source package with game audio and two extracted frames.
 The 500 GB NAS contains all seven files with verified payload sizes and SHA-256 hashes;
 eight source packages are now delivered. Raw object handles and diagnostic context
 stay private. No user clip selection, labelling or transfer is required.
+
+The full callback contains VUIDs in continuation-line specification links. The
+initial package parser only inspected the first error line. The follow-up
+[pool retirement investigation](rpcs3-descriptor-pool-retirement.md) corrects that
+extraction without changing the existing delivered package.

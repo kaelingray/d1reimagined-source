@@ -78,7 +78,31 @@ class Detector:
         return event
 
 
-def observations(sample, native_lines, backend_lines):
+class ValidationErrors:
+    """Read bounded callback continuations without retaining private diagnostic text."""
+    def __init__(self):
+        self.remaining = 0
+
+    def observe(self, text):
+        errors, identifiers = 0, set()
+        for line in text.splitlines():
+            is_error = bool(re.search(
+                r"(?:Validation Error:|RSX: ERROR: \[Validation\] Code -?\d+ :)", line))
+            if is_error:
+                errors += 1
+                self.remaining = 64
+            elif re.search(r"^(?:·[A-Za-z]|Validation (?:Warning|Info):)", line):
+                self.remaining = 0
+            elif self.remaining:
+                self.remaining -= 1
+            else:
+                continue
+            if is_error or self.remaining:
+                identifiers.update(re.findall(r"\b(VUID-[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+)", line))
+        return errors, sorted(identifiers)
+
+
+def observations(sample, native_lines, backend_lines, validation=None):
     result = []
     for line in native_lines.splitlines():
         if "D1FPBIND " not in line:
@@ -98,18 +122,15 @@ def observations(sample, native_lines, backend_lines):
         result.append(("renderer-device-loss", "FAILED", {"summary": "The owned run wrote a fatal renderer/device-loss diagnostic."}, "Known Broken"))
     if "malformed fragment program not saved" in native_lines:
         result.append(("live-fragment-validation", "FAILED", {"summary": "Live fragment program failed validation; cache refusal alone does not fix its source."}, "Known Broken"))
-    validation_errors = [line for line in native_lines.splitlines() if
-                         re.search(r"(?:Validation Error:|RSX: ERROR: \[Validation\] Code -?\d+ :)", line)]
-    validation_ids = sorted(set(re.findall(
-        r"\b(VUID-[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+)", "\n".join(validation_errors))))
-    if validation_errors:
+    validation_errors, validation_ids = (validation or ValidationErrors()).observe(native_lines)
+    if validation_errors or validation_ids:
         reported = ", ".join(validation_ids[:3]) if validation_ids else "an error through the native callback"
         result.append(("renderer-vulkan-validation", "FAILED", {
             "summary": "The owned Vulkan validation layer reported " + reported +
                        ". The originating game defect and complete graphics acceptance remain unverified.",
             "source": "Vulkan validation", "validation_ids": validation_ids[:3],
             "distinct_ids_in_observation": len(validation_ids),
-            "error_lines_in_observation": len(validation_errors)}, "Known Broken"))
+            "error_lines_in_observation": validation_errors}, "Known Broken"))
     for service in set(re.findall(r"sent default reply for service (\d+) \(result error_none\)", backend_lines)):
         result.append(("service-" + service + "-stub", "PARTIAL",
                        {"summary": f"Local backend sent its default success-shaped reply for service {service}; client acceptance is unverified."}, "Stubbed / Mocked"))
@@ -150,6 +171,7 @@ class Monitor:
         self.segments = self.capture.root / "native-segments"
         self.segments.mkdir(exist_ok=True)
         self.tail = Tail()
+        self.validation = ValidationErrors()
         self.pending_path = self.capture.root / "pending-observations.json"
         self.pending = json.loads(self.pending_path.read_text()) if self.pending_path.exists() else []
         self.recorder = None
@@ -216,6 +238,7 @@ class Monitor:
             self.manifest, self.reader = self.eligible_run()
             if self.manifest:
                 self.tail = Tail()  # the shared native log belongs to this new run
+                self.validation = ValidationErrors()
                 self.start_recorder(self.manifest)
         if not self.manifest:
             return
@@ -242,7 +265,7 @@ class Monitor:
         native = self.tail.read(Path(emulator["executable"]).parent / "log" / "RPCS3.log")
         backend = self.tail.read(self.manifest.parent / (m["name"] + "-bap.log"))
         new_events = []
-        for feature, value, evidence, maturity in observations(s, native, backend):
+        for feature, value, evidence, maturity in observations(s, native, backend, self.validation):
             event = self.detector.observe(feature, value, evidence, maturity)
             if event:
                 event["run"] = m["name"]

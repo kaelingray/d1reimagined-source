@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from capture import Capture, atomic_json, digest, check_text, lock
-from monitor import Detector, Monitor, Tail, observations
+from monitor import Detector, Monitor, Tail, ValidationErrors, observations
 
 
 class PipelineTests(unittest.TestCase):
@@ -296,6 +296,33 @@ class PipelineTests(unittest.TestCase):
     def test_native_non_validation_error_is_not_a_validator_event(self):
         self.assertEqual(observations({}, "·E RSX: ERROR: [Other] Code 0 : private error", ""), [])
         self.assertEqual(observations({}, "·W RSX: WARNING: [Validation] Code 0 : compiler warning", ""), [])
+
+    def test_native_validation_continuations_supply_normalized_ids(self):
+        lines = ("·E 0:03:15.000000 RSX: ERROR: [Validation] Code 0 : private object 0xdead\n"
+                 "Shader private-path with an invalid resource\n"
+                 "The Vulkan spec states: see #VUID-vkCmdDrawIndexed-viewType-07752)\n"
+                 "·W RSX: WARNING: [Validation] Code 0 : ignored\n"
+                 "See #VUID-vkCmdDrawIndexed-warning-12345)\n"
+                 "·N RSX: unrelated event\n"
+                 "VUID-vkCmdDrawIndexed-unrelated-54321")
+        evidence = observations({}, lines, "")[0][2]
+        self.assertEqual(evidence["validation_ids"], ["VUID-vkCmdDrawIndexed-viewType-07752"])
+        self.assertEqual(evidence["error_lines_in_observation"], 1)
+        self.assertNotIn("0xdead", json.dumps(evidence))
+        self.assertNotIn("private-path", json.dumps(evidence))
+
+    def test_validation_continuation_spans_reads_and_ends_at_next_log_entry(self):
+        parser = ValidationErrors()
+        observations({}, "·E RSX: ERROR: [Validation] Code 0 : bad resource", "", parser)
+        event = observations({}, "The spec: #VUID-vkCmdDrawIndexed-format-07753)", "", parser)[0]
+        self.assertEqual(event[2]["validation_ids"], ["VUID-vkCmdDrawIndexed-format-07753"])
+        self.assertEqual(event[2]["error_lines_in_observation"], 0)
+        self.assertEqual(observations({}, "·N RSX: normal entry\nVUID-vkCmdDraw-unrelated-12345", "", parser), [])
+
+    def test_validation_continuations_are_bounded(self):
+        parser = ValidationErrors()
+        observations({}, "Validation Error: bad resource", "", parser)
+        self.assertEqual(observations({}, "continuation\n" * 65 + "VUID-vkCmdDraw-unrelated-12345", "", parser), [])
 
     def test_debugger_teardown_fatal_is_not_device_loss(self):
         line = "·F 0:11:47.588403 {GDB Server} SIG: Thread terminated due to fatal error: Error during socket read"

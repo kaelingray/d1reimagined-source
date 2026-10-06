@@ -94,19 +94,26 @@ with no monitor or processing error; NAS delivery remains verified for seven pac
 
 The next increment detects explicit Vulkan validation errors as Known Broken BEFORE
 events and retains only bounded, normalized VUID identifiers and error counts.
-The native callback format is also recognized when it omits VUIDs. Five fixtures verify
+The native callback format is also recognized when its first line omits VUIDs. Five fixtures verify
 deduplication, comparison pairing and private-context exclusion, and reject warnings,
 configuration messages and unrelated errors. Two further fixtures distinguish an
 intentional GDB teardown fatal from device loss reported on RSX, PPU or SPU threads.
 
 JOIN136 supplies native acceptance for the validator detector. It observes the real
-identifier-free callback, preserves a **112.64-second** original game/audio source
+callback with an identifier-free first line, preserves a **112.64-second** original game/audio source
 window and two frames, and automatically delivers the Known Broken BEFORE package.
 All seven package files and six payload sizes/SHA-256 hashes are verified on the
 500 GB share. **Eight packages** are now delivered. A brief processing access error
 recovers and the pending queue drains; no user capture or transfer is required.
 This establishes diagnostic capture, not a repaired renderer. The detailed
 [descriptor investigation](rpcs3-descriptor-binding-cache.md) records its limitations.
+
+The follow-up parser reads bounded callback continuation lines, which can contain
+VUIDs in specification links. It carries context across reads and clears it at the
+next log entry, after 64 continuation lines, or for a new owned run. Three new
+fixtures cover normalized extraction, warning/unrelated-context exclusion and
+bounded split reads. All **37 capture tests** pass. The already delivered JOIN136
+package remains unchanged; its IDs were omitted by the previous first-line parser.
 
 Keep the source-capture worker alongside development. The engineering priority remains
 the [remaining GPU fault and preview texture](rpcs3-device-fault-detail.md), then
