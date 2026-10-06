@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import threading
 import time
 import uuid
 
@@ -215,6 +216,9 @@ def git_context():
 
 class Capture:
     def __init__(self, config_path):
+        self._status_mutex = threading.Lock()
+        self._status_pending = {}
+        self._status_last = {}
         config_path = Path(config_path).resolve()
         self.cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
         for key in ("CONTENT_NAS_PATH", "DEVELOPMENT_MACHINE_ID", "CURRENT_SESSION",
@@ -596,8 +600,25 @@ class Capture:
     def status(self, **changes):
         # The observer and asynchronous transfer job both update this file.
         # Serialize their entire read/merge/write, including another CLI process.
-        with lock(self.root / "status.lock", timeout=2):
-            return self._status(**changes)
+        with self._status_mutex:
+            self._status_pending.update(changes)
+            try:
+                with lock(self.root / "status.lock", timeout=2):
+                    value = self._status(**{**self._status_pending, "STATUS_UPDATE_DEFERRED": False,
+                                           "STATUS_UPDATE_ERROR": None})
+            except OSError as error:
+                # Status is telemetry, not the durable package/retry state. Keep
+                # changes for the next update instead of terminating recording
+                # when a CLI process, slow disk or sharing violation delays it.
+                try:
+                    self._status_last = json.loads((self.root / "machine-status.json").read_text())
+                except (OSError, ValueError):
+                    pass
+                return {**self._status_last, "STATUS_UPDATE_DEFERRED": True,
+                        "STATUS_UPDATE_ERROR": error.errno}
+            self._status_pending.clear()
+            self._status_last = value
+            return value
 
     def _status(self, **changes):
         path = self.root / "machine-status.json"

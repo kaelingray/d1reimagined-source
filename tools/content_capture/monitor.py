@@ -532,7 +532,12 @@ class Monitor:
                             self.last_git = current
                     self.capture.status(MONITOR_ERROR=None)
                 except Exception as error:
-                    self.capture.status(MONITOR_ERROR=str(error))
+                    try:
+                        self.capture.status(MONITOR_ERROR=str(error))
+                    except Exception:
+                        # An unavailable status sink must not kill the observer.
+                        # The next iteration retries detection and pending work.
+                        print("Capture status unavailable; observer will retry.", file=sys.stderr, flush=True)
                 time.sleep(2)
         finally:
             self.stop_recorder()

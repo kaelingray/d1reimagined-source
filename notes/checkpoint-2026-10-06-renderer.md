@@ -220,3 +220,42 @@ text-only report transfer through the existing outbox. No new event is fabricate
 for the unchanged checkpoint capability. Next: correlate the retained compute kernel
 and descriptor resources, then demonstrate the repair in stable body/equipment,
 outdoor and mission views. The slice-handoff trace remains a separate open task.
+
+## JOIN150 onward: validation identifies concrete API errors
+
+The [Vulkan conformance work](rpcs3-vulkan-conformance.md) uses core validation
+without requesting GPU-assisted shader instrumentation. JOIN150 reports a query
+scope mismatch and concurrent presentation/submission on the same queue, then
+loses the GPU at **3:09.410591**. The queue repair serializes both host operations
+and checks failed submission results before marking the fence flushed. All
+**48 actual-code CPU checks pass**, compared with 15 baseline failures. The full
+Release build succeeds. JOIN151 reaches **11:55.154100** with no concurrent queue
+callback or device-loss entry; this is bounded acceptance of queue serialization.
+
+Query and overall rendering acceptance remain separate. The query increment
+reuses the existing matching outside-pass path for every driver. All **29 CPU
+checks pass**, compared with seven baseline failures, and its Release build
+succeeds. JOIN152 reaches **14:52.575180** with zero query-scope, render-pass query
+closure, queue-use or device-loss callbacks. This accepts that bounded query repair.
+
+Validation also observes descriptor-pool reset while command buffers are pending
+and depth/stencil feedback-layout mismatches. A subsequent GC prefix change
+prevents selection under a reader lock from being invalidated during lock upgrade.
+All **14 CPU checks pass**, compared with three baseline failures. Its Release
+build passes. JOIN153 completes the same fixture and remains running afterward;
+the final trace reaches **2:41:22.713699** without queue/query or device-loss entries,
+but two descriptor-reset callbacks and feedback/draw-layout errors remain. The
+GC repair does not fix that observed failure. Its final inspected screenshot is a
+black loading view, so the elapsed lifetime does not establish playable progress.
+All four native tests are exactly closed and restore original watch/title bytes,
+XInput and inactive controls. Full character/mission rendering remains open.
+
+The capture worker exits during JOIN152 after a status-lock timeout also breaks
+error reporting. Status now preserves pending fields and retries without stopping
+the observer. All **73 capture tests pass**; the corrected live worker survives a
+six-second held status locks both idle and during recording, then resumes fresh
+telemetry. The earlier coverage gap is recorded honestly. JOIN153 subsequently has
+63 decoded/hash-verified native segments through 15:24:24 UTC before its recorder
+exits separately; later recording coverage is unproved. The observer remains alive
+and returns to idle after test cleanup. Previously delivered NAS packages remain
+immutable.

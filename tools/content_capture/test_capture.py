@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
@@ -13,6 +14,53 @@ from monitor import CheckpointEvidence, Detector, Monitor, Tail, ValidationError
 
 
 class PipelineTests(unittest.TestCase):
+    def test_status_lock_contention_defers_telemetry_and_retries_all_changes(self):
+        initial = self.capture.status(RECORDER_STATUS="IDLE")
+        status_path = self.capture.root / "machine-status.json"
+        original = status_path.read_bytes()
+        native_lock = lock
+        with native_lock(self.capture.root / "status.lock"):
+            with patch("capture.lock", side_effect=lambda path, timeout=0: native_lock(path, timeout=0)):
+                first = self.capture.status(RECORDER_STATUS="RECORDING", ACTIVE_RUN="owned-run")
+                second = self.capture.status(PROCESSING_ERROR="pending report")
+        self.assertTrue(first["STATUS_UPDATE_DEFERRED"] and second["STATUS_UPDATE_DEFERRED"])
+        self.assertEqual(first["updated_at"], initial["updated_at"])
+        self.assertEqual(first["RECORDER_STATUS"], "IDLE")
+        self.assertEqual(status_path.read_bytes(), original)
+        retried = self.capture.status(MONITOR_ERROR=None)
+        self.assertEqual(retried["RECORDER_STATUS"], "RECORDING")
+        self.assertEqual(retried["ACTIVE_RUN"], "owned-run")
+        self.assertEqual(retried["PROCESSING_ERROR"], "pending report")
+        self.assertFalse(retried["STATUS_UPDATE_DEFERRED"])
+        self.assertIsNone(retried["STATUS_UPDATE_ERROR"])
+
+    def test_concurrent_deferred_status_updates_keep_both_fields(self):
+        native_lock = lock
+        results = []
+        with native_lock(self.capture.root / "status.lock"):
+            with patch("capture.lock", side_effect=lambda path, timeout=0: native_lock(path, timeout=0)):
+                threads = [threading.Thread(target=lambda value=value: results.append(self.capture.status(**value)))
+                           for value in ({"RECORDER_STATUS": "RECORDING"}, {"NAS_CONNECTED": True})]
+                for worker in threads:
+                    worker.start()
+                for worker in threads:
+                    worker.join(timeout=3)
+                self.assertTrue(all(not worker.is_alive() for worker in threads))
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(result["STATUS_UPDATE_DEFERRED"] for result in results))
+        retried = self.capture.status()
+        self.assertEqual(retried["RECORDER_STATUS"], "RECORDING")
+        self.assertTrue(retried["NAS_CONNECTED"])
+
+    def test_status_io_failure_preserves_pending_fields_for_next_update(self):
+        initial = self.capture.status(RECORDER_STATUS="IDLE")
+        with patch("capture.atomic_json", side_effect=OSError(28, "full disk")):
+            deferred = self.capture.status(RECORDER_STATUS="RECORDING")
+        self.assertTrue(deferred["STATUS_UPDATE_DEFERRED"])
+        self.assertEqual(deferred["STATUS_UPDATE_ERROR"], 28)
+        self.assertEqual(deferred["updated_at"], initial["updated_at"])
+        self.assertEqual(self.capture.status()["RECORDER_STATUS"], "RECORDING")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

@@ -146,7 +146,7 @@ preserve the previous file and remain visible. Successful processing clears its 
 error. The five recovery fixtures include a real Windows reader holding the destination
 open and 30 concurrent status updates from independent capture instances.
 
-The current suite has **70 tests**, including callback continuations, native exception
+The current suite has **73 tests**, including callback continuations, native exception
 classification, durable observation-to-capture handoff and interrupted-fragment recovery.
 The [GPU checkpoint detector](../../notes/rpcs3-gpu-checkpoints.md) also preserves
 normalized stage/operation hints from a bounded native device-loss report. Raw marker,
@@ -182,3 +182,15 @@ tail coverage remains excluded. Retried copies of one native segment are selecte
 preferring verified recovery provenance. Actual/truncated coverage stays explicit.
 The [native acceptance](../../notes/rpcs3-recording-fragments.md) verifies interruption,
 recovery and automatic NAS delivery separately from synthetic tests and gameplay.
+
+Status-file contention is recoverable telemetry. Updates from the observer and its
+transfer thread serialize within one Capture instance, then take the process lock.
+If that lock or local status I/O is unavailable, the previous snapshot keeps its
+original timestamp, the returned status indicates `STATUS_UPDATE_DEFERRED`, and
+pending fields merge into the next successful write. Package/retry state remains
+durable and separate. A status-reporting failure cannot terminate the observer's
+retry loop. Three tests cover real lock contention, concurrent deferred fields and
+failed status I/O. The live worker survives six-second held status locks both idle
+and during native recording, then resumes fresh status updates. Its recorder also
+survives the recording contention test. This repairs an observed worker exit;
+it does not claim uninterrupted coverage for the earlier capture gap.

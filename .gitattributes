@@ -10,3 +10,6 @@ patches/rpcs3-descriptor-pool-retirement.patch -text whitespace=-blank-at-eol,-s
 patches/rpcs3-recording-fragments.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-gpu-checkpoints.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-gpu-readback-context.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-queue-synchronization.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-query-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-gc-scope.patch -text whitespace=-blank-at-eol,-space-before-tab
