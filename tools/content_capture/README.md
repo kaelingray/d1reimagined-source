@@ -216,9 +216,18 @@ it does not claim uninterrupted coverage for the earlier capture gap.
 
 The native recorder appends timestamped JSON phases to its stderr log: start
 request, shortcut result, source identification/missing deadline, stop request,
-source finalization/timeout and any unidentified-source cleanup toggle. These
-diagnostics preserve boolean input results and do not restart unknown recording
-state automatically. A source file appearing later is not a decoded segment
+source finalization/timeout and preserved unknown recording state. These
+diagnostics preserve boolean input results. The controller sends only one stop
+request per identified source, retains a timed-out source and waits for closure
+before starting another segment. It never sends a blind cleanup toggle.
+Each identified source has a durable `.pending` receipt; after the controller
+releases its exclusive lock, the worker can recover that receipt once a read
+handle proves the source is closed. Stop-request time and observed closure are
+separate facts. Available coverage is capped by inspected media duration.
+`pwsh -NoProfile -File tools/content_capture/Test-NativeRecorder.ps1` exercises
+the actual controller functions using a real writer lock. Its passing checks
+do not prove that the game window consumed a posted shortcut.
+A source file appearing later is not a decoded segment
 receipt. Failed runs keep their originals; missing coverage stays explicit until
 the actual source is verified and associated with the owned run.
 

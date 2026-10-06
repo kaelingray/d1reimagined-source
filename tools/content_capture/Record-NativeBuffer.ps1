@@ -23,6 +23,8 @@ New-Item -ItemType Directory -Path $Segments -Force | Out-Null
 $lock=[IO.FileStream]::new((Join-Path $Segments 'recorder.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 $recording=$false
 $active=$null
+$stopRequestedAt=$null
+$receipt=$null
 function Write-RecorderPhase([string]$Phase, [hashtable]$Details=@{}) {
     # stderr preserves boolean input results and survives append-only log handles.
     try {
@@ -34,13 +36,25 @@ function Stop-Requested { (Test-Path -LiteralPath $StopFile) -or (Test-Path -Lit
 function Send-RecordKey {
     & (Join-Path $repo 'scripts\Send-RpcsKey.ps1') -ProcessId $identity.id -ProcessIdentity $identity -Keys F11 -HoldMs 30 -GapMs 0 -IfWindowReady -InputDiagnostics
 }
-function Finish-Segment {
-    if (-not $script:recording) { return }
-    if (Get-D1OwnedProcess $identity) { Send-RecordKey | Out-Null }
-    Write-RecorderPhase 'stop-requested' @{ source=$script:active }
-    $script:recording=$false
-    $end=[DateTimeOffset]::UtcNow.ToString('o')
-    $deadline=(Get-Date).AddSeconds(15)
+function Save-PendingSegment {
+    $value=@{ file=$script:active; recorded_at=$script:began; run=$manifest.name; source='RPCS3 native game/audio'; ownership=$identity; stop_requested_at=$script:stopRequestedAt }
+    $temp=$script:receipt+'.tmp'
+    [IO.File]::WriteAllText($temp,($value | ConvertTo-Json -Depth 5))
+    Move-Item -LiteralPath $temp -Destination ($script:receipt+'.pending') -Force
+}
+function Finish-Segment([int]$WaitSeconds=15) {
+    if (-not $script:recording) { return $true }
+    if (-not $script:active) { return $false }
+    if (-not $script:stopRequestedAt) {
+        # Posting a shortcut does not prove the GUI consumed it. Never toggle
+        # again until the identified source is demonstrably closed.
+        $script:stopRequestedAt=[DateTimeOffset]::UtcNow.ToString('o')
+        Save-PendingSegment
+        Write-RecorderPhase 'stop-requested' @{ source=$script:active }
+        if (Get-D1OwnedProcess $identity) { Send-RecordKey | Out-Null }
+    }
+    $size=0
+    $deadline=(Get-Date).AddSeconds($WaitSeconds)
     do {
         try {
             $stream=[IO.FileStream]::new($script:active,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
@@ -48,19 +62,25 @@ function Finish-Segment {
             $stream.Dispose()
             if ($size -gt 0) { break }
         } catch { }
-        Start-Sleep -Milliseconds 200
+        if ((Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
     } until ((Get-Date) -ge $deadline)
     if ($size -gt 0) {
-        $name=[Guid]::NewGuid().ToString('N')+'.json'
-        $value=@{ file=$script:active; recorded_at=$script:began; ended_at=$end; run=$manifest.name; source='RPCS3 native game/audio'; ownership=$identity }
-        $temp=Join-Path $Segments ($name+'.tmp')
+        $end=[DateTimeOffset]::UtcNow.ToString('o')
+        $value=@{ file=$script:active; recorded_at=$script:began; ended_at=$end; closure_observed_at=$end; stop_requested_at=$script:stopRequestedAt; run=$manifest.name; source='RPCS3 native game/audio'; ownership=$identity }
+        $temp=$script:receipt+'.tmp'
         [IO.File]::WriteAllText($temp,($value | ConvertTo-Json -Depth 5))
-        Move-Item -LiteralPath $temp -Destination (Join-Path $Segments $name)
-        Write-RecorderPhase 'source-finalized' @{ source=$script:active; size=$size; receipt=$name }
+        Move-Item -LiteralPath $temp -Destination ($script:receipt+'.json') -Force
+        Remove-Item -LiteralPath ($script:receipt+'.pending')
+        Write-RecorderPhase 'source-finalized' @{ source=$script:active; size=$size; receipt=(Split-Path $script:receipt -Leaf) }
+        $script:recording=$false
+        $script:active=$null
+        $script:stopRequestedAt=$null
+        $script:receipt=$null
+        return $true
     } else {
         Write-RecorderPhase 'source-finalization-timeout' @{ source=$script:active }
     }
-    $script:active=$null
+    return $false
 }
 try {
     # Refuse to toggle an existing active recording owned by another controller.
@@ -69,7 +89,7 @@ try {
         try { $s=[IO.FileStream]::new($latest.FullName,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); $s.Dispose() }
         catch { throw 'A native recording is already active; refusing to toggle it' }
     }
-    while (-not (Stop-Requested)) {
+    :segments while (-not (Stop-Requested)) {
         $before=@(Get-ChildItem -LiteralPath $recordings -Filter '*.mp4' -ErrorAction SilentlyContinue | ForEach-Object FullName)
         $script:began=[DateTimeOffset]::UtcNow.ToString('o')
         Write-RecorderPhase 'start-requested' @{ existing_sources=$before.Count }
@@ -88,16 +108,20 @@ try {
             elapsed_seconds=([DateTimeOffset]::UtcNow-[DateTimeOffset]::Parse($script:began)).TotalSeconds
         }
         if (-not $script:active) { throw 'Native recorder did not create one identifiable new source file' }
+        $script:receipt=Join-Path $Segments ([Guid]::NewGuid().ToString('N'))
+        Save-PendingSegment
         $until=(Get-Date).AddSeconds($SegmentSeconds)
         while ((Get-Date) -lt $until -and -not (Stop-Requested)) { Start-Sleep -Milliseconds 250 }
-        Finish-Segment
+        while (-not (Finish-Segment)) {
+            if (Stop-Requested) { break segments }
+            Start-Sleep -Milliseconds 250
+        }
     }
 } finally {
     try {
-        if ($active) { Finish-Segment }
-        elseif ($recording -and (Get-D1OwnedProcess $identity)) {
-            Write-RecorderPhase 'unidentified-source-cleanup-toggle'
-            Send-RecordKey | Out-Null
+        if ($active) { Finish-Segment -WaitSeconds 0 | Out-Null }
+        elseif ($recording) {
+            Write-RecorderPhase 'unidentified-source-preserved' @{ reason='Recording state is unknown; no cleanup toggle is safe' }
         }
     }
     finally { $lock.Dispose() }

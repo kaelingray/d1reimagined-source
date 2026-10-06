@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 
-from capture import Capture, REPO, atomic_json, check_text, closed_source_hashes, digest, git_context, lock, now
+from capture import Capture, REPO, atomic_json, check_text, closed_source, closed_source_hashes, digest, git_context, lock, now
 
 sys.path.insert(0, str(REPO / "scripts"))
 from rpcs3_shared_log import open_shared_read
@@ -365,8 +365,35 @@ class Monitor:
         else:
             self.capture.status(RECORDER_STATUS="RECORDING", RECORDER_EXIT=None, ACTIVE_RUN=m["name"])
 
+    def recover_pending_segments(self):
+        # The PowerShell controller holds this file with FileShare.None for its
+        # whole lifetime. Recover only after it releases ownership, and only
+        # while a read handle denies concurrent source writers/deletion.
+        try:
+            with lock(self.segments / "recorder.lock"):
+                for pending in sorted(self.segments.glob("*.pending")):
+                    receipt = pending.with_suffix(".json")
+                    if receipt.exists():
+                        pending.unlink()  # publication survived a controller interruption
+                        continue
+                    info = json.loads(pending.read_text())
+                    try:
+                        with closed_source(Path(info["file"])) as source:
+                            if os.fstat(source.fileno()).st_size == 0:
+                                continue
+                            closed_at = now()
+                            atomic_json(receipt, {**info, "ended_at": closed_at,
+                                                  "closure_observed_at": closed_at,
+                                                  "controller_recovery": True})
+                        pending.unlink()
+                    except (OSError, ValueError):
+                        continue  # still writing/unavailable; retain the durable pending source
+        except OSError:
+            pass  # the live controller owns the lock; its state must not be disturbed
+
     def process(self):
         # Called on one low-priority worker: validation and SMB copies never block game monitoring.
+        self.recover_pending_segments()
         for receipt in sorted(self.segments.glob("*.json")):
             info = json.loads(receipt.read_text())
             done = receipt.with_suffix(".indexed")
@@ -392,13 +419,17 @@ class Monitor:
                     buffer_path.with_suffix(".json").unlink(missing_ok=True)
                     buffer_path.unlink(missing_ok=True)
                     raise
-                if recovery:
+                if recovery or info.get("closure_observed_at"):
                     # Termination time includes the discarded tail, which must not
                     # inflate the available post-event footage window.
                     decoded_end = datetime.fromisoformat(info["recorded_at"]) + timedelta(seconds=buffer_info["duration_seconds"])
                     buffer_info["source_ended_at"] = info["ended_at"]
                     buffer_info["ended_at"] = min(decoded_end, datetime.fromisoformat(info["ended_at"])).isoformat()
-                    recovery.update(proof)
+                    if recovery:
+                        recovery.update(proof)
+                for field in ("stop_requested_at", "closure_observed_at", "controller_recovery"):
+                    if field in info:
+                        buffer_info[field] = info[field]
                 atomic_json(self.capture.buffer / Path(buffer_info["file"]).with_suffix(".json"), buffer_info)
                 feature = "native-recording-recovery" if recovery else "native-buffer-validation"
                 summary = ("Interrupted RPCS3 recording recovered through complete fragments, fully decoded and verified against its original prefix; the unfinished original is preserved."

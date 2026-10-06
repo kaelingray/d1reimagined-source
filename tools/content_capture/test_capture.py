@@ -187,6 +187,67 @@ class PipelineTests(unittest.TestCase):
                              "ended_at": "2026-10-05T16:20:40+00:00"})
         return receipt
 
+    def test_pending_source_waits_for_controller_lock_release(self):
+        monitor = Monitor(self.config)
+        try:
+            pending = monitor.segments / "pending.pending"
+            atomic_json(pending, {"file": str(self.video)})
+            with lock(monitor.segments / "recorder.lock"):
+                monitor.recover_pending_segments()
+            self.assertTrue(pending.exists())
+            self.assertFalse(pending.with_suffix(".json").exists())
+            self.assertEqual(self.video.read_bytes(), b"a closed source fixture")
+        finally:
+            monitor.pool.shutdown()
+
+    def test_pending_source_waits_for_writer_without_decoding(self):
+        monitor = Monitor(self.config)
+        try:
+            pending = monitor.segments / "pending.pending"
+            atomic_json(pending, {"file": str(self.video)})
+            with patch("monitor.closed_source", side_effect=OSError("still writing")), patch("capture.validate_video") as decode:
+                monitor.process()
+                decode.assert_not_called()
+            self.assertTrue(pending.exists())
+            self.assertFalse(pending.with_suffix(".json").exists())
+        finally:
+            monitor.pool.shutdown()
+
+    def test_pending_source_recovery_uses_duration_instead_of_stop_request(self):
+        monitor = Monitor(self.config)
+        try:
+            pending = monitor.segments / "pending.pending"
+            atomic_json(pending, {"file": str(self.video), "run": "owned-run",
+                                 "recorded_at": "2026-10-05T16:20:00+00:00",
+                                 "stop_requested_at": "2026-10-05T16:20:10+00:00"})
+            with patch("monitor.now", return_value="2026-10-05T16:25:00+00:00"):
+                monitor.process()
+            self.assertFalse(pending.exists())
+            receipt = pending.with_suffix(".json")
+            self.assertTrue(receipt.with_suffix(".indexed").exists())
+            entry = json.loads(next(monitor.capture.buffer.glob("*.json")).read_text())
+            self.assertEqual(entry["ended_at"], "2026-10-05T16:20:30+00:00")
+            self.assertEqual(entry["stop_requested_at"], "2026-10-05T16:20:10+00:00")
+            self.assertEqual(entry["closure_observed_at"], "2026-10-05T16:25:00+00:00")
+            self.assertTrue(entry["controller_recovery"])
+            monitor.process()
+            self.assertEqual(len(list(monitor.capture.buffer.glob("*.mp4"))), 1)
+        finally:
+            monitor.pool.shutdown()
+
+    def test_pending_receipt_publication_survives_interruption(self):
+        monitor = Monitor(self.config)
+        try:
+            receipt = self.native_receipt(monitor)
+            pending = receipt.with_suffix(".pending")
+            atomic_json(pending, {"file": str(self.video)})
+            original = receipt.read_bytes()
+            monitor.recover_pending_segments()
+            self.assertFalse(pending.exists())
+            self.assertEqual(receipt.read_bytes(), original)
+        finally:
+            monitor.pool.shutdown()
+
     def test_interrupted_segment_is_verified_indexed_and_original_retained(self):
         prefix = box(b"ftyp") + box(b"moov") + box(b"moof") + box(b"mdat", b"complete")
         original = prefix + box(b"moof") + b"unfinished"
