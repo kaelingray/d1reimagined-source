@@ -51,7 +51,12 @@ using u32 = std::uint32_t; using u64 = std::uint64_t; using usz = std::size_t;
 using VkDescriptorSet = u64;
 template<class T> using atomic_t = std::atomic<T>;
 constexpr u32 umax = std::numeric_limits<u32>::max();
-namespace d1diag { unsigned g_tables_released = 0; bool descriptor_logging() { return false; } }
+namespace d1diag {
+unsigned g_tables_released = 0;
+enum class descriptor_event_kind { reset, retire };
+void descriptor_record(descriptor_event_kind, std::initializer_list<u64>) {}
+bool descriptor_logging() { return false; }
+}
 struct diagnostic_logger { template<class... T> void notice(const char*, T...) {} } d1_log;
 namespace vk {
 u64 current_eid = 0, completed_eid = 0;

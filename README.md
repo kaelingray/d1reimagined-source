@@ -37,8 +37,16 @@ combined graphics or mission acceptance. Read the
 
 The separate [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md)
 passes 20 actual-source CPU checks against five failures in the original allocator;
-all 23 retirement checks pass. Its Release build is deployed for JOIN160, whose
-native result is pending. Its connection to the native fault remains unproved.
+all 23 retirement checks pass. Its Release build is deployed for JOIN160, which
+reproduces one descriptor-reset error through **12:37.486264** with tracing off.
+Its inspected captures show loading/dialogs and a Rhinoceros reconnect warning;
+character/world acceptance is not established. The cache increment has not
+resolved the observed native fault.
+
+A [bounded memory trace](notes/rpcs3-descriptor-lifetime-ring.md) now retains the
+lead-up to descriptor-reset callbacks without continuous trace output. Its 20
+concurrency checks, 10 decoder tests and Release build pass. JOIN161 is testing
+it with core validation; the native result is pending.
 
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe

@@ -309,5 +309,17 @@ reach character/inventory/world views. The sampled Titan and final world shading
 look normal, but initial loading, level/light zero and weapon spinners remain.
 The trace covers the earlier failure window and reaches its cap without a failure.
 That does not establish repair of intermittent faults or sustained combined
-fidelity. The allocator increment is built and deployed for a trace-off JOIN160;
-its native result is pending. Exact details are in the October 7 checkpoint.
+fidelity. JOIN160 tests the deployed allocator increment with descriptor tracing
+off and verified core validation. It completes its 500-second fixture and eleven
+phases, reaching **12:37.486264** with one reset-00313 callback at **3:17.903782**,
+zero queue/query callbacks and zero device loss. Bounded conformance fails;
+the cache increment has not resolved the native fault. Inspected screenshots and
+sampled native footage show loading, dialogs and a Rhinoceros reconnect warning,
+so character/world acceptance is not established. Exact details are in the
+October 7 checkpoint.
+
+The next comparison uses a [bounded memory trace](rpcs3-descriptor-lifetime-ring.md)
+that freezes on a real descriptor-reset callback. It has 20 passing ring checks,
+10 passing decoder tests, 20 allocation and 23 retirement regression checks, and
+a passing Release build. JOIN161 native validation and causal correlation remain
+pending. It changes diagnostics, not Vulkan resource lifetime or visual acceptance.

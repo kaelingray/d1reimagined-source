@@ -56,7 +56,11 @@ using shared_mutex=std::mutex; using reader_lock=std::lock_guard<std::mutex>;
 void ensure(bool ok) { if (!ok) throw std::runtime_error("assertion"); }
 #define CHECK_RESULT(r) ensure((r)==VK_SUCCESS)
 struct logger { template<class... T> void notice(const char*,T...) {} template<class... T> void warning(const char*,T...) {} } d1_log,rsx_log;
-namespace d1diag { bool descriptor_logging() { return false; } }
+namespace d1diag {
+enum class descriptor_event_kind { reset, retire };
+void descriptor_record(descriptor_event_kind, std::initializer_list<u64>) {}
+bool descriptor_logging() { return false; }
+}
 namespace fmt { void throw_exception(const char*) { throw std::runtime_error("unreachable"); } }
 struct VkDescriptorPoolSize { u32 type=0,descriptorCount=0; };
 struct VkDescriptorPoolCreateInfo { u32 sType=0; const void* pNext=nullptr; u32 flags=0,maxSets=0,poolSizeCount=0; const VkDescriptorPoolSize* pPoolSizes=nullptr; };

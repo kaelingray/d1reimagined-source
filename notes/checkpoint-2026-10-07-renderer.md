@@ -43,9 +43,51 @@ The full incremental MSVC x64 Release build passes. The scoped patch reproduces
 the exact changed source in an isolated fixture. Executable SHA-256:
 `4706856a73901b1555d03af7a4f1f854b4a2950fbded89d9f51b140ec71f94a5`.
 It is deployed after the previous native client closes, with a byte-verified backup
-of `55efc907`. Original title/watch bytes remain intact. JOIN160 is testing this
-increment with core validation, the depth candidate enabled, descriptor tracing
-off, longer inputs and two repeated character captures. Its native result is pending.
+of `55efc907`. Original title/watch bytes remain intact. JOIN160 tests this
+increment with core validation, the depth candidate enabled and descriptor tracing
+off. Its completed result is recorded below.
+
+## JOIN160: native failure reproduced on the cache increment
+
+The full 500-second post-match fixture and eleven input/capture phases complete.
+The core layer is verified live and immediately before shutdown. The final native
+log reaches **12:37.486264**, with one
+`VUID-vkResetDescriptorPool-descriptorPool-00313` callback at **3:17.903782**.
+Queue-use, query-scope and device-loss counts remain zero. **Bounded conformance
+fails.** The cache repair therefore has not resolved the observed native fault.
+Descriptor tracing is off, so this run cannot correlate the failing command
+buffer with its earlier submission or completion.
+
+The game loads the configured keyboard pad, but posted inputs do not establish
+consumed actions. Inspected native screenshots and sampled footage show loading,
+an urgent-message dialog, contacting-server text and a **Rhinoceros reconnect
+warning while the owned services are still running**. They do not establish
+character, inventory, outdoor traversal or mission acceptance. A matching
+`activity:in_world` label in memory does not override those visible results.
+Original title/watch bytes, XInput and inactive controls are restored, all owned
+processes close and shared RPCN is preserved without cleanup errors.
+
+All **22 indexed originals** remain present with SHA-256 matching their indexing
+receipts after rolling-buffer expiration. One earlier startup segment remains
+unindexed with a full-decode/no-usable-duration failure; its original is preserved.
+The last two untouched segments fully decode: **30.09 and 31.21 seconds**,
+**1280×720**, game audio, rounded average/base rates **26.95/30 and 22.89/30 fps**.
+These are media properties, not measured gameplay performance. Private sampled
+frames contain native path overlays; no clean release or continuous fidelity
+claim is made.
+
+## Next native comparison: JOIN161
+
+The [bounded descriptor fault trace](rpcs3-descriptor-lifetime-ring.md) retains
+recent lifetime records in memory and dumps only when a descriptor-reset callback
+occurs. Its 20 concurrent-ring checks and 10 decoder tests pass; allocation and
+retirement regression audits remain 20/20 and 23/23. The Release build passes and
+is deployed at idle with a verified backup. Executable SHA-256:
+`ef67aa5cf3c015de130cef958f1abfe345bd92a74964e2c20515e35e238f7645`.
+JOIN161 uses the same 500-second Titan/world-113 fixture, the guarded depth
+candidate and core validation, with text tracing off and the ring armed. Its
+result is pending. This instrumentation is not a renderer repair or a passing
+graphics claim.
 
 ## JOIN159: unobstructed inspection on the preceding build
 
