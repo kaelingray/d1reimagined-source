@@ -57,11 +57,19 @@ route sends no walking input and the activity host reconnects. A
 context lookup and records the pending transition machines before timeout.
 Its five focused checks pass; this is diagnostic progress, not a mission fix.
 A [filtered native entry trace](notes/ppu-watch-filters.md) now preserves its
-budget for the relevant state message, with 44 actual-source CPU checks passing.
+budget for the relevant state message, with 52 actual-source CPU checks passing,
+including caller selection through the link register.
 JOIN172 verifies the supported filters in the native client: calls reach the
 serializer, but the original connection receives no state message after the
 teleport request. The clock advances and the client reconnects without activating
 112. Mission control and combined graphics remain unaccepted.
+JOIN173 verifies the caller filters and actual shared return helpers in the native
+client. Readiness checks pass and both outer layers return success for the
+transition message, while the original host connection receives none after the
+request. The direct branch reports success without testing later queue consumption.
+JOIN174 then matches successful allocation with the transport consumer for the
+same serialized transition record, while host receipt still fails. BAP forwarding
+is the next check. No protocol or graphics repair is claimed by these diagnostics.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement
@@ -180,6 +188,8 @@ PS3 01.00 reached local sign-in, orbit and a spawned Guardian in the first missi
 its memory/lighting work informed the 01.24 port. These earlier build-specific results
 are preserved in dated notes and are not current 01.24 acceptance.
 
-The obsolete Xbox 360 emulator route, tools and research have been removed.
+The obsolete Xbox 360 emulator route and tools are retired. One historical
+research checkout remains privately pending removal; it is not part of the active
+PS3 source or runtime.
 The supported development route is RPCS3 on PS3 01.24. Earlier PS3 results remain
 in the [test history](notes/test-log.md).

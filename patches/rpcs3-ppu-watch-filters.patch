@@ -56,7 +56,7 @@
 +		if (!std::all_of(w.filters.begin(), w.filters.end(), [&](const auto& filter)
 +		{
 +			return d1diag::matches_ppu_watch_filter(filter,
-+				[&](u32 reg) { return reg == 1 ? r1 : ppu.gpr[reg]; },
++				[&](u32 reg) { return reg == d1diag::ppu_filter_lr ? ppu.lr : reg == 1 ? r1 : ppu.gpr[reg]; },
 +				[](u32 ptr, u32 width, u64& value)
 +				{
 +					if (!vm::check_addr(ptr, vm::page_readable, width)) return false;
@@ -79,7 +79,7 @@
  template <typename T>
 --- /dev/null
 +++ b/rpcs3/Emu/RSX/Common/ppu_watch_filter.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,81 @@
 +#pragma once
 +#include <charconv>
 +#include <cstdint>
@@ -89,6 +89,7 @@
 +
 +namespace d1diag
 +{
++	inline constexpr std::uint32_t ppu_filter_lr = 32; // internal selector; r32 is not a register
 +	// A register equality, or a big-endian guest-memory equality. A zero width selects
 +	// the register itself. Filters are read-only and must run before deduplication/budget.
 +	struct ppu_watch_filter
@@ -110,7 +111,7 @@
 +		return result.ec == std::errc{} && result.ptr == text.data() + text.size();
 +	}
 +
-+	// if=r5==0x15 or if=m6+1:4==0x15; multiple predicates on a watch are ANDed.
++	// if=r5==0x15, if=lr==0x47a208 or if=m6+1:4==0x15; predicates are ANDed in order.
 +	inline bool parse_ppu_watch_filter(std::string_view token, ppu_watch_filter& out)
 +	{
 +		if (!token.starts_with("if=")) return false;
@@ -120,6 +121,12 @@
 +		auto location = token.substr(0, equal);
 +		ppu_watch_filter parsed;
 +		if (!ppu_filter_number(token.substr(equal + 2), parsed.value) || location.empty()) return false;
++		if (location == "lr")
++		{
++			parsed.reg = ppu_filter_lr;
++			out = parsed;
++			return true;
++		}
 +		const bool memory = location.front() == 'm';
 +		if (!memory && location.front() != 'r') return false;
 +		location.remove_prefix(1);

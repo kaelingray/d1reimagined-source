@@ -40,6 +40,12 @@ wrapping guest ranges do not match. Rejected calls leave the watch armed, do
 not use its hit budget and do not populate unique keys. Existing unfiltered,
 unique-dump/LR and one-hit coverage behavior remains available.
 
+`if=lr==VALUE` selects the full 64-bit link register at the traced entry. Put it
+before memory predicates on shared helpers: a different caller then skips guest
+reads as well as hit counting. `lr` cannot take an offset or memory width, and
+the internal selector does not make `r32` a valid register. This adds no argument
+to the LLVM callback, so existing compiled objects retain the same callback ABI.
+
 ## Verification — 7 October 2026
 
 The actual private watch declaration, parser and callback are extracted into a
@@ -51,10 +57,12 @@ python scripts/rpcs3_ppu_watch_filter_audit.py --root <private-rpcs3-root> --out
 ```
 
 Compile the generated `ppu-watch-filter-audit.cpp` with a C++20 compiler and run
-it. MSVC `/std:c++20 /EHsc /W4 /O2` passes **44 checks**, including 100,000 rejected
+it. MSVC `/std:c++20 /EHsc /W4 /O2` passes **52 checks**, including 100,000 rejected
 routine calls, a later accepted target, unique-key/budget retention, invalid
 predicate rejection, big-endian unaligned reads, unreadable/wrapping ranges,
-live r1 and unchanged ordinary/coverage watches. The incremental patch applies
+live r1 and unchanged ordinary/coverage watches. Caller checks also cover
+100,000 mismatched LR calls without guest reads, an accepted caller, strict
+syntax and comparison above 32 bits. The incremental patch applies
 to saved pre-change files and reproduces all three modified files with normalized
 newlines.
 
@@ -64,3 +72,12 @@ require separate native evidence. In JOIN171 the target was copied into both
 engine/host last-sent records without a corresponding host-received message;
 neither a copied baseline nor the wrapper's unconditional success return proves
 delivery. See [the session timeline](session-transition-probe-0124.md).
+
+JOIN173 uses the caller predicates in the native `c5bc7f57` build, including on
+shared helpers. The readiness entries and actual return-helper entries emit
+filtered hits for initialized subtype21 headers. This confirms the tested native
+calling convention as well as the CPU checks. At shared return helpers, registers
+are observed **before** the saved guest registers are restored. Verify the exact
+caller and live register meanings in the current game build. Unique watches can
+suppress a repeated header/LR pair; the logged returns are sampled evidence, not
+an exhaustive account of every repeated call.

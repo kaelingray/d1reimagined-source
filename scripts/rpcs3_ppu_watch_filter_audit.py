@@ -76,7 +76,9 @@ int main() {
     check("memory offset and big-endian width",d1diag::parse_ppu_watch_filter("if=m6+1:4==21",filter) && filter.reg==6 && filter.offset==1 && filter.width==4 && filter.value==21);
     check("memory default offset",d1diag::parse_ppu_watch_filter("if=m1:8==0xffffffffffffffff",filter) && filter.offset==0 && filter.width==8);
     check("maximum memory offset",d1diag::parse_ppu_watch_filter("if=m31+0xffffffff:1==255",filter) && filter.offset==0xffffffff);
+    check("link register predicate",d1diag::parse_ppu_watch_filter("if=lr==0x47a208",filter) && filter.reg==d1diag::ppu_filter_lr && filter.width==0 && filter.value==0x47a208);
     for(auto token: {"if=r0==21","if=r2==21","if=m0:4==21","if=m2:4==21",
+                    "if=lr+1==21","if=lr:4==21","if=mlr:4==21",
                     "if=r32==21","if=r-1==21","if=r5==21tail","if=r5==+21","if=r5==0x",
                     "if=r5==18446744073709551616","if=r5+1==21","if=r5:4==21","if=m6==21",
                     "if=m6:3==21","if=m6:0==21","if=m6:1==256","if=m6+4294967296:4==21",
@@ -122,6 +124,15 @@ int main() {
     load("# coverage disabled\n"); // Coverage remains requested until the literal is absent.
     load("# off\n"); check("coverage reload clears coverage masks",!d1diag::g_ppu_mask[0x124>>2]);
     d1diag::g_ppu_mask[0x128>>2]=1; enter(ppu,0x128); check("orphan mask is disarmed",!d1diag::g_ppu_mask[0x128>>2]);
+    load("12c 2 if=lr==0x47a208 if=m6:4==21\n");
+    ppu.lr=0x48e930; ppu.gpr[6]=0x100; set_be(0x100,4,21); const auto before_lr=vm::checks;
+    for(unsigned i=0;i<100000;++i) enter(ppu,0x12c);
+    check("caller filter avoids guest reads for unrelated callers",vm::checks==before_lr && d1diag::g_ppu_watches[0].left==2 && d1diag::g_ppu_mask[0x12c>>2]==1);
+    ppu.lr=0x47a208; enter(ppu,0x12c);
+    check("selected caller reaches memory predicate and logs",d1diag::g_ppu_watches[0].left==1);
+    load("130 2 if=lr==0x10047a208\n");
+    enter(ppu,0x130); check("LR comparison does not truncate to32 bits",d1diag::g_ppu_watches[0].left==2);
+    ppu.lr=0x10047a208ull; enter(ppu,0x130); check("full64-bit caller value matches",d1diag::g_ppu_watches[0].left==1);
     std::cout<<checks<<" PPU watch checks, "<<failures<<" failed\n";
     return failures?1:0;
 }

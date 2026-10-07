@@ -476,3 +476,34 @@ closes at 18:20:11 UTC and restores its settings. Forty-four actual-source filte
 checks and the final parser-guard Release build pass; the full native join tests
 the earlier supported r5/r6 build. See the session note for timestamps, original
 media checks and the remaining acceptance requirements.
+
+JOIN173 verifies caller predicates and actual shared return helpers in the
+`c5bc7f57` native build; **52** actual-source CPU checks and its Release build pass.
+The unchanged fixture records1,052 session samples without lookup/recheck
+failures. The observed transition message passes readiness gates and both outer
+layers return1, but the original host receives no state message after requesting
+112. The direct branch reports success regardless of later queue consumption.
+The next check follows allocation and consumption of its serialized record,
+rather than accepting the outer return as delivery.
+
+The first attempt contains244 samples of loaded/inactive112; both attempts
+total432, with no idle112. The clock advances and the original connection resets
+before reconnecting. Owned cleanup finishes19:08:36UTC with original settings
+restored and no errors. Core validation is verified; the bounded log has no
+validation IDs/device loss/fatal entries. Eighteen indexed original recordings
+retain matching hashes, seven unindexed failures are preserved, and the last two
+fully decode39.24/20.82seconds. Inspected samples show loading/contacting-server
+UI. This remains diagnostic progress; combined graphics, mission control and
+whole-game acceptance are still open. See the session note for the exact call,
+clock, connection and media scope.
+
+JOIN174 follows the direct path in the same native build. For both requested
+transitions, the initialized47-byte record's allocation and consumer observations
+have identical24-byte prefixes; successful allocation and consumer entry are now
+verified. Host receipt still fails. Correct runtime selection maps kind17 to
+codec8 and packet factory3, narrowing the next trace to BAP header encoding and
+forwarding. Its1,017 session samples have no lookup/recheck failures, but no idle112
+or Guardian control. The exact owned stack closes19:40:51UTC with settings restored
+and no errors. Twenty indexed originals hash-match, three failed sources remain
+preserved, and the last two raw clips fully decode30.33/16.5seconds. Actual samples
+show loading. Native API cleanliness remains distinct from graphics/playability.

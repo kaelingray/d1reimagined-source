@@ -145,3 +145,119 @@ verified. No idle 112, traversal, combat, mission completion or graphics repair
 is accepted. A subsequent parser guard rejects unsupported live r0/r2 predicates;
 44 CPU checks and its Release build pass. That final guard build has not yet had
 a full native join; JOIN172's supported r5/r6 evidence belongs to `97518199`.
+
+## JOIN173 actual gates and return values — 7 October 2026
+
+The `c5bc7f57` diagnostic build adds `if=lr==VALUE` caller selection without
+changing the compiled callback ABI. Its actual-source CPU fixture passes **52
+checks** and the incremental Release build succeeds. The same Titan/highway
+fixture, transport protocol and rendering settings are retained. No RSX capture
+is armed. The automatic reader records **1,052 non-atomic samples,
+19:00:32–19:07:51 UTC**, with zero context lookup, pointer or descriptor/handle
+recheck failures.
+
+Seventeen subtype21 attempts reach the wrapper, queue, serializer and direct
+branch. Eight distinct header/caller combinations emit the configured unique
+gate/return watches. The queue rejection gate observes object+0x8c equal1 and
+readiness observes inner+0x10f8 equal8, including for the new 34-byte payload.
+Actual shared helper entries `0xd98a58` and `0xd98a54` emit **r3=1** before guest
+register restoration. The 34-byte header is observed at native elapsed
+**0:06:56.414828/415140**, with LR `0x47a208/0x476840` respectively. No selected
+asynchronous branch or failure cleanup hit occurs. Unique header/LR keys can
+suppress repeated calls, so these results must not be described as every return.
+
+This establishes that the earlier readiness/outer-return hypotheses do not
+explain this observed attempt. It still does not establish delivery:
+`0x479fa8` sets its success value unconditionally after calling direct enqueue
+`0x4797b8`. That routine can fail a later allocation or leave a serialized record
+for transport consumption. The kind17 mapper's eligibility method resolves to
+`0xa6220`, which returns constant1; its alternative-path method returns constant0.
+Neither should be blamed without stronger evidence.
+
+The original connection receives five initial subtype21 messages. At
+**19:01:57.209 UTC** the host requests112. No subsequent subtype21 reaches that
+connection before the live reset at **19:04:04.398 UTC**, and no group1 switch is
+published. Pending20 reaches2; pending18 remains0. There are **244** samples with
+112 loaded and inactive from **19:02:08.225–19:03:56.197 UTC** in this first
+attempt. The native clock advances from2487 at the first pending sample, with
+pending start2485, to6047 before the sampled session is removed at19:03:57.
+Session37/38 is not sampled, so the approximately120-second wall-clock interval
+is not alone proof of the exact teardown path. Reconnect initialization and its
+second19:06:39 request are separate from the original connection. Across both
+attempts, **432** samples show loaded/inactive112 and none shows idle active112.
+The reset at19:08:35.870 belongs to owned shutdown.
+
+An initial private analysis mistakenly treated the loaded-word array as a list
+of indices and reported zero loaded112 samples. It is a bitset; the corrected
+counts above use word3/bit16 and supersede that invalid result. Original timeline
+bytes are preserved.
+
+Inspected native images show outdoor cinematic behind the urgent dialog, then
+black/loading after an owned Cross. Final inspected recording samples show
+loading/contacting-server UI. Eighteen indexed untouched originals hash-match;
+seven unindexed failures remain preserved. The last two originals fully decode,
+**39.24/20.82 seconds**, 1280×720 with audio. Reported average/base rates
+29.97/30 and28.04/30 describe the recordings, not gameplay FPS.
+
+Cleanup at **19:08:36 UTC** closes the exact client, probe, services and proxy;
+original title/watch, XInput and inactive controls are restored with no errors.
+Core validation is verified before stop, and the bounded log contains zero
+validation IDs, device loss or fatal entries. Guardian control, combat, mission
+completion and combined character/equipment/world rendering remain unaccepted.
+
+Next: correlate the initialized serialized record with actual queue allocation
+and consumer entry, then with host receipt. Preserve real resurrection-to112
+flow; change transport only when the observed failure supports the change.
+
+## JOIN174 direct allocation and transport consumption — 7 October 2026
+
+The same `c5bc7f57` build and Titan/highway fixture replace outer-return watches
+with caller-filtered direct allocation and consumer watches. The automatic
+reader records **1,017 non-atomic samples, 19:32:45–19:40:04 UTC**, with no lookup
+or pointer/context recheck failures. Sixteen subtype21 attempts reach direct
+enqueue, its record allocator and the later mapper hook after successful body
+allocation. No selected serializer-failure cleanup hit occurs.
+
+For each of two requested transitions, the 34-byte payload becomes a **47-byte
+serialized record**. The allocator-side hook and transport-side mapper entry
+observe an identical initialized 24-byte record prefix: sequence, channel17,
+serialized-buffer pointer/length and auxiliary pointer/length. The first matched
+pair occurs at native elapsed **0:06:10.710615/711634**; the second at
+**0:11:05.481820/482848**. These actual entries establish successful allocation
+and arrival at the consumer for these records. They do not prove a completed
+packet header, forwarding to the socket or host receipt.
+
+The consumer caller is `0x47a6d4`, entered from `0x8c5bdc`. Runtime tables and
+actual instructions show that **kind17 selects codec index8**, at vtable
+`0x13e9f78`, rather than index17. Its serializer is `0x47837c`; packet descriptor
+selection returns3. The earlier private codec17 lookup was the wrong selection
+and must not support this path's diagnosis. The actual packet factory3 resolves
+header encoding to `0x5b2610 -> 0x8c8220`, reached after consumer output by
+`0x8c5bdc`. Next: trace that encoder's result and the forwarding queue before
+changing the supported protocol. A late non-atomic snapshot shows both the direct
+queue and inner forwarding queue empty; it does not identify the earlier outcome.
+
+The original connection receives four initial subtype21 messages, then none
+after its **19:34:45.825 UTC** request. It resets at **19:36:49.242 UTC** and
+reconnect initialization belongs to a different connection. The first attempt
+has **273** loaded/inactive112 samples from19:34:49.572 to19:36:46.018. Across both
+attempts there are326; no idle112 is sampled. Pending20 remains2 during the failed
+transition, pending18 stays0, and session37/38 is not sampled. No group1 switch,
+Guardian movement, combat or completed mission is accepted.
+
+The inspected19:34:37 native image shows the urgent dialog over outdoor scenery;
+19:35:04 shows black/loading after a Cross. An invocation mistake runs the input
+helper's default150ms Cross before an attempted function call fails: it is a
+script. Only this owned RPCS3 client is live at the surrounding checks, but no
+400ms press or helper-level identity validation is claimed for that invocation.
+No walking input is sent. Subsequent calls must invoke the script with explicit
+PID and creation-time/executable identity.
+
+Twenty indexed originals hash-match and three unindexed failures remain
+preserved. The last two originals fully decode **30.33/16.50 seconds**, 1280×720
+with audio; reported average/base24.58/30 and19.07/30 are recording properties.
+Inspected samples show loading UI, not controlled gameplay. Cleanup finishes
+**19:40:51 UTC**, exact client/services/proxy/probe all closed, original title/watch
+and XInput restored, controls inactive, errors empty. Core validation is verified
+before stop and the bounded log has zero validation IDs/device loss/fatal entries.
+Combined character/equipment/outdoor/mission rendering remains unaccepted.
