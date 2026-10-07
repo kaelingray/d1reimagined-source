@@ -45,7 +45,11 @@ the final local colour target. Neither changes live-game shading or establishes
 character/world/mission acceptance. A shorter follow-up exposes a launcher bug:
 cancelling the unfinished sign-in observer closes its kept stack. The join now
 requests a successful handoff after the user-profile reply and verifies observer
-completion before reporting success. Native verification of this runner fix is pending.
+completion before reporting success. JOIN168 verifies that handoff with the exact
+client still alive after its shorter 60-second interval. Cross dismisses the urgent
+message and an inspected frame shows unobstructed outdoor scenery. A subsequent
+native capture saves successfully, but its replay shows loading UI; matching
+outdoor-frame capture/replay remains unverified.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement

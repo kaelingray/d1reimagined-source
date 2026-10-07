@@ -405,3 +405,40 @@ failure retains its original. The last two raw clips fully decode, **33.3 and
 and 29.73/30 fps**, not gameplay measurements. Three private QA samples show
 loading. No original is repaired or edited, and no capture or graphics success
 is inferred from them.
+
+## JOIN168: native observer handoff verified, capture scope differs
+
+The repaired observer returns after one logged user-profile reply at
+**14:12:53 UTC**, recording **completed=true**, **keptStack=true** and
+**returnedAfterUserProfileReply=true**. The exact client remains alive with
+core validation loaded at the capture checkpoint after the **60-second**
+sampling interval. This verifies the short-join ownership repair; it is not
+a repeat of the longer 500/600-second renderer comparisons.
+
+The inspected final baseline image shows outdoor cinematic scenery behind
+the urgent maintenance message. Cross dismisses it at **14:15:35 UTC**;
+the next image shows loading, followed by unobstructed outdoor scenery
+with rusted cars, trees and distant structures at **14:16:14 UTC**.
+No traversal, character/equipment change or completed mission is demonstrated.
+
+An explicitly armed native capture succeeds at **14:16:39 UTC**, saves
+**2,524,052 bytes** and pauses as designed. Its gzip decode and serialized
+resource-prefix checks pass: one tile state, 246 memory mappings, 197 data
+blocks, one display state and 11,812 commands. The register tail is initially
+left opaque; the subsequent native parser reaches rendered replay output.
+
+Both actually inspected replay images show loading UI, rather than the
+earlier outdoor screenshot. The requested next frame can differ from the
+inspected reference. Neither matching outdoor replay nor reproduction of
+the black/green fault is accepted, and this difference does not by itself
+identify a replay defect. Core validation is verified in both native runs;
+their bounded logs contain no validation IDs or device loss. Existing texture
+alias warnings remain observations, not an established cause.
+
+The live stack closes at **14:16:44 UTC**, preserving the original title/watch,
+XInput, inactive controls and shared RPCN. The owned replay closes at
+**14:18:17 UTC** and restores the original global configuration. Both cleanup
+receipts have no errors. Native captures remain private; the new recording
+clips have not yet received final full-decode/visual inspection. Next: align
+the actual captured scene with a fresh reference before evaluating an outdoor
+control/fault pair, while retaining combined character/world/mission acceptance.
