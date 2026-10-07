@@ -17,3 +17,5 @@ patches/rpcs3-fence-completion.patch -text whitespace=-blank-at-eol,-space-befor
 patches/rpcs3-descriptor-timeline.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-attachment-layout.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-native-rsx-capture-marker.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-native-rsx-replay-context.patch -text whitespace=-blank-at-eol,-space-before-tab
+patches/rpcs3-native-rsx-replay-display.patch -text whitespace=-blank-at-eol,-space-before-tab

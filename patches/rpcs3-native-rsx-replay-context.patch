@@ -1,0 +1,15 @@
+diff --git a/rpcs3/Emu/System.cpp b/rpcs3/Emu/System.cpp
+index dba798107..85f7b8fc8 100644
+--- a/rpcs3/Emu/System.cpp
++++ b/rpcs3/Emu/System.cpp
+@@ -933,7 +933,9 @@ bool Emulator::BootRsxCapture(const std::string& path)
+ 	g_cfg.video.disable_on_disk_shader_cache.set(true);
+ 
+ 	vm::init();
+-	vm::reserve_map(vm::main, 0, 0x1FFF0000, vm::page_64k_size);
++	// The replay context is allocated rather than loaded from an ELF. Exclude
++	// address zero, which vm::alloc returns as its failure sentinel.
++	vm::reserve_map(vm::main, 0x00010000, 0x1FFF0000, vm::page_size_64k);
+ 	g_fxo->init(false);
+ 
+ 	// Initialize progress dialog

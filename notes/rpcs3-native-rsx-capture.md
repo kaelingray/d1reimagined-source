@@ -34,5 +34,61 @@ private renderer modifications are excluded. Patch SHA-256:
 The x64 Release verification exits **0**; warnings are retained privately.
 Executable SHA-256:
 `714e432f39969b3d19cd585e40963e8ee8670208d9bc7ea853e4e93324ebba6b`.
-**Native capture and replay: NOT RUN.** This is diagnostic work, with no new
-graphics repair or combined character/world acceptance claimed.
+JOIN165 completes its baseline and visual phases, but the bounded diagnostic
+checkpoint expires before the marker is armed. **Native capture and replay:
+NOT RUN in JOIN165.** JOIN166 saves one native capture after its longer inspected
+checkpoint. This captures the inactivity dialog, not the outdoor fault; no new
+live-game graphics repair or combined character/world acceptance is claimed.
+
+Local RPCS3 source also provides `--no-gui --rsx-capture <private-capture-path>`
+for replay. `BootRsxCapture` loads the compressed file and validates its native
+version and host endianness before starting the replay thread. It clears the
+game title and loads the global configuration. The ordinary CLI game's
+`--config` branch does not apply to this capture branch: explicitly verify the
+replay settings and restore any temporary configuration after owned cleanup.
+A repeated replay image is diagnostic evidence; compare it with the original
+captured scene before assigning any fault or improvement to it.
+
+## Native capture and replay verification
+
+JOIN166 completes its 600-second baseline and saves a **495,990-byte** native
+capture at **2026-10-07 13:23:25 UTC**, with the successful native log line,
+recorded SHA-256 and expected pause. The requested screenshot actually shows
+the **Still there?** inactivity dialog. Earlier outdoor cinematic screenshots
+do not make this captured frame an outdoor-fault reproduction. Owned cleanup
+restores the tested configuration, watch list and input state without errors.
+
+Full gzip decoding and command-prefix/resource-reference inspection pass for
+this file: 277 memory mappings, 201 data blocks and 11,771 commands. The native
+parser subsequently reaches replay execution. These checks do not establish
+the complete game's accuracy or the capture format's general correctness.
+
+The first native replay fails with `Capture Replay: context alloc failed`.
+[rpcs3-native-rsx-replay-context.patch](../patches/rpcs3-native-rsx-replay-context.patch)
+changes only capture boot initialization: reserve main memory starting at
+`0x10000`, excluding the null address returned as the allocator's failure sentinel.
+The rebuilt replay reaches command execution, but both inspected output frames
+are black. Its fallback presents buffer 1 while the stream's final colour-A
+target matches registered display buffer 0; no display flip command is captured.
+
+[rpcs3-native-rsx-replay-display.patch](../patches/rpcs3-native-rsx-replay-display.patch)
+selects a registered display buffer with matching offset and pitch when the
+final colour-A target uses local framebuffer memory. It retains the previous
+fallback when no match exists and leaves captured flip commands unchanged.
+Both later native replay images visibly reproduce the captured inactivity dialog.
+Their decoded RGB pixels exactly match the inspected original screenshot.
+Core validation is verified; the bounded replay log has no validation IDs or
+device loss. Both scoped patches reproduce the modified sources in isolated
+Git fixtures, and their incremental Release builds exit zero. The new executable
+is `cc73a62d8a079fca2ca3e995647c468485bb6095c548a95596de4e73a6c90397`.
+
+One intervening replay attempt ends during startup without current native output.
+Its old log snapshot is explicitly rejected. The private launcher now waits for
+the complete PID/start-time/executable identity and rejects stale logs. All
+replay attempts close their owned processes and restore the original global
+configuration; capture replay clears the title, so title-only settings are insufficient.
+
+This verifies the diagnostic route for one UI control. Capture/replay fidelity
+for the corrupted outdoor scene, live character rendering, equipment changes,
+traversal and the first mission remain unaccepted. Captures and diagnostic images
+stay private; they are not repository assets or production-package payloads.

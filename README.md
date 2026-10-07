@@ -30,6 +30,19 @@ with core validation verified. No validation error or device loss appears throug
 shading. Loading and the urgent dialog obstruct character/equipment checks. **The
 combined graphics fix fails acceptance even when the API log is clean.** Corruption
 is visible before a late guest debugger snapshot; that pause is recorded separately.
+JOIN165 completes a longer 600-second interval and twenty captures with no API
+validation errors through **19:05.151916**. Inspected views include the mission
+cinematic, menus and a rendered Titan with armour/rifle; weapon icons still load.
+Returning to the mission leads to loading/contacting-server text, and the host
+connection repeatedly reconnects. Inventory, traversal and sustained combined
+graphics remain unaccepted. Its diagnostic checkpoint closes without an armed
+RSX capture request; no saved frame or replay is claimed.
+JOIN166 saves a private native RSX capture after a completed 600-second interval.
+The inspected capture shows the inactivity dialog, so it is a UI control rather
+than the outdoor fault. Two replay-only repairs allow that dialog to be replayed:
+exclude the null allocation address and present the registered buffer matching
+the final local colour target. Neither changes live-game shading or establishes
+character/world/mission acceptance.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement
@@ -42,9 +55,9 @@ comparisons do not identify either stall's cause or resolve the intermittent fau
 
 The runner now rejects failed screenshot-child exits and cleans up its owned stack,
 with 14 process-boundary checks and 20 shutdown checks passing. A new
-[one-shot native RSX capture marker](notes/rpcs3-native-rsx-capture.md) builds successfully
-and will collect command/resource evidence for the shading fault. Its native capture
-and replay still require verification. Existing SPU colour reads remain enabled.
+[one-shot native RSX capture marker](notes/rpcs3-native-rsx-capture.md) now supports
+verified native capture and UI-control replay. An inspected outdoor fault
+capture and comparable replay are still needed. Existing SPU colour reads remain enabled.
 Read the [October 6 handoff](notes/HANDOFF-2026-10-06.md) and October 7 checkpoint
 before continuing; the earlier normal Titan/inventory views remain bounded evidence.
 

@@ -275,3 +275,90 @@ The [native RSX capture marker](rpcs3-native-rsx-capture.md) uses RPCS3's existi
 one-frame capture path. Its scoped patch reproduces the modified source with
 normalized line endings and the incremental x64 Release verification exits zero.
 Native capture/replay remains unverified until the next experiment completes.
+
+## JOIN165: visible character and unresolved mission return
+
+The capture-marker build `714e432f` completes its 600-second post-match interval,
+successful final native screenshot and twenty later comparison phases. The ring
+and text trace stay off from boot; the guarded depth candidate remains enabled.
+The core validation layer is verified live and before shutdown. The pre-stop
+native log reaches **19:05.151916**, with zero validation IDs, queue/query/reset
+callbacks and device-loss entries. This is a completed bounded API comparison,
+not sustained whole-game conformance or fidelity acceptance.
+
+Every phase screenshot is inspected. Views include black loading, the opening
+mission cinematic, character icons with the body loading, an empty quest menu,
+and finally a visible Titan with armour and a rifle. The attempted inventory
+phase does not show an inventory tab. Cinematic samples include broad white bloom
+and very dark views; no original-hardware comparison establishes their accuracy.
+The final model image and a later repeated character image have normal sampled
+proportions, while weapon icons remain loading. They do not prove equipping,
+inventory persistence, traversable gameplay or mission completion.
+
+After the twenty comparison phases, an additional Circle input dismisses the
+character menu. Native images then show loading and **Contacting Destiny Servers**.
+A later Return input opens a rendered character view again. Three activity-host
+connection resets occur before shutdown, **263.694, 267.658 and 261.085 seconds**
+after the respective client-in-world notification. The first two precede the
+comparison inputs. Their cause is unproved; a clean renderer API log cannot
+establish backend stability. Eight incident messages decode without malformed
+records, containing IDs 734 and 2120; those IDs alone do not identify the fault.
+
+The four-minute diagnostic checkpoint ends before the marker is armed. **No RSX
+capture is requested or saved, and parse/replay remains NOT RUN.** The bounded
+shutdown succeeds at **12:57:14 UTC**: all owned processes closed, original
+title/watch bytes restored, XInput, inactive controls, shared RPCN preserved,
+no cleanup errors. This unsuccessful capture attempt is retained explicitly.
+
+All **28 indexed originals** remain present with matching hashes; five unindexed
+sources retain their recorded failures and original bytes. The penultimate raw
+source fully decodes: **33.79 seconds**, 1280×720, game audio, reported average/base
+rates **29.89/30 fps**. The final raw source fails decoding. Its already generated
+recovered derivative is copied unchanged and fully decodes: **101.87 seconds**,
+1280×720, game audio, reported **27.41/30 fps**, **103,709 discarded tail bytes**.
+These rates are media properties. Five sampled video frames are inspected,
+including a later character view; original recording timestamps are preserved
+separately from filenames and media offsets. No original or final video is edited.
+
+The follow-up keeps the same build/fixture and 600-second baseline, leaves the
+urgent dialog untouched, and allows a bounded ten-minute inspected-capture
+checkpoint. It omits the twenty menu phases to seek outdoor command/resource
+evidence independently of their transitions. This changes the diagnostic scope;
+it is not an equivalent combined graphics acceptance test.
+
+## JOIN166: native capture and bounded UI replay
+
+The same `714e432f` build completes a 600-second baseline with core validation
+verified. Its pre-stop log reaches **21:19.808203**, with no validation IDs,
+queue/query/reset callbacks or device-loss entries. The diagnostic checkpoint
+shows outdoor cinematic scenery behind the urgent dialog, followed by the
+inactivity return-to-Orbit dialog. It makes no character/equipment or mission
+acceptance claim. A stale screenshot request is rejected before arming; a fresh
+inspected inactivity-dialog image precedes the one successful request.
+
+At **13:23:25 UTC**, native capture saves 495,990 bytes and pauses as expected.
+The successful log line and private hash receipt establish saving. Gzip and
+serialized-prefix/reference checks pass. This is a UI/control capture, **not**
+the black/green outdoor fault. Normal owned cleanup completes at **13:23:28 UTC**,
+preserving the original title/watch, XInput, inactive controls and shared RPCN.
+
+Native replay first fails allocating its context at the null guest address.
+Excluding that address allows execution, but replay presents an untouched
+back buffer and both inspected images are black. A second replay-only repair
+matches the final local colour-A offset/pitch to a registered display buffer.
+Both subsequent inspected frames reproduce the recorded inactivity dialog.
+The [capture/replay record](rpcs3-native-rsx-capture.md) links the two isolated
+patches, source reproduction and successful Release builds. Core validation
+is verified; global configuration is restored after every owned replay.
+One intervening startup attempt produces no current log and is not accepted.
+No live-game shading, descriptor lifetime or mission behavior is changed.
+
+All **40 indexed untouched originals** retain matching hashes; one unindexed
+source retains its recorded failure and original bytes. The last two raw clips
+fully decode: **30.19 and 9.03 seconds**, 1280×720 with game audio, reported
+average/base rates **29.95/30 and 25.56/30 fps**. These are recording properties,
+not game-performance measurements. Four inspected video samples show the
+inactivity dialog and the expected pause. No recovery, editing or publication
+is performed. Next: obtain an inspected outdoor-fault capture before inactivity
+or menu transitions obscure it, then assess comparable replay while preserving
+the combined character/outdoor/mission acceptance criteria.
