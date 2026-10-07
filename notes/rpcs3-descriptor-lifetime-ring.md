@@ -62,3 +62,12 @@ The test is closed at that safe menu checkpoint after its matchmaking deadline;
 owned cleanup succeeds and its fixture-completed flag is false. It provides no
 post-match conformance or combined graphics acceptance. See the
 [October 7 checkpoint](checkpoint-2026-10-07-renderer.md) for combined acceptance.
+
+JOIN162 uses the same build with the ring disabled from boot. It reaches
+matchmaking and completes the 500-second fixture, but core validation reports
+one reset-00313 callback at **8:11.023332** through **12:32.372609**. Outdoor
+captures still alternate normal and corrupted shading, with a dialog obstructing
+character inspection. No ring dump is expected in that OFF comparison. A separate
+test arms only after a verified matchmaking reply; it must retain an actual
+callback and complete trace before any lifetime cause is accepted. A single
+selection success with the ring off does not explain JOIN161's stall.

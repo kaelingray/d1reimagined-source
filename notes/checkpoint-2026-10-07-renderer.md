@@ -76,7 +76,7 @@ These are media properties, not measured gameplay performance. Private sampled
 frames contain native path overlays; no clean release or continuous fidelity
 claim is made.
 
-## Next native comparison: JOIN161
+## JOIN161: incomplete selection comparison
 
 The [bounded descriptor fault trace](rpcs3-descriptor-lifetime-ring.md) retains
 recent lifetime records in memory and dumps only when a descriptor-reset callback
@@ -151,3 +151,43 @@ not a gameplay performance measurement. Sampled frames show the character,
 inventory transition and world return. Account text and native path overlays
 make it private diagnostic material. No editing, publication or new daily handoff
 is performed; October 6's delivered package remains immutable.
+
+## JOIN162: trace-off fault and outdoor corruption reproduced
+
+The same `ef67aa5c` diagnostic executable starts with the ring disabled. Core
+validation is verified live and before shutdown; the guarded depth candidate
+remains enabled. Stored-character selection and matchmaking now progress, unlike
+JOIN161. That observation does not establish the selection stall's cause.
+
+The 500-second post-match fixture and eleven later input/capture phases complete.
+The final native log reaches **12:32.372609**, with one reset-00313 callback at
+**8:11.023332** and zero queue-use/query-scope/device-loss entries. **Bounded
+conformance fails.** The later callback also shows why testing only the earlier
+three-minute failure window would miss this occurrence. Neither text tracing nor
+the memory ring is armed, so there is no submission/completion correlation.
+
+All eleven phase screenshots are inspected. The first three show loading; later
+frames show the urgent-message dialog over outdoor scenery alternating normal
+shading and black/green corruption. Character, equipment and traversal inputs are
+obstructed and do not establish those actions. The combined rendering fix remains
+**Known Broken**; a memory label still does not establish mission progress.
+
+Cleanup at **08:52:52 UTC** verifies original title/watch bytes, XInput, inactive
+controls, all owned processes closed, shared RPCN preserved and no errors.
+All **23 indexed originals** remain present with their recorded SHA-256; one
+startup segment remains unindexed with a decode failure and its original retained.
+The penultimate original fully decodes: **30.14 seconds**, **1280×720**, game audio,
+rounded average/base rates **9.42/30 fps**. The last original fails full decoding.
+The recorder has already produced a recovered fragment copy, explicitly reporting
+**118,084 discarded tail bytes**. That existing derivative is preserved unchanged,
+hash-verified and fully decoded: **23.43 seconds**, **1280×720**, game audio,
+rounded average/base rates **8.9/30 fps**. Original bytes remain untouched. Stream
+rates do not establish gameplay performance; private sampled footage includes
+native path overlays and further corrupted outdoor frames.
+
+The next controlled comparison keeps the ring off during selection and arms it
+only after this run's matchmaking reply, exact client identity and core layer are
+verified. It retains the same baseline interval and eleven phases, then adds late
+dialog dismissal/body/world checks because JOIN162's early Cross presses occurred
+during loading. Those extra phases are separately identified; their result and a
+captured lifetime fault remain unproved until the run completes.

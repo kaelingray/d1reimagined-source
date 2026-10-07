@@ -327,3 +327,13 @@ and cleanup succeeds; it has no post-match conformance acceptance or captured
 reset correlation. The join runner now cleans up and throws on the missing-match
 deadline instead of entering post-match sampling. The trace changes diagnostics,
 not Vulkan resource lifetime or visual acceptance.
+
+JOIN162 repeats `ef67aa5c` with the ring OFF from boot, core validation verified and
+the guarded depth candidate enabled. Matchmaking and the full fixture complete;
+the final log reaches **12:32.372609**, with one reset-00313 callback at
+**8:11.023332**, zero queue/query callbacks and zero device loss. **Bounded
+conformance fails.** Inspected outdoor frames still alternate normal and
+black/green shading, while the urgent-message dialog prevents character/equipment
+acceptance. The OFF comparison has no trace correlation and does not establish
+the cause of the preceding selection stall. Follow the October 7 checkpoint for
+the separate late-arm comparison and honest original/fragment decode outcomes.

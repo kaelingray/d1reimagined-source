@@ -51,6 +51,13 @@ Its hang's cause remains open; no captured reset correlation or post-match
 acceptance is obtained. The join runner now fails and cleans up when matchmaking
 times out, instead of continuing into a misleading post-match sampling interval.
 
+JOIN162 uses the same diagnostic build with the ring disabled from boot. It reaches
+matchmaking and completes the fixture, but reproduces one descriptor-reset error
+through **12:32.372609**. Outdoor captures alternate normal and black/green shading;
+the urgent-message dialog obstructs character/equipment inspection. The change in
+selection behavior does not establish the cause of JOIN161's stall. A separate
+comparison arms the ring only after a verified matchmaking reply.
+
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe
 isolated contracts rather than whole-game acceptance. Follow
