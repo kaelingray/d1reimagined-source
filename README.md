@@ -20,7 +20,7 @@ so its asset payloads are unchanged.
 
 Local sign-in, stored characters and initial mission/world entry have bounded native
 evidence. Equipment records/buckets and Ghost authored bindings have partial acceptance.
-Renderer stability, character/world distortion, settled mission slice handoff, Ghost
+Renderer stability, character/world distortion, repeated mission slice handoff, Ghost
 illumination, combat, progression and mission completion remain open. Static schemas,
 service maps, package counts and serializer preflights are not gameplay acceptance.
 Late October 6 and October 7 runs reproduce outdoor corruption and intermittent
@@ -59,8 +59,15 @@ the original host receives no state message after requesting112. Native idle112,
 visible control and combined character/world graphics remain unaccepted. JOIN174
 matches successful allocation and consumer entry for the same transition record,
 but host receipt still fails; the next source investigation follows BAP forwarding.
-These diagnostic changes
-do not regenerate or validate the data payloads.
+JOIN175 identifies long delays around repeated flushed console output. The source
+now omits only the exact routine type-15/00 console lines while retaining full
+binary/event captures and all packet handling; `--verbose-wire` restores them.
+JOIN176 receives the transition deltas, completes native113→112 and records1,397
+idle112 samples without a live reconnect. Eight socket/session checks and the
+broader88-check backend suite pass. The inspected footage still shows the urgent
+dialog over outdoor scenery; visible Guardian control, mission completion and
+combined graphics remain unaccepted. These source changes do not regenerate or
+validate the data payloads.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
