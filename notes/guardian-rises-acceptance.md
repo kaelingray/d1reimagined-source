@@ -18,6 +18,15 @@ black/green shading persists. This is bounded traversal and menu evidence; the
 Breach route, combined graphics, progression and combat remain unaccepted.
 See the [October 8 checkpoint](checkpoint-2026-10-08-mission.md).
 
+JOIN178 subsequently completes the recorded route, reports the physical Wall
+trigger and advances the host objective. Group-switch publication alone leaves
+loaded24 inactive. A manual host request activates24 and exposes its lit interior,
+but a return112 request follows; no idle24 sample is observed. Recorded-route
+arrival within1.5units must not be treated as a verified final zone crossing.
+Stable automatic Breach handoff remains open. The saved mission-frame capture
+parses, but its replay does not match the lit original; graphics acceptance remains
+open as well.
+
 - **Observed:** read directly from the 01.24 executable/content, or captured in an identified
   01.24 run. Serialization tests prove a state can be encoded, not that it produces the expected
   gameplay.

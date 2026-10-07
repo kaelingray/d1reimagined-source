@@ -15,7 +15,7 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | Earlier native runs play the resurrection cinematics, hand control to the Guardian outside the Wall, show initial objectives and enter the Wall. JOIN176/177 repeat native 113→112 arrival on the original host connection after reducing routine console output. JOIN177 consumes guarded movement and advances about 73 world units along the outdoor route. Activity 229 uses scenario checksum `0x8fe07299`. | Finish the route and verify Breach handoff, objectives, rifle pickup, combat, mission completion and Tower arrival. The latest route stops at its 45-second budget; it does not reach the Breach. |
+| Opening mission | JOIN176–178 repeat native 113→112 arrival after reducing routine console output. JOIN178 completes the recorded outdoor route with guarded pad input, reports the Wall trigger and advances the host objective. A manual host request activates slice24 and a lit Breach interior is visible. Activity 229 uses scenario checksum `0x8fe07299`. | Group-switch publication alone leaves the Breach handoff pending. After manual activation the client requests112 again; no idle24 sample is observed. Automatic stable handoff, rifle pickup, combat, mission completion and Tower arrival remain open. |
 | Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
 | Ghost | Authored member/performance bindings create one bound Ghost after the tested readiness/reset gate; helper components resolve. | The reset remains a protocol experiment. Visible torch behavior and automatic mission cues are unverified. |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
@@ -98,9 +98,12 @@ continuous checks still required. The [October 5 checkpoint](notes/checkpoint-20
 [inventory repair](notes/inventory-items-0124.md) retain their bounded original evidence.
 
 Priority is core gameplay, stability, fidelity, content coverage, multiplayer/backend
-completeness, then polish. Next: continue the consumed outdoor movement toward the
-Wall and verify the client-requested Breach transition. Obtain a matching outdoor
-RSX capture while the owned client is live. Continue correlating recurring descriptor resets with submission and
+completeness, then polish. Next: verify the final doorway crossing and settle the
+client-requested Breach transition. Obtain a matching outdoor
+RSX capture while the owned client is live. JOIN178 saves a mission-frame capture,
+but its replay does not match the lit original interior; capture/replay fidelity
+needs diagnosis before using that replay as evidence of the live fault.
+Continue correlating recurring descriptor resets with submission and
 completion, and require unobstructed character/equipment, outdoor and mission
 views together for graphics acceptance.
 

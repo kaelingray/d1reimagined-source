@@ -103,3 +103,19 @@ unverified. The native parser runs, core validation is
 verified, and owned cleanup restores configuration. See the
 [October 7 checkpoint](checkpoint-2026-10-07-renderer.md) for the actual timing
 and scope. No new live-game graphics repair is claimed.
+
+## JOIN178: mission capture saves; replay fidelity fails
+
+After the actual recorded outdoor route and a manual host-protocol Breach handoff,
+the native client renders a lit interior. A46,247,472-byte private capture saves
+at23:24:30UTC7October with the native success line and expected pause. Full gzip
+and resource-prefix inspection passes:3,218memory mappings,2,994data blocks and
+65,308commands. The same C5 build's native replay parser reaches presentation.
+
+Both inspected replay frames show black scenery and a corrupted strip beneath the
+HUD. Untouched original recording samples immediately around capture still show
+the lit Breach geometry. This fails scene fidelity; it does not reproduce the live
+outdoor fault. Original capture and recordings are preserved. Core validation and
+owned cleanup pass, global/title configuration is restored, and no new renderer
+patch, cause or live-game graphics repair is claimed. See the
+[October 8 checkpoint](checkpoint-2026-10-08-mission.md#join178-recorded-route-complete-breach-handoff-remains-unsettled).

@@ -47,3 +47,51 @@ original host connection through the client-requested Breach handoff, and verify
 the correct objective and usable controls. Obtain an outdoor RSX diagnostic while
 the exact client is live. Torch, rifle pickup, combat, rewards, checkpoints,
 mission completion, Tower and broader game systems remain unfinished.
+
+## JOIN178: recorded route complete; Breach handoff remains unsettled
+
+The same fixture/backend/renderer completes the recorded route using guarded
+pad input and read-only memory. `--allow-breach-preload --wait 12 --budget 180`
+permits the already documented, bounded preload while preserving player/connection
+checks. The route reaches `[352.5052,-796.5757,14.0964]` at **23:20:10.971 UTC
+on 7 October**, within its unchanged 1.5-unit endpoint tolerance. It releases
+keys and restores its player hook. This is recorded-route arrival, not proof
+that the player has crossed the final zone boundary.
+
+The client requests24 at23:19:02.008UTC; the host publishes group1. Its physical
+Wall trigger starts the existing objective handover at23:19:47.217UTC. The host
+completes objective3 and activates objective7; the latter on-screen label is not
+separately verified. Loaded24 remains inactive with current112/target24/engine3.
+The group-switch message alone does not complete the handoff.
+
+At23:22:17.063UTC, a fresh owned, read-only check confirms that same target and
+a player still within five units of the recorded endpoint. The existing manual
+host-protocol request for24 is queued; this is an explicit experiment, not a
+guest-memory write or an automatic mission repair. Current24 arrives23:22:20.106UTC
+and a lit Breach interior is inspected. Four seconds later the client requests112
+again with the named-set hash retained. Across2,093 non-atomic samples,555 show
+active24 but none shows idle24. All retain session6 with no pointer/context recheck
+failure; the original host connection persists until owned shutdown.
+
+A private native mission-frame capture saves46,247,472bytes at23:24:30UTC with the
+successful native log line, hash and expected pause. Full gzip/resource-prefix
+inspection passes:3,218memory mappings,2,994data blocks and65,308commands. The
+native replay parser reaches output, but both inspected replay images have black
+scenery and a corrupted strip below the HUD. Untouched original recording samples
+at approximately23:24:29/34UTC still show the lit interior. **Replay fidelity
+fails; this is not a reproduction of the live outdoor fault.** No renderer change
+or identified capture/replay cause is claimed.
+
+Native cleanup ends23:24:40.867UTC and replay cleanup23:26:22.317UTC. All exact
+service/client/proxy/probe/route/replay identities are closed. Title/watch/XInput,
+sharedRPCN and global configuration are restored; controls/errors are empty.
+Core validation is verified, with no VUID, device-loss or fatal-severity entries
+in either bounded log. Twenty-four indexed originals retain matching hashes;
+one unindexed failure remains preserved. The last two fully decode30.23/25.87seconds,
+1280×720 with audio. Reported frame rates describe recordings, not gameplay FPS.
+
+Next: observe the actual player position and zone choice during the final doorway
+crossing before accepting or automating the client-requested handoff. Investigate
+the capture/replay mismatch separately. Captures/logs remain private; combined
+character/world graphics, automatic Breach progression and the full mission remain
+unaccepted. These events occur on8October UK while their UTC date is7October.
