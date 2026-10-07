@@ -21,29 +21,20 @@ evidence. Equipment records/buckets and Ghost authored bindings have partial acc
 Renderer stability, character/world distortion, settled mission slice handoff, Ghost
 illumination, combat, progression and mission completion remain open. Static schemas,
 service maps, package counts and serializer preflights are not gameplay acceptance.
-Late October 6 testing still shows outdoor corruption and descriptor-reset errors.
-The October 7 repeat reaches character/inventory views with normal sampled Titan
-proportions and no validation errors; sustained graphics acceptance remains open.
-The allocator repair has isolated CPU/build acceptance, but its completed native
-test reproduces a descriptor-reset error. Captures show loading/dialogs and a
-Rhinoceros reconnect warning; the repair has not resolved the observed native
-fault. Snapshot data files are unchanged.
-The next diagnostic run stalls at character selection without reaching matchmaking;
-its incomplete fixture is not accepted as passing conformance.
-The same diagnostic build with the ring disabled from boot reaches matchmaking
-and completes the next fixture, but again reports a descriptor-reset error and
-visible outdoor corruption. A dialog obstructs character inspection; the combined
-rendering fix remains unaccepted. The next comparison arms tracing after verified
-matchmaking. These results do not regenerate or validate this snapshot's assets.
-That comparison later stalls and fails capture without a reset trace; absence
-of errors in the stalled interval is not passing conformance. The source runner's
-capture failure gate now has isolated process/cleanup checks. Snapshot assets
-remain unchanged and combined gameplay/graphics acceptance is still open.
-The four-minute delayed-arm run completes its interval and twenty captures with
-no validation error, but outdoor shading still alternates normal and black/green.
-This distinguishes a clean bounded API log from combined graphics acceptance;
-loading/dialogs obstruct character and equipment checks. The source project is
-now adding native command/resource capture for the shading investigation.
+Late October 6 and October 7 runs reproduce outdoor corruption and intermittent
+descriptor-reset errors. The allocator repair has isolated CPU/build acceptance,
+but has not resolved the native fault. Incomplete selection/capture runs are not
+passing conformance. JOIN164 completes its interval with no validation errors while
+outdoor shading still alternates normal and black/green. JOIN165 completes a longer
+interval with no API errors and shows a sampled Titan with armour/rifle; weapon
+icons still load, inventory/traversal remain unverified, and mission return shows
+loading/contacting-server text with repeated activity-host reconnects. Combined
+graphics and gameplay acceptance remain open. Its RSX diagnostic checkpoint ends
+without an armed request or saved frame. JOIN166 subsequently saves a private
+native UI/control capture. Replay-only allocation and display-buffer repairs
+allow its inactivity dialog to be replayed; outdoor-fault capture/replay and
+combined live-game acceptance remain open. These tests do not regenerate or
+validate this snapshot's assets; native captures remain outside both repositories.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
