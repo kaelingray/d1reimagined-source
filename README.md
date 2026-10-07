@@ -28,6 +28,8 @@ The allocator repair has isolated CPU/build acceptance, but its completed native
 test reproduces a descriptor-reset error. Captures show loading/dialogs and a
 Rhinoceros reconnect warning; the repair has not resolved the observed native
 fault. Snapshot data files are unchanged.
+The next diagnostic run stalls at character selection without reaching matchmaking;
+its incomplete fixture is not accepted as passing conformance.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
