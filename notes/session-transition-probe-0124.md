@@ -91,3 +91,57 @@ Next acceptance requires native idle112, visible control and appropriate mission
 progress, followed by sustained character/equipment and outdoor rendering
 together. Do not force guest state, bypass resurrection with a direct112 start,
 or treat a successful reader as a gameplay repair.
+
+## JOIN172 filtered native trace — 7 October 2026
+
+The diagnostic build `97518199` adds optional function-entry predicates; the
+Titan/highway fixture and protocol remain unchanged. It completes the same
+60-second baseline and eight-minute checkpoint. The automatic reader records
+**1,175 non-atomic samples, 18:12:06–18:19:26 UTC**, without pointer/context
+lookup or recheck failures. The filter trace records **12 calls each** at the
+wrapper, queue and serializer entries, within their 80-hit budgets. Configured
+r5/r6 predicates select subtype 21 and its initialized 13-byte header.
+
+Delivery is delayed even before the transition: a 22-byte state call recorded
+around 18:12:00 reaches the proxy at **18:14:58 UTC**, when the host starts the
+mission clock. This observation does not identify the cause of the delay.
+At **18:17:19 UTC** the host requests 112. Pending 20 reaches 2 and the engine's
+last-sent target becomes 112. A later subtype 21 attempt reaches the serializer,
+but the original connection receives **no type 21 after that request** and no
+group 1 switch is published. Reconnect initialization messages are counted
+separately, rather than mistaken for delivery on the original connection.
+
+There are 128 samples of loaded/inactive 112 from **18:17:29–18:18:18 UTC**.
+The native clock advances throughout this phase; it resets when the activity
+session is recreated. At 18:18:18 the sampled session leaves 6 for 3, and the
+proxy sees a live socket reset at **18:18:21 UTC**. The pending start tick 7621
+and the later sampled tick 9377 represent less than 120 seconds at 30Hz. Transient
+session 37/38 is not observed; the reconnect must not be labeled the earlier
+local 120-second timeout without stronger evidence. The separate 18:20:10 reset
+occurs during owned shutdown.
+
+Observed vtables resolve the queue rejection gate to `0x47b7ec` (returns true
+when object+0x8c is zero) and connection readiness to `0x8c6d4c` (true only for
+connection+0x10f8 equal 8). A non-atomic **18:17:10 UTC** snapshot has values 1/8.
+It establishes neither the gate values at an earlier send nor the actual
+serializer/queue return. Function-entry watches cannot observe arbitrary
+post-call instructions. Next: capture these deterministic gate inputs at the
+relevant call, follow serialization/enqueue outcome and correlate the target
+payload with receipt before changing transport or session behavior.
+
+Inspected native screenshots show black/loading and the urgent dialog. Two
+owned Cross presses are recorded; the later image shows loading. After reconnect,
+inspected recording samples show outdoor cinematic scenery behind a reappeared
+urgent dialog. They do not prove control or unobstructed combined graphics.
+Twenty-two indexed originals retain matching hashes; three unindexed failures
+are preserved. The last two original clips fully decode, **30.3/18.29 seconds**,
+1280×720 with audio; reported average/base rates 14.1/30 and 12.41/30 describe the
+recordings, not gameplay performance. Originals remain untouched.
+
+Cleanup at **18:20:11 UTC** closes all exactly owned processes and restores
+title/watch, XInput and inactive controls with no errors. The pre-stop native
+log has zero validation IDs, device loss and fatal entries, with core validation
+verified. No idle 112, traversal, combat, mission completion or graphics repair
+is accepted. A subsequent parser guard rejects unsupported live r0/r2 predicates;
+44 CPU checks and its Release build pass. That final guard build has not yet had
+a full native join; JOIN172's supported r5/r6 evidence belongs to `97518199`.

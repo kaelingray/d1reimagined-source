@@ -56,6 +56,12 @@ route sends no walking input and the activity host reconnects. A
 [read-only session probe](notes/session-transition-probe-0124.md) corrects the
 context lookup and records the pending transition machines before timeout.
 Its five focused checks pass; this is diagnostic progress, not a mission fix.
+A [filtered native entry trace](notes/ppu-watch-filters.md) now preserves its
+budget for the relevant state message, with 44 actual-source CPU checks passing.
+JOIN172 verifies the supported filters in the native client: calls reach the
+serializer, but the original connection receives no state message after the
+teleport request. The clock advances and the client reconnects without activating
+112. Mission control and combined graphics remain unaccepted.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement

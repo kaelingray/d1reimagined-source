@@ -464,3 +464,15 @@ A late screenshot fails, and two separate native clock reads are unchanged.
 These observations narrow the next transport/stall investigation; they are not
 a repaired mission or graphics result. Owned cleanup completes **17:42:18 UTC**
 with original configuration/watch/input/controls restored and no errors.
+
+JOIN172 verifies the [filtered function-entry trace](ppu-watch-filters.md) for
+subtype 21 in the native client. Twelve calls each reach wrapper, queue and
+serializer; 1,175 session samples have no lookup/recheck failures. The clock
+advances during the loaded/inactive 112 phase, followed by a live reconnect.
+No type 21 arrives on the original connection after the request; the actual
+serializer return and enqueue outcome remain unknown. This differs from
+JOIN171's frozen clock and does not establish a shared cause. The owned stack
+closes at 18:20:11 UTC and restores its settings. Forty-four actual-source filter
+checks and the final parser-guard Release build pass; the full native join tests
+the earlier supported r5/r6 build. See the session note for timestamps, original
+media checks and the remaining acceptance requirements.
