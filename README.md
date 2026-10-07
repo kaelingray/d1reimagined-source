@@ -13,8 +13,10 @@ repository rename. The active project target is PS3 BLES01857 01.24 in patched R
 Current source, fixes, acceptance criteria and engineering checkpoints live in
 `d1reimagined`; the export validation below describes the scope of this data snapshot.
 The source tree and this PC now use the RPCS3 route exclusively. Retired Xbox
-emulator tools, experiments and captures have been removed; this companion
-snapshot already contains PS3 research data, so its asset payloads are unchanged.
+emulator tools, experiments and captures have been removed. One historical
+Xbox research checkout remains privately pending removal.
+This companion snapshot already contains PS3 research data,
+so its asset payloads are unchanged.
 
 Local sign-in, stored characters and initial mission/world entry have bounded native
 evidence. Equipment records/buckets and Ghost authored bindings have partial acceptance.
@@ -49,8 +51,15 @@ gameplay repair and does not change or validate this snapshot's assets.
 JOIN172 verifies native subtype 21 entry filters and captures an advancing clock
 through the failed transition. Calls reach the serializer, but the original
 connection receives no state message after the teleport request and reconnects.
-The source adds 44 actual-source CPU checks; serializer return, visible control
-and combined character/world graphics remain unaccepted. These diagnostic changes
+The source adds 52 actual-source CPU checks, including caller filters. JOIN173
+verifies those filters and actual shared return helpers: readiness passes and the
+observed transition message receives success from both outer layers. The direct
+branch still reports success without proving later transport consumption, and
+the original host receives no state message after requesting112. Native idle112,
+visible control and combined character/world graphics remain unaccepted. JOIN174
+matches successful allocation and consumer entry for the same transition record,
+but host receipt still fails; the next source investigation follows BAP forwarding.
+These diagnostic changes
 do not regenerate or validate the data payloads.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
