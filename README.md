@@ -46,6 +46,12 @@ urgent dialog but does not reach idle slice112; no guarded walking input is sent
 The source adds a corrected read-only session/context probe to diagnose that
 transition before timeout, with five focused checks passing. This is not a
 gameplay repair and does not change or validate this snapshot's assets.
+JOIN172 verifies native subtype 21 entry filters and captures an advancing clock
+through the failed transition. Calls reach the serializer, but the original
+connection receives no state message after the teleport request and reconnects.
+The source adds 44 actual-source CPU checks; serializer return, visible control
+and combined character/world graphics remain unaccepted. These diagnostic changes
+do not regenerate or validate the data payloads.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
