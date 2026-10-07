@@ -39,6 +39,11 @@ That comparison later stalls and fails capture without a reset trace; absence
 of errors in the stalled interval is not passing conformance. The source runner's
 capture failure gate now has isolated process/cleanup checks. Snapshot assets
 remain unchanged and combined gameplay/graphics acceptance is still open.
+The four-minute delayed-arm run completes its interval and twenty captures with
+no validation error, but outdoor shading still alternates normal and black/green.
+This distinguishes a clean bounded API log from combined graphics acceptance;
+loading/dialogs obstruct character and equipment checks. The source project is
+now adding native command/resource capture for the shading investigation.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
