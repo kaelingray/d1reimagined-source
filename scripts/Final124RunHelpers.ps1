@@ -311,6 +311,7 @@ function Read-Final124Progress {
         ManifestReplies = @($signon -cmatch '\] replied 200 content manifest ').Count
         BapConnections = @($bap -cmatch '^\S+ \[[^\]]+\] connection from [\d.]+:\d+').Count
         BapFrames = @($bap -cmatch '^\S+ \[[^\]]+\] frame \d+ \(kind \d+\): ').Count
+        UserProfileReplies = @($bap -cmatch '^\S+ \[[^\]]+\] sent upo rsp\b').Count
     }
 }
 

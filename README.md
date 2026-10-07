@@ -42,7 +42,10 @@ The inspected capture shows the inactivity dialog, so it is a UI control rather
 than the outdoor fault. Two replay-only repairs allow that dialog to be replayed:
 exclude the null allocation address and present the registered buffer matching
 the final local colour target. Neither changes live-game shading or establishes
-character/world/mission acceptance.
+character/world/mission acceptance. A shorter follow-up exposes a launcher bug:
+cancelling the unfinished sign-in observer closes its kept stack. The join now
+requests a successful handoff after the user-profile reply and verifies observer
+completion before reporting success. Native verification of this runner fix is pending.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement
@@ -54,7 +57,7 @@ JOIN164's four-minute delayed arm progresses without capturing a reset. These
 comparisons do not identify either stall's cause or resolve the intermittent fault.
 
 The runner now rejects failed screenshot-child exits and cleans up its owned stack,
-with 14 process-boundary checks and 20 shutdown checks passing. A new
+with 19 capture/handoff checks, 173 isolated run checks and 20 shutdown checks passing. A new
 [one-shot native RSX capture marker](notes/rpcs3-native-rsx-capture.md) now supports
 verified native capture and UI-control replay. An inspected outdoor fault
 capture and comparable replay are still needed. Existing SPU colour reads remain enabled.

@@ -83,10 +83,12 @@ $proxyArgs = @('--ah-mgr-reply', [Convert]::ToHexString($mgr).ToLower(), '--ah-j
 $launch = Start-Job -ScriptBlock { param($script, $n, $l, $d, $b)
     $env:D1_LOCAL = $l
     $ErrorActionPreference = 'Stop'
-    # Keep title-screen input available for the join wrapper's full eight-minute
-    # sign-in window; a successful launcher exit at 250 s ended slow boots early.
+    # Keep title-screen input available for the full sign-in window, then let
+    # the observer finish successfully once the user-profile reply is sent.
+    # Cancelling a still-running observer invokes its failure cleanup and kills
+    # the kept stack when a short post-match interval finishes before eight minutes.
     & $script -Name $n -Local $l -DataRepo $d -BootSeconds 480 -PressSeconds 110 `
-        -ContinueAfterBap -KeepRpcs3 -BapExtra $b 2>&1 | Select-Object -Last 5
+        -ContinueAfterBap -ReturnAfterUserProfileReply -KeepRpcs3 -BapExtra $b 2>&1 | Select-Object -Last 5
 } -ArgumentList (Join-Path $PSScriptRoot 'Invoke-Final124Run.ps1'), $Name, $D1Local, $DataRepo, $bapArgs
 $bap = Join-Path $logs "$Name-bap.log"
 $deadline = (Get-Date).AddMinutes(8)
@@ -188,6 +190,11 @@ try {
     Invoke-D1CheckedPowerShellStep -Path "$PSScriptRoot\Invoke-RpcsStep.ps1" -Arguments @('-ProcessId', (Get-JoinEmulatorId), '-WaitSeconds', 0)
     # The kept stack can hold the launcher job's output pipe open; do not wait on it indefinitely.
     Wait-Job $launch -Timeout 60 | Out-Null
+    if ($launch.State -ne 'Completed') {
+        throw "Sign-in observer did not complete its kept-stack handoff (state $($launch.State)); refusing to report a completed join."
+    }
+    Receive-Job $launch -ErrorAction Stop | Out-Null
+    Get-JoinEmulatorId | Out-Null
     Remove-Job $launch -Force
     "done; close with: scripts/Invoke-Final124Join.ps1 -Name $Name -Stop"
 } catch {

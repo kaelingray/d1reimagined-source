@@ -59,12 +59,13 @@ function Start-Sleep { param($Seconds=0,$Milliseconds=0) [Threading.Thread]::Sle
     'import time; time.sleep(90)' | Set-Content -LiteralPath (Join-Path $root 'server\bap_server.py')
     'print("isolated mock state; no native acceptance")' | Set-Content -LiteralPath (Join-Path $scripts 'rpcs3_final124_bootflow.py')
     @'
-param($Name,$Local,$DataRepo,$BootSeconds,$PressSeconds,[switch]$ContinueAfterBap,[switch]$KeepRpcs3,$BapExtra)
+param($Name,$Local,$DataRepo,$BootSeconds,$PressSeconds,[switch]$ContinueAfterBap,[switch]$ReturnAfterUserProfileReply,[switch]$KeepRpcs3,$BapExtra)
 . "$PSScriptRoot\Final124RunHelpers.ps1"
+if (-not $ReturnAfterUserProfileReply) { throw 'Join did not request the profile handoff' }
 $children=@()
 $pwsh=(Get-Command pwsh).Source
 foreach ($tag in 'rpcs3','bap') {
-    $child=Start-Process -FilePath $pwsh -ArgumentList '-NoProfile -Command "Start-Sleep -Seconds 90"' -WindowStyle Hidden -PassThru
+    $child=Start-Process -FilePath $pwsh -ArgumentList '-NoProfile -Command "Start-Sleep -Seconds 90"' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $Local "$Name-$tag-out.txt") -RedirectStandardError (Join-Path $Local "$Name-$tag-err.txt")
     $children+=Get-D1ProcessIdentity -Process $child -Tag $tag -Executable $pwsh
 }
 $logs=Join-Path $Local 'SIGNON_LOCAL\logs'
@@ -80,7 +81,7 @@ if (($phase -eq 'first' -and $Keys -contains 'D') -or ($phase -eq 'final' -and -
 'isolated mock screenshot result'
 '@ | Set-Content -LiteralPath (Join-Path $scripts 'Invoke-RpcsStep.ps1')
     $env:D1_PYTHON=if ($savedPython) {$savedPython}else{(Get-Command python -ErrorAction Stop).Source}
-    foreach ($phase in 'first','final') {
+    foreach ($phase in 'first','final','none') {
         $run='FINAL124_CAPTURE_'+$phase
         Set-Content -LiteralPath (Join-Path $scripts 'failure-phase.txt') $phase
         $outputs=@();$failureMessage=$null
@@ -89,12 +90,19 @@ if (($phase -eq 'first' -and $Keys -contains 'D') -or ($phase -eq 'final' -and -
         $manifest=Read-D1ProcessManifest (Join-Path $logs "$run-processes.json")
         $identities=@($manifest.processes)+(Get-Content -LiteralPath (Join-Path $logs "$run-proxy-process.json") -Raw | ConvertFrom-Json)
         $owned+=$identities
-        Assert-CaptureCheck ([bool]($failureMessage -like '*Invoke-RpcsStep.ps1*exit code 7*')) $true "$phase failure propagates through actual join runner"
-        Assert-CaptureCheck ([bool](($outputs -join '\n') -match 'done; close with')) $false "$phase failure cannot report done"
+        if ($phase -eq 'none') {
+            Assert-CaptureCheck ([bool]$failureMessage) $false 'successful join completes its observer handoff'
+            Assert-CaptureCheck ([bool](($outputs -join '\n') -match 'done; close with')) $true 'successful handoff reports done'
+            Assert-CaptureCheck @($identities | Where-Object {Get-D1OwnedProcess $_}).Count $identities.Count 'successful short join retains all exact children and proxy'
+            & (Join-Path $scripts 'Invoke-Final124Join.ps1') -Name $run -Local $local -DataRepo $data -Stop | Out-Null
+        } else {
+            Assert-CaptureCheck ([bool]($failureMessage -like '*Invoke-RpcsStep.ps1*exit code 7*')) $true "$phase failure propagates through actual join runner"
+            Assert-CaptureCheck ([bool](($outputs -join '\n') -match 'done; close with')) $false "$phase failure cannot report done"
+        }
         Assert-CaptureCheck @($identities | Where-Object { Get-D1OwnedProcess $_ }).Count 0 "$phase failure closes all exact owned children and proxy"
         Assert-CaptureCheck (Test-Path -LiteralPath (Join-Path $logs "$run-processes.json.stop")) $true "$phase failure records cooperative shutdown"
     }
-    'All fourteen isolated native capture checks passed.'
+    'All isolated native capture and kept-stack handoff checks passed.'
 } finally {
     foreach ($identity in $owned) { Stop-D1OwnedProcess $identity }
     $PSNativeCommandUseErrorActionPreference=$savedNativePreference

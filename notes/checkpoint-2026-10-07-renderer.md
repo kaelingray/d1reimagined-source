@@ -362,3 +362,46 @@ inactivity dialog and the expected pause. No recovery, editing or publication
 is performed. Next: obtain an inspected outdoor-fault capture before inactivity
 or menu transitions obscure it, then assess comparable replay while preserving
 the combined character/outdoor/mission acceptance criteria.
+
+## JOIN167: short-run observer cancellation
+
+The `cc73a62d` live-game run finishes its 180-second sampling interval and saves
+the final screenshot. An earlier inspected image shows outdoor cinematic scenery
+behind the urgent message; the final image and three inspected video samples
+show loading. No RSX capture request is armed.
+
+The client is already closed when the diagnostic checkpoint begins at
+**13:57:07 UTC**. The outer fixture flag is true because its sampling command
+returned, but the inner sign-in summary records **completed=false** and
+**keptStack=false**. These flags describe different scopes; this is not an
+accepted capture or native conformance experiment.
+
+The join waits only sixty seconds for its background observer, then forcibly
+removes the job. A short join finishes before that observer's eight-minute
+`ContinueAfterBap` interval. Cancelling it runs its failure cleanup and closes
+the owned debugger/client/services. The debugger socket error and recorder
+trailer failure occur during that cleanup; they are not evidence of a renderer
+crash. All owned processes close and the original configuration/input/controls
+are restored at **13:57:08 UTC**.
+
+The runner now asks the observer to return successfully after the logged
+user-profile reply, retaining the exact owned stack. The eight-minute sign-in
+budget and title-window input remain available until that reply. The join also
+requires the observer job to be Completed, receives its errors and verifies the
+exact client before reporting success. Ordinary full-duration observations keep
+their previous behavior unless the new option is supplied.
+
+The actual run-wrapper fixture passes **173 checks**, including a late profile
+reply, return before a sixty-second observation deadline, retained ownership,
+missing-reply continuation, delayed windows and failure cleanup. The actual
+join-wrapper fixture passes **19 checks**, including failed screenshot exits and
+a successful short join that retains its exact children/proxy until explicit
+owned shutdown. These are isolated process tests; native handoff verification
+is pending the follow-up.
+
+All thirteen indexed raw recordings retain matching hashes, and one unindexed
+failure retains its original. The last two raw clips fully decode, **33.3 and
+2.39 seconds**, 1280×720 with audio; reported average/base rates are **26.9/30
+and 29.73/30 fps**, not gameplay measurements. Three private QA samples show
+loading. No original is repaired or edited, and no capture or graphics success
+is inferred from them.

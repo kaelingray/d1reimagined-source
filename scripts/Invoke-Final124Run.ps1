@@ -11,6 +11,8 @@
 # press deadline. SignOn alone does not end the experiment: BAP is the next gate.
 # -ContinueAfterBap observes the full BootSeconds and keeps scheduled input
 # active through profile setup; the default stops at the first BAP connection.
+# -ReturnAfterUserProfileReply lets a join observer hand off the successful
+# kept stack after its profile reply, rather than waiting the whole boot window.
 param(
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')][string]$Name,
     [string]$StunArgs = '',
@@ -24,6 +26,7 @@ param(
     [string]$DataRepo,
     [switch]$KeepRpcs3,
     [switch]$ContinueAfterBap,
+    [switch]$ReturnAfterUserProfileReply,
     [string]$Rpcs3Dir,
     [string]$GameUsrdir,
     [string]$PpuHash,
@@ -45,6 +48,7 @@ $presses = 0
 $launcherCompleted = $false
 $bapReported = $false
 $waitingForGameWindow = $false
+$returnedAfterUserProfileReply = $false
 $logCapture = [ordered]@{ status = 'not_started'; source = $null; destination = $null; bytes = $null; error = $null }
 
 function Get-LaunchFailureDetail {
@@ -136,6 +140,10 @@ try {
             if (-not $bapReported) {
                 Write-Host '  BAP TCP connection observed' -ForegroundColor Green
                 $bapReported = $true
+            }
+            if ($ReturnAfterUserProfileReply -and $progress.UserProfileReplies -gt 0) {
+                $returnedAfterUserProfileReply = $true
+                break
             }
             if (-not $ContinueAfterBap) { break }
         }
@@ -257,6 +265,7 @@ try {
                 verdict = if ($progress) { Get-Final124Verdict $progress } else { 'no protocol evidence collected' }
                 local = $Local; dataRepo = $DataRepo; rpcs3Dir = $Rpcs3Dir; gameUsrdir = $GameUsrdir
                 presses = $presses; progress = $progress; keptStack = [bool]($KeepRpcs3 -and $completed)
+                returnedAfterUserProfileReply = $returnedAfterUserProfileReply
                 continuedAfterBap = [bool]$ContinueAfterBap
                 logCapture = $logCapture
                 finishedAt = (Get-Date).ToString('o')
