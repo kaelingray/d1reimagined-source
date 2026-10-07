@@ -296,22 +296,40 @@ class PipelineTests(unittest.TestCase):
             atomic_json(receipt.with_suffix(".failed"), {**failure, "next_attempt": 0})
             monitor.process()
             self.assertTrue(receipt.with_suffix(".indexed").exists())
-            self.assertFalse(self.video.exists())
+            self.assertTrue(self.video.exists())
         finally:
             monitor.pool.shutdown()
 
-    def test_finished_segment_is_byte_identical_before_original_retirement(self):
+    def test_finished_segment_retains_untouched_original_and_verified_copy(self):
         original = self.video.read_bytes()
         monitor = Monitor(self.config)
         try:
             receipt = self.native_receipt(monitor)
             monitor.process()
-            self.assertFalse(self.video.exists())
+            self.assertEqual(self.video.read_bytes(), original)
             copy = next(monitor.capture.buffer.glob("*.mp4"))
             self.assertEqual(copy.read_bytes(), original)
             proof = json.loads(receipt.with_suffix(".indexed").read_text())
             self.assertEqual(proof["source_sha256"], digest(copy))
             self.assertIsNone(proof["source_recovery"])
+            self.assertTrue(proof["original_retained"])
+        finally:
+            monitor.pool.shutdown()
+
+    def test_native_original_survives_rolling_buffer_expiration(self):
+        original = self.video.read_bytes()
+        monitor = Monitor(self.config)
+        try:
+            receipt = self.native_receipt(monitor)
+            monitor.process()
+            monitor.capture.cfg["BUFFER_SECONDS"] = 0
+            monitor.capture.trim_buffer()
+            self.assertEqual(list(monitor.capture.buffer.glob("*.mp4")), [])
+            self.assertEqual(self.video.read_bytes(), original)
+            self.assertTrue(receipt.with_suffix(".indexed").exists())
+            monitor.process()
+            self.assertEqual(list(monitor.capture.buffer.glob("*.mp4")), [])
+            self.assertEqual(self.video.read_bytes(), original)
         finally:
             monitor.pool.shutdown()
 

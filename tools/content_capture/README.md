@@ -16,9 +16,9 @@ Startup shortcut so queued transfers recover after login without starting a game
 The worker has an OS process lock and an exact process-identity receipt. No config
 means no capture side effects. `-Stop` requests cooperative shutdown, preserving files.
 
-## Verified state — 2026-10-06
+## Verified state — 2026-10-07
 
-The capture suite passes **81 tests**. Live acceptance includes native game/audio
+The capture suite passes **82 tests**. Live acceptance includes native game/audio
 segments, interrupted-fragment recovery, durable event/outbox handling, full decoding,
 verified SMB transfer and atomic ready transitions. Status-lock contention is repaired
 and tested with the live worker during recording. Source-start identification still
@@ -33,7 +33,7 @@ require reliable acceptance signals before automatic milestone classification ca
 added. Missing footage and unverified tests remain explicit. Normal capture/transfer
 is automatic; final editorial and publication review happens on the production machine.
 See the [project status](../../README.md) and
-[October 6 evidence](../../notes/checkpoint-2026-10-06-renderer.md).
+[October 7 evidence](../../notes/checkpoint-2026-10-07-renderer.md).
 
 ## Normal operation
 
@@ -45,10 +45,11 @@ after an event. Buffer retention includes two extra segments and a byte cap. Rot
 can introduce short gaps, which metadata explicitly records; this is not a frame-exact
 continuous replay buffer. It captures neither the desktop nor a microphone.
 
-Completed native segments are fully decoded and copied with matching SHA-256 before
-their redundant originals are removed. Only this recorder's identified files are
-eligible. Selected segments are remuxed without re-encoding into immutable local source
-packages; those packages are retained after delivery. Unselected buffer copies expire.
+Completed native segments are fully decoded and copied with matching SHA-256.
+Untouched native originals remain locally available when rolling buffer copies
+expire; their deletion requires an agreed archive policy. Selected segments are
+remuxed without re-encoding into immutable local source packages, which are retained
+after delivery. Unselected buffer copies expire independently of the originals.
 The controller refuses to toggle an already active native recorder. Client shutdown
 asks the exact matching recorder to finalize before terminating the emulator.
 

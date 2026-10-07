@@ -438,11 +438,10 @@ class Monitor:
                     {"summary": summary, "contains_audio": buffer_info["contains_audio"], "source_recovery": recovery},
                     "Experimental", run=info["run"], observed_at=buffer_info["ended_at"])
                 self.queue_observations()
-                atomic_json(done, {**proof, "source_recovery": recovery, "indexed_at": now()})
-                if not recovery:
-                    # Delete only the controller's byte-identical original. Keep
-                    # interrupted originals intact for inspection or later recovery.
-                    Path(info["file"]).unlink()
+                # The rolling buffer may expire independently of a handoff. Keep
+                # untouched native originals until an archive policy is agreed.
+                atomic_json(done, {**proof, "source_recovery": recovery,
+                                   "original_retained": True, "indexed_at": now()})
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 atomic_json(failure, {"error": str(error), "next_attempt": time.time() + 300})
                 continue
