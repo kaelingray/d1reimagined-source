@@ -20,7 +20,7 @@ so its asset payloads are unchanged.
 
 Local sign-in, stored characters and initial mission/world entry have bounded native
 evidence. Equipment records/buckets and Ghost authored bindings have partial acceptance.
-Renderer stability, character/world distortion, repeated mission slice handoff, Ghost
+Renderer stability, character/world distortion, stable Breach handoff, Ghost
 illumination, combat, progression and mission completion remain open. Static schemas,
 service maps, package counts and serializer preflights are not gameplay acceptance.
 Late October 6 and October 7 runs reproduce outdoor corruption and intermittent
@@ -74,6 +74,12 @@ menu. The route stops at its45-second budget; Breach/combat/completion are still
 open. Earlier black/green outdoor shading persists. A capture attempt misses the
 bounded deadline and ownership validation rejects it before marker creation.
 These results do not establish combined graphics or validate this data snapshot.
+JOIN178 then completes the recorded route and activates24 through a manually
+requested host handoff. Its interior is visible, but the client requests112 again
+and never reaches sampled idle24. A native mission capture saves and parses;
+replay shows black scenery/corrupted HUD despite the lit original recording.
+Automatic stable handoff and capture/replay fidelity remain open. All captures
+stay outside these repositories; no snapshot asset is changed or revalidated.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-08-mission.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
