@@ -231,3 +231,47 @@ The next trace comparison retains a four-minute OFF interval after matchmaking
 before arming. It records any reset callbacks preceding that arm separately;
 they cannot be attributed to later retained events. The new failure gate also
 requires successful native captures before fixture completion.
+
+## JOIN164: outdoor corruption without a reset callback
+
+The same `ef67aa5c` build keeps the ring off through boot and for four minutes
+after matchmaking, then arms at **09:37:27 UTC** with exact ownership and the core
+layer verified. Its pre-arm snapshot has no descriptor-reset callback. The
+500-second interval, final native screenshot and all twenty later input/capture
+phases complete. Core validation is verified before shutdown. The final native
+log reaches **13:20.013137**, with zero validation IDs, queue/query/reset callbacks
+or device-loss entries. There is no frozen ring dump.
+
+All twenty phase screenshots are inspected. The first fifteen show loading;
+the last five show the urgent dialog over outdoor scenery alternating normal
+shading and black/green corruption. Posted character/equipment/traversal inputs
+remain obstructed. **Combined graphics acceptance fails.** The clean API log
+does not establish a shading repair or resolve earlier intermittent resets.
+No invalid-source or malformed-fragment-store entries appear in this interval,
+so those particular logged failures are also absent while corruption is visible.
+
+One guest debugger snapshot at **09:43:41 UTC** records 22 PPU PCs/LRs and short
+stack chains, with the main thread sampled in the known timed-wait syscall.
+It pauses/resumes the guest; the last two interaction phases are diagnostically
+perturbed. Fresh native captures follow at 09:43:46 and 09:43:52. The bad outdoor
+frame at **09:43:34** precedes the pause. This snapshot supplies no SPU context
+and cannot diagnose JOIN163's earlier stalled producer. Cleanup at **09:44:07 UTC**
+verifies all owned processes closed, original title/watch bytes, XInput, inactive
+controls, shared RPCN preserved and no errors.
+
+All **24 indexed originals** remain present with matching hashes; one unindexed
+startup source retains its decode failure and original bytes. The penultimate
+original fully decodes: **30.14 seconds**, 1280×720, game audio, reported average/base
+rates **12.38/30 fps**. The last raw original fails full decoding. Its existing
+recovered derivative is preserved unchanged and fully decodes: **34.7 seconds**,
+1280×720, game audio, reported rates **10.59/30 fps**, **141,473 discarded tail bytes**.
+These are media properties, not gameplay performance measurements. Four inspected
+video samples show loading and further corrupted outdoor frames. All inputs stay
+private; no media editing, publication or duplicate daily handoff is performed.
+
+The next investigation captures command/resource evidence for the shading fault
+while preserving SPU colour reads and the combined character/world requirements.
+The [native RSX capture marker](rpcs3-native-rsx-capture.md) uses RPCS3's existing
+one-frame capture path. Its scoped patch reproduces the modified source with
+normalized line endings and the incremental x64 Release verification exits zero.
+Native capture/replay remains unverified until the next experiment completes.

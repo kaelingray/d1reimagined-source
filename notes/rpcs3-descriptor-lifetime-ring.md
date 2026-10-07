@@ -79,3 +79,11 @@ RSX in FIFO-empty/yield and the driver worker in its wake-event wait, without
 establishing the reason for the stall. The next experiment delays arming for four
 minutes after matchmaking and records pre-arm errors explicitly. See the
 October 7 checkpoint for the repaired screenshot-child failure gate and tests.
+
+JOIN164 completes a four-minute OFF interval after matchmaking and arms at
+09:37:27 UTC. Its pre-arm snapshot has zero reset callbacks. The full sampling
+interval and twenty later captures complete, with no validation callback or dump
+through 13:20.013137. Outdoor frames still alternate normal and black/green.
+The absence of a reset in this corrupted interval narrows the observed shading
+failure without identifying its cause or resolving intermittent lifetime errors.
+The next shading investigation uses [native RSX frame capture](rpcs3-native-rsx-capture.md).

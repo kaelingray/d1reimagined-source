@@ -344,3 +344,14 @@ entries through **12:15.839029** and no frozen dump; this is **not accepted
 conformance**. Its ignored child exit is now propagated with owned cleanup,
 covered by 14 process-boundary/integration checks plus 20 shutdown checks.
 Absence of errors in a stalled run does not establish working Vulkan rendering.
+
+JOIN164 delays arming four minutes after matchmaking. The 500-second interval,
+final native screenshot and twenty later diagnostic phases complete; core validation
+is verified at arming and before shutdown. There are no validation IDs or
+queue/query/reset/device-loss callbacks through **13:20.013137**, with zero reset
+callbacks in the separate pre-arm log. This records a completed, bounded clean API
+interval. **Graphics acceptance fails:** outdoor images alternate normal and
+black/green corruption, and loading/dialogs obstruct body/equipment checks. A late
+guest debugger pause affects the last two phases; corruption is already visible
+before it. Neither the clean interval nor the snapshot diagnoses earlier stalls.
+See the October 7 checkpoint and [native frame-capture investigation](rpcs3-native-rsx-capture.md).

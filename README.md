@@ -24,43 +24,29 @@ folders may still have their earlier names; use explicit paths for imported runt
 
 The [October 7 checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
 [Vulkan conformance record](notes/rpcs3-vulkan-conformance.md) hold the latest renderer
-evidence. JOIN158 enables the guarded depth-only candidate on the attachment-layout
-build; eligible sampled draws take the intended path, but two descriptor-reset
-validation callbacks recur and outdoor corruption remains. JOIN159 repeats that
-build with an earlier trace and longer inputs. It completes with the core layer
-verified and no validation errors or device loss through **14:06.829486**. Inputs
-clear both dialogs and reach character, inventory and world views. The inspected
-returned Titan and final outdoor frames look normal, but level/light zero and
-loading weapon slots remain. These selected views do **not** establish sustained
-combined graphics or mission acceptance. Read the
-[October 6 handoff](notes/HANDOFF-2026-10-06.md) and October 7 checkpoint before continuing.
+evidence. JOIN164 completes the 500-second interval and twenty input/capture phases
+with core validation verified. No validation error or device loss appears through
+**13:20.013137**, but inspected outdoor frames still alternate normal and black/green
+shading. Loading and the urgent dialog obstruct character/equipment checks. **The
+combined graphics fix fails acceptance even when the API log is clean.** Corruption
+is visible before a late guest debugger snapshot; that pause is recorded separately.
 
-The separate [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md)
-passes 20 actual-source CPU checks against five failures in the original allocator;
-all 23 retirement checks pass. Its Release build is deployed for JOIN160, which
-reproduces one descriptor-reset error through **12:37.486264** with tracing off.
-Its inspected captures show loading/dialogs and a Rhinoceros reconnect warning;
-character/world acceptance is not established. The cache increment has not
-resolved the observed native fault.
+The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
+actual-source CPU checks against five original failures, with all 23 retirement
+checks passing. Completed native runs JOIN160 and JOIN162 nevertheless reproduce
+descriptor-reset errors. A [bounded lifetime ring](notes/rpcs3-descriptor-lifetime-ring.md)
+has 20 concurrency checks and 10 decoder tests, but no native fault dump yet.
+JOIN161 stalls at selection; JOIN163 stalls after matchmaking and fails capture.
+JOIN164's four-minute delayed arm progresses without capturing a reset. These
+comparisons do not identify either stall's cause or resolve the intermittent fault.
 
-A [bounded memory trace](notes/rpcs3-descriptor-lifetime-ring.md) now retains the
-lead-up to descriptor-reset callbacks without continuous trace output. Its 20
-concurrency checks, 10 decoder tests and Release build pass. JOIN161 has the core
-layer verified but fails to reach matchmaking and is closed at character selection.
-Its hang's cause remains open; no captured reset correlation or post-match
-acceptance is obtained. The join runner now fails and cleans up when matchmaking
-times out, instead of continuing into a misleading post-match sampling interval.
-
-JOIN162 uses the same diagnostic build with the ring disabled from boot. It reaches
-matchmaking and completes the fixture, but reproduces one descriptor-reset error
-through **12:32.372609**. Outdoor captures alternate normal and black/green shading;
-the urgent-message dialog obstructs character/equipment inspection. The change in
-selection behavior does not establish the cause of JOIN161's stall. A separate
-comparison arms the ring only after a verified matchmaking reply.
-That comparison later stalls without a reset callback or dump and fails its
-final screenshot; it provides no passing conformance or combined visual result.
-The runner now propagates failed screenshot-child exits and cleans up its owned
-stack, with 14 process-boundary checks and 20 shutdown checks passing.
+The runner now rejects failed screenshot-child exits and cleans up its owned stack,
+with 14 process-boundary checks and 20 shutdown checks passing. A new
+[one-shot native RSX capture marker](notes/rpcs3-native-rsx-capture.md) builds successfully
+and will collect command/resource evidence for the shading fault. Its native capture
+and replay still require verification. Existing SPU colour reads remain enabled.
+Read the [October 6 handoff](notes/HANDOFF-2026-10-06.md) and October 7 checkpoint
+before continuing; the earlier normal Titan/inventory views remain bounded evidence.
 
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe
