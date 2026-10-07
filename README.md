@@ -57,6 +57,10 @@ through **12:32.372609**. Outdoor captures alternate normal and black/green shad
 the urgent-message dialog obstructs character/equipment inspection. The change in
 selection behavior does not establish the cause of JOIN161's stall. A separate
 comparison arms the ring only after a verified matchmaking reply.
+That comparison later stalls without a reset callback or dump and fails its
+final screenshot; it provides no passing conformance or combined visual result.
+The runner now propagates failed screenshot-child exits and cleans up its owned
+stack, with 14 process-boundary checks and 20 shutdown checks passing.
 
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe

@@ -12,6 +12,19 @@ function Get-D1DefaultDataRepo {
     return $current
 }
 
+function Invoke-D1CheckedPowerShellStep {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$Arguments = @()
+    )
+    # Native pwsh exits do not obey the caller's PowerShell error preference.
+    # A failed input/screenshot child must never become a completed join.
+    & pwsh -NoProfile -File $Path @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "PowerShell step '$([IO.Path]::GetFileName($Path))' failed with exit code $LASTEXITCODE."
+    }
+}
+
 function ConvertTo-D1ProcessArgument {
     param([AllowEmptyString()][string]$Value)
     # Start-Process joins ArgumentList with spaces on Windows. Apply the Windows

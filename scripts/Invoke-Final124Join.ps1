@@ -116,78 +116,84 @@ function Get-JoinEmulatorId {
     $process.Id
 }
 # Character select uses a free cursor: right and up onto the stored character, then Log In.
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys D -HoldMs 500 -WaitSeconds 0 | Out-Null
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys W -HoldMs 125 -WaitSeconds 1
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -Keys X -WaitSeconds 3
-$deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
-$openingSkipSent = $false
-$loginRetryAttempts = 0
-$lastLoginPress = Get-Date
-while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
-    if ((Get-Date) -gt $deadline) {
-        # A timed-out character/login flow is not a post-match fixture.
-        # Reuse exact ownership cleanup before returning this failed run.
-        & $PSCommandPath -Name $Name -Local $D1Local -DataRepo $DataRepo -Stop | Out-Null
-        Remove-Job $launch -Force
-        throw 'No matchmaking reply within 7 minutes; post-match fixture was not started.'
-    }
-    $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
-    $retryDue = -not $selectionAnswered -and $loginRetryAttempts -lt 3 -and
-        ((Get-Date) - $lastLoginPress).TotalSeconds -ge 6
-    if ($retryDue -or ($SkipOpeningCinematic -and -not $openingSkipSent)) {
-        Get-JoinEmulatorId | Out-Null
-        $openingState = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" `
-            --process-manifest (Join-Path $logs "$Name-processes.json") | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0) { throw 'Could not verify the join bootflow stage.' }
+try {
+    Invoke-D1CheckedPowerShellStep -Path "$PSScriptRoot\Invoke-RpcsStep.ps1" -Arguments @('-ProcessId', (Get-JoinEmulatorId), '-Keys', 'D', '-HoldMs', 500, '-WaitSeconds', 0) | Out-Null
+    Invoke-D1CheckedPowerShellStep -Path "$PSScriptRoot\Invoke-RpcsStep.ps1" -Arguments @('-ProcessId', (Get-JoinEmulatorId), '-Keys', 'W', '-HoldMs', 125, '-WaitSeconds', 1)
+    Invoke-D1CheckedPowerShellStep -Path "$PSScriptRoot\Invoke-RpcsStep.ps1" -Arguments @('-ProcessId', (Get-JoinEmulatorId), '-Keys', 'X', '-WaitSeconds', 3)
+    $deadline = (Get-Date).AddMinutes(7)   # the prologue video runs about 3 minutes
+    $openingSkipSent = $false
+    $loginRetryAttempts = 0
+    $lastLoginPress = Get-Date
+    while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
+        if ((Get-Date) -gt $deadline) {
+            # A timed-out character/login flow is not a post-match fixture.
+            # Reuse exact ownership cleanup before returning this failed run.
+            throw 'No matchmaking reply within 7 minutes; post-match fixture was not started.'
+        }
         $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
-        # The first Cross can be lost while character select is loading. Retry
-        # only its exact native wait, and stop once the service has answered.
-        if ($retryDue -and (Test-D1CharacterLoginRetry -State $openingState `
-                -Attempts $loginRetryAttempts -SecondsSincePress ((Get-Date) - $lastLoginPress).TotalSeconds `
-                -SelectionAnswered $selectionAnswered)) {
-            $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
-                (Join-Path $logs "$Name-login-retry-$($loginRetryAttempts + 1)-before.json") -Encoding utf8
-            & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
-                -ProcessIdentity $emulatorIdentity -Keys X -HoldMs 500 -GapMs 50 | Out-Null
-            $loginRetryAttempts++
-            $lastLoginPress = Get-Date
-            "$(Get-Date -Format HH:mm:ss) stored-character login retry $loginRetryAttempts posted"
-            # Resample on the next iteration before considering a Mars skip.
-            continue
+        $retryDue = -not $selectionAnswered -and $loginRetryAttempts -lt 3 -and
+            ((Get-Date) - $lastLoginPress).TotalSeconds -ge 6
+        if ($retryDue -or ($SkipOpeningCinematic -and -not $openingSkipSent)) {
+            Get-JoinEmulatorId | Out-Null
+            $openingState = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" `
+                --process-manifest (Join-Path $logs "$Name-processes.json") | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Could not verify the join bootflow stage.' }
+            $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
+            # The first Cross can be lost while character select is loading. Retry
+            # only its exact native wait, and stop once the service has answered.
+            if ($retryDue -and (Test-D1CharacterLoginRetry -State $openingState `
+                    -Attempts $loginRetryAttempts -SecondsSincePress ((Get-Date) - $lastLoginPress).TotalSeconds `
+                    -SelectionAnswered $selectionAnswered)) {
+                $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
+                    (Join-Path $logs "$Name-login-retry-$($loginRetryAttempts + 1)-before.json") -Encoding utf8
+                & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
+                    -ProcessIdentity $emulatorIdentity -Keys X -HoldMs 500 -GapMs 50 | Out-Null
+                $loginRetryAttempts++
+                $lastLoginPress = Get-Date
+                "$(Get-Date -Format HH:mm:ss) stored-character login retry $loginRetryAttempts posted"
+                # Resample on the next iteration before considering a Mars skip.
+                continue
+            }
+            # Only the pre-matchmaking character prologue is eligible. Never post
+            # skip input into an activity's revival, power beat or outro.
+            if ($SkipOpeningCinematic -and -not $openingSkipSent -and
+                $openingState.current -eq 24 -and $openingState.target -eq 24 -and
+                $openingState.name -eq 'character:prologue' -and
+                $openingState.stage_unchanged_during_sample) {
+                $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
+                    (Join-Path $logs "$Name-opening-skip-before.json") -Encoding utf8
+                & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
+                    -ProcessIdentity $emulatorIdentity -Keys C -HoldMs 1500 -GapMs 50 | Out-Null
+                $openingSkipSent = $true
+                "$(Get-Date -Format HH:mm:ss) opening Mars cinematic skip input posted"
+            }
         }
-        # Only the pre-matchmaking character prologue is eligible. Never post
-        # skip input into an activity's revival, power beat or outro.
-        if ($SkipOpeningCinematic -and -not $openingSkipSent -and
-            $openingState.current -eq 24 -and $openingState.target -eq 24 -and
-            $openingState.name -eq 'character:prologue' -and
-            $openingState.stage_unchanged_during_sample) {
-            $openingState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath `
-                (Join-Path $logs "$Name-opening-skip-before.json") -Encoding utf8
-            & "$PSScriptRoot\Send-RpcsKey.ps1" -ProcessId (Get-JoinEmulatorId) `
-                -ProcessIdentity $emulatorIdentity -Keys C -HoldMs 1500 -GapMs 50 | Out-Null
-            $openingSkipSent = $true
-            "$(Get-Date -Format HH:mm:ss) opening Mars cinematic skip input posted"
-        }
+        Start-Sleep 3
     }
-    Start-Sleep 3
-}
-$start = Get-Date
-for ($i = 1; ((Get-Date) - $start).TotalSeconds -lt $AfterMatchSeconds; $i++) {
-    Start-Sleep ($i -le 30 ? 1 : 8)   # keep short in-world transitions in the timeline
-    Get-JoinEmulatorId | Out-Null
-    $line = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" --world --process-manifest (Join-Path $logs "$Name-processes.json") `
-        --out (Join-Path $research "$Name-bootflow-$i.json") 2>&1 |
-        Select-Object -Last 1
-    "$(Get-Date -Format HH:mm:ss) $line"
-    if ($CaptureTimeline) {
-        $shot = & "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0 |
+    $start = Get-Date
+    for ($i = 1; ((Get-Date) - $start).TotalSeconds -lt $AfterMatchSeconds; $i++) {
+        Start-Sleep ($i -le 30 ? 1 : 8)   # keep short in-world transitions in the timeline
+        Get-JoinEmulatorId | Out-Null
+        $line = & $D1Python "$PSScriptRoot\rpcs3_final124_bootflow.py" --world --process-manifest (Join-Path $logs "$Name-processes.json") `
+            --out (Join-Path $research "$Name-bootflow-$i.json") 2>&1 |
             Select-Object -Last 1
-        [pscustomobject]@{ time = (Get-Date).ToUniversalTime().ToString('o'); sample = "$Name-bootflow-$i.json"; screenshot = $shot } |
-            ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $logs "$Name-screenshots.jsonl")
+        "$(Get-Date -Format HH:mm:ss) $line"
+        if ($CaptureTimeline) {
+            $shot = & "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0 |
+                Select-Object -Last 1
+            [pscustomobject]@{ time = (Get-Date).ToUniversalTime().ToString('o'); sample = "$Name-bootflow-$i.json"; screenshot = $shot } |
+                ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $logs "$Name-screenshots.jsonl")
+        }
     }
+    Invoke-D1CheckedPowerShellStep -Path "$PSScriptRoot\Invoke-RpcsStep.ps1" -Arguments @('-ProcessId', (Get-JoinEmulatorId), '-WaitSeconds', 0)
+    # The kept stack can hold the launcher job's output pipe open; do not wait on it indefinitely.
+    Wait-Job $launch -Timeout 60 | Out-Null
+    Remove-Job $launch -Force
+    "done; close with: scripts/Invoke-Final124Join.ps1 -Name $Name -Stop"
+} catch {
+    $joinFailure = $_
+    try { & $PSCommandPath -Name $Name -Local $D1Local -DataRepo $DataRepo -Stop | Out-Null }
+    catch { Write-Warning "Join failure cleanup needs attention: $_" }
+    if (Get-Job -Id $launch.Id -ErrorAction SilentlyContinue) { Remove-Job $launch -Force }
+    throw $joinFailure
 }
-& pwsh -NoProfile -File "$PSScriptRoot\Invoke-RpcsStep.ps1" -ProcessId (Get-JoinEmulatorId) -WaitSeconds 0
-# The kept stack can hold the launcher job's output pipe open; do not wait on it indefinitely.
-Wait-Job $launch -Timeout 60 | Out-Null
-Remove-Job $launch -Force
-"done; close with: scripts/Invoke-Final124Join.ps1 -Name $Name -Stop"

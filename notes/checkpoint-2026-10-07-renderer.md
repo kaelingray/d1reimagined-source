@@ -191,3 +191,43 @@ verified. It retains the same baseline interval and eleven phases, then adds lat
 dialog dismissal/body/world checks because JOIN162's early Cross presses occurred
 during loading. Those extra phases are separately identified; their result and a
 captured lifetime fault remain unproved until the run completes.
+
+## JOIN163: stalled rendering, no captured reset fault
+
+JOIN163 keeps the ring off through character selection and arms it after verified
+matchmaking at **08:57:44 UTC**. Core validation is verified at arming and before
+shutdown. The 500-second sampling interval completes, but rendering stops making
+useful progress and the final screenshot command fails. There is no reset
+callback or frozen ring dump through native **12:15.839029**, and no queue/query
+or device-loss entry. This stalled interval is **not passing conformance or
+graphics acceptance**. None of the twenty intended later phases completes.
+
+A private host dump is captured after the sampling interval, before owned
+shutdown. Offline unwinding uses the matching executable/PDB and local image
+unwind tables. At that instant the RSX thread yields in the FIFO-empty branch;
+the Vulkan driver worker waits for its wake event. This does not identify why
+the guest stops supplying frames or establish the trace as the stall's cause.
+Dump capture can perturb timing and provides one host snapshot, not a continuous
+comparison. Cleanup restores the original configuration and closes all owned
+processes without errors. All dump/log/media inputs remain private.
+
+All **11 indexed originals** remain present with their recorded hashes; **13
+unindexed sources** retain their recorded decode/duration failures and original
+bytes. The last two indexed sources fully decode (**30.25/30.19 seconds**, 1280×720,
+game audio). Four sampled frames show an urgent dialog over dark scenery followed
+by black loading views. They provide no accepted body, equipment or mission result.
+
+The runner had ignored the failed native PowerShell screenshot child's exit
+status and printed `done`; its caller then marked the baseline completed before
+the later visual step failed. [Checked child execution](../scripts/Final124RunHelpers.ps1)
+now propagates input/screenshot failures, and the join runner cleans up exact
+owned processes before rethrowing. Failed final capture cannot reach `done`.
+[Fourteen isolated checks](../scripts/Test-Final124JoinCapture.ps1) pass, including
+actual first/final failure paths through the join runner with harmless sleeping
+children and a mock service. All **20 existing shutdown checks** pass. These
+test process boundaries and ownership, not native gameplay or renderer repair.
+
+The next trace comparison retains a four-minute OFF interval after matchmaking
+before arming. It records any reset callbacks preceding that arm separately;
+they cannot be attributed to later retained events. The new failure gate also
+requires successful native captures before fixture completion.

@@ -337,3 +337,10 @@ black/green shading, while the urgent-message dialog prevents character/equipmen
 acceptance. The OFF comparison has no trace correlation and does not establish
 the cause of the preceding selection stall. Follow the October 7 checkpoint for
 the separate late-arm comparison and honest original/fragment decode outcomes.
+
+JOIN163 arms after matchmaking, completes sampling, then fails its final
+screenshot while rendering is stalled. There are no reset/queue/query/device-loss
+entries through **12:15.839029** and no frozen dump; this is **not accepted
+conformance**. Its ignored child exit is now propagated with owned cleanup,
+covered by 14 process-boundary/integration checks plus 20 shutdown checks.
+Absence of errors in a stalled run does not establish working Vulkan rendering.

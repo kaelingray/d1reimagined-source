@@ -71,3 +71,11 @@ character inspection. No ring dump is expected in that OFF comparison. A separat
 test arms only after a verified matchmaking reply; it must retain an actual
 callback and complete trace before any lifetime cause is accepted. A single
 selection success with the ring off does not explain JOIN161's stall.
+
+JOIN163 arms after matchmaking but later stalls, obtains no reset callback/dump,
+and fails its final screenshot. Its 500-second sampling interval therefore has
+no accepted visual or conformance result. A matching-symbol host snapshot places
+RSX in FIFO-empty/yield and the driver worker in its wake-event wait, without
+establishing the reason for the stall. The next experiment delays arming for four
+minutes after matchmaking and records pre-arm errors explicitly. See the
+October 7 checkpoint for the repaired screenshot-child failure gate and tests.
