@@ -80,6 +80,11 @@ and never reaches sampled idle24. A native mission capture saves and parses;
 replay shows black scenery/corrupted HUD despite the lit original recording.
 Automatic stable handoff and capture/replay fidelity remain open. All captures
 stay outside these repositories; no snapshot asset is changed or revalidated.
+JOIN179 reaches the recorded endpoint with a0.25-unit final tolerance. Fresh
+native observations show the manual handover replaces the player about30units
+back and the client requests112 again. Guarded movement reaches and passes the
+entrance on that player without sampled idle24. Automatic streaming remains
+unaccepted; this is source/runtime evidence and does not alter the data snapshot.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-08-mission.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
