@@ -37,7 +37,10 @@ combined live-game acceptance remain open. These tests do not regenerate or
 validate this snapshot's assets; native captures remain outside both repositories.
 A shorter follow-up exposes cancellation of the unfinished sign-in observer,
 which closes the kept stack before capture. The source runner has an isolated
-tested profile-reply handoff repair; its native follow-up remains pending.
+tested profile-reply handoff repair. JOIN168 verifies retained native ownership
+after its shorter interval and saves another capture after an unobstructed
+outdoor cinematic image. Replay shows loading UI rather than that reference;
+matching outdoor capture/replay and live-game acceptance remain unverified.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
