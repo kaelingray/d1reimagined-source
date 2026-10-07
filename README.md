@@ -35,6 +35,9 @@ native UI/control capture. Replay-only allocation and display-buffer repairs
 allow its inactivity dialog to be replayed; outdoor-fault capture/replay and
 combined live-game acceptance remain open. These tests do not regenerate or
 validate this snapshot's assets; native captures remain outside both repositories.
+A shorter follow-up exposes cancellation of the unfinished sign-in observer,
+which closes the kept stack before capture. The source runner has an isolated
+tested profile-reply handoff repair; its native follow-up remains pending.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
