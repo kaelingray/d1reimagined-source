@@ -95,9 +95,11 @@ stay private; they are not repository assets or production-package payloads.
 
 JOIN168 verifies the repaired short-join handoff and saves another native
 capture after an inspected unobstructed outdoor cinematic view. Both replay
-images show loading UI instead of that earlier view. The next captured frame
-may differ from the reference; matching outdoor replay and reproduction of the
-outdoor fault remain unverified. The native parser runs, core validation is
+images show loading UI instead of that earlier view. Follow-up inspection of the
+untouched native recordings confirms loading before the capture marker, consistent
+with the replay. This is not evidence that replay substitutes loading for outdoor
+scenery. Matching outdoor replay and reproduction of the outdoor fault remain
+unverified. The native parser runs, core validation is
 verified, and owned cleanup restores configuration. See the
 [October 7 checkpoint](checkpoint-2026-10-07-renderer.md) for the actual timing
 and scope. No new live-game graphics repair is claimed.

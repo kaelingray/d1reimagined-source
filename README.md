@@ -48,8 +48,14 @@ requests a successful handoff after the user-profile reply and verifies observer
 completion before reporting success. JOIN168 verifies that handoff with the exact
 client still alive after its shorter 60-second interval. Cross dismisses the urgent
 message and an inspected frame shows unobstructed outdoor scenery. A subsequent
-native capture saves successfully, but its replay shows loading UI; matching
-outdoor-frame capture/replay remains unverified.
+native capture saves successfully. Follow-up inspection of untouched recordings
+confirms loading was already visible before the capture marker, consistent with
+the loading replay. Matching outdoor-frame capture/replay remains unverified.
+JOIN169 dismisses the urgent dialog but fails to reach idle slice112; the guarded
+route sends no walking input and the activity host reconnects. A
+[read-only session probe](notes/session-transition-probe-0124.md) corrects the
+context lookup and records the pending transition machines before timeout.
+Its five focused checks pass; this is diagnostic progress, not a mission fix.
 
 The [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md) passes 20
 actual-source CPU checks against five original failures, with all 23 retirement
@@ -77,10 +83,11 @@ continuous checks still required. The [October 5 checkpoint](notes/checkpoint-20
 [inventory repair](notes/inventory-items-0124.md) retain their bounded original evidence.
 
 Priority is core gameplay, stability, fidelity, content coverage, multiplayer/backend
-completeness, then polish. Next: investigate the remaining fragment/rendering corruption,
-correlate any recurring descriptor reset with actual submission and completion,
-and obtain unobstructed character/equipment, outdoor and mission views together.
-Continue the stalled slice-transition investigation once the renderer permits it.
+completeness, then polish. Next: resolve the opening mission's stalled slice
+transition using native session evidence, then verify visible control and mission
+progress. Continue correlating recurring descriptor resets with submission and
+completion, and require unobstructed character/equipment, outdoor and mission
+views together for graphics acceptance.
 
 ## Reproducing the active target
 

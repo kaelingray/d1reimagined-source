@@ -439,6 +439,28 @@ The live stack closes at **14:16:44 UTC**, preserving the original title/watch,
 XInput, inactive controls and shared RPCN. The owned replay closes at
 **14:18:17 UTC** and restores the original global configuration. Both cleanup
 receipts have no errors. Native captures remain private; the new recording
-clips have not yet received final full-decode/visual inspection. Next: align
-the actual captured scene with a fresh reference before evaluating an outdoor
-control/fault pair, while retaining combined character/world/mission acceptance.
+clips subsequently receive full-decode/visual inspection. All eleven indexed
+originals hash-match, and one unindexed failure remains preserved. The last two
+raw clips fully decode, 30.22/6.4 seconds, 1280×720 with audio. Inspected samples
+confirm loading before the capture marker, consistent with the replay, rather
+than an established replay scene-substitution defect. Matching outdoor/fault
+capture and combined character/world/mission acceptance remain open.
+
+## JOIN169–171: native transition diagnosis
+
+JOIN169 dismisses the urgent dialog but its guarded route stops at **15:10:15 UTC**
+without reaching idle112 or sending walking input. Two requested transitions are
+followed by activity-host reconnects. Its late session timeline cannot establish
+the pre-timeout cause and used the wrong context-handle field. JOIN170 closes its
+owned checkpoint without a probe attached; no timeout diagnosis is claimed.
+
+The [corrected read-only session probe](session-transition-probe-0124.md) starts
+automatically in JOIN171 before the request. Its five focused checks pass, and
+1,372 native samples resolve the actual active context without lookup/recheck
+failures. The second pending machine remains2 while slice112 is loaded/inactive.
+Native engine and host sent copies contain112, but no type21 reaches the proxy
+after the request. The first pending machine remains0; no session37/38 is observed.
+A late screenshot fails, and two separate native clock reads are unchanged.
+These observations narrow the next transport/stall investigation; they are not
+a repaired mission or graphics result. Owned cleanup completes **17:42:18 UTC**
+with original configuration/watch/input/controls restored and no errors.
