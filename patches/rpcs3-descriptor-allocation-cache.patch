@@ -1,0 +1,16 @@
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index fbe8566..f31d240 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -244,6 +244,11 @@ namespace vk
+ 
+ 	void descriptor_pool::next_subpool()
+ 	{
++		// Unissued cached sets belong to the pool being retired. A different-layout
++		// or uncached allocation can exhaust it while these handles remain cached.
++		// Drop them on the allocating thread before queuing its asynchronous reset.
++		m_descriptor_set_cache.clear();
++
+ 		if (m_current_subpool_index != umax)
+ 		{
+ 			// Enqueue release using gc

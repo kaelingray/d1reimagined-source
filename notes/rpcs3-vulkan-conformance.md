@@ -281,3 +281,33 @@ separately and investigate their exact resource lifetimes/layouts. A short run
 without device loss does not establish crash resolution. Stable full-body,
 equipment, outdoor and mission views are still required to accept the user's
 flicker/distortion fix; mission handoff and combat remain separate open work.
+
+## Late October 6 guarded-depth comparison and October 7 cache audit
+
+JOIN158 uses executable `55efc907` with the optional guarded depth candidate enabled.
+The 500-second post-match fixture completes, but core validation reports two
+`VUID-vkResetDescriptorPool-descriptorPool-00313` callbacks at 3:39.734023 and
+3:40.279613. The final native log reaches **12:02.875802** without queue/query or
+device-loss entries. The lifetime trace begins after the failures and reaches
+its cap; it cannot correlate their submissions. Inspected outdoor views still
+alternate normal shading and black/green corruption, and the message-of-the-day
+obstructs character/equipment phases. This is failed bounded conformance and
+unaccepted visual/gameplay behavior.
+
+The separate [allocation cache increment](rpcs3-descriptor-allocation-cache.md)
+drops unissued old-pool handles at rollover. All 20 actual-source CPU checks pass
+against five failures in the original allocator; all 23 retirement checks also
+pass with current diagnostic mocks. The native failure's cause remains unproved:
+inspected graphics tables allocate one layout per owned pool. Follow the
+[October 7 checkpoint](checkpoint-2026-10-07-renderer.md) for native build/run status.
+
+JOIN159 repeats `55efc907` with the guarded depth candidate enabled, an earlier
+bounded trace and longer menu inputs. It completes the fixture and nine phases
+with the core layer verified, reaching **14:06.829486** without validation IDs or
+queue/query/descriptor-reset/device-loss entries. Inputs clear the dialogs and
+reach character/inventory/world views. The sampled Titan and final world shading
+look normal, but initial loading, level/light zero and weapon spinners remain.
+The trace covers the earlier failure window and reaches its cap without a failure.
+That does not establish repair of intermittent faults or sustained combined
+fidelity. The allocator increment is built and deployed for a trace-off JOIN160;
+its native result is pending. Exact details are in the October 7 checkpoint.

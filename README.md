@@ -10,7 +10,7 @@ Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1rei
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state — 2026-10-06
+## Current state — 2026-10-07
 
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
@@ -19,22 +19,26 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
 | Ghost | Authored member/performance bindings create one bound Ghost after the tested readiness/reset gate; helper components resolve. | The reset remains a protocol experiment. Visible torch behavior and automatic mission cues are unverified. |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
-| Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 81 tests; 11 actual-controller checks cover pending source retention. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
+| Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The [October 6 checkpoint](notes/checkpoint-2026-10-06-renderer.md) and
+The [October 7 checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
 [Vulkan conformance record](notes/rpcs3-vulkan-conformance.md) hold the latest renderer
-evidence. JOIN154 completes its bounded fixture but retains descriptor/layout errors.
-JOIN155 completes without validation IDs or device loss, but diagnostic trace coverage
-ends before earlier failures and the inspected outdoor scene is still distorted.
-Those results do **not** accept the flicker/distortion repair. A new attachment-layout
-candidate passes 31 CPU checks against 15 failures in the original control flow;
-its full Release build passes and it is now deployed. JOIN157 completes the same
-fixture with core validation, tracing off and no validation IDs or device loss
-through 11:48.007191. Outdoor images still alternate between normal shading and
-black/green corruption; startup dialogs obstruct the character check. The
-flicker/distortion repair remains **unaccepted**. Read the
-[October 6 handoff](notes/HANDOFF-2026-10-06.md) before continuing.
+evidence. JOIN158 enables the guarded depth-only candidate on the attachment-layout
+build; eligible sampled draws take the intended path, but two descriptor-reset
+validation callbacks recur and outdoor corruption remains. JOIN159 repeats that
+build with an earlier trace and longer inputs. It completes with the core layer
+verified and no validation errors or device loss through **14:06.829486**. Inputs
+clear both dialogs and reach character, inventory and world views. The inspected
+returned Titan and final outdoor frames look normal, but level/light zero and
+loading weapon slots remain. These selected views do **not** establish sustained
+combined graphics or mission acceptance. Read the
+[October 6 handoff](notes/HANDOFF-2026-10-06.md) and October 7 checkpoint before continuing.
+
+The separate [allocation cache repair](notes/rpcs3-descriptor-allocation-cache.md)
+passes 20 actual-source CPU checks against five failures in the original allocator;
+all 23 retirement checks pass. Its Release build is deployed for JOIN160, whose
+native result is pending. Its connection to the native fault remains unproved.
 
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe

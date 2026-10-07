@@ -13,6 +13,10 @@ not establish that the pool's host callbacks have finished. Releasing their owne
 by age can invalidate both GPU descriptors and a pending callback pointer.
 This source defect is established; its contribution to JOIN136/137 remains unproven.
 
+The later [allocation cache repair](rpcs3-descriptor-allocation-cache.md) covers a
+separate stale-handle path during mixed-layout or uncached rollover. It does not
+replace these owner/completion checks or establish the cause of native failures.
+
 `patches/rpcs3-descriptor-pool-retirement.patch` keeps the existing sweep policy and
 adds two nonblocking requirements: a completed submission strictly later than the
 table's last use, and no pending pool-reset callbacks. The strict comparison adds
