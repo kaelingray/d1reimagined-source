@@ -52,7 +52,13 @@ Patch SHA-256: `c93a2e69d170e1e927fefcbdffac8365dbff1af6e9f9d1eaca7ce79a3f704fc2
 The full incremental MSVC x64 Release build passes, with warnings retained in
 private evidence. Executable SHA-256:
 `ef67aa5cf3c015de130cef958f1abfe345bd92a74964e2c20515e35e238f7645`.
-It is deployed at idle with a verified backup of `4706856a`. JOIN161 is running
-the same Titan/world-113 fixture with the ring armed, text tracing off and core
-validation enabled. Its native result is **pending**. See the
+It is deployed at idle with a verified backup of `4706856a`. JOIN161 starts with
+the ring armed, text tracing off and core validation enabled, but **fails to reach
+matchmaking**. It remains at character selection, with repeated screenshot/input
+failures. The ring is disabled during the run as a diagnostic comparison; the
+selection wait still has not progressed nearly two minutes later. That does not
+establish the cause of the hang. No reset callback or frozen dump is obtained.
+The test is closed at that safe menu checkpoint after its matchmaking deadline;
+owned cleanup succeeds and its fixture-completed flag is false. It provides no
+post-match conformance or combined graphics acceptance. See the
 [October 7 checkpoint](checkpoint-2026-10-07-renderer.md) for combined acceptance.

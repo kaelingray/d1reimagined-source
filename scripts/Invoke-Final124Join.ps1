@@ -124,7 +124,13 @@ $openingSkipSent = $false
 $loginRetryAttempts = 0
 $lastLoginPress = Get-Date
 while (-not (Select-String -Path $bap -Pattern 'mm rsp' -Quiet)) {
-    if ((Get-Date) -gt $deadline) { 'no mm req within 7 minutes'; break }
+    if ((Get-Date) -gt $deadline) {
+        # A timed-out character/login flow is not a post-match fixture.
+        # Reuse exact ownership cleanup before returning this failed run.
+        & $PSCommandPath -Name $Name -Local $D1Local -DataRepo $DataRepo -Stop | Out-Null
+        Remove-Job $launch -Force
+        throw 'No matchmaking reply within 7 minutes; post-match fixture was not started.'
+    }
     $selectionAnswered = Select-String -Path $bap -Pattern 'sent select-character rsp|pushed self .*after-501' -Quiet
     $retryDue = -not $selectionAnswered -and $loginRetryAttempts -lt 3 -and
         ((Get-Date) - $lastLoginPress).TotalSeconds -ge 6

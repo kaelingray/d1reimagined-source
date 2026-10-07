@@ -45,8 +45,11 @@ resolved the observed native fault.
 
 A [bounded memory trace](notes/rpcs3-descriptor-lifetime-ring.md) now retains the
 lead-up to descriptor-reset callbacks without continuous trace output. Its 20
-concurrency checks, 10 decoder tests and Release build pass. JOIN161 is testing
-it with core validation; the native result is pending.
+concurrency checks, 10 decoder tests and Release build pass. JOIN161 has the core
+layer verified but fails to reach matchmaking and is closed at character selection.
+Its hang's cause remains open; no captured reset correlation or post-match
+acceptance is obtained. The join runner now fails and cleans up when matchmaking
+times out, instead of continuing into a misleading post-match sampling interval.
 
 The depth-only shader candidate stays disabled by default. Queue, query, GC and fence
 audits have 48, 29, 14 and 71 passing CPU checks respectively; these counts describe

@@ -84,10 +84,28 @@ occurs. Its 20 concurrent-ring checks and 10 decoder tests pass; allocation and
 retirement regression audits remain 20/20 and 23/23. The Release build passes and
 is deployed at idle with a verified backup. Executable SHA-256:
 `ef67aa5cf3c015de130cef958f1abfe345bd92a74964e2c20515e35e238f7645`.
-JOIN161 uses the same 500-second Titan/world-113 fixture, the guarded depth
-candidate and core validation, with text tracing off and the ring armed. Its
-result is pending. This instrumentation is not a renderer repair or a passing
-graphics claim.
+JOIN161 is configured for the same 500-second Titan/world-113 fixture, the guarded
+depth candidate and core validation, with text tracing off and the ring armed.
+It instead remains at character selection and never receives a matchmaking
+reply. The core layer is verified live. Screenshots time out and posted cursor/
+Cross retries do not establish consumed actions. Disabling the ring at the safe
+menu checkpoint does not restore observed progress nearly two minutes later;
+the hang's cause remains unproved. No reset callback or frozen dump is obtained.
+
+The existing runner prints its seven-minute matchmaking timeout but then enters
+the post-match sampling loop anyway. That failure path now closes the exact owned
+stack and throws before post-match sampling. The already loaded JOIN161 script
+still uses the earlier behavior, so its unmatched run is explicitly stopped at
+character selection. Cleanup verifies all owned processes closed, original title/
+watch bytes, XInput, inactive controls and shared RPCN, with no errors. Its fixture
+is **incomplete**, not passing conformance. This instrumentation is not a renderer
+repair or a passing graphics claim.
+
+The reused cleanup path passes **20 isolated shutdown checks** with real sleeping
+child processes, including client-before-backend ordering, stale-identity rejection,
+unrelated-process preservation and repeated-stop evidence retention. PowerShell
+syntax passes. Those checks verify cleanup, not the missing-match branch in a
+new native run or the underlying character-selection hang.
 
 ## JOIN159: unobstructed inspection on the preceding build
 

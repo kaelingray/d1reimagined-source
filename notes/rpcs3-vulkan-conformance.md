@@ -321,5 +321,9 @@ October 7 checkpoint.
 The next comparison uses a [bounded memory trace](rpcs3-descriptor-lifetime-ring.md)
 that freezes on a real descriptor-reset callback. It has 20 passing ring checks,
 10 passing decoder tests, 20 allocation and 23 retirement regression checks, and
-a passing Release build. JOIN161 native validation and causal correlation remain
-pending. It changes diagnostics, not Vulkan resource lifetime or visual acceptance.
+a passing Release build. JOIN161 verifies the core layer but stalls at character
+selection without a matchmaking reply or reset callback. Its fixture is incomplete
+and cleanup succeeds; it has no post-match conformance acceptance or captured
+reset correlation. The join runner now cleans up and throws on the missing-match
+deadline instead of entering post-match sampling. The trace changes diagnostics,
+not Vulkan resource lifetime or visual acceptance.
