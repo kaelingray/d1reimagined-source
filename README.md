@@ -30,6 +30,11 @@ Rhinoceros reconnect warning; the repair has not resolved the observed native
 fault. Snapshot data files are unchanged.
 The next diagnostic run stalls at character selection without reaching matchmaking;
 its incomplete fixture is not accepted as passing conformance.
+The same diagnostic build with the ring disabled from boot reaches matchmaking
+and completes the next fixture, but again reports a descriptor-reset error and
+visible outdoor corruption. A dialog obstructs character inspection; the combined
+rendering fix remains unaccepted. The next comparison arms tracing after verified
+matchmaking. These results do not regenerate or validate this snapshot's assets.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
