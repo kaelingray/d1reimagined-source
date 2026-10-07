@@ -1,6 +1,6 @@
 # A Guardian Rises: 01.24 acceptance checks
 
-Updated 2026-10-05. This turns the two user-supplied tutorial
+Updated 2026-10-08. This turns the two user-supplied tutorial
 specifications into checks for the PS3 BLES01857 01.24 client. It summarizes their requirements;
 it does not copy their walkthrough, dialogue, proposed API, or public-release enemy counts.
 
@@ -9,6 +9,14 @@ and walking to the Wall have live evidence. The Breach progression, Ghost illumi
 weapons, combat, completion, and Tower hand-off remain incomplete.
 
 ## Evidence and the next gate
+
+Latest repeat: JOIN176/177 complete the repaired 113→112 transition on the original
+host connection. JOIN177 dismisses the inspected dialogs and consumes guarded
+outdoor movement, stopping at its 45-second budget about 73 world units from its
+start. The character menu renders a full armoured Titan, but earlier outdoor
+black/green shading persists. This is bounded traversal and menu evidence; the
+Breach route, combined graphics, progression and combat remain unaccepted.
+See the [October 8 checkpoint](checkpoint-2026-10-08-mission.md).
 
 - **Observed:** read directly from the 01.24 executable/content, or captured in an identified
   01.24 run. Serialization tests prove a state can be encoded, not that it produces the expected

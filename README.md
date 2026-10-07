@@ -10,19 +10,20 @@ Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1rei
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state — 2026-10-07
+## Current state — 2026-10-08
 
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | Earlier native runs play the resurrection cinematics, hand control to the Guardian outside the Wall, show initial objectives and enter the Wall. JOIN176 completes the native 113→112 transition after reducing routine console output; the host confirms arrival and 1,397 samples show idle112. Activity 229 uses scenario checksum `0x8fe07299`. | Repeat the repaired transition with visible control, then verify Breach handoff, objectives, rifle pickup, combat, mission completion and Tower arrival. A world-entry state label alone proves none of these. |
+| Opening mission | Earlier native runs play the resurrection cinematics, hand control to the Guardian outside the Wall, show initial objectives and enter the Wall. JOIN176/177 repeat native 113→112 arrival on the original host connection after reducing routine console output. JOIN177 consumes guarded movement and advances about 73 world units along the outdoor route. Activity 229 uses scenario checksum `0x8fe07299`. | Finish the route and verify Breach handoff, objectives, rifle pickup, combat, mission completion and Tower arrival. The latest route stops at its 45-second budget; it does not reach the Breach. |
 | Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
 | Ghost | Authored member/performance bindings create one bound Ghost after the tested readiness/reset gate; helper components resolve. | The reset remains a protocol experiment. Visible torch behavior and automatic mission cues are unverified. |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The [October 7 checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
+The [October 8 checkpoint](notes/checkpoint-2026-10-08-mission.md),
+[October 7 renderer checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
 [Vulkan conformance record](notes/rpcs3-vulkan-conformance.md) hold the latest renderer
 evidence. JOIN164 completes the 500-second interval and twenty input/capture phases
 with core validation verified. No validation error or device loss appears through
@@ -97,9 +98,9 @@ continuous checks still required. The [October 5 checkpoint](notes/checkpoint-20
 [inventory repair](notes/inventory-items-0124.md) retain their bounded original evidence.
 
 Priority is core gameplay, stability, fidelity, content coverage, multiplayer/backend
-completeness, then polish. Next: repeat the repaired opening slice transition,
-dismiss the inspected dialog and verify visible Guardian control and mission
-progress. Continue correlating recurring descriptor resets with submission and
+completeness, then polish. Next: continue the consumed outdoor movement toward the
+Wall and verify the client-requested Breach transition. Obtain a matching outdoor
+RSX capture while the owned client is live. Continue correlating recurring descriptor resets with submission and
 completion, and require unobstructed character/equipment, outdoor and mission
 views together for graphics acceptance.
 
@@ -112,7 +113,12 @@ session through its bounded checkpoint. Its last inspected footage still has the
 urgent dialog over outdoor scenery. Eight socket/session checks and the broader
 88-check backend suite pass; an earlier timing-sensitive failure is retained in
 the private record. This repairs the tested transition, not Guardian control,
-combat or the combined graphics fault. See the
+combat or the combined graphics fault. JOIN177 repeats idle112 on the original
+connection, clears both dialogs, consumes movement and renders a full armoured
+Titan in the character menu. Earlier black/green outdoor shading remains visible;
+later bright frames and a rendered menu do not pass combined graphics acceptance.
+The native capture attempt misses the bounded deadline and is rejected before
+creating a marker. See the
 [session evidence](notes/session-transition-probe-0124.md#join175176-routine-console-backpressure--7-october-2026).
 
 ## Reproducing the active target
