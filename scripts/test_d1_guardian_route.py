@@ -53,11 +53,14 @@ class GuardianRoute(unittest.TestCase):
     def test_hook_lease_preserves_other_hooks_and_concurrent_changes(self):
         path = self.root / "d1ppu.txt"
         original = "# diagnostics\n20f858 15 r3:4\n138e24 3 r4:16\n"
-        path.write_text(original)
-        with HookLease(path):
-            self.assertIn("20f858 15 r3:4", path.read_text())
-            self.assertIn("# guardian route saved: 138e24 3 r4:16", path.read_text())
-        self.assertEqual(path.read_text(), original)
+        # JOIN179 restored the directives but changed LF to CRLF on Windows.
+        # A diagnostic lease must restore the operator's exact bytes in both cases.
+        for original_bytes in (original.encode(), original.replace("\n", "\r\n").encode()):
+            path.write_bytes(original_bytes)
+            with HookLease(path):
+                self.assertIn("20f858 15 r3:4", path.read_text())
+                self.assertIn("# guardian route saved: 138e24 3 r4:16", path.read_text())
+            self.assertEqual(path.read_bytes(), original_bytes)
         with HookLease(path):
             path.write_text("# operator changed the diagnostics\n1df644 20\n")
         self.assertEqual(path.read_text(), "# operator changed the diagnostics\n1df644 20\n")

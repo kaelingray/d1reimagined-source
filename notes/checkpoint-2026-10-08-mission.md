@@ -95,3 +95,76 @@ crossing before accepting or automating the client-requested handoff. Investigat
 the capture/replay mismatch separately. Captures/logs remain private; combined
 character/world graphics, automatic Breach progression and the full mission remain
 unaccepted. These events occur on8October UK while their UTC date is7October.
+
+## JOIN179: precise arrival and the post-handover player
+
+The route tool now accepts an optional `--final-radius`, affecting only the last
+recorded point. Intermediate tolerance, ownership, fresh-player checks and
+transition guards remain unchanged. The existing 29 route/walker/memory/session
+checks pass. Actual CLI attempts with zero, negative, NaN and infinite final
+radii are rejected before native access or output creation.
+
+With the same backend and C5 renderer, `--wait 12 --budget 200 --final-radius 0.25`
+reaches `[353.8122,-796.3141,14.1274]` at **23:47:52.979 UTC on 7 October**.
+After key release, the same player settles near `[354.3044,-796.1596,14.1003]`.
+Current112/target24 remains in phase3. Closer recorded-point arrival alone does
+not settle the handoff.
+
+The existing manual host request is queued after a fresh owned state/position
+check at23:48:37.945UTC. Current24 arrives23:48:40.289UTC, followed by target112
+at23:48:45.433UTC. This time a fresh read-only callback follows the player through
+the transition. The player before the request is approximately
+`[354.304,-796.160,14.100]`; the fresh replacement callback identifies a different
+entity near `[324.445,-795.639,14.101]`. Old-address reads also change during the
+intervening phase6 and are not accepted as the current player's position: these
+reads are non-atomic and a recent callback cannot guarantee unit lifetime across
+respawn. This observes the replacement player following the forced host handover.
+The backend's existing
+state3 path is documented to respawn the player; the new observation must not be
+treated as seamless streaming.
+
+A native entry watch captures the real follow-player call at01.24 address352138,
+caller352f8c: requested target112 with named-set hash68935472. This corroborates
+the return request without inventing a protocol acknowledgement. The native
+selection record is retained privately; its volume indexes are not assumed to
+be global slice-set IDs.
+
+Two bounded ordinary-pad experiments on the fresh replacement player traverse
+the inspected entrance corridor. The first reaches the recorded endpoint at
+23:50:31.975UTC; the second reaches `[356.1282,-796.3821,14.0744]` at
+23:51:34.765UTC, beyond that endpoint. Subsequent position samples settle near
+`[356.8223,-796.2950,14.0866]`. Current24/target112 remains in phase3.
+The player consumes controls, but rewalking the doorway does not establish an
+idle24 handoff. These are diagnostic input experiments, not automatic mission
+logic or a gameplay fix.
+
+An inspected frame shows the lit Breach windows/interior; other inspected frames
+have black scenery with the HUD present. Combined graphics acceptance remains
+open. No RSX capture is armed in this run, and no new replay result is claimed.
+Next: resolve the client-directed streaming transition separately from the
+forced teleport/respawn path, retaining actual player identity, position, current
+slice, target slice and usable controls through the handover.
+
+Across2,572 non-atomic session samples,480 show idle112 and1,268 show active24;
+none shows idle24. Every sample retains session6, with no pointer/context recheck
+failure. Owned cleanup ends23:54:00.171UTC: title/watch bytes restore, XInput and
+sharedRPCN are preserved, controls/errors are empty, and exact recorded identities
+are independently checked closed. The two short movement helpers end normally;
+their live process identities are not captured before they exit, so no exact-ID
+receipt is claimed for them. Core validation is verified and the bounded native
+log contains no VUID, device-loss or fatal-severity entries. Those checks do not
+establish correct rendered output.
+
+Twenty-eight indexed original recordings retain matching hashes; one unindexed
+failure remains preserved. The final two originals fully decode30.24/20.47seconds,
+1280×720 with audio. Their reported average/base frame rates18.82/30 and18.98/30
+describe recordings, not measured gameplay FPS. Originals and diagnostics remain
+private; no final video is edited and no new capture/replay comparison is claimed.
+
+After native closure, a diagnostic restoration check finds that Python text IO
+restores all watch directives but converts nine LF endings to CRLF. The wrapper
+still restores the original backup bytes. The source lease now saves/restores
+bytes and compares its installed bytes before cleanup, preserving concurrent
+operator changes. The existing lease regression exercises both LF and CRLF
+restoration; the 29 relevant checks pass again. This repair has filesystem/CPU
+acceptance after JOIN179 and is not represented as its tested native build.

@@ -9,6 +9,9 @@ rejoin, a new slice request or a position jump. Only pad input is sent; guest me
 only. Diagnostic watch lines are preserved and private audit/state/result/grid files are
 written beside the manifest by default. This is a route test, not proof of mission completion.
 
+--final-radius overrides only the last point's arrival tolerance. Intermediate points retain
+--radius; a coarse endpoint arrival must not be mistaken for crossing a slice boundary.
+
 --allow-breach-preload explicitly allows the observed engine-3 player-follow request for
 24/0x68935472 while the same player remains in 112. At the canonical route's final point,
 the observed reversed 24 -> 112 request permits at most 20 seconds within five units of the
@@ -140,22 +143,23 @@ class HookLease:
         if not isinstance(hits, int) or not 1 <= hits <= 1000000:
             raise ValueError("player hook hit budget must be 1..1000000")
         self.path = Path(path)
-        self.original = self.path.read_text(encoding="utf-8") if self.path.exists() else ""
+        self.original_bytes = self.path.read_bytes() if self.path.exists() else b""
+        self.original = self.original_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
         preserved = "".join("# guardian route saved: " + line if HOOK_LINE.match(line) else line
                             for line in self.original.splitlines(keepends=True))
         self.installed = preserved.rstrip("\r\n") + f"\n# guardian route: fresh player only\n138e24 {hits}\n"
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        current = self.path.read_text(encoding="utf-8") if self.path.exists() else ""
-        if current != self.original:
+        current = self.path.read_bytes() if self.path.exists() else b""
+        if current != self.original_bytes:
             raise RouteStopped("diagnostic watch changed before the player hook could be armed")
-        self.path.write_text(self.installed, encoding="utf-8")
+        self.path.write_bytes(self.installed.encode("utf-8"))
         return self
 
     def __exit__(self, *unused):
-        if self.path.read_text(encoding="utf-8") == self.installed:
-            self.path.write_text(self.original, encoding="utf-8")
+        if self.path.read_bytes() == self.installed.encode("utf-8"):
+            self.path.write_bytes(self.original_bytes)
 
 
 class Guard:
@@ -318,6 +322,8 @@ def main(argv=None):
     ap.add_argument("--out-dir", type=Path)
     ap.add_argument("--every", type=int, default=3)
     ap.add_argument("--radius", type=float, default=1.5, help="arrival tolerance in world units (JOIN88: 1.5)")
+    ap.add_argument("--final-radius", type=float,
+                    help="optional final-point tolerance; intermediate points retain --radius")
     ap.add_argument("--allow-breach-preload", action="store_true",
                     help="EXPERIMENT: allow only the engine-3 112 -> 24 preload with the same live player")
     ap.add_argument("--wait", type=float, default=600, help="seconds to wait for slice112 and idle engine")
@@ -334,10 +340,14 @@ def main(argv=None):
         ap.error("wait and budget must be finite and positive")
     if not math.isfinite(args.radius) or args.radius <= 0:
         ap.error("radius must be finite and positive")
+    if args.final_radius is not None and (not math.isfinite(args.final_radius) or args.final_radius <= 0):
+        ap.error("final radius must be finite and positive")
     points = route_points(args.route, args.every)
     output.mkdir(parents=True, exist_ok=True)
     emulator_dir = Path(identity["executable"]).parent
-    result, pad, grid = {"run": run, "started_utc": utc_now(), "status": "stopped"}, None, None
+    final_radius = args.radius if args.final_radius is None else args.final_radius
+    result, pad, grid = {"run": run, "started_utc": utc_now(), "status": "stopped",
+                         "radius": args.radius, "final_radius": final_radius}, None, None
     with (output / "audit.jsonl").open("a", encoding="utf-8", buffering=1) as stream:
         def audit(**fields):
             stream.write(json.dumps({"utc": utc_now(), **fields}) + "\n")
@@ -403,8 +413,9 @@ def main(argv=None):
                     if (args.allow_breach_preload and args.route.resolve() == WALL_ROUTE.resolve() and
                             index == points[-1][0]):
                         guard.arm_final_entry(point)
-                    audit(ev="waypoint", route_index=index, xyz=point)
-                    if not walker.go(point[:2], radius=args.radius, budget=max(0, guard.deadline - time.monotonic())):
+                    radius = final_radius if index == points[-1][0] else args.radius
+                    audit(ev="waypoint", route_index=index, xyz=point, radius=radius)
+                    if not walker.go(point[:2], radius=radius, budget=max(0, guard.deadline - time.monotonic())):
                         raise RouteStopped(f"waypoint {index} was not reached")
                 result.update(status="route_reached", final_xyz=player.position())
         except (RouteStopped, OSError, ValueError) as exc:

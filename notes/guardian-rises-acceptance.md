@@ -27,6 +27,15 @@ Stable automatic Breach handoff remains open. The saved mission-frame capture
 parses, but its replay does not match the lit original; graphics acceptance remains
 open as well.
 
+JOIN179 tightens only the route's final arrival radius to0.25 and reaches the
+recorded point. The handoff still stalls. Fresh native callbacks observe a
+replacement player about30units back after the manual host request; the actual
+follow-player controller requests112 again. Bounded ordinary movement reaches
+and passes the doorway on that replacement player without sampled idle24.
+The next gate must distinguish seamless client-directed streaming from the
+forced teleport/respawn experiment. Precise arrival and consumed controls do
+not establish automatic Breach progression.
+
 - **Observed:** read directly from the 01.24 executable/content, or captured in an identified
   01.24 run. Serialization tests prove a state can be encoded, not that it produces the expected
   gameplay.
