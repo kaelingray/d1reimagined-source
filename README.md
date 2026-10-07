@@ -39,8 +39,13 @@ A shorter follow-up exposes cancellation of the unfinished sign-in observer,
 which closes the kept stack before capture. The source runner has an isolated
 tested profile-reply handoff repair. JOIN168 verifies retained native ownership
 after its shorter interval and saves another capture after an unobstructed
-outdoor cinematic image. Replay shows loading UI rather than that reference;
-matching outdoor capture/replay and live-game acceptance remain unverified.
+outdoor cinematic image. Untouched recording inspection confirms loading before
+the capture marker, consistent with its loading replay. Matching outdoor
+capture/replay and live-game acceptance remain unverified. JOIN169 dismisses the
+urgent dialog but does not reach idle slice112; no guarded walking input is sent.
+The source adds a corrected read-only session/context probe to diagnose that
+transition before timeout, with five focused checks passing. This is not a
+gameplay repair and does not change or validate this snapshot's assets.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
