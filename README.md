@@ -24,8 +24,10 @@ service maps, package counts and serializer preflights are not gameplay acceptan
 Late October 6 testing still shows outdoor corruption and descriptor-reset errors.
 The October 7 repeat reaches character/inventory views with normal sampled Titan
 proportions and no validation errors; sustained graphics acceptance remains open.
-The allocator repair has isolated CPU/build acceptance and a native test pending;
-its role in the earlier failure remains unproved. Snapshot data files are unchanged.
+The allocator repair has isolated CPU/build acceptance, but its completed native
+test reproduces a descriptor-reset error. Captures show loading/dialogs and a
+Rhinoceros reconnect warning; the repair has not resolved the observed native
+fault. Snapshot data files are unchanged.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
