@@ -261,3 +261,74 @@ Inspected samples show loading UI, not controlled gameplay. Cleanup finishes
 and XInput restored, controls inactive, errors empty. Core validation is verified
 before stop and the bounded log has zero validation IDs/device loss/fatal entries.
 Combined character/equipment/outdoor/mission rendering remains unaccepted.
+
+## JOIN175/176 routine console backpressure — 7 October 2026
+
+JOIN175 preserves the original backend and `c5bc7f57` renderer. Its transition
+state arrives in separate payloads rather than the previous34-byte combined
+delta, so fixed47-byte allocation/consumer/header watches do not emit. That is
+a filter-scope limitation, not evidence of a failed allocator or header encoder.
+All16 subtype21 attempts reach the broad wrapper/direct/allocator watches.
+The1,156 session samples contain548 loaded/inactive112 observations and no
+idle112, with no lookup/recheck failures. Owned cleanup finishes20:14:43UTC.
+
+A non-atomic transport snapshot at20:08:37UTC has an empty direct/forward queue,
+inner state8 and packet counter3403; the original proxy is still receiving frames
+near1300. This suggests a receive backlog rather than a lost queue record.
+The original event/console timestamps independently bound2,023 unique frame
+prints:32 exceed one second, with93.919seconds of total elapsed time and a worst
+interval of6.579seconds. The interval is immediately before the flushed stdout
+print through the structured log timestamp after it; it includes scheduling
+delay and does not identify the OS cause. A broader event-to-log measure also
+includes event IO and must not be treated as pure stdout time.
+
+`server/bap_server.py` now suppresses only the two console lines for the exact
+encrypted AH notification with flag1, subtype15, length1, reserved0 and body00.
+The host ID is still parsed and every packet still follows normal processing.
+Full encrypted/plain binary files and structured frame/AH events remain retained.
+Other messages remain visible; `--verbose-wire` restores the previous verbosity.
+No ACK, schema, teleport state, guest memory or renderer behavior is changed.
+
+Two actual encrypted socket tests send64 routine packets, a nonroutine type15
+and a type21. They verify contiguous frame/event capture, all original binary
+files, host reaction execution and the verbosity override. The eight session
+tests pass. The broader command, run from `server`, is:
+
+```powershell
+python -m unittest test_ah_session test_bap_server test_activity_join test_bap_teleport_delta test_run_log
+```
+
+Its first88-test run fails one existing150ms teleport test while the native test
+is active. That12-test module subsequently passes in isolation, and the full
+88-test command passes on repeat in10.577seconds after native closure. The
+initial failure remains recorded; no timing expectation was weakened.
+
+JOIN176 tests the same Titan/highway fixture and renderer with the changed
+backend. The broad producer hook observes all10 subtype21 allocations. Its
+consumer/header watches select37-byte bodies; the observed combined transition
+uses47bytes, so those watches do not support a header-return claim. Actual
+host receipt provides stronger delivery evidence:
+
+- **20:24:41.288UTC:** host requests112.
+- **20:24:42.299UTC:** host decodes current−1, target112, state2, peer byte2.
+- **20:24:42.695UTC:** fresh state4 arrives; host publishes finishing state3.
+- **20:24:43.906UTC:** current112 arrives; the host clears the group switch.
+- **20:24:48.663–20:30:39.950UTC:**1,397 samples show active112 with no loading
+  and phase0. Pending20 clears, group0 is112 and group1 is empty.
+
+All1,747 non-atomic samples retain session6 with no lookup/recheck failures.
+The original connection persists until owned shutdown, with5,873 routine
+notifications fully captured. Cleanup finishes20:31:22UTC, all exact processes
+closed, original title/watch and XInput restored, controls inactive, errors empty.
+Core validation is verified before stop; the bounded log contains no validation
+IDs, device loss or fatal entries. No RSX capture is armed.
+
+Twenty-three indexed originals hash-match; one unindexed failure is retained.
+The last two originals fully decode30.32/10.69seconds,1280×720 with audio. Their
+reported average/base9.12/30 and9.14/30 describe recordings, not gameplay FPS.
+Inspected samples show the urgent dialog over outdoor scenery and a level-up
+prompt. No additional Cross or walking input occurs after the baseline checkpoint.
+This verifies the repaired transition in one native run; it does not verify
+visible Guardian control, character proportions, sustained graphics, combat or
+mission completion. Next: repeat with owned dialog dismissal and inspected
+Guardian movement, then resume the real mission route and combined fidelity gate.

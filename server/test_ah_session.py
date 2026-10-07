@@ -193,6 +193,41 @@ class ActivityHostSession(unittest.TestCase):
         self.assertIn({"ah_type": 15, "body": "41"}, [{k: e[k] for k in ("ah_type", "body")} for e in host])
         self.assertTrue(any(e.get("ev") == "frame" and e["type"] == b.SHELLO_REQ for e in events))
 
+    def check_routine_notification_capture(self, verbose):
+        extra = ("--verbose-wire",) if verbose else ()
+        c = self.start("--ah-baselines", "0x10/3/0", "--ah-heartbeat", "0.05:-1", "--ah-on",
+                       '15/^00=>0@0x10:3:0:0x80809002={"0":9}', *extra)
+        for _ in range(64):
+            c.notify(15, b"\x00")
+            time.sleep(0.003)
+        c.notify(15, b"\x41")
+        c.notify(b.AH_CLIENT_STATE, b"\x00")
+        pushes = c.pushes(0.3)
+        self.assertTrue(any(subtype == b.AH_SIMULATION
+                            and objects_in(self.schema, data).get((0x10, 3, 0)) == {0: 9}
+                            for _, subtype, data in pushes))
+        folder = next(Path(self.tmp.name).glob("*/events.jsonl")).parent
+        events = [json.loads(line) for line in (folder / "events.jsonl").read_text().splitlines()]
+        frames = [e for e in events if e.get("ev") == "frame"]
+        self.assertEqual([e["n"] for e in frames], list(range(1, 69)))
+        self.assertEqual(len(list(folder.glob("*-client-plain.bin"))), 67)
+        self.assertEqual(len(list(folder.glob("*-client-kind*.bin"))), 68)
+        routine = [e for e in events if e.get("ev") == "ah"
+                   and e["ah_type"] == 15 and e["body"] == "00"]
+        self.assertEqual(len(routine), 64)
+        self.assertTrue(any(e.get("ev") == "ah" and e["ah_type"] == b.AH_CLIENT_STATE
+                            for e in events))
+        printed = [line for line in self.logs if "c->ah not host 0x1 type 15 len 1 body 00" in line]
+        self.assertEqual(len(printed), 64 if verbose else 0)
+        self.assertTrue(any("c->ah not host 0x1 type 15 len 1 body 41" in line for line in self.logs))
+        self.assertTrue(any("c->ah not host 0x1 type 21" in line for line in self.logs))
+
+    def test_routine_console_suppression_preserves_capture_and_reactions(self):
+        self.check_routine_notification_capture(verbose=False)
+
+    def test_verbose_wire_retains_routine_console_lines(self):
+        self.check_routine_notification_capture(verbose=True)
+
     def test_mission_script_with_clock_and_trigger(self):
         mission = {"objects": {"timed": "0x10:3:0:0x80809002", "next": "0x10:3:1:0x80809002",
                                "trig": "0x10:3:2:0x80809002"},

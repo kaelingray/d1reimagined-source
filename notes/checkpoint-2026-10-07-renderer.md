@@ -507,3 +507,20 @@ or Guardian control. The exact owned stack closes19:40:51UTC with settings resto
 and no errors. Twenty indexed originals hash-match, three failed sources remain
 preserved, and the last two raw clips fully decode30.33/16.5seconds. Actual samples
 show loading. Native API cleanliness remains distinct from graphics/playability.
+
+JOIN175/176 turn the stalled transition into a tested backend repair. The original
+run exposes long waits around flushed console output while the proxy trails the
+client's packet counter. Suppressing only repeated type15/00 console lines retains
+all binary/event captures and handlers; `--verbose-wire` restores them. The same
+renderer/fixture then completes113→112 on the original connection. Actual type21
+receipt, teleport finish/group-clear and1,397 idle112 samples establish the scoped
+repair. Eight encrypted socket/session tests and the broader88-test suite pass;
+one earlier timing-sensitive failure is recorded before isolation/repeat PASS.
+
+JOIN176 closes20:31:22UTC with the original settings restored and no cleanup errors.
+Core validation remains active and its bounded log has no validation IDs, device
+loss or fatal entries. Inspected final footage still has the urgent dialog over
+outdoor scenery. Renderer behavior is unchanged; combined graphics and visible
+Guardian control are still unaccepted. See the session note for exact test,
+timestamp, filter-scope and media limitations. Next: repeat the repaired transition
+with owned dialog dismissal and visible control before progressing to the Wall.

@@ -596,6 +596,9 @@ AH_MGR_REQ, AH_MGR_RSP = 0x06, 0x07
 # Client -> activity host message relayed by the proxy: u64 host id | u8 1 | u32 type |
 # u32 length | u32 0 | body (type 3 = host join request carrying account and character ids).
 AH_NOT = 0x08
+# Exact routine notification observed repeatedly in 01.24. Keep its full capture
+# and normal processing, but avoid two flushed stdout writes per packet by default.
+ROUTINE_TYPE15_PAYLOAD = struct.pack(">BIII", 1, 15, 1, 0) + b"\x00"
 # Activity host messages are typed structs in the investment bit format (0x25bd0c /
 # 0x25bc88). Client -> host types come from the table at *(0x179eba4), host -> client types
 # from *(0x179eba8); the schema is exported with scripts/rpcs3_tiger_types.py (outside Git).
@@ -1669,6 +1672,7 @@ def handle(conn, peer, args):
     # notes/architecture-multiplayer.md); with "ready" the timed steps wait for the client
     client_ready_at = None
     incident_echoed = False
+    quiet_notifications = 0
 
     def mission_t0(world_anchor):
         return world_anchor if args.mission_clock == "world" else client_ready_at
@@ -1740,8 +1744,14 @@ def handle(conn, peer, args):
             payload = body[6:]
             record_event(ev="frame", n=number, kind=kind, type=msg_type, name=NAMES.get(msg_type, hex(msg_type)),
                    id=msg_id, payload=payload.hex())
-            log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
-                f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
+            quiet_frame = (kind == 1 and msg_type == AH_NOT
+                           and not getattr(args, "verbose_wire", False)
+                           and payload[8:] == ROUTINE_TYPE15_PAYLOAD)
+            if quiet_frame:
+                quiet_notifications += 1
+            else:
+                log(f"[{tag}] frame {number} (kind {kind}): {NAMES.get(msg_type, hex(msg_type))} "
+                    f"id={msg_id} payload={len(payload)} bytes {payload[:48].hex()}")
             if kind == 1 and msg_type == WS_REQ and payload[:2] == bytes.fromhex("01f7") and args.ws_signin:
                 account_id = int.from_bytes(payload[38:46], "big")
                 if args.ws_markers:
@@ -1872,7 +1882,8 @@ def handle(conn, peer, args):
                 host_id, _flag, ah_type, ah_len = struct.unpack_from(">QBII", payload)
                 body = payload[21:21 + ah_len]
                 record_event(ev="ah", n=number, host=f"{host_id:#x}", ah_type=ah_type, body=body.hex())
-                log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
+                if not quiet_frame:
+                    log(f"[{tag}] c->ah not host {host_id:#x} type {ah_type} len {ah_len} body {body.hex()}")
                 if ah_type == AH_CLIENT_PROGRESS and client_ready_at is None and client_in_world(body):
                     client_ready_at = time.time()
                     log(f"[{tag}] client in world (type 17 {CLIENT_IN_WORLD:#x})"
@@ -2300,6 +2311,9 @@ def handle(conn, peer, args):
         conn.close()
         sink, _events.sink = _events.sink, None
         sink.close()
+        if quiet_notifications:
+            log(f"[{tag}] retained full captures for {quiet_notifications} routine type-15 notifications; "
+                "per-packet console lines omitted (use --verbose-wire to restore them)")
 
 
 def user_msg_body(spec):
@@ -2354,6 +2368,8 @@ def parse_args(argv=None):
                     help="ws result code in the first 4 bits (0 error_none, 1 unknown, 2 no_content, "
                          "3 moved, 4 not_found, 5 service_unavailable, 6 unauthorized, 7 timeout)")
     ap.add_argument("--capture-dir", type=Path, default=CAPTURE_DIR)
+    ap.add_argument("--verbose-wire", action="store_true",
+                    help="also print each routine type-15 packet; full binary/event captures are always retained")
     ap.add_argument("--ws-no-reply", type=lambda v: {int(x) for x in v.split(",") if x},
                     default=set(),
                     help="comma-separated ws services to leave unanswered (experiments only)")

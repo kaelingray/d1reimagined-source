@@ -15,7 +15,7 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | Earlier native runs play the resurrection cinematics, hand control to the Guardian outside the Wall, show initial objectives and enter the Wall. Activity 229 uses scenario checksum `0x8fe07299`. | Reliable Breach slice handoff, objectives, rifle pickup, combat, mission completion and Tower arrival remain unverified. A world-entry state label alone proves none of these. |
+| Opening mission | Earlier native runs play the resurrection cinematics, hand control to the Guardian outside the Wall, show initial objectives and enter the Wall. JOIN176 completes the native 113→112 transition after reducing routine console output; the host confirms arrival and 1,397 samples show idle112. Activity 229 uses scenario checksum `0x8fe07299`. | Repeat the repaired transition with visible control, then verify Breach handoff, objectives, rifle pickup, combat, mission completion and Tower arrival. A world-entry state label alone proves none of these. |
 | Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
 | Ghost | Authored member/performance bindings create one bound Ghost after the tested readiness/reset gate; helper components resolve. | The reset remains a protocol experiment. Visible torch behavior and automatic mission cues are unverified. |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
@@ -97,11 +97,23 @@ continuous checks still required. The [October 5 checkpoint](notes/checkpoint-20
 [inventory repair](notes/inventory-items-0124.md) retain their bounded original evidence.
 
 Priority is core gameplay, stability, fidelity, content coverage, multiplayer/backend
-completeness, then polish. Next: resolve the opening mission's stalled slice
-transition using native session evidence, then verify visible control and mission
+completeness, then polish. Next: repeat the repaired opening slice transition,
+dismiss the inspected dialog and verify visible Guardian control and mission
 progress. Continue correlating recurring descriptor resets with submission and
 completion, and require unobstructed character/equipment, outdoor and mission
 views together for graphics acceptance.
+
+The latest backend change removes two flushed console writes for each exact
+routine type-15/00 notification; all binary captures, structured events and
+packet processing remain enabled. `--verbose-wire` restores those console lines.
+JOIN175 records long waits around console output and no idle112. JOIN176 receives
+the transition deltas, completes the teleport and remains in the original host
+session through its bounded checkpoint. Its last inspected footage still has the
+urgent dialog over outdoor scenery. Eight socket/session checks and the broader
+88-check backend suite pass; an earlier timing-sensitive failure is retained in
+the private record. This repairs the tested transition, not Guardian control,
+combat or the combined graphics fault. See the
+[session evidence](notes/session-transition-probe-0124.md#join175176-routine-console-backpressure--7-october-2026).
 
 ## Reproducing the active target
 
