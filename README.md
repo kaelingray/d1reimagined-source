@@ -35,6 +35,10 @@ and completes the next fixture, but again reports a descriptor-reset error and
 visible outdoor corruption. A dialog obstructs character inspection; the combined
 rendering fix remains unaccepted. The next comparison arms tracing after verified
 matchmaking. These results do not regenerate or validate this snapshot's assets.
+That comparison later stalls and fails capture without a reset trace; absence
+of errors in the stalled interval is not passing conformance. The source runner's
+capture failure gate now has isolated process/cleanup checks. Snapshot assets
+remain unchanged and combined gameplay/graphics acceptance is still open.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-07-renderer.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
