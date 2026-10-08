@@ -46,6 +46,8 @@ WALL_DENSE_POINTS = (1, 2, *range(44, 52))
 WALL_SLICE = (112, 0x811C9DC5)
 BREACH_SLICE = (24, 0x68935472)
 FINAL_ENTRY_SECONDS = 20
+UNSTABLE_RETRIES = 5
+UNSTABLE_RETRY_SECONDS = 0.05
 FINAL_ENTRY_DISTANCE = 5
 HOOK = re.compile(rb"\bpc=0x138e24\s+lr=0x352a4c\b.*?\br4=0x([0-9a-f]+)\b", re.I)
 HOOK_LINE = re.compile(r"^\s*(?:0x)?138e24(?:\s|$)", re.I)
@@ -233,6 +235,14 @@ class Guard:
 
     def check(self):
         state = self.observe()
+        # Snapshots are non-atomic: JOIN189 stopped on one torn sample (stage 36, engine 0)
+        # while the engine wrote the preload target. Re-sample briefly; persistent instability
+        # still stops below.
+        for _ in range(UNSTABLE_RETRIES):
+            if state["stable"]:
+                break
+            time.sleep(UNSTABLE_RETRY_SECONDS)
+            state = self.observe()
         if self.deadline is not None and time.monotonic() >= self.deadline:
             raise RouteStopped("route time budget exhausted")
         preload = self.walking and self.allow_breach_preload

@@ -367,3 +367,42 @@ boundaries and need review before any use.
 Next: find volumes 173/174 (triggers 120/121) and trigger 34's volume from the activity
 data so the route can reach them; resolve why the Breach interior renders black (scene
 lighting vs. renderer); verify the automatic bubble-3 reset produces the same Ghost blip.
+
+## JOIN189: automatic bubble-3 reset verified; Breach volumes located
+
+Same executable/fixture, source `01c9bd3`. The dialog is dismissed by one owned Cross
+after inspection; the incident-driven revival reaches current112 at 10:18:59 UTC.
+The guarded route stops after 75 s on one **torn non-atomic sample** (`stable: false`,
+stage 36, engine 0, native target being written as the client starts its 24 preload).
+The remaining Wall approach is walked with the same guarded pad helper; the natural
+crossing reports current24/target112 at 10:22:03 with no host teleport.
+
+The shipped mission rule fires the bubble-3 reset at 10:22:33.878 (30 s after
+current24); the client's Breach sensor updates start 0.3 s later and the radar shows
+the Ghost, matching JOIN188's manual reset. **Automatic Ghost-squad activation is
+verified in this scope**; a visible Ghost model, torch and enemies are not.
+
+Read-only `d1_traverse.py find` locates the floor polygons (x, y; base z; height):
+
+| Volume | Rectangle | Base z |
+| --- | --- | --- |
+| `0xfc0e45a3/0x3a/173` light-up start (trigger 120) | x 387.9–393.1, y −791.7..−787.4 | 11.88 (height 15) |
+| `0xfc0e45a3/0x3a/174` light-up continue (trigger 121) | x 387.7–394.4, y −789.1..−785.3 | 11.88 |
+| `0xfc0e45a3/0x3a/177` fly to gun | x 399.7–416.4, y −788.9..−776.4 | 11.88 |
+| `0x992bb471/0x3a/59` investigate wall (trigger 34) | polygon around x 385–400, y −787..−773 | 16.26 |
+| `0x992bb471/0x3a/67` power cinematic (trigger 37) | x 387.9–393.2, y −785.8..−783.6 | 17.49 |
+| `0x992bb471/0x3a/74` get weapon (trigger 35) | x 402.0–416.4, y −805.8..−793.0 | 7.53 |
+| `0x992bb471/0x3a/49` investigate-wall area | x 380.7–417.9, y −792.9..−766.5 | 15.00 |
+
+So the light, investigate and power volumes sit about 10 units north of the recorded
+corridor end. In darkness the guarded walker finds a railing/wall north of the
+corridor (y ≈ −796 at x 391; y ≈ −790.8 at x 369–376) and a low debris pocket at
+z 11.8 near (372–376, −794..−791) that it cannot leave quickly; no light or investigate
+incident is reported. Owned cleanup at 10:34:16 UTC is clean (all closed, hashes
+restored, XInput, no controls/errors).
+
+Source change: the route guard re-samples a torn snapshot up to five times (50 ms
+apart) before stopping; persistent instability still stops. Two new checks; all 165
+script checks pass. Next: plan a path from the corridor to x 388–393, y −791..−787
+(geometry or a recorded manual walk), then verify the light-up trigger report and the
+authored torch/performance response.

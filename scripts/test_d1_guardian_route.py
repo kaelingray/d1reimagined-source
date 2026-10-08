@@ -128,6 +128,26 @@ class GuardianRoute(unittest.TestCase):
             with self.assertRaisesRegex(RouteStopped, "loading or leaving"):
                 guard.check()
 
+    def test_guard_resamples_a_torn_snapshot_but_stops_when_instability_persists(self):
+        class Memory:
+            read = None
+        class Tail:
+            def lines(self):
+                return []
+        guard = Guard(Memory(), Tail(), self.root, lambda **event: None)
+        guard.world.current = (112, 0x811C9DC5)
+        guard.world.joins = guard.join_at_start = 1
+        guard.walking = True
+        torn = {"current": 36, "engine": 0, "stable": False}
+        stable = {"current": 36, "engine": 0, "stable": True}
+        with patch("d1_guardian_route.time.sleep"),                 patch("d1_guardian_route.run_state", side_effect=[torn, torn, stable]) as sample:
+            guard.check()
+            self.assertEqual(sample.call_count, 3)
+        with patch("d1_guardian_route.time.sleep"),                 patch("d1_guardian_route.run_state", return_value=torn) as sample:
+            with self.assertRaisesRegex(RouteStopped, "loading or leaving"):
+                guard.check()
+            self.assertEqual(sample.call_count, 6)
+
     def test_guarded_hold_releases_keys_if_mission_changes_mid_press(self):
         class FailingGuard:
             def audit(self, **unused):
