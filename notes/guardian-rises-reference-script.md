@@ -14,7 +14,7 @@ Legend: **OK** matches in the tested scope, **PARTIAL**, **MISSING**, **NOT REAC
 | --- | --- | --- | --- |
 | 04:25–04:50 | Fade in, "COSMODROME" location card, sunrise panorama, tree, bridge | Vista and tree shots present (JOIN188 09:51:42–09:52:15 UTC) | PARTIAL: location card not confirmed |
 | 04:50–05:25 | Car graveyard, towers, pull past the overturned truck, overhead shot of the cars | Same shots in order | OK (visual sample) |
-| 05:27–05:35 | Wrecked car; **the Ghost flies past/into frame** | Car shot present; Ghost not seen at sample size | MISSING (Ghost) |
+| 05:27–05:35 | Wrecked car; **the Ghost flies in through the window and turns to camera** | Identical camera move at 2 fps (JOIN192), daylight, **no Ghost in any frame** | MISSING (Ghost actor absent, not a lighting fault) |
 | 05:37–05:40 | Ghost's scan POV (blue rings, green tint) | Present | OK |
 | 05:41–05:48 | Fallen captain and dregs on the ridge | Present | OK |
 | 05:49–05:56 | Low shot of the Wall, Ghost voice ("is it possible?") | Wall shots present | PARTIAL: audio not reviewed |
@@ -76,7 +76,13 @@ the "torch" is the Ghost fits the evidence: the camera-following light appears w
 Ghost should be accompanying the player, and the visible blue Ghost appears seconds later.
 JOIN190 shows that `tv_flashlight` only gates a dialogue line.
 
-Leading hypothesis (to verify, not yet accepted): the cinematic and companion Ghost
+JOIN192 compares the daylight car shot frame for frame: the camera move is identical
+and the reference Ghost crosses the window over ~5 s, while ours has no Ghost at all.
+The cinematic Ghost is therefore **not created**, rather than drawn black. Codex's
+performance probe records two player replacement pairs, `(0,16)` and `(0,17)`; the
+second is the likely Ghost slot, filled from the local player's own Ghost.
+
+Earlier hypothesis (JOIN192 negative): the cinematic and companion Ghost
 render with the player's equipped Ghost shell. The 01.24 starter fixture equips Ghost
 item 862 in slot 11 **without a model arrangement**, so the client receives −1 and gets
 no model art, as the armour did before JOIN118. Next: read item 862's arrangement from
