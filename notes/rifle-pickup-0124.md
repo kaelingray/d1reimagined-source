@@ -86,3 +86,9 @@ either side, with the camera tilted down, produces no prompt and no client reque
 `o_weapon` with the barrier command changes nothing. The pickup is probably a loot object the
 host must place there; see [loot and rewards](loot-and-rewards.md). A second Message of the Day
 dialog can block input after control (JOIN212); automated drives now dismiss it.
+## JOIN216: equipped Khvostov renders, magazine 12, no firing
+
+Art record for item 3598: appearance 19, arrangement 2364, dyes (5, 6036) and (6, 6037). Equipped
+in slot 6 from login, the rifle renders in first person with an ammo HUD reading 12 (reference
+25/184); R2 produces no shot or ammo change. In the reference the rifle leans on the chest front
+and is taken by walking up to it, with no prompt.

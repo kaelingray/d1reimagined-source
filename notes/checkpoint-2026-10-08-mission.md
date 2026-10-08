@@ -797,3 +797,21 @@ host places at the chest (`investment_loot_object_manager`, loot nonce, `loot-ba
 `loot_component_send_pickup_message` in [the loot note](loot-and-rewards.md)), which our host
 never sends. Next: find how loot objects reach the client (host message or replicated kind)
 and how the pickup message returns to the backend, then grant the Khvostov through inventory.
+## Reference pickup and JOIN216: the Khvostov renders but does not fire
+
+Reference 08:18–08:21 at 4 fps: the rifle leans against the front of the blue chest; the player
+walks up and takes it without any prompt; then the Khvostov 7G-02 notification, the 25/184 ammo
+HUD and a grimoire card appear. Our chest has no rifle on its front.
+
+The Khvostov's art record (item 3598, table `0x80a5f241`) gives world appearance 19,
+arrangement 2364 and default dyes (5, 6036) and (6, 6037). JOIN216 (source `67b68a1`, private
+gear file adding it in slot 6, Primary Weapons) shows **the Khvostov in first person with its
+holographic sight** on the highway in daylight and in the Breach, a crosshair, and an ammo HUD
+with a rifle icon. The magazine reads **12** from the start (the reference shows 25), and two
+R2 holds on the highway (1.2 s and 0.6 s) and one in the Breach produce no muzzle flash or ammo
+change: firing is not observed. Missing per-item instance stats (magazine size) or a mission
+weapons restriction are the candidates; neither is established. The 900-second bound stops the
+client at 21:27:51 UTC; cleanup is clean.
+
+Next: the weapon instance data (stats/ammo) the inventory must carry, why firing is inert,
+and then the authentic unarmed-to-Khvostov grant at the chest.
