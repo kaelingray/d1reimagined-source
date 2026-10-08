@@ -584,3 +584,27 @@ and no Windows application error. The wrapper detects the closed client; cleanup
 14:38:32 UTC is clean (owned processes closed, title/watch restored, XInput, RPCN
 preserved). The starter default now carries appearance 0 and dye 15/2493; 197 server
 tests pass. Next: the renderer exit on the resurrection light.
+## JOIN202: starter default reproduces the Ghost; the torch follows the camera
+
+Source `00b891d` with the **committed starter default** (no gear file or overlay), plus a
+read-only watcher holding the emulator handle for its exit code. Sampled frames show the
+whole revival with the authored Ghost: over the truck, through the car window, to the
+Wall, the shell opening into the blue resurrection sphere (reference 05:57–06:03), and the
+first-person Ghost hovering centre while the hands rise (06:19–06:45). The emulator does
+**not** exit where JOIN201 did. One frame shows the renderer presenting a normals buffer,
+and the first person is much darker than the reference.
+
+The guarded route walks to the Wall door, stairs and lit corridor (07:20–07:35), and the
+client crosses naturally into slice 24. NEW MISSION and "Find a Weapon" appear; the
+banner subtitle reads "The Taken King: Prelude", which still needs comparing with the
+reference. Past the corridor, **a circular torch light follows the camera** through the
+Breach, matching reference 07:35. It is the Ghost's light: it was absent in every run
+without a valid Ghost appearance. A guarded walk climbs the stairs to the upper platform
+(z 19.3, around x 388–395, y −792..−782) and sees the railings with the red flare
+(reference 07:54). No blue Ghost, "Hang tight" line or power beat appears there yet.
+
+The wrapper's 900-second bound stops the client at 15:02:49 UTC (exit code 0xffffffff
+from the owned stop, not a crash). Cleanup is clean (owned processes closed, title/watch
+restored, XInput, RPCN preserved). JOIN201's exit therefore did not repeat in one run.
+Next: the platform beat (`pf_104a_pwr` and its trigger `0x1d/37`) with the Ghost now
+present, the first-person brightness and normals flash, and the Nav null component.

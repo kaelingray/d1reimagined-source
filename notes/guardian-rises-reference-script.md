@@ -18,9 +18,9 @@ Legend: **OK** matches in the tested scope, **PARTIAL**, **MISSING**, **NOT REAC
 | 05:37–05:40 | Ghost's scan POV (blue rings, green tint) | Present | OK |
 | 05:41–05:48 | Fallen captain and dregs on the ridge | Present | OK |
 | 05:49–05:56 | Low shot of the Wall, Ghost voice ("is it possible?") | Wall shots present | PARTIAL: audio not reviewed |
-| 05:57–06:03 | **Ghost resurrection close-up: shell opens, blue light sphere** | JOIN201: the Ghost flies to the Wall and its shell opens; the light then renders magenta and the emulator process exits | MISSING (renderer) |
+| 05:57–06:03 | **Ghost resurrection close-up: shell opens, blue light sphere** | JOIN202: the shell opens into the blue sphere in front of the Wall (JOIN201 exited here once; JOIN202 did not) | OK (sampled); intermittent exit open |
 | 06:05–06:17 | Black, eyes opening, "Guardian… eyes up" | ~20 s black/very dark | PARTIAL: much darker/longer |
-| 06:19–06:45 | Bright daylight first person; **Ghost hovers centre and talks**, Guardian's hands rise, warning about Fallen territory, Ghost flies off toward the Wall | Same viewpoint (red pipe at left) but dark, no Ghost, then green/black renderer corruption | MISSING (Ghost, lighting) |
+| 06:19–06:45 | Bright daylight first person; **Ghost hovers centre and talks**, Guardian's hands rise, warning about Fallen territory, Ghost flies off toward the Wall | JOIN202: the Ghost hovers centre and the hands rise, after a one-frame normals-buffer flash; the scene is much darker than the reference | PARTIAL (lighting) |
 | 06:47–07:00 | Control; Ghost talks; "Enter the Wall" objective and Wall diamond | Control, objective and diamond (JOIN182/188) | PARTIAL: objective text/Nav Mode open |
 
 The host now hands over on the client's cinematic-end incidents (JOIN186–188), so timing
@@ -43,10 +43,10 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 
 | Ref | Original | Ours | Status |
 | --- | --- | --- | --- |
-| 07:35–07:37 | Leaving the lit corridor: **a circular torch light follows the camera** | Black, no torch | MISSING |
+| 07:35–07:37 | Leaving the lit corridor: **a circular torch light follows the camera** | JOIN202: the circular torch follows the camera through the Breach | OK (sampled) |
 | 07:38–07:45 | Ghost: "Quiet. They're right above us."; "THE BREACH / OLD RUSSIA, EARTH"; stairs down | Area title appears at the crossing (JOIN190); `pt_fallen_above` reports and `seq_fallen_above` plays (no audible line yet) | PARTIAL |
-| 07:45–07:49 | Door, stairs down, red flare on the floor | Not reached (dark) | NOT REACHED |
-| 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | Ghost only as a radar blip after the bubble-3 reset (JOIN188–190) | MISSING (visible Ghost) |
+| 07:45–07:49 | Stairs up, then stairs down, red flare on the floor | JOIN202: guarded walk climbs to the upper platform (z 19.3) and sees the railings with the red flare | PARTIAL (path differs from the reference camera; no dialogue checked) |
+| 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN202: radar Ghost marker; no blue Ghost ahead and no dialogue on the platform | MISSING |
 | 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | `pf_104a_pwr` start by control ends immediately (JOIN188) | MISSING |
 | 08:10–08:16 | Lights come on; Ghost glows | — | MISSING |
 | 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | Not reached | NOT REACHED |

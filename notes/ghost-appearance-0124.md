@@ -3,8 +3,10 @@
 Updated 8 October 2026. **JOIN201 shows the authored Generalist Shell in the
 revival** (car window fly-in and turn to camera, reference 05:27–05:35) with
 appearance row **0** and dye **15/2493**, now the 01.24 starter default. The
-resurrection light then renders magenta and the emulator process exits; the
-first-person conversation, Breach torch and held Ghost remain unaccepted.
+resurrection light then renders magenta and the emulator process exits. JOIN202 repeats it
+through the committed default without the exit, shows the resurrection sphere and the
+first-person Ghost, and **the Breach torch follows the camera**. The held Ghost in Nav Mode,
+first-person brightness and the platform/power beat remain unaccepted.
 
 ## JOIN201: the world appearance comes from the art record
 
