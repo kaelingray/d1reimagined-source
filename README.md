@@ -85,7 +85,15 @@ native observations show the manual handover replaces the player about30units
 back and the client requests112 again. Guarded movement reaches and passes the
 entrance on that player without sampled idle24. Automatic streaming remains
 unaccepted; this is source/runtime evidence and does not alter the data snapshot.
-See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-08-mission.md).
+JOIN180 enters current24 through ordinary controls and traverses the initial
+recorded Breach corridor on the same player, without a manual host teleport24.
+Current24/target112 stays pending; no idle24 streaming acceptance or combined
+graphics fix is established. The user reports missing objective waypoints,
+revival shots and Ghost. The source's timestamped reference comparison corrects
+the earlier broad revival claim and makes those visible gaps explicit. These
+source/runtime observations do not modify or validate this snapshot's assets.
+See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-08-mission.md)
+and [reference comparison](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/guardian-rises-reference-review.md).
 
 The repository was renamed from `d1xenia-data` on 2026-10-06. Its GitHub identity,
 history and private visibility are retained. Fresh checkouts should use
