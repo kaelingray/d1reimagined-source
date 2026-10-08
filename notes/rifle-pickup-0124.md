@@ -79,3 +79,10 @@ The mission sends it automatically 2 s after creating those props; JOIN211 then 
 rifle without any control lines, trigger `0x1d:35` reports and Fight Through the Wall starts.
 A visible weapon, pickup prompt, ammo, grimoire and inventory grant remain unverified; the
 fixture still pre-equips a rifle.
+## JOIN212–215: no pickup prompt at the chest
+
+With the barrier open, the closed chest renders at the rifle point, but holding Square (Z) from
+either side, with the camera tilted down, produces no prompt and no client request; activating
+`o_weapon` with the barrier command changes nothing. The pickup is probably a loot object the
+host must place there; see [loot and rewards](loot-and-rewards.md). A second Message of the Day
+dialog can block input after control (JOIN212); automated drives now dismiss it.

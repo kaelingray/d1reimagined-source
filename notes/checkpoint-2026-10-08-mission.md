@@ -772,3 +772,28 @@ starts. The scene there is very dark: no visible rifle, pickup prompt, ammo or g
 accepted, and the fixture rifle is still pre-equipped. The 900-second bound stops the client
 at 19:36:22 UTC; cleanup is clean. Next: the authentic unarmed start and rifle grant, Breach
 lighting, then the first Fallen encounter of Fight Through the Wall.
+## JOIN212–215: the rifle chest renders but offers no pickup
+
+All four runs use source `67b68a1` (automatic Breach chain with prop activation) and stop on
+their 900-second bound with clean cleanup (exit 0xffffffff from the owned stop at 20:01:32,
+20:22:46, 20:41:15 and 20:59:40 UTC).
+
+JOIN212 never moves: after the Urgent Message, a second **"ATTENTION / Message of the Day"**
+dialog appears once the player has control and swallows all input, so the guarded route
+reports "stuck" at the spawn for its whole budget. The drive now presses Cross once 8 s after
+slice 112 (a harmless jump when no dialog is shown); JOIN213–215 move normally.
+
+The reference shows a hold-Square prompt at the rifle chest, followed by the Khvostov 7G-02
+notification, a grimoire card and 25/184 ammo. Square is keyboard Z in the automation profile
+and look-down is K. JOIN213 holds Z twice at the chest; JOIN214 approaches from the north,
+tilts the camera down and holds Z three times: brightened frames show the closed blue chest
+filling the view with **no interaction prompt**, and the activity host and BAP logs show no new
+client request (services 701/702 repeat every 50–60 s in every run and are not pickup traffic).
+JOIN215 additionally sends `o_weapon` the JOIN210 activation (channels 0–2 at 1/1/1.0) by
+diagnostic control: the host applies it, the chest stays closed and still offers no prompt.
+
+So the chest prop is scenery for this purpose. The pickup is most likely a loot item that the
+host places at the chest (`investment_loot_object_manager`, loot nonce, `loot-bauble`,
+`loot_component_send_pickup_message` in [the loot note](loot-and-rewards.md)), which our host
+never sends. Next: find how loot objects reach the client (host message or replicated kind)
+and how the pickup message returns to the backend, then grant the Khvostov through inventory.
