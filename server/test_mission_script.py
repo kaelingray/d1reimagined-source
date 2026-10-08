@@ -273,7 +273,14 @@ class BreachDialogueRules(unittest.TestCase):
         self.assertLess(names.index("seq_d_o2_50"), names.index("o_breach_doors_lights"))
         self.assertLess(names.index("o_breach_gating_lights"), names.index("seq_d_o2_70"))
         self.assertLess(names.index("seq_d_o2_70"), names.index("seq_d_o2_80"))
-        self.assertIn("o_chest_primary_weapon", names)
+        self.assertIn("o_weapon", names)
+        self.assertNotIn("o_chest_primary_weapon", names)
+        self.assertEqual(self.mission["objects"]["o_weapon"],
+                         "0x992bb471:0x4:6:0x808007d9:1")
+        (rifle,) = self.steps_setting("o_weapon")
+        self.assertEqual(rifle["on"], {"type": 18, "object": "trig_ghostlight"})
+        self.assertEqual(rifle["delay"], 30)
+        self.assertIn("seq_d_o2_80", rifle["set"])
         created = {"0": 1, "4": True, "8": {"0": 0x811C9DC5, "4": -1, "6": -1}}
         for s in chain:
             for name, value in s["set"].items():

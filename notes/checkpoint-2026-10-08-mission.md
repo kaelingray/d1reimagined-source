@@ -690,8 +690,9 @@ Grab the Rifle shows with an **on-screen waypoint** toward the rifle. The extra 
 
 JOIN206 adds native watches: prop creator `0x214478` (from `0x215bfc`) and entity creator
 `0x13f068` (from `0x2145d0`) run three times at native 0:09:55 (control, door lights,
-gating lights) and once at 0:10:03 (chest). The props are therefore created as units; the
-missing lamp light is a rendering/lighting question, not a mission-state one.
+gating lights) and once at 0:10:03 (chest). These calls establish entry into the
+creation path, not successful allocation or light activation. JOIN209 adds
+return-value and pool-membership checks; mission-state causes remain open.
 
 The rifle's nav point (`0x992bb471/0x2c/78`, nav table `0x80cb9124`) is
 **(410.78, −794.41, 18.52)** on the platform level; investigate is (392.13, −773.45) and
@@ -705,3 +706,47 @@ natively; seven creations in total) with no visible change and no way through.
 All three runs stop on the 900-second bound (exit 0xffffffff from the owned stop) with clean
 cleanup. Next: identify the grey surface (a gate prop or the real path around it), then the
 chest interaction and rifle grant; separately the lighting of the companion Ghost and lamps.
+
+## JOIN208–209: correct rifle object and close-range route precision
+
+Read-only inspection of the latest package chains finds that the previously spawned
+`o_chest_primary_weapon` is placed at (534.865, −736.800, 16.507), about 137 horizontal
+units from the rifle marker. The activity's `o_weapon` is at
+(410.644, −794.385, 17.723), within 0.14 horizontal units of that marker. The automatic
+rifle cue now creates this object instead. See [rifle evidence](rifle-pickup-0124.md).
+
+JOIN208 uses the earlier selection. Its initial route is obstructed by the urgent
+dialog; a later retry stops on a position discontinuity. No rifle success is claimed.
+An interrupted route's watch lease is restored before final cleanup; all nine owned
+identities and title/global/watch hashes are independently verified closed/restored.
+
+JOIN209 uses source `694b183` plus the rifle correction, the committed Generalist
+Shell default and the existing C5 renderer. It crosses naturally into the Breach.
+An initial direct approach from below hits geometry; the southern stair route reaches
+the upper platform and reports the light-up trigger at 19:04:22 UK. The chain sends
+`o_weapon` at 19:04:53 UK. Native creation arguments select unit `80cb828c` at the
+correct placement; the creator returns a non-absent datum. A later read-only sample
+verifies bank/index/occupancy and unchanged unit row/registry, including the three
+control/light units. Allocation still does not establish rendering or pickup.
+
+A helper defect is repaired during this run: within two units of a final goal, the
+walker could repeatedly release movement while still outside the caller's tighter
+radius. Its final-waypoint tolerance now respects that radius. The new regression
+models slower pad polling; all earlier walker checks remain. The initial helper had
+loaded the old code; subsequent helpers use the repair. No guest writes, forced
+transition, teleport, renderer rebuild or manual mission-state changes occur.
+
+The north walkway reaches the rifle barrier again. An ordinary jump does not pass
+it. The east attempt stops near x 417.6; the south attempt stops near y −788.8 before
+returning across the platform. Neither proves the authored route inaccessible.
+Pickup, ammo, grimoire, Fight Through the Wall and inventory persistence remain open.
+The host always marks optional secondary prop state absent, so light/gate activation
+must be investigated as well as rendering. Its field semantics are not yet mapped.
+
+The cooperative finish closes JOIN209 at **18:12:27 UTC** before its 25-minute
+deadline. All nine exact identities independently verify closed; title/global/watch
+hashes match baseline, XInput is restored, RPCN preserved, active controls and cleanup
+errors are empty. No RSX capture is requested or claimed. Final checks: **198 server
+tests**, **166 script tests**, final-schema preflight **1 timed / 55 reactive** pass.
+The already delivered October 8 report is unchanged; these later runs are retained
+privately for the next report.

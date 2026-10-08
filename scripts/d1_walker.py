@@ -248,7 +248,7 @@ class Walker:
         for key in keys:
             self.pad._post(self.pad.VK[key], down)
 
-    def stride(self, target, seconds=4.0, sprint=True, arrived=None):
+    def stride(self, target, seconds=4.0, sprint=True, arrived=None, target_radius=2.0):
         """Hold W toward the target, steering on the fly. Returns 'arrived', 'stuck', 'drop' or
         'time', or 'goal' when the actual goal is reached between waypoint checks."""
         if arrived is not None and arrived():
@@ -263,7 +263,7 @@ class Walker:
                 here = self.player.position()
                 if arrived is not None and arrived(here):
                     return "goal"
-                if math.dist(here[:2], target[:2]) < 2.0:
+                if math.dist(here[:2], target[:2]) < target_radius:
                     return "arrived"
                 if here[2] < last_pos[2] - 3.0:
                     return "drop"
@@ -328,7 +328,11 @@ class Walker:
             self.face(heading(here, target), arrived=arrived)
             if arrived():
                 return reached()
-            result = self.stride(target, arrived=arrived)
+            # Intermediate points use the coarse steering tolerance; the actual
+            # goal must retain the caller's tighter radius. Otherwise short W
+            # pulses can repeatedly stop before the game consumes the input.
+            target_radius = min(2.0, radius) if math.dist(target, goal) < 1e-6 else 2.0
+            result = self.stride(target, arrived=arrived, target_radius=target_radius)
             if arrival is not None:
                 return reached()
             now = self.player.position()

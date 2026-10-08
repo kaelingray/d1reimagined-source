@@ -134,5 +134,49 @@ class WalkerArrival(unittest.TestCase):
         self.assertEqual(pad.events, [])
 
 
+class WalkerPrecision(unittest.TestCase):
+    def test_close_goal_keeps_moving_until_a_slow_pad_poll_consumes_input(self):
+        # A 100 ms press/release can fall entirely between game input polls.
+        # The final goal is inside the intermediate two-unit waypoint tolerance,
+        # but outside the caller's one-unit arrival tolerance.
+        class Clock:
+            now = 0.0
+
+            def time(self):
+                self.now += 0.01
+                return self.now
+
+            def sleep(self, seconds):
+                self.now += seconds
+
+        clock = Clock()
+
+        class Pad:
+            VK = {"W": "W", "G": "G"}
+            down_at = None
+
+            def _post(self, key, down):
+                if key == "W":
+                    self.down_at = clock.now if down else None
+
+        pad = Pad()
+
+        class Player:
+            x = 0.0
+
+            def position(self):
+                if pad.down_at is not None and clock.now - pad.down_at >= 0.25:
+                    self.x += 0.4
+                return (self.x, 0.0, 0.0)
+
+        player = Player()
+        walker = Walker(None, player, pad, (0, 1), log=lambda _: None)
+        walker.yaw = lambda: 0.0
+        with patch("d1_walker.time.time", clock.time), patch("d1_walker.time.sleep", clock.sleep):
+            self.assertTrue(walker.go((1.5, 0.0), radius=1.0, budget=2.0))
+        self.assertGreaterEqual(player.x, 0.5)
+        self.assertIsNone(pad.down_at)
+
+
 if __name__ == "__main__":
     unittest.main()
