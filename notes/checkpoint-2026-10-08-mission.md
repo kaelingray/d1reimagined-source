@@ -477,3 +477,24 @@ Reference-order gap found in the review: the original first shows "LEVEL UP / Le
 after the Divide fight (14:21); our fixture shows a "Level Up — upgrade an ability" tip
 from the start of the highway. It probably comes from the starter subclass progression;
 not yet investigated.
+
+## JOIN193: the revival binds the player's Ghost through the Ghost gear cache
+
+Read-only call watches during the revival (same fixture, standard starter kit) show
+each performance binding (`0x42b51c` → `0x42f3a0`) requests the player's **Ghost**:
+third person (type 0x10) makes one `0x42edb4` request, category 4, which reaches
+`0x2d184c` (the "ghost gear cache registry", global `0x1ab69ac`); first person
+(type 0x11) requests category 0 (player armour) and category 4 (Ghost). The
+category-to-cache jump table is permuted; category 4 is the Ghost cache. The
+Ghost acquire is called with key 0 and a descriptor derived from the player
+lookup `0x42f144`, which reads the player's normalized equipment through the
+equipped-slot table's bucket bytes (+0xd, +0x10..+0x13) into cast fields
+(+0x1a4/+0x1cc/+0x1fc/+0x208). The world appearance path repeatedly calls
+`0x2e9124` with id `0xffffffff` for three player slots.
+
+So the cinematic Ghost is the **player's own Ghost**, supplied from the profile's
+equipped Ghost data; it is missing because that data resolves to nothing, not
+because of lighting. Next: decode which equipped-slot row and field `0x42f144`
+uses for the Ghost (bucket 14), what `0x71ec90` stores, and which profile field
+(likely a Ghost-specific appearance/arrangement or dye block) the fixture omits;
+then supply it and re-check the revival and Breach. JOIN193 cleanup is clean.
