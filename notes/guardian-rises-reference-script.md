@@ -48,8 +48,8 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | 07:45–07:49 | Stairs up, then stairs down, red flare on the floor | JOIN202: guarded walk climbs to the upper platform (z 19.3) and sees the railings with the red flare | PARTIAL (path differs from the reference camera; no dialogue checked) |
 | 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN204: the companion Ghost hovers on the platform but renders as a black silhouette with no core glow | PARTIAL (rendering) |
 | 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | `pf_104a_pwr` has no cinematic content in any build (ends at once, as in retail). JOIN204: o2_40 "Hang tight" and o2_50 "hardened military systems" play by control; the companion Ghost is a black silhouette by the fuse panel | PARTIAL (dialogue); Ghost/lights MISSING |
-| 08:10–08:16 | Lights come on; Ghost glows | — | MISSING |
-| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN203: objective Grab the Rifle shown after Investigate; no chest/dialogue verified | PARTIAL |
+| 08:10–08:16 | Lights come on; Ghost glows | JOIN205–207: the chain creates the control, door-light and gating-light props (native creation verified); no lamp light or Ghost glow is visible | PARTIAL (rendering) |
+| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN205–207: o2_80 plays, the chest is created and Grab the Rifle shows a waypoint at (410.8, −794.4); the walk is blocked about four units short | PARTIAL |
 | 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | Fixture rifle already held | MISSING (authentic grant) |
 
 ## Fight through the Wall → the Divide

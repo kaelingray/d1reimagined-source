@@ -257,6 +257,29 @@ class BreachDialogueRules(unittest.TestCase):
         self.assertLessEqual(step["delay"], 5)
         self.assertEqual(step["set"]["seq_d_o2_20"], {"0": "$now", "4": 1})
 
+    def test_light_up_chain_follows_the_reference_order(self):
+        # JOIN205-207: reference 07:50-08:17 order from the light-up start trigger.
+        armed = [s for s in self.steps_setting("trig_ghostlight")
+                 if s["set"]["trig_ghostlight"].get("0") is True]
+        (arm,) = armed
+        (reset,) = [s for s in self.mission["steps"] if "bubble_reset" in s]
+        self.assertEqual(arm["on"], {"type": 21, "slice_set": 24})
+        self.assertGreater(arm["delay"], reset["delay"])
+        chain = [s for s in self.mission["steps"]
+                 if s.get("on") == {"type": 18, "object": "trig_ghostlight"}]
+        order = sorted((s.get("delay", 0), name) for s in chain for name in s["set"])
+        names = [name for _, name in order]
+        self.assertEqual(names[:2], ["seq_d_o2_40", "trig_ghostlight"])
+        self.assertLess(names.index("seq_d_o2_50"), names.index("o_breach_doors_lights"))
+        self.assertLess(names.index("o_breach_gating_lights"), names.index("seq_d_o2_70"))
+        self.assertLess(names.index("seq_d_o2_70"), names.index("seq_d_o2_80"))
+        self.assertIn("o_chest_primary_weapon", names)
+        created = {"0": 1, "4": True, "8": {"0": 0x811C9DC5, "4": -1, "6": -1}}
+        for s in chain:
+            for name, value in s["set"].items():
+                if name.startswith("o_"):
+                    self.assertEqual(value, created)
+
     def test_fallen_above_is_armed_at_the_wall_and_disarmed_on_its_report(self):
         armed = [s for s in self.steps_setting("trig_fallen_above")
                  if s["set"]["trig_fallen_above"].get("0") is True]

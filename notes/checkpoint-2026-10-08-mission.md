@@ -673,3 +673,35 @@ JOIN104/111 saw a blue core only after a performance action. The 900-second boun
 client at 16:19:38 UTC (owned stop); cleanup is clean. Next: why the companion Ghost
 renders black (its cosmetic/dye or lighting), which props or helper state light the room,
 then the chest and rifle grant.
+## JOIN205–207: automatic Breach light-up chain; props created; rifle behind a wall
+
+The shipped mission now arms `pt_nux_ghost_light_up_start` (`0xfc0e45a3/0x1d/120`) 35 s
+after current 24, after the bubble-3 reset. Its report (the player reaching the upper
+platform, volume 173) plays the reference order: o2_40 "Hang tight", +10 s o2_50
+"hardened military systems", +22 s the Breach control, door-light and gating-light props
+are created, +25 s o2_70 "They're coming for us!", +30 s o2_80 "found a rifle" with the
+rifle chest. The `cine_ghost_light` rule is kept; the client ends it at once (no content).
+
+JOIN205 (shipped mission, private diff `JOIN205-tested-mission.diff`): an ordinary walk
+reports trigger 120 at 17:34:38 UK and every chain step is sent on time. The GHOST speaker
+indicator shows for each line. The investigate trigger then completes Find a Weapon and
+Grab the Rifle shows with an **on-screen waypoint** toward the rifle. The extra NEW MISSION
+"The Taken King: Prelude" banner reappears with that objective. No lamp light is visible.
+
+JOIN206 adds native watches: prop creator `0x214478` (from `0x215bfc`) and entity creator
+`0x13f068` (from `0x2145d0`) run three times at native 0:09:55 (control, door lights,
+gating lights) and once at 0:10:03 (chest). The props are therefore created as units; the
+missing lamp light is a rendering/lighting question, not a mission-state one.
+
+The rifle's nav point (`0x992bb471/0x2c/78`, nav table `0x80cb9124`) is
+**(410.78, −794.41, 18.52)** on the platform level; investigate is (392.13, −773.45) and
+Find a Weapon (375.73, −796.57). A guarded walk east along the platform reaches
+(411–416, −790, 19.3), about four units north of the rifle, but a grey surface at
+y ≈ −791 blocks the last step (the waypoint shows through it). JOIN207 sets
+`tg_m0_gating` `+8` to 2, 1, 0 and −1 (3 fails the encoder's range) and creates
+`o_breach_doors_exit`, `o_breach_gating_back` and `o_breach_nut_back` (all three created
+natively; seven creations in total) with no visible change and no way through.
+
+All three runs stop on the 900-second bound (exit 0xffffffff from the owned stop) with clean
+cleanup. Next: identify the grey surface (a gate prop or the real path around it), then the
+chest interaction and rifle grant; separately the lighting of the companion Ghost and lamps.
