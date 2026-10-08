@@ -807,11 +807,13 @@ The Khvostov's art record (item 3598, table `0x80a5f241`) gives world appearance
 arrangement 2364 and default dyes (5, 6036) and (6, 6037). JOIN216 (source `67b68a1`, private
 gear file adding it in slot 6, Primary Weapons) shows **the Khvostov in first person with its
 holographic sight** on the highway in daylight and in the Breach, a crosshair, and an ammo HUD
-with a rifle icon. The magazine reads **12** from the start (the reference shows 25), and two
-R2 holds on the highway (1.2 s and 0.6 s) and one in the Breach produce no muzzle flash or ammo
-change: firing is not observed. Missing per-item instance stats (magazine size) or a mission
-weapons restriction are the candidates; neither is established. The 900-second bound stops the
+with a rifle icon. The magazine reads **12** from the start (the reference shows 25). R2 (key R)
+holds produce no shot, but the Breach R1 tap (key E, 300 ms) **fires one round: the counter drops
+from 12 to 11**. In this layout R1 fires. The equipped rifle therefore renders, fires and spends
+ammo; the magazine size differs from the reference, probably because the inventory carries no
+per-item stats (equipment `+0x10` holds a (hash, value) pair; inventory entries have three spare
+counters at `+0x10/+0x14/+0x18`). Damage and hit registration are untested. The 900-second bound stops the
 client at 21:27:51 UTC; cleanup is clean.
 
-Next: the weapon instance data (stats/ammo) the inventory must carry, why firing is inert,
-and then the authentic unarmed-to-Khvostov grant at the chest.
+Next: Fight Through the Wall combat against the Breach Fallen with this rifle (R1), the
+weapon stats that set magazine 25, then the authentic unarmed-to-Khvostov grant at the chest.
