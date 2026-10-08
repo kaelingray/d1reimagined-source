@@ -51,8 +51,8 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN204: the companion Ghost hovers on the platform but renders as a black silhouette with no core glow | PARTIAL (rendering) |
 | 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | `pf_104a_pwr` has no cinematic content in any build (ends at once, as in retail). JOIN204: o2_40 "Hang tight" and o2_50 "hardened military systems" play by control; the companion Ghost is a black silhouette by the fuse panel | PARTIAL (dialogue); Ghost/lights MISSING |
 | 08:10–08:16 | Lights come on; Ghost glows | JOIN209 verifies allocation and pool membership of the control/light units; no visible illumination accepted. Optional secondary prop state is currently omitted by the host | PARTIAL (activation/rendering unresolved) |
-| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN205–207 show the dialogue and waypoint. JOIN209 corrects the distant chest selection to `o_weapon` at that waypoint and verifies native allocation; the barrier still blocks pickup | PARTIAL; see [rifle evidence](rifle-pickup-0124.md) |
-| 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | Fixture rifle already held | MISSING (authentic grant) |
+| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN205–207 show the dialogue and waypoint; JOIN209 corrects the selection to `o_weapon`. JOIN210–211: the prop activation opens the barrier, the rifle trigger reports and Fight Through the Wall starts (JOIN211 fully automatic) | PARTIAL (no visible pickup); see [rifle evidence](rifle-pickup-0124.md) |
+| 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | Objective Fight Through the Wall starts at the rifle (JOIN210–211); fixture rifle already held, no grant or grimoire | PARTIAL (authentic grant missing) |
 
 ## Fight through the Wall → the Divide
 

@@ -35,7 +35,8 @@
     "JOIN190: pt_fallen_above (volume x 327-342 inside the Wall) reports once armed and stops when disarmed; the audible/visible effect of seq_fallen_above is not yet verified.",
     "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete.",
     "JOIN205-207: the light-up start trigger (armed 35 s after current 24, after the bubble-3 reset) plays the reference order: o2_40 Hang tight, +10 s o2_50 hardened military systems, +22 s Breach control/door/gating light props created, +25 s o2_70 They're coming for us, +30 s o2_80 found a rifle. Visible lamp lighting remains unverified.",
-    "JOIN208 static correction: o_chest_primary_weapon is placed at (534.865,-736.800,16.507), far from the rifle waypoint. The activity's o_weapon is at (410.644,-794.385,17.723), matching that waypoint. The rifle cue now creates o_weapon instead of the unrelated chest; native pickup and durable inventory grant remain unverified."
+    "JOIN208 static correction: o_chest_primary_weapon is placed at (534.865,-736.800,16.507), far from the rifle waypoint. The activity's o_weapon is at (410.644,-794.385,17.723), matching that waypoint. The rifle cue now creates o_weapon instead of the unrelated chest; native pickup and durable inventory grant remain unverified.",
+    "JOIN210 (manual): State A +0x10 carries typed command 0x8080279a, three (i32, i32, float) channels. With channels 0-2 at (1, 1, 1.0) on the Breach control/door/gating-light props the grey barrier opens; the player reaches the rifle, trigger 0x1d:35 reports and Fight Through the Wall starts. Channel 0 or 0-1 alone leave it closed; channel 2 at (2, 2, 0.0) closes it again. The chain now sends that activation 2 s after creating the props."
   ],
   "clock": "ready",
   "objects": {
@@ -679,6 +680,99 @@
             "0": 2166136261,
             "4": -1,
             "6": -1
+          }
+        }
+      }
+    },
+    {
+      "on": {
+        "type": 18,
+        "object": "trig_ghostlight"
+      },
+      "delay": 24,
+      "set": {
+        "o_breach_control": {
+          "0": 1,
+          "4": true,
+          "8": {
+            "0": 2166136261,
+            "4": -1,
+            "6": -1
+          },
+          "16": {
+            "0": 1,
+            "16": [
+              {
+                "type": "0x8080279a",
+                "values": {
+                  "0": 1,
+                  "4": 1,
+                  "8": 1.0,
+                  "12": 1,
+                  "16": 1,
+                  "20": 1.0,
+                  "24": 1,
+                  "28": 1,
+                  "32": 1.0
+                }
+              }
+            ]
+          }
+        },
+        "o_breach_doors_lights": {
+          "0": 1,
+          "4": true,
+          "8": {
+            "0": 2166136261,
+            "4": -1,
+            "6": -1
+          },
+          "16": {
+            "0": 1,
+            "16": [
+              {
+                "type": "0x8080279a",
+                "values": {
+                  "0": 1,
+                  "4": 1,
+                  "8": 1.0,
+                  "12": 1,
+                  "16": 1,
+                  "20": 1.0,
+                  "24": 1,
+                  "28": 1,
+                  "32": 1.0
+                }
+              }
+            ]
+          }
+        },
+        "o_breach_gating_lights": {
+          "0": 1,
+          "4": true,
+          "8": {
+            "0": 2166136261,
+            "4": -1,
+            "6": -1
+          },
+          "16": {
+            "0": 1,
+            "16": [
+              {
+                "type": "0x8080279a",
+                "values": {
+                  "0": 1,
+                  "4": 1,
+                  "8": 1.0,
+                  "12": 1,
+                  "16": 1,
+                  "20": 1.0,
+                  "24": 1,
+                  "28": 1,
+                  "32": 1.0
+                }
+              }
+            ]
           }
         }
       }

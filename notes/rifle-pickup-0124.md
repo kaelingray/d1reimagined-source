@@ -70,3 +70,12 @@ character/world flicker and distortion remain open.
 Verification: 198 server tests, 166 script tests and final 01.24 schema preflight
 (1 timed / 55 reactive changes) pass. Recordings, extracted package data, unit
 handles, probe outputs and production inputs remain private.
+
+## JOIN210–211: barrier opens through the prop activation command
+
+The barrier is opened by State A `+0x10` typed command `0x8080279a` on the Breach control,
+door-light and gating-light props, with all three channels at (1, 1, 1.0) (JOIN210, manual).
+The mission sends it automatically 2 s after creating those props; JOIN211 then reaches the
+rifle without any control lines, trigger `0x1d:35` reports and Fight Through the Wall starts.
+A visible weapon, pickup prompt, ammo, grimoire and inventory grant remain unverified; the
+fixture still pre-equips a rifle.

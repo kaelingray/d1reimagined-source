@@ -750,3 +750,25 @@ errors are empty. No RSX capture is requested or claimed. Final checks: **198 se
 tests**, **166 script tests**, final-schema preflight **1 timed / 55 reactive** pass.
 The already delivered October 8 report is unchanged; these later runs are retained
 privately for the next report.
+
+## JOIN210–211: prop activation opens the barrier; Fight Through the Wall starts
+
+JOIN210 (manual, source `3501113`) identifies the prop command channel: State A `+0x10`
+carries a typed value `0x8080279a` with three (i32, i32, float) channels. With the same
+value sent to the Breach control, door-light and gating-light props, a guarded walk stays
+north of the grey barrier with channel 0 (414.1, −790.7) or channels 0–1 (414.8, −790.7),
+but passes with channels 0–2 at (1, 1, 1.0), reaching (409.8, −797.0) and the rifle point.
+Trigger `0x1d:35` reports at 19:41:05 UK; Grab the Rifle completes and **Fight Through the
+Wall** (objective 14) starts with the graveyard trigger armed. Channel 2 at (2, 2, 0.0)
+leaves the next probe north of the barrier again. Removing the door-light prop alone does
+not open it. Which of the three props carries the barrier is not yet separated.
+
+The chain now sends that activation 2 s after creating the props. JOIN211 (shipped mission
+plus this change, **no control lines**) reports the light-up trigger, creates and activates
+the props automatically (20:28:32/34 UK), and the guarded walk crosses from (408.9, −791.0)
+to (410.7, −794.1) in 2 s. The rifle trigger reports at 20:29:57 UK after the walk continues
+to the lower floor near (409.8, −797.5); Grab the Rifle completes and Fight Through the Wall
+starts. The scene there is very dark: no visible rifle, pickup prompt, ammo or grimoire is
+accepted, and the fixture rifle is still pre-equipped. The 900-second bound stops the client
+at 19:36:22 UTC; cleanup is clean. Next: the authentic unarmed start and rifle grant, Breach
+lighting, then the first Fallen encounter of Fight Through the Wall.

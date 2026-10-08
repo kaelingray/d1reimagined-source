@@ -282,10 +282,17 @@ class BreachDialogueRules(unittest.TestCase):
         self.assertEqual(rifle["delay"], 30)
         self.assertIn("seq_d_o2_80", rifle["set"])
         created = {"0": 1, "4": True, "8": {"0": 0x811C9DC5, "4": -1, "6": -1}}
-        for s in chain:
-            for name, value in s["set"].items():
-                if name.startswith("o_"):
-                    self.assertEqual(value, created)
+        props = ("o_breach_control", "o_breach_doors_lights", "o_breach_gating_lights")
+        (create,) = [s for s in chain if set(props) <= set(s["set"]) and "16" not in s["set"][props[0]]]
+        (activate,) = [s for s in chain if set(props) <= set(s["set"]) and "16" in s["set"][props[0]]]
+        self.assertGreater(activate["delay"], create["delay"])
+        self.assertLess(activate["delay"], [s["delay"] for s in chain if "seq_d_o2_70" in s["set"]][0])
+        # JOIN210: channels 0-2 at (1, 1, 1.0) open the barrier to the rifle.
+        channels = {"0": 1, "4": 1, "8": 1.0, "12": 1, "16": 1, "20": 1.0, "24": 1, "28": 1, "32": 1.0}
+        for name in props:
+            self.assertEqual(create["set"][name], created)
+            self.assertEqual(activate["set"][name], {**created, "16": {"0": 1, "16": [
+                {"type": "0x8080279a", "values": channels}]}})
 
     def test_fallen_above_is_armed_at_the_wall_and_disarmed_on_its_report(self):
         armed = [s for s in self.steps_setting("trig_fallen_above")
