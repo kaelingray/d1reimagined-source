@@ -608,3 +608,22 @@ from the owned stop, not a crash). Cleanup is clean (owned processes closed, tit
 restored, XInput, RPCN preserved). JOIN201's exit therefore did not repeat in one run.
 Next: the platform beat (`pf_104a_pwr` and its trigger `0x1d/37`) with the Ghost now
 present, the first-person brightness and normals flash, and the Nav null component.
+## JOIN203: investigate and power triggers report; the power cinematic still ends at once
+
+Source `24c881f`, committed starter default, exit-code watcher. The revival again shows the
+Ghost and the resurrection sphere with no emulator exit (2 of 3 runs). After the natural
+crossing, a guarded walk climbs to the upper level and steps into the investigate volume
+(59; it lies at y > −780.7 for x 385–395, which JOIN202 never entered). `trig_investigate`
+reports at 16:14:29 UK; the mission completes Investigate, arms the Ghost-light trigger
+`0x1d:37` and the rifle trigger `0x1d:35`, and the objective becomes **Grab the Rifle**.
+The doorway with the red flare (reference 07:45–07:49) is visible under the torch.
+
+Re-crossing the power volume (67) reports `0x1d:37` at 16:15:04; the mission sets
+`cine_ghost_light` (`pf_104a_pwr`) exactly like the working revival cinematics, and the
+client answers with cinematic-end incident 734 one second later with no 2120 start, as
+in JOIN188. The player's Ghost is therefore not what this cinematic lacks. The reference
+shows the blue companion Ghost ahead of the player before this beat; ours exists only as a
+radar marker after the bubble-3 reset, so the companion (`sq_ghost`) actor is the next
+candidate. Incident IDs come from `scripts/d1_incident_summary.py` (private output).
+The 900-second bound stops the client at 15:23:34 UTC (owned stop, exit 0xffffffff);
+cleanup is clean.

@@ -36,7 +36,7 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | --- | --- | --- | --- |
 | 07:00–07:20 | Run through the cars to the Wall, through the gap and up the ramp to the door | Guarded route walk (automated input) | OK (route) |
 | 07:20–07:27 | Door with fallen panel, stairs inside | Same | OK |
-| 07:27–07:33 | Ghost: "need to find you a weapon before the Fallen find us"; objective becomes **Find a Weapon** | Objective handover and NEW MISSION banner; `seq_d_o2_10` now played by the mission (JOIN190 audio) | PARTIAL: which line plays is unconfirmed (no subtitles) |
+| 07:27–07:33 | Ghost: "need to find you a weapon before the Fallen find us"; objective becomes **Find a Weapon** | Objective handover plus an extra "NEW MISSION / The Taken King: Prelude" banner (JOIN202) that the reference does not show; `seq_d_o2_10` plays (JOIN190 audio) | PARTIAL: remove the extra banner; line unconfirmed (no subtitles) |
 | 07:31–07:35 | Lit corridor with windows, diamond ahead | Same corridor, lit (JOIN188/190) | OK |
 
 ## The Breach (slice 24)
@@ -46,10 +46,10 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | 07:35–07:37 | Leaving the lit corridor: **a circular torch light follows the camera** | JOIN202: the circular torch follows the camera through the Breach | OK (sampled) |
 | 07:38–07:45 | Ghost: "Quiet. They're right above us."; "THE BREACH / OLD RUSSIA, EARTH"; stairs down | Area title appears at the crossing (JOIN190); `pt_fallen_above` reports and `seq_fallen_above` plays (no audible line yet) | PARTIAL |
 | 07:45–07:49 | Stairs up, then stairs down, red flare on the floor | JOIN202: guarded walk climbs to the upper platform (z 19.3) and sees the railings with the red flare | PARTIAL (path differs from the reference camera; no dialogue checked) |
-| 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN202: radar Ghost marker; no blue Ghost ahead and no dialogue on the platform | MISSING |
-| 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | `pf_104a_pwr` start by control ends immediately (JOIN188) | MISSING |
+| 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN202–203: radar Ghost marker only; no blue Ghost ahead and no dialogue on the platform | MISSING (companion actor) |
+| 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | JOIN203: the authored triggers report and the mission starts `pf_104a_pwr`; the client ends it at once (734, no 2120), as in JOIN188 | MISSING (likely needs the companion Ghost) |
 | 08:10–08:16 | Lights come on; Ghost glows | — | MISSING |
-| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | Not reached | NOT REACHED |
+| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN203: objective Grab the Rifle shown after Investigate; no chest/dialogue verified | PARTIAL |
 | 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | Fixture rifle already held | MISSING (authentic grant) |
 
 ## Fight through the Wall → the Divide
