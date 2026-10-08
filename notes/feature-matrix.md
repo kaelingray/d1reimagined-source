@@ -67,10 +67,10 @@ Last full review: 2026-10-02.
 | Simulation packets (roster, sim player spawn grant, game mode, baselines, clock) | WORKING | JOIN24+ | - | multi-peer roster |
 | Game mode state incl. **activity quarantine** | WORKING | `game_mode()` sends bubble -1 (JOIN27) | real per-activity quarantine values unknown | find what the original host sent |
 | World state (peer slot, group records, **version**) | WORKING | `world_state_delta()`; version fix (JOIN39) | - | full peer client-state relay |
-| Slice-set switch protocol (group record 1, per-peer byte, world-state version) | WORKING | `--ah-group-switch`; version per session; JOIN39, JOIN51 | finish must not bump the version (JOIN43-50 black screen) | automated regression run |
+| Slice-set switch protocol (group record 1, per-peer byte, world-state version) | PARTIAL | `--ah-group-switch`; JOIN176–179 repeat113→112; JOIN179 receives group1 for24 | Natural112→24 remains pending; manual teleport replaces the player and returns to target112. Finish must not bump the version. | Verify client-directed crossing with original player and idle24; [latest checkpoint](checkpoint-2026-10-08-mission.md) |
 | Host-driven teleport (world-state group request @0x2e48+0x21c8) | WORKING | mission step `{"at": S, "teleport": SET}` or `--ah-teleport ZONE@SECONDS` (state 1 -> finish state 3 at the client's arrival report, same version; dropped on arrival); JOIN51/53 | one world per proxy connection (debt) | per activity instance with several peers |
 | Client state relay (type 21 -> world-state peer slot) | NOT INVESTIGATED | - | - | needed for multiplayer |
-| Heartbeats / host timeout (baboon) | WORKING | `--ah-heartbeat` (01.24 runs use `1:-1` from JOIN41) | an empty type-11 heartbeat clears the teleport field | - |
+| Heartbeats / host timeout (baboon) | PARTIAL | Default `--ah-heartbeat 1` preserves current world state and version; encrypted regressions pass and JOIN176–179 retain the original connection until shutdown | An explicitly empty type11 still clears the request. Broader timeout/recovery behavior is unaccepted. | [State-preserving heartbeat evidence](rpcs3-world-heartbeat.md); validate broader activity recovery |
 | Multi-client activity sessions | NOT INVESTIGATED | - | - | scope 44 |
 
 ## 5. Mission: A Guardian Rises / The Taken King: Prelude (intro activity, world 229)
@@ -79,11 +79,11 @@ Last full review: 2026-10-02.
 | --- | --- | --- | --- | --- |
 | Arrival in 112 (highway), visible world, HUD, walking | WORKING | JOIN27 | Urgent Message dialogs | - |
 | Arrival in 113 (intro cinematic slice set) | WORKING | JOIN32-35 | one GPU device loss (JOIN33) | - |
-| Revival cinematics `pf_104_res`, `pf_104_res_fp` | WORKING | JOIN34/35 with the director; null object refs fix (JOIN32) | letterbox stale strip (rendering) | - |
+| Revival cinematics `pf_104_res`, `pf_104_res_fp` | PARTIAL | JOIN34/35 establish playback; JOIN53 establishes a scripted handoff. [Reference comparison](guardian-rises-reference-review.md) corrects the earlier broad WORKING claim. | User reports omitted shots and missing Ghost; fixed stop timers do not prove complete playback, cast, dialogue or fades; rendering faults remain. | Verify the full authored sequence and Ghost against the reference before accepting revival. |
 | Hand-off 113 -> 112 after the intro | WORKING | automatic, JOIN51 (no cinematics); JOIN53 after both cinematics (stopped by the script) | a cinematic left to end on its own keeps the screen black (JOIN52) | - |
 | "New Mission" banner (incoming sequence) | WORKING | JOIN31 | - | - |
 | Objective display / waypoints | PARTIAL | "ENTER THE WALL" (JOIN62) and "FIND A WEAPON" (JOIN70) on the HUD from host state: 1 = incoming (banner; needs the incoming sequence at step 1), 5 = active; the previous objective must be cleared (0) | Grab the Rifle not shown yet; waypoint markers not shown; on-screen completion unconfirmed | waypoints; completion visuals; Grab the Rifle |
-| Player triggers, Ghost light cinematic, weapon pickup | INVESTIGATING | trigger volume geometry read from content (JOIN65); traversal tooling `d1_traverse.py` (position, goto/route, record/replay); the player has not reached the Enter the Wall volume yet (JOIN67) | automatic walking through the junkyard | record a route by hand and replay it |
+| Player triggers, Ghost light cinematic, weapon pickup | PARTIAL | Actual Wall-trigger handovers and guarded recorded-route arrival observed through JOIN180. JOIN180 enters current24 through ordinary controls, then traverses the initial recorded corridor on the same player. | Idle24 streaming, visible Ghost/torch/power beat, rifle pickup transaction and later objectives remain unaccepted. A pre-equipped fixture rifle is not pickup evidence. | Resolve streaming; verify Ghost, illumination, markers and the authentic unarmed-to-rifle sequence. |
 | Enemies (Fallen squads in The Breach) | NOT INVESTIGATED (01.24) | squad layout mapped (+0x74) | spawn trigger unknown | - |
 | Zone change 112 -> 24 (The Breach) by walking | PARTIAL | follow-player request seen (JOIN25); protocol now known | not re-tested with the switch protocol | test with `--ah-group-switch` |
 | Mission completion, rewards, return to orbit | NOT INVESTIGATED | - | - | - |

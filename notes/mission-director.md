@@ -10,6 +10,13 @@ objects: objectives, sequences, cinematics, triggers and squads. This note gives
 Object names and ids come from [`mission-objects-highway.md`](mission-objects-highway.md). An
 object reference (type `0x808004b1`) is {u32 group key, 6-bit kind, 16-bit index}.
 
+**Build scope:** the original handler addresses and field interpretations below
+describe 01.00 unless an explicit 01.24 paragraph supersedes them. The 01.24
+objective state is 0x2f0 bytes and its active HUD value is5, not the original
+provisional value1. Playback/handoff observations do not accept complete revival,
+Ghost casting or waypoints. The [8 October reference comparison](guardian-rises-reference-review.md)
+records the visible gaps and actual 01.24 marker registration gates.
+
 ## What the states do
 
 **Objective, kind 0x20, state `0x80802a1b`.** Handler `0x3561d8`. It copies the 0x2d0-byte state

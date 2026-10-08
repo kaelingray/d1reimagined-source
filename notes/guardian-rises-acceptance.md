@@ -4,8 +4,9 @@ Updated 2026-10-08. This turns the two user-supplied tutorial
 specifications into checks for the PS3 BLES01857 01.24 client. It summarizes their requirements;
 it does not copy their walkthrough, dialogue, proposed API, or public-release enemy counts.
 
-**The mission is not verified end to end.** Revival, the highway hand-off, objective display,
-and walking to the Wall have live evidence. The Breach progression, Ghost illumination,
+**The mission is not verified end to end.** Revival playback, the highway hand-off, objective text,
+and walking to the Wall have bounded live evidence. Complete revival shots/Ghost,
+objective waypoints, stable Breach progression, Ghost illumination,
 weapons, combat, completion, and Tower hand-off remain incomplete.
 
 ## Evidence and the next gate
@@ -35,6 +36,14 @@ and passes the doorway on that replacement player without sampled idle24.
 The next gate must distinguish seamless client-directed streaming from the
 forced teleport/respawn experiment. Precise arrival and consumed controls do
 not establish automatic Breach progression.
+
+JOIN180 crosses through ordinary pad movement, without a manual host teleport24.
+Fresh observations retain the same player, and a separate guarded continuation
+traverses the initial recorded Breach corridor. Current24/target112 nevertheless
+stays pending, with no idle24 samples; inspected mission scenery is dark. This is
+movement progress, not a streaming, waypoint, cinematic, Ghost or graphics fix.
+The [reference comparison](guardian-rises-reference-review.md) makes the user's
+reported missing waypoints, revival shots and Ghost explicit acceptance failures.
 
 - **Observed:** read directly from the 01.24 executable/content, or captured in an identified
   01.24 run. Serialization tests prove a state can be encoded, not that it produces the expected
@@ -133,7 +142,7 @@ Later objective labels must not be used to claim that an encounter or item grant
 | Empty account and creation | An empty roster permits creation. Class, race, presentation, and appearance survive restart. Creation retries return the same character. Three independent slots can be selected without replacing another character. | Service 501 carries creation; saved request data reconstructs the character. SQLite has slot allocation, transactions, and retry tests; BAP still presents its first stored character. Live creation/selection of multiple characters is open. |
 | New-character state | Level 1, correct initial subclass and class armor, default Ghost shell; no usable firearm or travel capability. Completion/unlock state represents an unprogressed character. | Final starter kit definitions are verified below. Broad test unlock flags and CLI equipment overlays do not prove authentic initial progression or durable inventory. |
 | Appearance and rendering | The same custom Guardian appears correctly in creation, inventory, revival, mission, and later social space; repeated frames show no flicker or distorted lighting. | Selective SPU-written color-buffer reads eliminated sampled setup magenta frames and restored normal inventory Titan lighting. JOIN117 isolates missing armour arrangement indexes in the world profile; JOIN118 supplies them and JOIN119 repeats solid daylight Titan armour with the public fixture and five valid model roots. JOIN123 additionally resolves subclass, Ghost and armour icons and removes their Materials listing through individual item records and fixed inventory ranges. Vulkan device loss still occurs around the character screen; level/light remain zero. Indoor views, other classes, full revival appearance and social space remain to be checked; combined menu/world stability is open. Keep color reads enabled. See [appearance evidence](guardian-appearance-0124.md). |
-| Account intro and character revival | Account introduction and each character's resurrection have distinct progression. Revival plays with the actual Guardian, then hands control to an unarmed player without a lasting fade. | Both revival cinematic objects and automatic 113 -> 112 hand-off work in JOIN53+. The script currently uses timed start/stop steps, not a verified cinematic-completion acknowledgement. First versus later character intro flags are open. |
+| Account intro and character revival | Account introduction and each character's resurrection have distinct progression. Revival includes all authored shots, the visible animated Ghost, resurrection effects, correct Guardian/cast, dialogue and first-person awakening, then hands control to an unarmed player without a lasting fade. | Playback and scripted 113 -> 112 handoff observed in JOIN53+; complete revival is PARTIAL. The user reports missing shots and Ghost. The script uses timed start/stop steps, not a verified completion acknowledgement. First versus later character intro flags remain open. See the [timestamped comparison](guardian-rises-reference-review.md). |
 | Enter the Wall | Objective/nav guidance appears; normal movement reaches the entrance. The correct trigger advances the mission once and the activity stays connected. | Objective 3 is visible; recorded-route traversal reaches the Wall, reproduced in JOIN88 with extra climb points. Highway Ghost reset/generation and encoded member IDs are observed in JOIN87/88; physical spawn needs separate proof. JOIN90's guarded preload walk reached within 2.51 units of the route endpoint before the local slice changed. JOIN88 posts cleanup reason 0x4d, which maps to three final-build session states; its exact selecting state remains unknown. |
 | Find a Weapon / The Breach | Client-requested slice 24 completes at the actual entrance; correct objective, darkness, Ghost torch, path, power sequence, lights, Fallen reaction, and weapon access occur in order. | JOIN97–102 clear all 249 live baselines and show the interior after host handover. JOIN109/111 replace the unbound count-only Ghost with one authored member carrying both member and performance bindings; JOIN111 tests the automatic state after a manual bubble reset. The manual filter/helper previously resolves twelve linked components, but its generation callback queries a damage interface absent on the Ghost; this does not establish a torch blocker. Controlled nearby views and consumed generations still do not verify torch light. Visible torch/power, stable idle transition and automatic trigger-to-switch progression remain open. |
 | Grab the Rifle | Correct Khvostov 7G-02 instance is granted once, equipped in Primary, and saved. Armed first-person view, ammo, reload, and firing work. Replay/reconnect cannot duplicate or lose the item. | Rifle container and relevant objective/cinematic/trigger objects are identified. HUD display for objective 11, pickup transaction, item definition selection, and durable equip are not verified. A title change is insufficient. |

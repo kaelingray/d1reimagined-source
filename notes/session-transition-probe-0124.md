@@ -1,7 +1,12 @@
 # Read-only 01.24 session-transition probe
 
-The opening mission's 113-to-112 transition still fails native acceptance. In
-JOIN169 the local engine requests 112, but the client does not reach an idle
+Current checkpoint, 8 October: JOIN176–179 repeat native113→112 activation and
+ordinary movement after the routine console-output repair. The remaining
+streaming gate is112→24: JOIN179 receives the host's group record but remains
+in phase3. A manual host request replaces the player; it is not seamless entry.
+See the [mission checkpoint](checkpoint-2026-10-08-mission.md).
+
+Historical JOIN169: the local engine requests112, but the client does not reach an idle
 active slice112 before the guarded route's deadline. No walking input is sent.
 Activity-host reconnects follow two requests. Dismissing the urgent dialog
 alone does not resolve this run's transition.
@@ -25,7 +30,15 @@ lookup using the actual BLES01857 01.24 instructions:
   in [the timeout analysis](ipahp-timeout-0124.md).
 - Native and last-sent engine state, slice loading/activation and the operands
   of the `0x71aba4` early-return predicate distinguish local progress from
-  publication of a client state change. Flag meanings are not guessed.
+publication of a client state change. Flag meanings are not guessed.
+
+The spatial controller at `0x352968` writes a follow classification to
+engine `+0x1d2`; `0x35149c` tests classification4 before committing the crossing.
+The reader now names this `follow_player_phase_1d2`. Its old output key
+`peer_count_1d2` remains for existing timeline consumers, but **is not a peer
+count**. The reader also retains the resolved target index at `+0x138` and raw
+selection bytes `+0x36c..+0x393`. Volume indexes are not assumed to be global
+slice-set IDs, and a received group record alone is not a completed crossing.
 
 The reader uses the existing exact PID/start-time/executable ownership check
 and verified guest allocation. It performs no writes, pauses or debugger calls.

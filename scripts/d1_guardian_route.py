@@ -11,6 +11,8 @@ written beside the manifest by default. This is a route test, not proof of missi
 
 --final-radius overrides only the last point's arrival tolerance. Intermediate points retain
 --radius; a coarse endpoint arrival must not be mistaken for crossing a slice boundary.
+--continue-breach follows the connected tail of the existing Breach recording after the
+Wall endpoint. It retains the preload guards and stops input when the native slice changes.
 
 --allow-breach-preload explicitly allows the observed engine-3 player-follow request for
 24/0x68935472 while the same player remains in 112. At the canonical route's final point,
@@ -37,6 +39,7 @@ from rpcs3_shared_log import open_shared_read
 
 ROOT = Path(__file__).resolve().parents[1]
 WALL_ROUTE = ROOT / "missions/routes/enter_the_wall.json"
+BREACH_ROUTE = ROOT / "missions/routes/breach.json"
 # JOIN87's sparse climb cut across the pit; JOIN88 reached the Wall with these intermediate
 # targets and a 1.5-unit arrival radius. Keep the full recorded route as the source of truth.
 WALL_DENSE_POINTS = (1, 2, *range(44, 52))
@@ -67,6 +70,15 @@ def route_points(path, every=3):
     if Path(path).resolve() == WALL_ROUTE.resolve():
         indexes.update(i for i in WALL_DENSE_POINTS if i < len(points))
     return [(i, points[i]) for i in sorted(indexes)]
+
+
+def breach_continuation_points(endpoint):
+    """Connect the existing recording at its closest point; reject unrelated routes."""
+    points = route_points(BREACH_ROUTE, every=1)
+    nearest = min(range(len(points)), key=lambda i: math.dist(endpoint, points[i][1]))
+    if math.dist(endpoint, points[nearest][1]) > FINAL_ENTRY_DISTANCE or nearest == len(points) - 1:
+        raise ValueError("Breach recording has no connected continuation from the Wall endpoint")
+    return points[nearest + 1:]
 
 
 class SharedTail:
@@ -324,6 +336,8 @@ def main(argv=None):
     ap.add_argument("--radius", type=float, default=1.5, help="arrival tolerance in world units (JOIN88: 1.5)")
     ap.add_argument("--final-radius", type=float,
                     help="optional final-point tolerance; intermediate points retain --radius")
+    ap.add_argument("--continue-breach", action="store_true",
+                    help="EXPERIMENT: follow the recorded Breach tail until the guarded native slice changes")
     ap.add_argument("--allow-breach-preload", action="store_true",
                     help="EXPERIMENT: allow only the engine-3 112 -> 24 preload with the same live player")
     ap.add_argument("--wait", type=float, default=600, help="seconds to wait for slice112 and idle engine")
@@ -342,12 +356,16 @@ def main(argv=None):
         ap.error("radius must be finite and positive")
     if args.final_radius is not None and (not math.isfinite(args.final_radius) or args.final_radius <= 0):
         ap.error("final radius must be finite and positive")
+    if args.continue_breach and (not args.allow_breach_preload or args.route.resolve() != WALL_ROUTE.resolve()):
+        ap.error("Breach continuation requires the canonical Wall route and --allow-breach-preload")
     points = route_points(args.route, args.every)
+    continuation = breach_continuation_points(points[-1][1]) if args.continue_breach else []
     output.mkdir(parents=True, exist_ok=True)
     emulator_dir = Path(identity["executable"]).parent
     final_radius = args.radius if args.final_radius is None else args.final_radius
     result, pad, grid = {"run": run, "started_utc": utc_now(), "status": "stopped",
-                         "radius": args.radius, "final_radius": final_radius}, None, None
+                         "radius": args.radius, "final_radius": final_radius,
+                         "continue_breach": args.continue_breach}, None, None
     with (output / "audit.jsonl").open("a", encoding="utf-8", buffering=1) as stream:
         def audit(**fields):
             stream.write(json.dumps({"utc": utc_now(), **fields}) + "\n")
@@ -417,6 +435,17 @@ def main(argv=None):
                     audit(ev="waypoint", route_index=index, xyz=point, radius=radius)
                     if not walker.go(point[:2], radius=radius, budget=max(0, guard.deadline - time.monotonic())):
                         raise RouteStopped(f"waypoint {index} was not reached")
+                if continuation:
+                    # The doorway allowance cannot authorize movement on a changed slice.
+                    guard.final_endpoint = guard.final_entry_deadline = None
+                    audit(ev="wall_endpoint_reached", xyz=player.position())
+                    for index, point in continuation:
+                        guard.check()
+                        audit(ev="waypoint", route=str(BREACH_ROUTE), route_index=index, xyz=point,
+                              radius=args.radius)
+                        if not walker.go(point[:2], radius=args.radius,
+                                         budget=max(0, guard.deadline - time.monotonic())):
+                            raise RouteStopped(f"Breach waypoint {index} was not reached")
                 result.update(status="route_reached", final_xyz=player.position())
         except (RouteStopped, OSError, ValueError) as exc:
             result["reason"] = str(exc)

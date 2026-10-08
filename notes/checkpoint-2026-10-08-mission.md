@@ -168,3 +168,72 @@ bytes and compares its installed bytes before cleanup, preserving concurrent
 operator changes. The existing lease regression exercises both LF and CRLF
 restoration; the 29 relevant checks pass again. This repair has filesystem/CPU
 acceptance after JOIN179 and is not represented as its tested native build.
+
+## JOIN180: ordinary crossing on the same player, with presentation gaps
+
+The source route adds opt-in `--continue-breach`, connecting the canonical Wall
+endpoint to the existing Breach recording. It requires `--allow-breach-preload`
+and the canonical Wall route; it preserves the original slice/player/ownership
+guards and stops when the native slice changes. Real invalid-option CLI checks
+reject both missing preload permission and an unrelated route before output or
+native access. The 29 existing route/walker/memory/session checks pass. The
+read-only session probe adds the resolved target index, raw follow record and
+correctly names +0x1d2 as a spatial follow state; the old key remains compatible
+but is not a peer count. The native run also exercises byte-preserving hook leases.
+
+With the same backend and C5 executable, `--wait 12 --budget 260 --final-radius 0.25
+--continue-breach` reaches `[353.6315,-796.4345,14.0699]` at
+**00:13:40.742 UTC on 8 October**. Ordinary input toward the connected recording
+reaches `[354.2264,-796.2291,14.0712]`. The strict route guard stops at
+00:13:42.115 when current24/target112 appears. The actual client report reaches
+the host at00:13:42.502. **No manual teleport24 is queued**; the run's control
+file stays empty. This differs from JOIN178/179's forced teleport/respawn tests.
+
+Fresh read-only observations retain the same player entity `0x602c3300`, settling
+near `[354.614,-796.248,14.095]`. A bounded ordinary-pad continuation follows all
+14 connected corridor points, reaching `[387.574,-801.931,16.646]` at
+00:16:38.383. Later fresh observations settle near `[387.182,-801.972,16.624]`.
+The first continuation attempt stops before pad input while waiting for a fresh
+callback; the second allows up to five seconds only for that callback. Other
+state/position guards remain intact. Read-only snapshots are non-atomic and a
+recent callback cannot guarantee entity lifetime across a respawn.
+
+Across2,660 session samples,547 show idle112 and1,452 current24/target112 in
+engine phase3; none shows idle24. All retain session6 and pass pointer/context
+rechecks. The raw follow byte briefly reaches4, then remains unsettled; its
+values are not a peer count or a completion acknowledgement. The original host
+connection lasts until owned shutdown. Ordinary same-player crossing and consumed
+corridor controls are progress, but stable automatic streaming is not accepted.
+
+The host publishes the authored Ghost95 member state and three Fallen squad
+generations20seconds after current24. That receipt does not establish visible
+Ghost, working enemies or illumination. Inspected mission frames show dark
+scenery with a small lit floor patch and the HUD. The character menu renders a
+normally proportioned armoured Titan with five armour icons, Ghost/subclass and
+held fixture rifle; level/light remain zero and weapon icons still load. Neither
+the fixture weapon nor that single model view accepts authentic pickup or the
+combined graphics fix. No RSX capture is armed or saved.
+
+Owned cleanup ends00:19:53.566UTC. Thirteen recorded service/client/proxy/probe/
+helper identities are independently checked closed; title, global configuration
+and watch hashes match their originals. XInput/sharedRPCN restore, controls and
+cleanup errors are empty. The native validation layer is present before stop;
+the bounded pre-stop log has no VUID, device-loss or fatal-severity entry through
+15:05.515255. Correct pixels are still unaccepted.
+
+Only three original recordings are indexed, all hash-matching; two unindexed
+failures stay preserved. The last two indexed originals fully decode30.31/30.22
+seconds,1280×720 with audio, but inspected samples show frontend verification
+screens. Their average/base29.97/30 and27.35/30 describe recordings, not game FPS.
+There is no accepted continuous JOIN180 mission video. Screenshots, owned-input
+audits and native/host observations provide the bounded movement evidence.
+
+The user then identifies missing waypoints, incomplete revival shots and missing
+Ghost. The earlier selective reference review was overclaimed. A new full-duration
+five-second visual review and closer cue samples record the intended sequence in
+[the reference comparison](guardian-rises-reference-review.md). Revival is now
+PARTIAL in the feature matrix and mission walkthrough. Static01.24 review finds
+that the script has no marker entries and that registration requires entry type
+and entry+0x20 reference; prior root+4-only experiments did not satisfy this gate.
+Actual presentation, authored timing/cast and native markers still need repair
+and verification. Original reference/test media and raw definitions remain private.

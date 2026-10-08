@@ -63,7 +63,9 @@ Dialogue = subtitle text (`0x80cb91bb` unless noted); objective titles/descripti
    long I've been looking for you.", "I'm a Ghost. Actually, now I'm your Ghost...", "Hold still.",
    "This is Fallen territory. We aren't safe here.", "I have to get you to the City.", "Don't
    worry, I'm still with you. We need to move, fast." (`0x80cb8d68`). Host: play both cinematics,
-   stop them, teleport 113 -> 112. **WORKING** (JOIN53+).
+   stop them, teleport 113 -> 112. **PARTIAL**: playback and scripted handoff observed
+   (JOIN53+), but complete shots, visible Ghost, cast and dialogue are not accepted.
+   The user reports missing shots/Ghost; see the [reference review](guardian-rises-reference-review.md).
 2. **Enter the Wall (112).** "We won't survive long out in the open like this. Let's get inside
    the Wall." Objective 3 "Enter the Wall" / "Take refuge inside the ancient wall."; incoming
    sequence `0x5/4`; waypoint on the Wall. Nag lines while the player dawdles (likely

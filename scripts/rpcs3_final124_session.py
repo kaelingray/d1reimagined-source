@@ -109,7 +109,12 @@ def snapshot(read):
         "reported_peer_byte": raw[0x1D0 - 0x88],
         "target_state_13c": raw[0x13C - 0x88],
         "target_phase_141": raw[0x141 - 0x88],
+        "target_resolved_index_138": struct.unpack_from(">i", raw, 0x138 - 0x88)[0],
+        # 0x352968 writes its spatial follow classification here; retain the raw byte.
+        # Retain the old output key for existing private timelines, but it is not a peer count.
+        "follow_player_phase_1d2": raw[0x1D2 - 0x88],
         "peer_count_1d2": raw[0x1D2 - 0x88],
+        "follow_record_raw_36c_393": raw[0x36C - 0x88:0x394 - 0x88].hex(),
         "group0": raw[0x3B8 - 0x88:0x490 - 0x88].hex(),
         "group1": raw[0x490 - 0x88:0x568 - 0x88].hex(),
         "mapped_slots": slots, "sessions": [],
