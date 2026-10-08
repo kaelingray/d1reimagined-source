@@ -22,7 +22,7 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The current backend and diagnostic changes pass **202 server tests**, **171 script tests**
+The current backend and diagnostic changes pass **202 server tests**, **176 script tests**
 and the actual final-schema preflight (1 timed / 58 reactive changes).
 The [rifle investigation](notes/rifle-pickup-0124.md) corrects the cue's object
 selection: the previous chest was about 137 units from the marker; `o_weapon`
@@ -32,6 +32,10 @@ Guardian still cannot acquire its rifle. The [loot mapping](notes/loot-and-rewar
 now identifies the separate pending-loot table and nonce/position cache, with a
 read-only probe. JOIN217 verifies that the native manager reads diagnostic rifle
 records, but their nonce/position cache is empty and approach produces no claim.
+JOIN218 identifies the native incident catalog and corrects the scripting-resource
+address lookup. A bounded offline reader parses its 3,083 records; one selector
+matches an observed cinematic callback. Event names and the rifle incident body
+remain unresolved. See [incident diagnostics](notes/incident-diagnostics.md#join218-native-catalog-and-resource-address-correction).
 Visible room illumination and companion
 Ghost glow remain unaccepted.
 

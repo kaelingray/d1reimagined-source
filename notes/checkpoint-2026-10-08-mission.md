@@ -854,3 +854,26 @@ next consolidated report; today's delivered package remains immutable.
 Next: identify the native action supplying the rifle nonce and position, observe
 its service-601 claim, and connect an idempotent durable grant to the replicated
 inventory before accepting the unarmed-to-Khvostov sequence.
+
+## JOIN218: native incident catalog, pickup still unresolved
+
+A read-only native run corrects a 64 KiB scripting-resource address error and
+identifies the incident catalog through the actual database getter. The AH incident,
+script-event, base-script-data and script-state codecs are already in the final
+schema. The new offline catalog reader validates 3,083 records; index 2120's
+selector 17 and identity hash match an inspected cinematic callback.
+
+Five native client incident-handler entries are observed. Loot position-recording
+and service-601 watches have zero hits. Event names, auxiliary-field meanings and
+the rifle action body remain unresolved. No incident injection, inventory/mission
+change or renderer change is tested. This establishes a diagnostic lookup, not
+pickup, combat, visual fidelity or whole-game acceptance.
+
+The script suite passes **176 tests**, including five catalog-reader checks.
+The unchanged server's last checkpoint remains **202 tests** passing. JOIN218
+closes cooperatively at **22:31:18.214 UTC on 8 October**; independent checks
+verify all nine exact owned identities closed and three configuration hashes
+restored. Raw inputs and reports stay private. See
+[incident diagnostics](incident-diagnostics.md#join218-native-catalog-and-resource-address-correction)
+for the correction and next native decoding trace. Today's delivered daily package
+stays immutable; this late evidence belongs in the next consolidated report.

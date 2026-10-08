@@ -129,3 +129,60 @@ Squad spawning remains a separate acceptance gate: later code analysis identifie
 and `+0x850` as transient roster-reset masks, with baseline-ready processing clearing only
 the latter. Type 27 writes a separate activity-level value. Neither should be presented as
 a verified direct simulation-authority setter. See [mission acceptance](guardian-rises-acceptance.md).
+
+## JOIN218: native catalog and resource address correction
+
+The 01.24 instruction `lis r3,0x18e` followed by a load with displacement
+`-0x11c4` addresses **`0x18dee3c`**, not `0x18eee3c`. The earlier private
+scripting-resource lookup was 64 KiB too high. Read-only native checks now resolve:
+
+| Resource | Global address | Codec handle |
+| --- | --- | --- |
+| AH incident, type 18 | `0x18dedc4` | `0x8080097d` |
+| AH script event, type 39 | `0x18dee3c` | `0x80800c0a` |
+| Base script data | `0x18ded3c` | `0x808009a6` |
+| AH script state, type 38 | `0x18ded40` | `0x808052e5` |
+
+These codec types are already in the final schema. The wrong-address value
+`0x80804c4c` is not evidence of a missing script-event codec. Resource metadata
+points four bytes after the type-definition start; use the definition start when
+interpreting that metadata.
+
+Client incident interface `*(0x1a93300)` dispatches through handlers including
+`0x5aea30` and `0x5aede4`. They can call the loot position-recording paths, but
+are incident handlers rather than BAP reply callbacks. JOIN218 observes five
+entries into `0x5aea30`. An inspected cinematic context has payload selector 17
+at `+0x134` and body type `0x80800792`; it does not select the branch that calls
+`0x2b279c`. The loot recording paths and service-601 entry have zero watch hits.
+No host incident is injected in this run.
+
+The interface's database getter `0x5aef50 -> 0x4696f4` identifies catalog tag
+`0x816564aa`, content class `0x80800659`. Its array at `+0x10` has **3,083**
+records of content class `0x808003d3`, stride 20. Each record exposes an identity
+hash at +0, a field-relative definition link at +4, four still-unnamed u16 fields
+at +8, and a payload selector byte at +16. Catalog index 2120 has hash
+`0xaeca3822` and selector 17, matching the inspected native cinematic context.
+This is a bounded correlation, not recovery of all incident meanings.
+
+`scripts/d1_incident_catalog.py` reads an already extracted private catalog,
+checks array and definition bounds, and writes an exclusive private JSON report:
+
+```powershell
+python scripts/d1_incident_catalog.py <private-extracted-catalog> `
+    --out <new-private-report.json> --hash 0xaeca3822
+```
+
+Five checks cover independent record layout, signed field-relative links,
+malformed headers, truncated/out-of-range definitions and output preservation.
+The complete script suite passes **176 tests**. The actual private catalog parses
+successfully. Extracted definitions, reports and native traces remain outside Git.
+Content class hashes are not wire codec handles. Names, auxiliary-field meanings,
+incident body encoding and the event that supplies the rifle nonce/position are
+still unverified; this reader does not grant loot or send an incident.
+
+JOIN218 closes cooperatively at **22:31:18.214 UTC on 8 October**. Independent
+verification confirms nine exact owned identities closed and all three baseline
+configuration hashes restored. No mission, renderer or inventory behaviour changes
+in this run, and no new gameplay or graphics acceptance is claimed. Next: trace
+the incoming incident's body decoding into the client action context, then verify
+the native cache insertion and service-601 claim for the unarmed starter.

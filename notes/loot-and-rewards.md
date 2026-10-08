@@ -153,3 +153,10 @@ cache bounds, finite positions and rereads its inputs. It rejects changing
 samples and preserves earlier output. A position match is only a prerequisite;
 unit occupancy, visible art, pickup, equipment and durable grants require
 separate evidence.
+
+JOIN218 locates the native incident catalog and correlates one cinematic record
+with the client callback's selector. The position-recording callbacks are native
+incident dispatch paths, not BAP reply handlers. The corrected script-event codec
+is already present in the final schema. This narrows the missing rifle action
+investigation, but supplies neither its body nor its nonce/position. See
+[the catalog evidence and address correction](incident-diagnostics.md#join218-native-catalog-and-resource-address-correction).
