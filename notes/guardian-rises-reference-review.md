@@ -23,7 +23,7 @@ editing and older PS4 UI: its numeric reward/defence values are not assumed to b
 | 01:35–04:25 | Logos, Mars/account introduction and Traveler backstory | First-view versus later-view intro flags must be independent of per-character revival. |
 | 04:30–06:05 | Cosmodrome panorama, car graveyard, searching Ghost, scan POV, watching Fallen and resurrection energy | Verify all authored shots and actors. Current first cinematic is stopped after 70 seconds of host time; the longer reference sequence motivates investigation, not a guessed duration replacement. |
 | 06:10–06:55 | First-person awakening, visible hovering Ghost, Guardian hand, warning, Ghost departure and fade | Missing Ghost/shots remain reported defects. Cast, effects, dialogue and fade removal require continuous native evidence. |
-| 07:00–07:35 | Unarmed control, Enter the Wall, a world diamond on the Wall, then Find a Weapon on entry | Titles have partial evidence; normal-view and Nav Mode waypoints do not. Pre-granted fixture weapons cannot accept the authentic opening. |
+| 07:00–07:35 | Unarmed control, Enter the Wall, a world diamond on the Wall, then Find a Weapon on entry | JOIN182 verifies the normal-view Wall diamond and its disabled state after completion. Nav Mode shows No Tracked Items; subsequent markers are unaccepted. Pre-granted fixture weapons cannot accept the authentic opening. |
 | 07:40–08:15 | The Breach, camera-following spotlight, a world diamond, Ghost moving ahead and powering the light | Ghost member receipt is not visibility. The power performance is separate from the moving torch; both need native checks. |
 | 08:19–08:25 | Grab the Rifle; Ghost by the rifle box; Khvostov pickup and armed ammo HUD; Fight through the Wall with marker | Grant once, equip/save, ammo/reload/fire, correct marker and reconnect/replay behavior are unaccepted. |
 | 08:40–11:50 | Dreg combat, Nav Mode Ghost/objective, loot cache and special weapon, tripmine beams and crouch tutorial | Enemy presence, AI, damage/death, real rewards, weapon switch and hazards must work rather than only advancing the title. |
@@ -50,10 +50,25 @@ style with state+0xc through `0x3a67ac`, and calls `0x57a7d8` for every entry.
 Registration at `0x57a7d8` requires both nonzero entry type at entry+0 and a
 non-null object reference at entry+0x20. Helper `0x155f60` checks kind/index
 sentinels; it does not resolve the reference or prove its target is loaded.
-The current mission sets neither marker entry. JOIN62/63 already failed tests
+The mission previously set neither marker entry. JOIN62/63 already failed tests
 that filled entry+4 or root+4 alone; repeating those is not a waypoint repair.
-Correct target, style and normal/Nav Mode display still need a bounded native
-test before a marker candidate can be promoted.
+JOIN181's candidate also fails: kind 13 position fields have schema width zero,
+but the raw client decoder consumes three real32 coordinates. The old encoder
+omitted those 96 bits in every marker, shifting the target and later state fields.
+The client reads the raw format with position quantization disabled; the repaired
+codec emits/reads xyz and leaves native w=1 to the client. Compressed positions
+are not implemented. Six independent wire checks fail against the prior encoder;
+all 175 server checks pass with the repair.
+
+JOIN182 verifies the first normal-view Wall diamond at 07:42:57 UTC. Native state
+retains the intended target `0x992bb471:0x2c:87`, slice bucket 14, zero xyz and w=1.
+At 07:49:56, after the physical Wall trigger, objective 3 and marker type are zero.
+The null root uses the client's current-slice fallback bucket `(slice>>3)&63`:
+14 for 112 and 3 for 24. The shipped mission now sets/clears entry 0 across the first
+four objective handovers, using authored nav targets 87/65/78/88. Only the first
+normal-view marker has native visibility acceptance. Nav Mode's No Tracked Items,
+missing objective text, remaining markers and stable transition remain open.
+The final entrance view is black with its HUD present; no graphics fix is claimed.
 
 The cinematic state has separate counted machine-ID lists at +0x18 (up to16)
 and +0x9c (up to6). Their presence does not establish Ghost casting. The script

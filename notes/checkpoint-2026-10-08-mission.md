@@ -237,3 +237,75 @@ that the script has no marker entries and that registration requires entry type
 and entry+0x20 reference; prior root+4-only experiments did not satisfy this gate.
 Actual presentation, authored timing/cast and native markers still need repair
 and verification. Original reference/test media and raw definitions remain private.
+
+## JOIN181–182: raw-position repair and the first visible waypoint
+
+The private marker candidate sets entry 0 for objectives 3/7/11/14, with type 1,
+authored navigation targets 87/65/78/88 and fallback slice buckets 14/3. It clears
+the marker on completion and objective clearing. No cinematic, trigger, clock,
+equipment or renderer change is part of this comparison.
+
+JOIN181 fails native marker decoding. Kind 13 has schema width 0, but the actual
+01.24 readers `0xe44ab0`/`0xe46830` call `0x28eb2c` and consume three raw real32s
+when the position quantizer global `0x1aa9460` is zero. That mode is read directly
+in both runs. The old encoder writes no position bits, omitting 96 bits per entry
+and 120 bytes across ten markers. Native xyz consumes the intended target instead,
+the target becomes garbage, and later state fields shift. A matching faulty
+encoder/decoder can pass a round-trip preflight, so that earlier PASS was insufficient.
+
+The source codec now reads/writes the three coordinates even with width 0,
+defaults them to zero and rejects malformed/non-finite/unrepresentable encoder
+inputs. Native adds w=1. Compressed position encoding remains unsupported.
+Six independent wire checks use separate struct/bit construction, exercise
+unaligned following references and all ten markers, and fail against the prior
+encoder. All 175 server checks pass after repair. The launcher's actual schema,
+`d1reimagined-data/ps3_updates/types_01.24.json`, passes 4 timed/35 reactive state
+changes. Earlier attempts against an old runtime activity export and an
+unaugmented research types export fail on missing schemas; neither is supplied
+to these live runs.
+
+JOIN182 uses the same C5 executable/backend/candidate. The inspected normal-view
+frame at **07:42:57 UTC on 8 October** shows a white diamond on the Wall. Earlier
+normal-view samples lack it; visibility is established at that later sample,
+after leaving Nav Mode. Nav Mode's 07:39:39 frame shows No Tracked Items and no
+held Ghost; correct objective text and Nav Mode guidance remain open.
+Native marker state retains type 1, bucket 14, zero xyz/w=1 and reference
+`0x992bb471:0x2c:87`; materialization resolves a position near the Wall.
+The broken JOIN181 reference and later-field shifts are absent.
+
+Guarded ordinary movement reaches the canonical endpoint
+`[353.6537,-796.4932,13.9975]` at 07:45:29.108 UTC. The physical Wall incident reaches
+the original host at 07:44:57.159 and schedules the existing handover. A read-only
+sample at 07:49:56 reads objective 3 state 0 and marker type 0. The inspected final
+frame has black scenery with HUD/coach text. No manual host teleport to 24 or guest
+memory write is issued. This run does not cross to current24: 3,146 non-atomic
+session samples include 1,364 idle112 and 1,425 current112/target24 in engine phase3;
+all retain session 6 and pass pointer rechecks. The next marker is not accepted.
+
+The mission now ships the tested first-four marker lifecycle entries. Only the
+normal-view Wall diamond and native clearing have acceptance; other target
+visibility, objective text and complete normal/Nav Mode handovers remain partial.
+
+Revival is still incomplete. Native entry traces reach the authored third-person
+performance hash `0xaccc0f17` and first-person `0xafcc146d`; the initial read-only
+manager sample contains two performance records and the local machine cast entry.
+The sampled first-person scene has no visible Ghost. These observations establish
+starts/records, not complete actor casting, animation, shots, dialogue or natural
+completion. The 70/45-second host stops remain unchanged pending authored evidence.
+The filtered `0x57b3cc` watch uses an incorrect caller return address; its lack of
+hits cannot exclude that helper. Its call site's correct return is `0x57b734`.
+
+Owned cleanup ends 07:50:14.559 UTC. Eleven recorded service/client/proxy/probe/
+recorder/route identities are independently checked closed at 07:51:15.662.
+Title/global/watch hashes match originals, XInput/sharedRPCN restore, and controls
+and cleanup errors are empty. The validation layer is present before stop;
+the pre-stop log has no VUID/device-loss/fatal-severity entry through 17:28.892378.
+The black final image still fails graphics acceptance. No RSX capture is armed,
+saved or replayed.
+
+JOIN182 recording fails source identification 8.49 seconds after its start key.
+No new source is selected and no indexed JOIN182 segment is found; no accepted continuous
+mission footage is claimed. The unknown sources are preserved without a cleanup
+toggle. Screenshots, exact owned state reads, route audit and native/host logs are
+the bounded evidence. JOIN181 originals remain private. Capture status later reads
+IDLE/NASconnected, but health alone does not turn the failed JOIN182 capture into footage.

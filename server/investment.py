@@ -20,6 +20,10 @@ it is kept outside Git). Encoding mirrors the client's deserializer (0x25d2dc ->
     schema's fields. None encodes null; present values use {"type": HANDLE,
     "values": {OFFSET: VALUE}}. Unknown handles are rejected. These readers are
     0xe45198/0xe45604 in 01.24 and 0xd1ccb8/0xd1d124 in 01.00.
+  * kind 13 is an unquantized position: three raw real32 coordinates (96 bits),
+    despite schema width zero. The client stores a fourth coordinate w=1. This
+    supports the local activity's disabled position quantizer; compressed position
+    encoding is not implemented.
 
 `values` maps a struct offset to a value (or, for nested fields, a dict or list of dicts for
 that struct) at each level; everything not given is encoded as absent (optional) or zero.
@@ -33,6 +37,7 @@ must carry version = previous + 1, otherwise sign-in reason 6 is set.
 """
 
 import json
+import math
 import struct
 from pathlib import Path
 
@@ -42,6 +47,7 @@ DEFAULT_SCHEMA = SIGNON / "investment_schema.json"
 MACHINE_ID_KIND = 0x23
 NULLABLE_HANDLE_KIND = 0x17
 TYPED_VALUE_KIND = 0x22
+POSITION_KIND = 13
 NULL_HANDLE = 0xFFFFFFFF
 
 
@@ -120,6 +126,11 @@ def decode_from(reader, schema, handle, limit=None):
             values[off] = bool(reader.get(1))
         elif kind == 11:
             values[off] = struct.unpack(">f", struct.pack(">I", reader.get(32)))[0]
+        elif kind == POSITION_KIND:
+            # 01.24 0xe44ab0 -> 0x28eb2c: with position quantization
+            # disabled, read three raw real32s; native storage adds w=1.
+            values[off] = [struct.unpack(">f", struct.pack(">I", reader.get(32)))[0]
+                           for _ in range(3)]
         elif kind == MACHINE_ID_KIND:
             values[off] = reader.get(64)
         elif kind == NULLABLE_HANDLE_KIND:
@@ -146,6 +157,23 @@ def load_schema(path=DEFAULT_SCHEMA):
 
 def _primitive(w, field, value):
     kind = field["kind"]
+    if kind == POSITION_KIND:
+        # The field's width is zero, but its raw-position payload is 96 bits.
+        # The local activity uses the unquantized codec (native global
+        # 0x1aa9460 == 0); compressed positions require a separate codec.
+        position = [0.0, 0.0, 0.0] if value is None else value
+        if not isinstance(position, (list, tuple)) or len(position) != 3:
+            raise ValueError("position needs three finite real32 coordinates")
+        try:
+            coordinates = [float(coordinate) for coordinate in position]
+            if not all(math.isfinite(coordinate) for coordinate in coordinates):
+                raise ValueError("position needs three finite real32 coordinates")
+            packed = struct.pack(">fff", *coordinates)
+        except (TypeError, ValueError, OverflowError, struct.error) as exc:
+            raise ValueError("position needs three finite real32 coordinates") from exc
+        for component in struct.unpack(">III", packed):
+            w.put(component, 32)
+        return
     if kind == 2:
         w.put(1 if value else 0, 1)
         return

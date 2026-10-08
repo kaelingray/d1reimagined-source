@@ -22,7 +22,11 @@
     "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet.",
     "01.24 JOIN104: the manual o_device_invis_light alias creates, removes and recreates its placed unit using generation and +4 Boolean; illumination and mission timing remain unverified.",
     "01.24 JOIN109: the authored Ghost member state creates one unit with member/performance bindings while desired counts remain zero; it replaces the count-only Ghost path.",
-    "nux_ghost is a manual performance alias, kind 0x28 (40 decimal)/index 125; no automatic cue or torch action is enabled."
+    "nux_ghost is a manual performance alias, kind 0x28 (40 decimal)/index 125; no automatic cue or torch action is enabled.",
+    "01.24 JOIN182: raw kind-13 positions require 96 wire bits even when schema width is zero.",
+    "Objective markers use entry 0 at +0x40, type 1, authored nav target at entry+0x20 and null root fallback slice bucket (112>>3=14, 24>>3=3).",
+    "JOIN182 verifies the normal-view Enter the Wall diamond and disabled marker after completion; the next three target entries are configured but still need native visibility acceptance.",
+    "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete."
   ],
   "clock": "ready",
   "objects": {
@@ -119,7 +123,18 @@
       "set": {
         "obj_enter_wall": {
           "0": 1,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 14,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 87
+              }
+            }
+          }
         },
         "seq_enter_wall_in": {
           "0": "$now",
@@ -142,7 +157,18 @@
       "set": {
         "obj_enter_wall": {
           "0": 5,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 14,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 87
+              }
+            }
+          }
         }
       },
       "lane": "objectives",
@@ -156,7 +182,12 @@
       "set": {
         "obj_enter_wall": {
           "0": 3,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "seq_enter_wall_done": {
           "0": "$now",
@@ -178,11 +209,27 @@
       "set": {
         "obj_enter_wall": {
           "0": 0,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "obj_investigate": {
           "0": 1,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 65
+              }
+            }
+          }
         },
         "seq_investigate_in": {
           "0": "$now",
@@ -205,7 +252,18 @@
       "set": {
         "obj_investigate": {
           "0": 5,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 65
+              }
+            }
+          }
         }
       },
       "lane": "objectives",
@@ -219,7 +277,12 @@
       "set": {
         "obj_investigate": {
           "0": 3,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "seq_investigate_done": {
           "0": "$now",
@@ -245,11 +308,27 @@
       "set": {
         "obj_investigate": {
           "0": 0,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "obj_get_weapon": {
           "0": 1,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 78
+              }
+            }
+          }
         },
         "seq_get_weapon_in": {
           "0": "$now",
@@ -272,7 +351,18 @@
       "set": {
         "obj_get_weapon": {
           "0": 5,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 78
+              }
+            }
+          }
         }
       },
       "lane": "objectives",
@@ -308,7 +398,12 @@
       "set": {
         "obj_get_weapon": {
           "0": 3,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "seq_get_weapon_done": {
           "0": "$now",
@@ -330,11 +425,27 @@
       "set": {
         "obj_get_weapon": {
           "0": 0,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 0
+            }
+          }
         },
         "obj_graveyard": {
           "0": 1,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 88
+              }
+            }
+          }
         },
         "seq_graveyard_in": {
           "0": "$now",
@@ -357,7 +468,18 @@
       "set": {
         "obj_graveyard": {
           "0": 5,
-          "0x2c0": -1
+          "0x2c0": -1,
+          "0x40": {
+            "0": {
+              "0": 1,
+              "0xc": 3,
+              "0x20": {
+                "0": 2569778289,
+                "4": 44,
+                "6": 88
+              }
+            }
+          }
         }
       },
       "lane": "objectives",

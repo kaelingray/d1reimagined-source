@@ -76,7 +76,9 @@ Dialogue = subtitle text (`0x80cb91bb` unless noted); objective titles/descripti
    back to your death...", "You can hear me right? We are going to die out here.", "I know I'm
    just a voice in your head, but you really should listen to me.", "I didn't bring you back just
    for you to die again, we have to move." The Ghost squad (`sq_ghost`) leads the way.
-   Host: objective/sequence **WORKING** (JOIN62); Ghost squad, waypoint, nag dialogue NOT YET.
+   Host: objective/sequence **WORKING** (JOIN62); JOIN182 verifies the normal-view Wall
+   diamond and disabled marker after completion. Nav Mode shows No Tracked Items;
+   Ghost visibility, complete guidance and nag dialogue remain open.
    The player trigger `0x1d/30` reports in a **type-18** message, which arrived only after the
    Breach loaded (JOIN77) - see below.
 3. **Find a Weapon (Breach, dark).** Area title "THE BREACH". "Ok... I need to find you a weapon

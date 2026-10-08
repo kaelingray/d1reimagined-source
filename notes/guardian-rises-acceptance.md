@@ -5,8 +5,8 @@ specifications into checks for the PS3 BLES01857 01.24 client. It summarizes the
 it does not copy their walkthrough, dialogue, proposed API, or public-release enemy counts.
 
 **The mission is not verified end to end.** Revival playback, the highway hand-off, objective text,
-and walking to the Wall have bounded live evidence. Complete revival shots/Ghost,
-objective waypoints, stable Breach progression, Ghost illumination,
+and walking to the Wall have bounded live evidence. JOIN182 verifies the first normal-view
+Wall diamond. Complete revival shots/Ghost, remaining waypoints and Nav Mode, stable Breach progression, Ghost illumination,
 weapons, combat, completion, and Tower hand-off remain incomplete.
 
 ## Evidence and the next gate
@@ -44,6 +44,15 @@ stays pending, with no idle24 samples; inspected mission scenery is dark. This i
 movement progress, not a streaming, waypoint, cinematic, Ghost or graphics fix.
 The [reference comparison](guardian-rises-reference-review.md) makes the user's
 reported missing waypoints, revival shots and Ghost explicit acceptance failures.
+
+JOIN181 exposes a real wire defect: kind 13 positions consume 96 bits even though
+their schema width is zero. The repaired codec preserves the following marker
+reference and state fields. Six independent checks fail with the original encoder;
+all 175 server checks pass after repair. JOIN182 visibly draws the normal-view Wall
+diamond and later reads a cleared objective/disabled marker after the Wall trigger.
+The next three authored marker targets are configured, but visibility is unaccepted.
+Nav Mode shows No Tracked Items. Current112/target24 remains pending and the final
+entrance frame is black. Revival shots, Ghost, streaming and graphics are still open.
 
 - **Observed:** read directly from the 01.24 executable/content, or captured in an identified
   01.24 run. Serialization tests prove a state can be encoded, not that it produces the expected
