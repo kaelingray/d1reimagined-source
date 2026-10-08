@@ -141,6 +141,34 @@ class PlayerDB:
             if not taken:
                 return candidate
 
+    @staticmethod
+    def _replay(db, key, account_id, reason, result_field, character_id=...):
+        """A retry may read only the result belonging to the original grant's scope.
+
+        Character creation does not yet have a character ID; import and item grants do.
+        The result field also distinguishes an item grant from a character operation.
+        """
+        row = db.execute("SELECT account_id, character_id, reason, result FROM grants "
+                         "WHERE idempotency_key=?", (key,)).fetchone()
+        if row is None:
+            return None
+        if (row[0] != account_id or row[2] != reason
+                or (character_id is not ... and row[1] != character_id)):
+            raise ValueError("idempotency key belongs to a different grant scope")
+        result = json.loads(row[3])
+        if result_field not in result:
+            raise ValueError("idempotency key belongs to a different operation")
+        return result[result_field]
+
+    @staticmethod
+    def _require_character_owner(db, account_id, character_id):
+        if character_id is None:
+            return
+        owner = db.execute("SELECT account_id FROM characters WHERE character_id=? AND deleted_at IS NULL",
+                           (character_id,)).fetchone()
+        if owner is None or owner[0] != account_id:
+            raise ValueError("character does not belong to the account")
+
     # accounts
     def ensure_account(self, account_id, display_name):
         with self._tx() as db:
@@ -170,9 +198,9 @@ class PlayerDB:
         """Create a character in the account's first free slot; replaying the same key returns the
         same character instead of creating another (a resent service 501)."""
         with self._tx() as db:
-            done = db.execute("SELECT result FROM grants WHERE idempotency_key=?", (idempotency_key,)).fetchone()
-            if done:
-                return json.loads(done[0])["character_id"]
+            done = self._replay(db, idempotency_key, account_id, "create_character", "character_id")
+            if done is not None:
+                return done
             used = {row[0] for row in db.execute(
                 "SELECT slot FROM characters WHERE account_id=? AND deleted_at IS NULL", (account_id,))}
             free = [s for s in range(3) if s not in used]
@@ -190,9 +218,9 @@ class PlayerDB:
         """Adopt a character created elsewhere (e.g. the legacy JSON store) with its existing id,
         so running sessions and recipes that name that id keep working. Idempotent by key."""
         with self._tx() as db:
-            done = db.execute("SELECT result FROM grants WHERE idempotency_key=?", (idempotency_key,)).fetchone()
-            if done:
-                return json.loads(done[0])["character_id"]
+            done = self._replay(db, idempotency_key, account_id, "import_character", "character_id", character_id)
+            if done is not None:
+                return done
             if db.execute("SELECT 1 FROM characters WHERE character_id=?", (character_id,)).fetchone():
                 raise ValueError(f"character id {character_id:#x} already exists")
             used = {row[0] for row in db.execute(
@@ -225,13 +253,10 @@ class PlayerDB:
         """Create item instances [{item_hash, location, equip_slot?, quantity?, state?}] for one
         owner in one transaction. Replaying the key returns the original instance ids."""
         with self._tx() as db:
-            done = db.execute("SELECT result FROM grants WHERE idempotency_key=?", (idempotency_key,)).fetchone()
-            if done:
-                return json.loads(done[0])["items"]
-            owner = db.execute("SELECT account_id FROM characters WHERE character_id=? AND deleted_at IS NULL",
-                               (character_id,)).fetchone() if character_id is not None else (account_id,)
-            if owner is None or owner[0] != account_id:
-                raise ValueError("character does not belong to the account")
+            done = self._replay(db, idempotency_key, account_id, reason, "items", character_id)
+            if done is not None:
+                return done
+            self._require_character_owner(db, account_id, character_id)
             ids = []
             for item in items:
                 instance_id = self._allocate(db)
@@ -261,6 +286,7 @@ class PlayerDB:
     def move_item(self, account_id, item_instance_id, expected_version, character_id, location, equip_slot=None):
         """Move one instance (transfer, vault, equip) if it is unchanged since the caller read it."""
         with self._tx() as db:
+            self._require_character_owner(db, account_id, character_id)
             cur = db.execute("UPDATE items SET character_id=?, location=?, equip_slot=?, version=version+1 "
                              "WHERE item_instance_id=? AND account_id=? AND version=?",
                              (character_id, location, equip_slot, item_instance_id, account_id, expected_version))

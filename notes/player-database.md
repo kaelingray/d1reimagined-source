@@ -2,8 +2,9 @@
 
 The durable store for all player state, replacing the single-client JSON store
 (`SIGNON_LOCAL/characters-0124.json`: one character per account, non-transactional, starter item
-ids `0x100 + slot`). Status: **schema v1 implemented and tested; not yet wired into the BAP
-stand-in** (next step). Multiplayer readiness: MULTIPLAYER-AWARE (concurrency tested with
+ids `0x100 + slot`). Status: **schema v1 implemented and tested; optional BAP integration
+through `--player-db` covers character/account persistence. Inventory grants and moves
+are not yet connected to native loot/equipment requests.** Multiplayer readiness: MULTIPLAYER-AWARE (concurrency tested with
 simulated sessions; no real two-client run yet).
 
 ## Principles
@@ -21,7 +22,7 @@ idempotency keys for grants, optimistic versions for client-driven mutations, nu
 | `accounts` | account_id (from sign-in) | account | display name, version, service-701 account data |
 | `characters` | character_id (allocated) | account | slot (unique per live account slot), the client's 501 creation request, soft delete, version |
 | `items` | item_instance_id (allocated) | account; character or NULL (vault) | definition hash, location (inventory/equipped/vault/postmaster), equip slot, quantity, per-instance JSON state, version |
-| `grants` | idempotency_key | account/character | ledger of every grant (character creation, items): reason and result; a replayed key returns the original result |
+| `grants` | idempotency_key | account/character | ledger of every grant (character creation, items): reason and result; replay requires the original owner, reason and operation |
 
 Planned next tables (each through a new migration): currencies (per account/character, ledger
 based), progression and reputation, quests/objectives/bounties, checkpoints (owner explicit:
@@ -61,3 +62,11 @@ after deletion; a resent creation request returns the same character; grants ide
 refused for another account's character; optimistic-concurrency conflict on a stale item move;
 eight concurrent sessions each granting 25 items twice (duplicate delivery) produce exactly 25
 items per account, all owned correctly, all instance ids unique.
+
+On 2026-10-08, four regressions exposed missing checks on ledger replays and item
+destinations. A globally unique key now rejects reuse by another account, character,
+reason or operation; valid retries still return the original IDs after reopening the
+database. Moves require a live destination character belonging to the item's account,
+and rejected moves leave both location and version unchanged. Vault round trips and
+stale-version rejection remain covered. All 12 database tests pass. This protects the
+grant foundation; it does not establish an in-game rifle pickup.

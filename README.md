@@ -15,20 +15,25 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | The revival now hands over on native cinematic-end incidents; JOIN196–199 progress through all nine third-person scenes and the first-person scene. JOIN182 verifies the first normal-view Wall diamond. JOIN188–192 verify ordinary Breach crossing and automatic squad/dialogue rules; JOIN196 repeats natural current24 arrival. Activity 229 uses checksum `0x8fe07299`. | Stable idle24 and usable Breach lighting remain unaccepted. The revival Ghost and the Breach torch now appear (JOIN201-202); first person is too dark and JOIN201 exited once on the resurrection light. Later waypoints, torch/power, authentic rifle pickup, combat, completion and Tower remain open. Nav input after revival causes a guest access violation in JOIN197–199. |
-| Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
+| Opening mission | The revival hands over on native cinematic-end incidents; JOIN196–199 progress through all nine third-person scenes and the first-person scene. The Wall and rifle objective diamonds have native evidence. Automatic Breach dialogue and prop activation open the rifle barrier (JOIN211). Activity 229 uses checksum `0x8fe07299`. | First person remains too dark; usable room lighting and companion Ghost glow are unaccepted. Reaching the rifle volume advances the objective without granting a weapon. Authentic pickup, combat, completion and Tower remain open. Nav input after revival causes a guest access violation in JOIN197–199. |
+| Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons. JOIN216's privately pre-equipped Khvostov renders and fires on R1, reducing its magazine from 12 to 11. Database grant retries and item moves now enforce account/character ownership. | The rifle fixture is not a world pickup; ammunition differs from the reference's 25/184, and damage is untested. Texture corruption/distortion, level/light values and stable combined rendering remain open. Native loot/equipment services are not wired to durable item grants. |
 | Ghost | The starter Generalist Shell now uses its art record's world appearance (row 0) and dye 15/2493. JOIN201 shows the authored shell fly in through the car window and turn to camera, matching the reference. Automatic Breach squad activation and dialogue have bounded native evidence. | JOIN202 repeats the revival through the default, including the resurrection sphere and first-person Ghost, and the Breach torch follows the camera. JOIN201 exited once on the resurrection light. First-person brightness, held Ghost, the power beat and combined graphics remain unaccepted. See [appearance evidence](notes/ghost-appearance-0124.md). |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The latest mission and route changes pass **198 server tests**, **166 script tests**
-and the actual final-schema preflight (1 timed / 55 reactive changes).
+The current backend and diagnostic changes pass **202 server tests**, **171 script tests**
+and the actual final-schema preflight (1 timed / 58 reactive changes).
 The [rifle investigation](notes/rifle-pickup-0124.md) corrects the cue's object
 selection: the previous chest was about 137 units from the marker; `o_weapon`
-matches it. JOIN209 verifies native creation and occupied unit-pool membership,
-but pickup and the barrier remain open. Automatic Breach dialogue ordering works;
-visible room illumination and companion Ghost glow remain unaccepted.
+matches it. JOIN209 verifies native creation and occupied unit-pool membership;
+JOIN211 verifies automatic barrier opening. The chest renders, but an unarmed
+Guardian still cannot acquire its rifle. The [loot mapping](notes/loot-and-rewards.md)
+now identifies the separate pending-loot table and nonce/position cache, with a
+read-only probe. JOIN217 verifies that the native manager reads diagnostic rifle
+records, but their nonce/position cache is empty and approach produces no claim.
+Visible room illumination and companion
+Ghost glow remain unaccepted.
 
 The [equipment appearance support](notes/ghost-appearance-0124.md) corrects
 the earlier claim that an empty-looking Ghost descriptor proved a missing lookup:

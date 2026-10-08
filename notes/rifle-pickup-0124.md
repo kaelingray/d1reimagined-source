@@ -53,7 +53,7 @@ A slow-pad-poll regression fails before this repair and passes afterwards;
 existing arrival, guard and facing checks remain intact. This improves test
 precision, not the world's collision geometry.
 
-## Open checks
+## Open checks at JOIN209 (superseded by the barrier result below)
 
 The host's object-stream encoder emits State A and always marks optional State B
 absent. Kind-4 props have secondary state type `80800387`; its actuation semantics
@@ -86,9 +86,47 @@ either side, with the camera tilted down, produces no prompt and no client reque
 `o_weapon` with the barrier command changes nothing. The pickup is probably a loot object the
 host must place there; see [loot and rewards](loot-and-rewards.md). A second Message of the Day
 dialog can block input after control (JOIN212); automated drives now dismiss it.
-## JOIN216: equipped Khvostov renders, magazine 12, no firing
+## JOIN216: equipped Khvostov renders and fires, magazine 12
 
 Art record for item 3598: appearance 19, arrangement 2364, dyes (5, 6036) and (6, 6037). Equipped
 in slot 6 from login, the rifle renders in first person with an ammo HUD reading 12 (reference
 25/184). R1 (key E) fires: one tap takes the magazine from 12 to 11; R2 does nothing in this layout. In the reference the rifle leans on the chest front
 and is taken by walking up to it, with no prompt.
+
+## Loot investigation after JOIN216
+
+The self character has a separate 64-slot pending-loot table. The native loot
+manager requires both a matching nonce/position cache entry and the current world
+ID before it can create the world pickup. The chest prop and a pre-equipped rifle
+do not supply this state. The functions previously described as host messaging in
+the loot note actually queue local callbacks; the pickup callback then reaches the
+service-601 path. See [the corrected loot mapping](loot-and-rewards.md).
+
+The new read-only `rpcs3_final124_loot.py` probe reports these prerequisites using
+an exact owned-process manifest and an observed self-character address. Its output
+does not claim unit occupancy, visibility or a successful grant. The durable database
+also now rejects grant-key reuse across owners and moves into another account's
+character. Those repairs are tested independently of native pickup.
+
+## JOIN217: pending records reach the manager; no native pickup
+
+An unarmed starter fixture adds two synthetic pending rifle records, one each
+with source kinds 3 and 5. It does not supply an equipped weapon, position cache
+or authentic reward nonce. The native `0x2b36f8` and `0x2b3240` entries read both
+records. The new probe agrees with these entries at revival, during the Wall
+route and after approaching the rifle: two records, no cached nonces, no matching
+slot positions and both unit references absent.
+
+Ordinary guarded input reaches `[410.5794, -794.0434, 19.2190]` at
+**22:03:04.975 UTC on 8 October**, after the production mission's automatic
+Breach prop activation. No manual control-file command or guest-memory write is
+used. Watches on the position-recording callbacks and pickup service entry have
+no hits; the backend log has no service-601 request. The inspected final view
+remains dark and has the Level Up coach; it establishes no graphics repair.
+
+This validates the diagnostic and the missing cache prerequisite for this
+synthetic fixture. It does not establish the original rifle nonce, how its action
+is created, or a successful grant. The run closes at **22:05:38.946 UTC**;
+independent verification confirms all nine exact owned processes closed and all
+three baseline configuration hashes restored. Next: recover the action that
+records the rifle's nonce/position, then verify the native claim and durable grant.

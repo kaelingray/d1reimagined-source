@@ -817,3 +817,40 @@ client at 21:27:51 UTC; cleanup is clean.
 
 Next: Fight Through the Wall combat against the Breach Fallen with this rifle (R1), the
 weapon stats that set magazine 25, then the authentic unarmed-to-Khvostov grant at the chest.
+
+## JOIN217: native loot prerequisites and durable ownership
+
+The authentic pickup investigation now maps the self character's 64 pending-loot
+slots separately from the manager's nonce/position cache. The previously inferred
+host-message routines are local deferred callbacks; the actual pickup callback
+reaches BAP service 601. The wire nonce's item meaning remains unproven.
+
+JOIN217 starts unarmed with two synthetic pending rifle records. Native manager
+entries read both, but the new read-only probe reports an empty nonce cache and
+no matching positions at revival, along the Wall route and after reaching the
+rifle. Automatic Breach activation permits ordinary input to reach
+`[410.5794,-794.0434,19.2190]` at **22:03:04.975 UTC on 8 October**.
+No position-recording callback, pickup service entry or backend service-601
+request is observed. This is diagnostic acceptance, not world pickup, combat or
+graphics acceptance. The inspected final view remains dark with the Level Up
+coach. Original reward identity and its action creation remain open.
+
+The durable database now scopes retry keys to the owning account, character,
+reason and operation. Item moves reject destinations belonging to another
+account, deleted characters and missing characters without changing the item.
+Valid reconnect replay and vault/equip moves remain covered. The new regressions
+fail against the previous implementation and pass with the repair; native loot
+services are still not connected to these grants.
+
+Validation: **202 server tests**, **171 script tests**, including 12 database and
+five loot-probe checks, and the actual final-schema mission preflight
+**1 timed / 58 reactive** pass. No renderer source or build is changed.
+JOIN217 closes cooperatively at **22:05:38.946 UTC**. Independent verification
+confirms all nine exact owned identities closed and title/global/watch hashes
+restored; XInput and RPCN are preserved, active controls and cleanup errors empty.
+Raw inputs, traces and media remain private. This late evidence belongs in the
+next consolidated report; today's delivered package remains immutable.
+
+Next: identify the native action supplying the rifle nonce and position, observe
+its service-601 claim, and connect an idempotent durable grant to the replicated
+inventory before accepting the unarmed-to-Khvostov sequence.

@@ -11,7 +11,7 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
 | `investment_loot_object_manager` | `0x12f0ed8` | a manager for loot objects in the world, part of the investment (BAP item) system |
 | `loot-bauble` | `0x12f0ecc` | the in-world pickup (engram/item "bauble") |
 | `loot_manager_record_client_data_from_nonce` | `0x12f0ea0` | loot is keyed by a **nonce**; client data recorded per nonce |
-| `loot_component_send_pickup_message` | `0x13cd260` | picking up sends a message (to the activity host or BAP) |
+| `loot_component_send_pickup_message` | `0x13cd260` | local pickup callback; service 601 downstream (corrected 2026-10-08) |
 | `c_cui_loot_pickup_item_server_message_component` | `0x133a684` | UI for the server's answer to a pickup |
 | `c_cui_investment_loot_pipe_component`, `c_cui_investment_character_loot_state_component` | `0x133a4e4`, `0x133a3a4` | loot "pipe" (delivery) and per-character loot state |
 | `investment_activity_reward_tracker` | `0x13053e0` | activity completion rewards tracked through investment |
@@ -45,13 +45,12 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
 
 ## Investigation plan
 
-1. Find the code around the loot strings (`d1_eboot.py xref`) and the BAP service or host message
-   the pickup uses; map the request/response types (services 304/305/1218 share a
-   `u64 x2 + {0x8080547d, 0x80804792, 0x80804407} arrays` request shape and are candidates for
-   activity/loot reward reports).
-2. Find where loot nonces arrive: a host message type (candidates in the 01.24 host table:
-   10/18 with 0x2cc-byte structs, 23/24 with large buffers, 38 with a blob) or a replicated object
-   kind (loot objects as replicated entities).
+1. Trace a live service-601 request/response and identify which action creates the
+   rifle's nonce and position cache. Services 304/305/1218 share a
+   `u64 x2 + {0x8080547d, 0x80804792, 0x80804407} arrays` request shape and remain candidates for
+   activity/loot reward reports.
+2. Connect the now-mapped self-family pending-loot records to that native action.
+   The callback name alone does not identify a host wire message or replicated kind.
 3. Decode the reward-related content tags in the catalog (`reward sheet`, `item_loot`, activity
    definitions' reward fields) to see what loot tables exist locally.
 4. Decode the Cryptarch / engram decode path (vendor purchase 901 and the item-action services
@@ -74,10 +73,10 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
 
 ## Code anchors (OBSERVED, 01.24)
 
-- `loot_component_send_pickup_message`: used in **`0xcbb6c4`** (the pickup sender). It calls
-  `0x47c1a0` and `0x47d684(…, 4)` in the BAP message block (0x47xxxx holds the BAP codec/request
-  functions, e.g. the user-message decoder `0x47bf9c`), so a pickup most likely becomes a BAP
-  request; `0x276c44` (activity-host messaging) is also called. To trace next.
+- `loot_component_send_pickup_message`: used in **`0xcbb6c4`** (the pickup sender).
+  Its deferred callback `0xcbb5d4` calls `0x472518`; that path selects service ID
+  `0x259` (601) and queues the request. This is static code evidence; no native
+  rifle claim has been observed yet.
 - `investment_loot_object_manager`: registered in `0x2b3fb8`.
 - `loot-bauble`: used in `0x2b2c00` (the bauble object, same module as the loot manager).
 - `investment_activity_reward_tracker`: registered in `0x482268` (BAP/investment block).
@@ -90,19 +89,67 @@ Target build 01.24. Labels: **OBSERVED** (seen in a run or read directly from th
   table `0xb6068c`): the 257 records are the client's family-object cache {family, u64 root}.
   So the pickup sender first looks up the player's own self-family object - the per-character
   investment state is where loot state lives (fits `c_cui_investment_character_loot_state_component`).
-  INFERRED next step: loot nonces/baubles are fields of the self family (or a family-4 child
-  object) that the backend pushes via qz updates; decode the self family's loot-related fields
-  in the 01.24 schema.
-- Pickup sender `0xcbb6c4` (2026-10-02, OBSERVED code): after the self-family lookup it sends,
-  when the network flag (bit 1 of the byte at `*0x1a93690`) is set, the named network message
-  **`loot_component_send_pickup_message`** (`0x276c44`, 0x38-byte payload, handler table
-  `0x1886af8`: `0xcbb5d4`, `0xcbb600`, `0xcbb60c`, `0xcbb6c4`, `0xcbba18`, `0xcbbafc`, `0xcbbb04`)
-  - i.e. a pickup is reported to the activity's authority, not straight to the investment
-  server; otherwise it calls `0x472518` with the loot object's byte +0x1d8 (a local path that
-  looks up id 0x259 = 601 through a virtual call and posts a 0x50-byte message via `0x475d50` /
-  `0x47676c`; whether that is BAP service 601 is OPEN). The loot object keeps a u64 at +0x208,
-  a sent flag +0x1c6 and a count +0x1c8.
+  The loot table is now mapped below.
+- **Correction, 2026-10-08:** `0x276b08` and `0x276c44` are local deferred
+  callback queues. They copy the supplied bytes into a bounded arena and store
+  a payload pointer plus a function descriptor. The diagnostic string is not a
+  wire message name. `0x1853168` resolves to `0x2b2f74`, which fills the local
+  nonce cache; `0x1886af8` resolves to `0xcbb5d4`, which calls the same
+  service-601 path as the immediate pickup branch. The earlier claim that this
+  proved a pickup message to the activity authority is withdrawn. The meaning
+  of the dispatch-mode bit at `*0x1a93690` remains unnamed.
 - Service 601 (`0x3bf631f4`): request {u3, {i32, u64}, i32}, response {status} {{i32, u64}, i32}
-  - the shape of an item claim ({source kind, {item hash, instance}, quantity} -> granted
-  {item hash, new instance}, quantity). INFERRED; to confirm with a live pickup (needs the
-  Breach rifle pickup or enemy drops, i.e. traversal / AI).
+  - consistent with claiming a pending reward by source kind and nonce. The
+  `{i32, u64}` pair is an opaque nonce, not an established item hash/instance
+  pair. Remaining field meanings and a live request/response still need validation.
+
+## Pending world loot (static mapping, 2026-10-08)
+
+The full final-build schema and native `0x2b4070` agree on this layout:
+
+| Location | Type / layout | Evidence |
+| --- | --- | --- |
+| Self character `0x80801714` +`0x3bd0` | `0x80801701` pending-loot state | Native manager reads the first slot at self +`0x3bd8` |
+| Pending state +8 | `0x80804671`, 64 slots with stride `0x38` | Manager calls `0x2b36f8` once per slot |
+| Each slot | `0x80801829`: item index +0, word +4, source kind +8, nonce record +`0x10`, optional state +`0x28` | Schema and native field reads |
+| Nonce record | `0x808018ff`: `{i32, u64}` at +0/+8, another i32 at +`0x10` | `0xc434e4` compares the key and full 64-bit ID |
+| Manager +`0x200` / `0x204` / `0x208` | Ring capacity / start / count | Native cache insertion and backwards search |
+| Manager +`0x210` | 64 client-data records, stride `0x30` | Each holds nonce, position at +`0x10`, world ID at +`0x20` |
+| Manager +`0xe10` | One fallback client-data record per pending slot | Cleared when its nonce no longer matches |
+
+`0x2b36f8` considers source kinds **3 and 5** for world spawning. `0x2b3240`
+looks up the item's definition, chooses the newest matching nonce in the ring
+(or the slot fallback), and requires its world ID to match the current world.
+Only then does it resolve world art, create a `loot-bauble`, attach the loot
+record to its component and bind the character owner. A pending record alone
+therefore does not prove that a pickup can appear.
+
+The current world ID comes from `0x14dcf4 -> 0x158dbc`: controller
+`*(0x1a1dc80)` +`0x110c`, bits 3..8, or -1 for an absent handle. Manager
++`0x1a10` contains a four-word world signature returned by `0x14de84`; its
+first word must not be used as the world ID.
+
+`0x2b279c` records an action's nonce and its source unit position, falling back
+to action +`0x2a0`; `0x2b2a60` is another recording path. Their direct callers
+are callback handlers `0x5aea30` and `0x5aede4`. The mission/backend mechanism
+that creates the correct rifle action and nonce remains open. This mapping is
+not a recovered drop table or a native pickup acceptance result.
+
+JOIN217 checks this mapping in the native client using an unarmed starter and
+two synthetic pending rifle records (source kinds 3 and 5). Both manager entry
+paths read them. Three read-only samples, including one after ordinary movement
+to the rifle, have an empty ring, unmatched slot caches and absent unit-reference
+pairs. No position-recording callback or service-601 entry is observed, and no
+601 request reaches the backend. Synthetic nonces cannot establish the original
+reward identity; this result verifies the diagnostic and illustrates why pending
+records alone are insufficient. See [the bounded run](rifle-pickup-0124.md#join217-pending-records-reach-the-manager-no-native-pickup).
+
+Use `scripts/rpcs3_final124_loot.py --process-manifest <exact-run-manifest>
+--self-character <observed-address> --character-id <owned-character-id> --out
+<new-private-path>` to inspect the two halves. Derive the self address from the
+first-slot argument to native entry `0x2b36f8`; do not treat a watch at an
+arbitrary return instruction as supported. The probe checks the character ID,
+cache bounds, finite positions and rereads its inputs. It rejects changing
+samples and preserves earlier output. A position match is only a prerequisite;
+unit occupancy, visible art, pickup, equipment and durable grants require
+separate evidence.

@@ -72,6 +72,72 @@ class PlayerDBTest(unittest.TestCase):
             self.db.move_item(1, item, version, c, "inventory")
         self.assertEqual(self.db.items(1)[0]["location"], "vault")
 
+    def test_grant_replay_cannot_change_owner_or_reason(self):
+        self.db.ensure_account(1, "alpha")
+        self.db.ensure_account(2, "bravo")
+        a = self.db.create_character(1, b"t", "ca")
+        a2 = self.db.create_character(1, b"h", "ca2")
+        b = self.db.create_character(2, b"w", "cb")
+        first = self.db.grant_items(1, a, [{"item_hash": 3598}], "rifle", "rifle:once")
+        for account, character, reason in ((2, b, "rifle"), (1, a2, "rifle"),
+                                           (1, None, "rifle"), (1, a, "vendor")):
+            with self.subTest(account=account, character=character, reason=reason):
+                with self.assertRaises(ValueError):
+                    self.db.grant_items(account, character, [{"item_hash": 3598}], reason, "rifle:once")
+        self.assertEqual(self.db.items(2), [])
+        self.assertEqual(self.db.items(1, a2), [])
+        # A reconnect still returns the original durable result exactly once.
+        self.db.close()
+        self.db = PlayerDB(self.path)
+        self.assertEqual(self.db.grant_items(1, a, [{"item_hash": 3598}], "rifle", "rifle:once"), first)
+        self.assertEqual(len(self.db.items(1)), 1)
+
+    def test_character_replay_cannot_borrow_another_accounts_key(self):
+        self.db.ensure_account(1, "alpha")
+        self.db.ensure_account(2, "bravo")
+        created = self.db.create_character(1, b"t", "create:once")
+        imported = self.db.import_character(1, ID_BASE + 100, b"h", "import:once")
+        with self.assertRaises(ValueError):
+            self.db.create_character(2, b"w", "create:once")
+        with self.assertRaises(ValueError):
+            self.db.import_character(2, imported, b"w", "import:once")
+        self.assertEqual(self.db.create_character(1, b"t", "create:once"), created)
+        self.assertEqual(self.db.characters(2), [])
+
+    def test_replay_key_cannot_be_shared_between_operations(self):
+        self.db.ensure_account(1, "p")
+        c = self.db.create_character(1, b"t", "create:once")
+        with self.assertRaises(ValueError):
+            self.db.import_character(1, c, b"t", "create:once")
+        self.db.grant_items(1, c, [{"item_hash": 3598}], "rifle", "rifle:once")
+        with self.assertRaises(ValueError):
+            self.db.create_character(1, b"h", "rifle:once")
+        with self.assertRaises(ValueError):
+            self.db.grant_items(1, c, [{"item_hash": 3598}], "rifle", "create:once")
+        # Even an identical reason string cannot turn an item operation into creation.
+        self.db.grant_items(1, None, [{"item_hash": 3598}], "create_character", "items:once")
+        with self.assertRaises(ValueError):
+            self.db.create_character(1, b"h", "items:once")
+
+    def test_move_requires_a_live_character_of_the_item_owner(self):
+        self.db.ensure_account(1, "alpha")
+        self.db.ensure_account(2, "bravo")
+        a = self.db.create_character(1, b"t", "ca")
+        a2 = self.db.create_character(1, b"h", "ca2")
+        b = self.db.create_character(2, b"w", "cb")
+        item, = self.db.grant_items(1, a, [{"item_hash": 3598}], "rifle", "rifle:once")
+        self.db.delete_character(1, a2)
+        before = self.db.items(1)
+        for destination in (b, a2, ID_BASE + 999):
+            with self.subTest(destination=destination):
+                with self.assertRaises(ValueError):
+                    self.db.move_item(1, item, 1, destination, "inventory")
+                self.assertEqual(self.db.items(1), before)
+        self.db.move_item(1, item, 1, None, "vault")
+        self.db.move_item(1, item, 2, a, "equipped", 6)
+        self.assertEqual([(i["character_id"], i["location"], i["equip_slot"], i["version"])
+                          for i in self.db.items(1)], [(a, "equipped", 6, 3)])
+
     def test_concurrent_grants_from_many_sessions(self):
         accounts = list(range(1, 9))
         characters = {}
