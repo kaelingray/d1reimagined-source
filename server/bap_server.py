@@ -190,6 +190,16 @@ STARTER_ARRANGEMENTS_0124 = {
     204: 191, 198: 188, 200: 189, 206: 192, 202: 190, # titan
     392: 374, 386: 371, 388: 372, 394: 375, 390: 373, # warlock
 }
+# Progression +0xa is the item's world appearance row (0x2a66dc), and +0x18
+# its default (channel, dye) pairs. Both come from the item's art record
+# (investment globals table 0x80a5f241, indexed by item): appearance at
+# +0xc + [+0xc] + 0x38, the read 0x46ed4c makes, and pairs from its
+# 0x808018ea array. Ghost shells use rows 0-4; the investment record's
+# 0x8080340e value (42 for every shell) selects a generic unit that renders as
+# a vehicle (JOIN194-200). Generalist with row 0 and dye 15/2493
+# (ghost_slot_0_starter_1) shows the authored shell in the revival (JOIN201).
+STARTER_APPEARANCES_0124 = {862: 0}
+STARTER_DYES_0124 = {862: [(15, 2493)]}
 # 01.24 investment globals: equipped-slot table (root +0xdc) gives each
 # slot's bucket; bucket ranges (root +0x84) give its fixed inventory start.
 # Inventory +0 is a mutation serial, not the length of a packed item list.
@@ -270,6 +280,11 @@ def gear_spec(value):
                 arrangement = STARTER_ARRANGEMENTS_0124.get(entry["item"])
                 if arrangement is not None:
                     entry.setdefault("arrangement", arrangement)
+                appearance = STARTER_APPEARANCES_0124.get(entry["item"])
+                if appearance is not None:
+                    entry.setdefault("appearance", appearance)
+                if not entry["dyes"]:
+                    entry["dyes"] = list(STARTER_DYES_0124.get(entry["item"], []))
         return gear
     if value.startswith("@"):
         raw = json.loads(Path(value[1:]).read_text(encoding="utf-8"))

@@ -166,28 +166,38 @@ class CharacterGear(unittest.TestCase):
         self.assertNotIn(12, bap.investment.decode(
             schema, 0x8080183c, bap.investment.encode(schema, 0x8080183c, omitted)))
 
-    def test_explicit_appearance_is_separate_from_shell_arrangement(self):
+    def test_generalist_starter_uses_art_record_appearance_and_dye(self):
+        # Ghost shells use appearance rows 0-4; Generalist is row 0 with its
+        # authored ghost_slot_0_starter_1 dye on channel 15 (JOIN201).
         layout = {**bap.LAYOUT_0100, "progression_items": 0x1e8,
                   "slot_size": 0x30, "slot_dyes": 0x18}
         for guardian in ("titan", "hunter", "warlock"):
             with self.subTest(guardian=guardian):
                 gear = bap.gear_spec(f"starter:01.24:{guardian}")
-                gear[11]["appearance"] = 42
                 self.assertNotIn("arrangement", gear[11])
-                self.assertEqual(gear[11]["dyes"], [])
+                self.assertEqual(gear[11]["appearance"], 0)
+                self.assertEqual(gear[11]["dyes"], [(15, 2493)])
                 extra = bap.gear_objects(gear, layout)
                 for family, offset in (("peer", 0x30), ("select", 0x68)):
                     self.assertEqual(extra[family][offset][0x1e8][11 * 0x30],
-                                     {0: 0x10b, 8: 862, 10: 42})
+                                     {0: 0x10b, 8: 862, 10: 0, 0x18: {0: {0: 15, 2: 2493}}})
 
-    def test_unverified_appearance_defaults_are_not_inherited(self):
-        self.assertNotIn("appearance", bap.gear_spec("starter:01.24:titan,11=123")[11])
-        self.assertNotIn("appearance", bap.gear_spec("starter:01.24:titan,11=862")[11])
+    def test_appearance_defaults_follow_the_item_and_build(self):
+        changed = bap.gear_spec("starter:01.24:titan,11=123")[11]
+        self.assertNotIn("appearance", changed)
+        self.assertEqual(changed["dyes"], [])
+        self.assertEqual(bap.gear_spec("starter:01.24:titan,11=862")[11]["appearance"], 0)
         for guardian in ("titan", "hunter", "warlock"):
-            for prefix in ("starter:", "starter:01.24:"):
-                self.assertTrue(all("appearance" not in g for g in
-                                    bap.gear_spec(f"{prefix}{guardian}").values()))
+            self.assertTrue(all("appearance" not in g for g in
+                                bap.gear_spec(f"starter:{guardian}").values()))
+            self.assertEqual([s for s, g in bap.gear_spec(f"starter:01.24:{guardian}").items()
+                              if "appearance" in g], [11])
         self.assertNotIn("appearance", bap.gear_spec("11=862")[11])
+        self.assertEqual(bap.gear_spec("11=862")[11]["dyes"], [])
+
+    def test_explicit_ghost_dyes_replace_the_starter_default(self):
+        gear = bap.gear_spec("starter:01.24:titan,11=862/15:7")
+        self.assertEqual(gear[11]["dyes"], [(15, 7)])
 
     def test_custom_appearance_signed_range_and_explicit_starter_override(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -224,6 +234,7 @@ class CharacterGear(unittest.TestCase):
         schema = {"0x8080183c": {"fields": fields, "size": 0x30}}
         gear = bap.gear_spec("starter:01.24:titan")
         gear[11]["appearance"] = 42
+        gear[11]["dyes"] = []
         slot = bap.gear_objects(gear)["peer"][0x30][0x138][11 * 0x28]
         expected = bytes.fromhex("8000000000000085e0d7b00540")
         self.assertEqual(bap.investment.encode(schema, 0x8080183c, slot), expected)
@@ -236,6 +247,7 @@ class CharacterGear(unittest.TestCase):
         layout = bap.character_layout(schema)
         gear = bap.gear_spec("starter:01.24:titan")
         gear[11]["appearance"] = 42
+        gear[11]["dyes"] = []
         extras = bap.gear_objects(gear, layout)
         for family, handle in (("peer", 0x808017fd), ("select", 0x80801954)):
             wire = bap.investment.encode(schema, handle, extras[family])

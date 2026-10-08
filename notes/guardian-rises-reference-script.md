@@ -14,11 +14,11 @@ Legend: **OK** matches in the tested scope, **PARTIAL**, **MISSING**, **NOT REAC
 | --- | --- | --- | --- |
 | 04:25–04:50 | Fade in, "COSMODROME" location card, sunrise panorama, tree, bridge | Vista and tree shots present (JOIN188 09:51:42–09:52:15 UTC) | PARTIAL: location card not confirmed |
 | 04:50–05:25 | Car graveyard, towers, pull past the overturned truck, overhead shot of the cars | Same shots in order | OK (visual sample) |
-| 05:27–05:35 | Wrecked car; **the Ghost flies in through the window and turns to camera** | Matching sampled camera move at 2 fps (JOIN192), daylight, **no expected Ghost in the sampled frames** | MISSING (cause unresolved; lookup/binding/rendering must be distinguished) |
+| 05:27–05:35 | Wrecked car; **the Ghost flies in through the window and turns to camera** | JOIN201: the Generalist Shell crosses the truck shot, passes through the cars, enters the car window and turns to camera | OK (sampled at 2 fps) |
 | 05:37–05:40 | Ghost's scan POV (blue rings, green tint) | Present | OK |
 | 05:41–05:48 | Fallen captain and dregs on the ridge | Present | OK |
 | 05:49–05:56 | Low shot of the Wall, Ghost voice ("is it possible?") | Wall shots present | PARTIAL: audio not reviewed |
-| 05:57–06:03 | **Ghost resurrection close-up: shell opens, blue light sphere** | Washed-out white frame, then black | MISSING (Ghost) |
+| 05:57–06:03 | **Ghost resurrection close-up: shell opens, blue light sphere** | JOIN201: the Ghost flies to the Wall and its shell opens; the light then renders magenta and the emulator process exits | MISSING (renderer) |
 | 06:05–06:17 | Black, eyes opening, "Guardian… eyes up" | ~20 s black/very dark | PARTIAL: much darker/longer |
 | 06:19–06:45 | Bright daylight first person; **Ghost hovers centre and talks**, Guardian's hands rise, warning about Fallen territory, Ghost flies off toward the Wall | Same viewpoint (red pipe at left) but dark, no Ghost, then green/black renderer corruption | MISSING (Ghost, lighting) |
 | 06:47–07:00 | Control; Ghost talks; "Enter the Wall" objective and Wall diamond | Control, objective and diamond (JOIN182/188) | PARTIAL: objective text/Nav Mode open |
@@ -71,7 +71,14 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | 18:37–19:10 | Advancement, Activity Rewards, Mission Summary (A Guardian Rises), Arcadia jumpship | NOT REACHED |
 | 19:15–19:35 | Flight to the Tower (next activity) | NOT REACHED |
 
-## The common blocker: the Ghost is never visible
+## The common blocker: the Ghost (resolved for the revival fly-in in JOIN201)
+
+JOIN201 sends the Generalist Shell's world appearance from its art record (row 0) with
+its authored dye 15/2493 instead of the investment value 42, which selects a generic
+vehicle-like unit. The authored shell then plays the reference fly-in. The next blocker
+is the renderer exit on the resurrection light. See [Ghost appearance](ghost-appearance-0124.md).
+
+Earlier analysis, kept for the record:
 
 The Ghost is missing in every place the reference shows it: the revival shots, the
 first-person conversation, the Breach companion and its light. The user's view that

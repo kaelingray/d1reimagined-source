@@ -1,8 +1,46 @@
 # Ghost equipment appearance in 01.24
 
-Updated 8 October 2026. The server now supports an explicit equipment unit
-appearance index. **No new starter appearance default is promoted. The visible
-Ghost, its torch and combined graphics remain unaccepted.**
+Updated 8 October 2026. **JOIN201 shows the authored Generalist Shell in the
+revival** (car window fly-in and turn to camera, reference 05:27–05:35) with
+appearance row **0** and dye **15/2493**, now the 01.24 starter default. The
+resurrection light then renders magenta and the emulator process exits; the
+first-person conversation, Breach torch and held Ghost remain unaccepted.
+
+## JOIN201: the world appearance comes from the art record
+
+Every investment item has an art record: investment globals table `0x80a5f241`
+(6,557 × 12-byte rows, indexed by item) gives its tag. This is checked against the
+known Titan armour arrangements: items 198/200/202/204/206 reach records whose
+`0x8080030a` arrays hold 188/189/190/191/192. In each record:
+
+- `0x46ed4c` reads the world appearance at `+0xc + [+0xc] + 0x38` and resolves it
+  through `0x2a66dc`. Ghost shells use rows **0–4** (unit `0x80a7d679` for row 0),
+  Generalist is row 0. Vehicles use rows 41–53 (Sparrow S-10 is 41).
+- The `0x808018ea` array holds default (channel, dye) pairs. Generalist has
+  **(15, 2493)**, cosmetic name `0x172a9087`, i.e. `ghost_dyes\ghost_slot_0_starter_1`.
+  The Titan helmet has channels 0–2 (549–551, `starter_guardian_armor`).
+- Ghost shells have **no** `0x8080030a` arrangement array. 2706 belongs to another
+  loaded record; the Arcadia jumpship's is 2321.
+
+The investment record's `0x8080340e` value is 42 for every Ghost shell, 43 for
+ships and 46 for vehicles. Rows 42, 43 and 46 all resolve the **same** generic
+unit `0x80a6a008`. JOIN194–200's "oversized floating geometry" is a vehicle-like
+craft flying the Ghost's authored path. Codex's cosmetic 15/1 was cosmetic index 1,
+`portal_hunter_cloth_battleworn` (a Hunter cloth dye).
+
+JOIN201 (committed server `7c2cc9c`, private gear file: Titan starter kit plus
+`{"item": 862, "id": 267, "appearance": 0, "dyes": [[15, 2493]]}`) shows the
+shell over the overturned truck, through the cars, in the car window turning to
+camera, then flying to the Wall, where its shell opens. At native time 0:05:54 the
+next shot draws magenta; the log ends right after RSX adds program vp 1809/fp 1830,
+with no guest fault or Windows application error. Cleanup at 14:38:32 UTC is clean
+(owned processes closed, title/watch restored, XInput, RPCN preserved).
+
+The starter default now sends Generalist with appearance 0 and dye 15/2493;
+an explicit dye list or appearance replaces it. Next: the renderer exit on the
+resurrection effect, then the first-person conversation, held Ghost and torch.
+
+## Earlier record (JOIN194–200)
 
 ## Fields and the server change
 
@@ -12,7 +50,7 @@ The final progression slot (`0x8080183c`, size `0x30`) separates:
 | --- | --- |
 | `+0` | Equipped instance ID; Generalist remains `0x10b`. |
 | `+8` | Investment item index; Generalist is 862. |
-| `+0xa` | Unit appearance index, read by `0x71ec90` through `0x2a66dc`. |
+| `+0xa` | World appearance row, read by `0x71ec90` through `0x2a66dc` (Generalist: 0). |
 | `+0xc` | Model arrangement index, independently converted by `0x46ed4c`. |
 | `+0x18` | Six cosmetic channel/index pairs. Inventory buckets are a different mapping. |
 

@@ -565,3 +565,22 @@ rechecks. Cleanup at 13:51:48 UTC is clean; eleven exact identities and all thre
 configuration hashes are independently checked. Two selected original clips
 (30.28/30.34 s, 1280×720, audio) fully decode. Sampled car/first-person evidence
 remains a failure, and no media is edited or published.
+
+## JOIN201: art-record appearance shows the Ghost; resurrection light exits the renderer
+
+Committed source `7c2cc9c`; private gear file: Titan starter kit plus Generalist
+`appearance 0`, `dyes [[15, 2493]]`. Both values come from the item's art record
+(table `0x80a5f241` by item index, verified against the Titan armour arrangements
+188–192): world appearance at `+0xc + [+0xc] + 0x38` (the `0x46ed4c` read) and its
+`0x808018ea` dye pair `ghost_slot_0_starter_1`. Ghost shells use appearance rows 0–4
+and have no arrangement array. The investment value 42 (also 43 ships, 46 vehicles)
+selects a shared generic unit, which explains JOIN194–200's vehicle-like geometry.
+
+The revival plays the reference beats with the authored shell: over the truck, through
+the cars, into the car window and turning to camera, the scan POV, the Fallen ridge,
+then flying to the Wall where the shell opens. The next shot draws magenta; the native
+log ends at 0:05:54 right after RSX adds program vp 1809/fp 1830, with no guest fault
+and no Windows application error. The wrapper detects the closed client; cleanup at
+14:38:32 UTC is clean (owned processes closed, title/watch restored, XInput, RPCN
+preserved). The starter default now carries appearance 0 and dye 15/2493; 197 server
+tests pass. Next: the renderer exit on the resurrection light.

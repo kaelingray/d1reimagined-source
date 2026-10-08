@@ -13,9 +13,9 @@ weapons, combat, completion, and Tower hand-off remain incomplete.
 
 Current checkpoint: JOIN196 repeats natural current24 arrival; JOIN196–199 advance
 through all authored revival scenes. The server supports explicit unit
-appearance separately from arrangement; no new starter default is promoted. Native base/cache lookups succeed, but
-the expected Ghost remains visually wrong, and JOIN197–199 reproduce a Nav guest
-access violation. Stable Breach lighting, torch, later waypoints and combined
+appearance separately from arrangement. JOIN201's starter Generalist (appearance row 0,
+dye 15/2493) shows the authored shell in the revival until the resurrection light renders
+magenta and the emulator exits; JOIN197–200 reproduce a Nav guest access violation. Stable Breach lighting, torch, later waypoints and combined
 graphics remain open. See [Ghost appearance evidence](ghost-appearance-0124.md).
 
 Earlier repeat: JOIN176/177 complete the repaired 113→112 transition on the original

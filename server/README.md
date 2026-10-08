@@ -19,8 +19,8 @@ Breach squad/dialogue rules. Equipment summaries now separate unit `appearance`
 from model `arrangement`; explicit custom values survive parsing and encoding.
 The [Ghost comparison](../notes/ghost-appearance-0124.md) records valid base/cache
 lookups alongside incorrect images and a reproducible Nav guest access violation.
-The appearance, cosmetic and shell-arrangement defaults remain unchanged after
-the negative native comparisons. All 196 server
+The 01.24 starter Generalist Shell now sends its art record's world appearance (row 0)
+and Ghost dye 15/2493, which shows the authored shell in the revival (JOIN201). All 197 server
 tests and 165 script tests pass; serialization and native lookup success are narrower
 than visual or end-to-end mission acceptance.
 
