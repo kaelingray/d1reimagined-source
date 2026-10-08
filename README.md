@@ -92,6 +92,13 @@ graphics fix is established. The user reports missing objective waypoints,
 revival shots and Ghost. The source's timestamped reference comparison corrects
 the earlier broad revival claim and makes those visible gaps explicit. These
 source/runtime observations do not modify or validate this snapshot's assets.
+JOIN181 identifies omitted raw-position bits that corrupt objective marker
+references. The source codec repair has six independent wire regressions and all
+175 server checks passing. JOIN182 verifies the first normal-view Wall diamond
+and later reads a cleared native marker after the Wall trigger. The remaining
+configured targets and Nav Mode are unaccepted; the final entrance view is black
+and the transition remains pending. Complete revival shots and visible Ghost
+remain open. This is source/runtime evidence; no data payload is regenerated.
 See the [latest source checkpoint](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/checkpoint-2026-10-08-mission.md)
 and [reference comparison](https://github.com/p3n1cillin/d1reimagined/blob/master/notes/guardian-rises-reference-review.md).
 
