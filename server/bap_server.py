@@ -38,7 +38,8 @@ which deserializes as an all-zero response structure and no blob.
 """
 
 import argparse
-from mission_script import ReactionQueue, ReactionRule, reaction_scope
+from mission_script import ReactionQueue, ReactionRule, TeleportReaction, reaction_scope
+from incident_codec import INCIDENT_HANDLE, decode_incident, validate_schema as validate_incident_schema
 import datetime
 import hashlib
 import hmac
@@ -1077,6 +1078,42 @@ class SliceSetMatcher:
         return bool(record) and record.get("current", (None,))[0] == self.index
 
 
+class CinematicCompletionMatcher:
+    """01.24 incident 734, with its kind-6 ID at the measured payload field.
+
+    Native 0x580640 posts this incident when the performance ends or is stopped. Matching
+    the ID at any bit would also match an unrelated field or a started incident.
+    JOIN185 verifies the 53-byte body and object ID at bit 303 for both sequences.
+    A matching incident permits the handover; it does not prove natural completion,
+    visible actors or audio. Natural completion requires a separate scene trace.
+    """
+    def __init__(self, schema, ident):
+        validate_incident_schema(schema, INCIDENT_HANDLE)
+        if ident[4] != 6:
+            raise ValueError("cinematic completion needs a kind-6 object")
+        self.schema, self.ident = schema, (ident[0], ident[4], ident[6])
+
+    def search(self, body_hex):
+        try:
+            if len(body_hex) > 16384:
+                return False
+            payload = bytes.fromhex(body_hex)
+            if len(payload) > 8192:
+                return False
+            types, body = decode_incident(self.schema, INCIDENT_HANDLE, payload)
+            if types != (734,) or len(body) != 53:
+                return False
+            reader = investment.BitReader(body)
+            reader.position = 303
+            ident = investment.decode_from(reader, self.schema, OBJECT_ID_TYPE)
+            reader.get(64)  # two native trailing words
+            padding = len(body) * 8 - reader.position
+            return (0 <= padding < 8 and not reader.get(padding)
+                    and tuple(ident.get(off) for off in (0, 4, 6)) == self.ident)
+        except (KeyError, ValueError, TypeError):
+            return False
+
+
 def resolve_values(value, context):
     """Fill mission placeholders at the moment a state is sent: "$player" (the local player's
     machine id, the --ah-sim-player owner) and "$now" (the host simulation tick, see
@@ -1118,12 +1155,19 @@ def expand_mission(mission, schema):
         if "at" in step:
             timed += [(float(step["at"]), change) for change in changes]
             continue
-        if "teleport" in step and not changes:
-            raise ValueError(f"mission step {number}: a teleport step needs \"at\"")
+        if "teleport" in step:
+            if changes:
+                raise ValueError(f"mission step {number}: separate teleport and state changes")
+            changes.append(TeleportReaction(parse_slice_set(step["teleport"])))
         on = step.get("on")
         if not on or "type" not in on:  # "type": "any" matches every client message type
             raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
-        if "object" in on:
+        if "cinematic_complete" in on:
+            if (on["cinematic_complete"] is not True or on.get("type") != AH_INCIDENT
+                    or "object" not in on):
+                raise ValueError("cinematic completion needs type 18 and an object")
+            matcher = CinematicCompletionMatcher(schema, heads[on["object"]][0])
+        elif "object" in on:
             ident = heads[on["object"]][0]
             matcher = ObjectIdMatcher(schema, ident[0], ident[4], ident[6])
         elif "slice_set" in on:
@@ -1236,6 +1280,8 @@ def validate_mission_states(schema, timed, reactive):
             raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
 
     for spec in [s for _, s in timed] + [entry[3] for entry in reactive]:
+        if isinstance(spec, TeleportReaction):
+            continue
         ident, state_type, values, _ = resolve_spec(spec, context)
         path = f"{ident[0]:#x}/{ident[4]:#x}/{ident[6]} state {state_type:#x}"
         try:
@@ -2011,8 +2057,10 @@ def handle(conn, peer, args):
                             getattr(args.ah_on[rule_index], "scope", None))
                         if cancelled:
                             log(f"[{tag}] --ah-on rule {rule_index}: cancelled {cancelled} obsolete phase changes")
-                        log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: object "
-                            f"{spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]} in {delay:g} s")
+                        action = (f"teleport {spec.zone[0]}" if isinstance(spec, TeleportReaction) else
+                                  f"object {spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]}")
+                        log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: "
+                            f"{action} in {delay:g} s")
             if (kind == 1 and msg_type == AH_NOT and len(payload) >= 21 and ah_type == AH_JOIN_REQUEST
                     and args.ah_join and args.activity_schema):
                 request = join_request(args.activity_schema, body)
@@ -2203,6 +2251,10 @@ def handle(conn, peer, args):
                 if sim_build and reactions_due.has_due(time.time()):
                     peer_, slot_, gen_, objects_, at_, joined_ = sim_build
                     for entry in reactions_due.pop_due(time.time()):
+                        if isinstance(entry[1], TeleportReaction):
+                            teleport_plan.insert(0, (entry[1].zone, 0.0))
+                            log(f"[{tag}] teleport to slice set {entry[1].zone[0]} queued ({entry[2]})")
+                            continue
                         entry = (entry[0], resolve_spec(entry[1], mission_context()), entry[2])
                         ident = replace_object(objects_, entry[1])
                         log(f"[{tag}] object {ident[0]:#x}:{ident[1]:#x}:{ident[2]} -> {entry[1][2]} ({entry[2]})")

@@ -1,5 +1,12 @@
 """Opt-in phase scopes for pending activity-host mission reactions."""
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class TeleportReaction:
+    zone: tuple
+
 
 def reaction_scope(step):
     """Return (lane, phase), or None for the original independent-rule behavior.

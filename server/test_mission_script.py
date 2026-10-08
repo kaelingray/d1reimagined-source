@@ -102,8 +102,9 @@ class GhostAuthoredMember(unittest.TestCase):
         }
         mission = json.loads((Path(__file__).resolve().parents[1] / "missions" /
                               "a_guardian_rises.json").read_text(encoding="utf-8"))
-        _, reactions = bap.expand_mission(mission, schema)
-        ghost = [rule for rule in reactions if rule[3][0] ==
+        from test_cinematic_completion import add_incident_schema
+        _, reactions = bap.expand_mission(mission, add_incident_schema(schema))
+        ghost = [rule for rule in reactions if not isinstance(rule[3], bap.TeleportReaction) and rule[3][0] ==
                  {0: 0xFC0E45A3, 4: 2, 6: 95}]
         self.assertEqual(len(ghost), 1)
         rule = ghost[0]
@@ -161,10 +162,11 @@ class RapidObjectiveHandover(unittest.TestCase):
 
     def test_guardian_script_rapid_wall_weapon_reports_keep_only_latest_objective_active(self):
         from test_bap_server import MissionScript
+        from test_cinematic_completion import add_incident_schema
 
         mission = json.loads((Path(__file__).resolve().parents[1] / "missions" /
                               "a_guardian_rises.json").read_text(encoding="utf-8"))
-        _, reactions = bap.expand_mission(mission, MissionScript.SCHEMA)
+        _, reactions = bap.expand_mission(mission, add_incident_schema(MissionScript.SCHEMA))
         queue, states = ReactionQueue(), {}
 
         def apply(now):

@@ -388,14 +388,17 @@ class MissionScript(unittest.TestCase):
         self.assertFalse(matcher.search(w.data().hex()))
 
     def test_shipped_scripts_expand(self):
+        from test_cinematic_completion import add_incident_schema
+
         folder = Path(__file__).resolve().parents[1] / "missions"
         timed, _ = bap.expand_mission(json.loads((folder / "tower_npcs.json").read_text(encoding="utf-8")),
                                       self.SCHEMA)
         self.assertEqual({spec[0][4] for _, spec in timed}, {1})
         mission = json.loads((folder / "a_guardian_rises.json").read_text(encoding="utf-8"))
-        timed, reactive = bap.expand_mission(mission, self.SCHEMA)
+        timed, reactive = bap.expand_mission(mission, add_incident_schema(self.SCHEMA))
         self.assertTrue(timed and reactive)
-        self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher)) for _, m, _, _ in reactive))
+        self.assertTrue(all(isinstance(m, (bap.ObjectIdMatcher, bap.SliceSetMatcher,
+                                          bap.CinematicCompletionMatcher)) for _, m, _, _ in reactive))
         self.assertTrue(any(isinstance(m, bap.SliceSetMatcher) and m.index == 24 for _, m, _, _ in reactive))
 
     def test_squad_field_resolves_for_both_build_layouts(self):

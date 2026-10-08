@@ -21,7 +21,7 @@ editing and older PS4 UI: its numeric reward/defence values are not assumed to b
 | --- | --- | --- |
 | 00:40–01:30 | Titan, Warlock and Hunter previews | Does not demonstrate every character-creation step; all classes still require native checks. |
 | 01:35–04:25 | Logos, Mars/account introduction and Traveler backstory | First-view versus later-view intro flags must be independent of per-character revival. |
-| 04:30–06:05 | Cosmodrome panorama, car graveyard, searching Ghost, scan POV, watching Fallen and resurrection energy | Verify all authored shots and actors. Current first cinematic is stopped after 70 seconds of host time; the longer reference sequence motivates investigation, not a guessed duration replacement. |
+| 04:30–06:05 | Cosmodrome panorama, car graveyard, searching Ghost, scan POV, watching Fallen and resurrection energy | JOIN184 confirms the old 70-second host stop omitted scene indices 5–8. JOIN186 reaches all nine indices with incident-driven completion; its overlay prevents shot/cast acceptance. |
 | 06:10–06:55 | First-person awakening, visible hovering Ghost, Guardian hand, warning, Ghost departure and fade | Missing Ghost/shots remain reported defects. Cast, effects, dialogue and fade removal require continuous native evidence. |
 | 07:00–07:35 | Unarmed control, Enter the Wall, a world diamond on the Wall, then Find a Weapon on entry | JOIN182 verifies the normal-view Wall diamond and its disabled state after completion. Nav Mode shows No Tracked Items; subsequent markers are unaccepted. Pre-granted fixture weapons cannot accept the authentic opening. |
 | 07:40–08:15 | The Breach, camera-following spotlight, a world diamond, Ghost moving ahead and powering the light | Ghost member receipt is not visibility. The power performance is separate from the moving torch; both need native checks. |
@@ -72,9 +72,10 @@ The final entrance view is black with its HUD present; no graphics fix is claime
 
 The cinematic state has separate counted machine-ID lists at +0x18 (up to16)
 and +0x9c (up to6). Their presence does not establish Ghost casting. The script
-currently fills the local player at +0x9c and uses fixed stop timers. Resolve the
-authored performance/cast and completion behavior before changing the automatic
-mission. Neither longer timers nor an arbitrary Ghost ID is an accepted fix.
+fills the local player at +0x9c. The [completion repair](revival-completion-0124.md)
+replaces fixed stop timers with measured end incidents and verifies an automatic
+handover in JOIN186. Embedded Ghost/Guardian casting and unobstructed visual/audio
+acceptance remain open. An arbitrary Ghost ID is not an accepted cast fix.
 
 See [mission acceptance](guardian-rises-acceptance.md),
 [mission walkthrough](mission-a-guardian-rises.md) and

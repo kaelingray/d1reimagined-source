@@ -26,6 +26,9 @@
     "01.24 JOIN182: raw kind-13 positions require 96 wire bits even when schema width is zero.",
     "Objective markers use entry 0 at +0x40, type 1, authored nav target at entry+0x20 and null root fallback slice bucket (112>>3=14, 24>>3=3).",
     "JOIN182 verifies the normal-view Enter the Wall diamond and disabled marker after completion; the next three target entries are configured but still need native visibility acceptance.",
+    "JOIN186: native incident 734 ends/stops a cinematic; match its measured kind-6 object field, never a started incident or arbitrary ID bits.",
+    "Revival handovers now follow those incidents instead of fixed 70/45-second stops. JOIN186 traces all nine third-person scenes, automatic first-person handover and 113-to-112 arrival.",
+    "JOIN186 uses a private 90-second initial delay; this script retains the original 20-second start. Its urgent overlay prevents cinematic visual acceptance.",
     "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete."
   ],
   "clock": "ready",
@@ -80,7 +83,11 @@
       }
     },
     {
-      "at": 90,
+      "on": {
+        "type": 18,
+        "object": "cine_revival",
+        "cinematic_complete": true
+      },
       "set": {
         "cine_revival": {
           "4": 2,
@@ -101,7 +108,11 @@
       }
     },
     {
-      "at": 135,
+      "on": {
+        "type": 18,
+        "object": "cine_revival_fp",
+        "cinematic_complete": true
+      },
       "set": {
         "cine_revival_fp": {
           "4": 2,
@@ -111,7 +122,12 @@
       }
     },
     {
-      "at": 140,
+      "on": {
+        "type": 18,
+        "object": "cine_revival_fp",
+        "cinematic_complete": true
+      },
+      "delay": 5,
       "teleport": 112
     },
     {
