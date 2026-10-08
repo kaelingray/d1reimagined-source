@@ -31,6 +31,7 @@
     "JOIN186 uses a private 90-second initial delay; this script retains the original 20-second start. Its urgent overlay prevents cinematic visual acceptance.",
     "JOIN188: after the natural crossing, a fresh inactive bubble-3 reset (sent manually 85 s after current 24) is followed by Breach sensor traffic and a Ghost radar blip; the reset is now a mission step 10 s after the member/squad states. Its automatic timing still needs a native run.",
     "JOIN190: host-stepped dialogue sequences play (Ghost speaker indicator and voice audio). seq_d_o2_30 is limited to players inside tv_flashlight (the corridor after the doorway, x 346-384), so it starts 2 s after current 24. Its resource is a plain dialogue line; it does not turn the torch on.",
+    "JOIN204: line texts come from each sequence's dialogue resource: o2_10 find you a weapon, o2_20 Quiet. They're right above us (now played 2 s after current 24, as in the reference), o2_40 Hang tight, o2_50/o2_60 hardened military systems, o2_70 They're coming for us, o2_80 found a rifle, o2_90 hope you know how to use that thing; o2_30's text is unresolved.",
     "JOIN190: pt_fallen_above (volume x 327-342 inside the Wall) reports once armed and stops when disarmed; the audible/visible effect of seq_fallen_above is not yet verified.",
     "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete."
   ],
@@ -71,7 +72,15 @@
     "seq_d_o2_20": "0x3c2f5ed5:0x5:10:0x808029a1",
     "seq_d_o2_30": "0x3c2f5ed5:0x5:11:0x808029a1",
     "seq_fallen_above": "0x3c2f5ed5:0x5:36:0x808029a1",
-    "trig_fallen_above": "0x3c2f5ed5:0x1d:47:0x80800463"
+    "trig_fallen_above": "0x3c2f5ed5:0x1d:47:0x80800463",
+    "seq_d_o2_40": "0x3c2f5ed5:0x5:14:0x808029a1",
+    "seq_d_o2_50": "0x3c2f5ed5:0x5:15:0x808029a1",
+    "seq_d_o2_80": "0x3c2f5ed5:0x5:18:0x808029a1",
+    "seq_d_o2_90": "0x3c2f5ed5:0x5:19:0x808029a1",
+    "o_breach_control": "0xfc0e45a3:0x4:0:0x808007d9:1",
+    "o_breach_doors_lights": "0xfc0e45a3:0x4:1:0x808007d9:1",
+    "o_breach_gating_lights": "0xfc0e45a3:0x4:4:0x808007d9:1",
+    "o_chest_primary_weapon": "0xfc0e45a3:0x4:7:0x808007d9:1"
   },
   "steps": [
     {
@@ -583,7 +592,7 @@
       },
       "delay": 2,
       "set": {
-        "seq_d_o2_30": {
+        "seq_d_o2_20": {
           "0": "$now",
           "4": 1
         }
