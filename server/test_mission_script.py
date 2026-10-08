@@ -239,3 +239,35 @@ class RapidObjectiveHandover(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BreachDialogueRules(unittest.TestCase):
+    """JOIN190: host-stepped dialogue sequences and the Fallen-above trigger."""
+
+    def setUp(self):
+        self.mission = json.loads((Path(__file__).resolve().parents[1] / "missions" /
+                                   "a_guardian_rises.json").read_text(encoding="utf-8"))
+
+    def steps_setting(self, name):
+        return [s for s in self.mission["steps"] if name in s.get("set", {})]
+
+    def test_flashlight_line_starts_while_the_player_is_in_its_corridor_volume(self):
+        (step,) = self.steps_setting("seq_d_o2_30")
+        self.assertEqual(step["on"], {"type": 21, "slice_set": 24})
+        self.assertLessEqual(step["delay"], 5)
+        self.assertEqual(step["set"]["seq_d_o2_30"], {"0": "$now", "4": 1})
+
+    def test_fallen_above_is_armed_at_the_wall_and_disarmed_on_its_report(self):
+        armed = [s for s in self.steps_setting("trig_fallen_above")
+                 if s["set"]["trig_fallen_above"].get("0") is True]
+        self.assertEqual(len(armed), 1)
+        self.assertEqual(armed[0]["on"], {"type": 18, "object": "trig_enter_wall"})
+        self.assertIn("seq_d_o2_10", armed[0]["set"])
+        (report,) = [s for s in self.mission["steps"] if s.get("on", {}).get("object") == "trig_fallen_above"]
+        self.assertEqual(report["set"]["trig_fallen_above"], {"0": False})
+        self.assertEqual(report["set"]["seq_fallen_above"], {"0": "$now", "4": 1})
+
+    def test_dialogue_objects_use_the_sequence_state_type(self):
+        for name in ("seq_d_o2_10", "seq_d_o2_30", "seq_fallen_above"):
+            self.assertTrue(self.mission["objects"][name].startswith("0x3c2f5ed5:0x5:"))
+            self.assertTrue(self.mission["objects"][name].endswith(":0x808029a1"))

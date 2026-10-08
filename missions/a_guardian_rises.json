@@ -30,6 +30,8 @@
     "Revival handovers now follow those incidents instead of fixed 70/45-second stops. JOIN186 traces all nine third-person scenes, automatic first-person handover and 113-to-112 arrival.",
     "JOIN186 uses a private 90-second initial delay; this script retains the original 20-second start. Its urgent overlay prevents cinematic visual acceptance.",
     "JOIN188: after the natural crossing, a fresh inactive bubble-3 reset (sent manually 85 s after current 24) is followed by Breach sensor traffic and a Ghost radar blip; the reset is now a mission step 10 s after the member/squad states. Its automatic timing still needs a native run.",
+    "JOIN190: host-stepped dialogue sequences play (Ghost speaker indicator and voice audio). seq_d_o2_30 is limited to players inside tv_flashlight (the corridor after the doorway, x 346-384), so it starts 2 s after current 24. Its resource is a plain dialogue line; it does not turn the torch on.",
+    "JOIN190: pt_fallen_above (volume x 327-342 inside the Wall) reports once armed and stops when disarmed; the audible/visible effect of seq_fallen_above is not yet verified.",
     "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete."
   ],
   "clock": "ready",
@@ -64,7 +66,12 @@
     "of_ghostlight": "0xfc0e45a3:0x21:124:0x80800750",
     "ho_ghostlight": "0xfc0e45a3:0x18:101:0x8080065c:1",
     "o_device_invis_light": "0xfc0e45a3:0x4:8:0x808007d9:1",
-    "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463"
+    "trig_ghostlight_continue": "0xfc0e45a3:0x1d:121:0x80800463",
+    "seq_d_o2_10": "0x3c2f5ed5:0x5:9:0x808029a1",
+    "seq_d_o2_20": "0x3c2f5ed5:0x5:10:0x808029a1",
+    "seq_d_o2_30": "0x3c2f5ed5:0x5:11:0x808029a1",
+    "seq_fallen_above": "0x3c2f5ed5:0x5:36:0x808029a1",
+    "trig_fallen_above": "0x3c2f5ed5:0x1d:47:0x80800463"
   },
   "steps": [
     {
@@ -536,6 +543,51 @@
       },
       "delay": 30,
       "bubble_reset": "3:1"
+    },
+    {
+      "on": {
+        "type": 18,
+        "object": "trig_enter_wall"
+      },
+      "delay": 2,
+      "set": {
+        "seq_d_o2_10": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_fallen_above": {
+          "0": true,
+          "4": "$now"
+        }
+      }
+    },
+    {
+      "on": {
+        "type": 18,
+        "object": "trig_fallen_above"
+      },
+      "set": {
+        "seq_fallen_above": {
+          "0": "$now",
+          "4": 1
+        },
+        "trig_fallen_above": {
+          "0": false
+        }
+      }
+    },
+    {
+      "on": {
+        "type": 21,
+        "slice_set": 24
+      },
+      "delay": 2,
+      "set": {
+        "seq_d_o2_30": {
+          "0": "$now",
+          "4": 1
+        }
+      }
     }
   ]
 }

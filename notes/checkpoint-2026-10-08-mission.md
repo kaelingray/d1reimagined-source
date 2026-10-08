@@ -406,3 +406,38 @@ apart) before stopping; persistent instability still stops. Two new checks; all 
 script checks pass. Next: plan a path from the corridor to x 388–393, y −791..−787
 (geometry or a recorded manual walk), then verify the light-up trigger report and the
 authored torch/performance response.
+
+## JOIN190: Breach dialogue plays; the torch is not a sequence effect
+
+The user's reference walkthrough (07:30–08:25) shows, after the lit windowed corridor,
+a camera-following torch circle from about 07:36, then stairs down past a red flare,
+the Ghost's "we need more light" power beat (07:50–08:10) and the rifle chest (08:17).
+Our runs reach the corridor end with black scenery and no torch.
+
+Offline package search (activity package 0x25c, read-only, private output) finds that
+`tv_flashlight` (`0x3c2f5ed5/0x3a/76`, x 346.4–384.1, y −808.7..−788.4, z ≥ 12.0 —
+the corridor right after the doorway) is referenced only by the definition of
+**`seq_d_o2_30`** (`0x3c2f5ed5/0x5/11`) and the volume list. That definition carries an
+object list containing the volume; its content resource (`0x80cb916b`) is byte-identical
+to `seq_d_o2_20`'s apart from the audio reference, i.e. a plain dialogue line limited to
+players in that volume. Kind-0x3a volumes are not replicated. **The torch is not driven
+by this sequence**; its source remains open (another client system, or a light the
+renderer drops — black frames cannot distinguish these).
+
+JOIN190 (source `2e02e29` plus the new object names; same executable/fixture): the
+route completes without the torn-sample stop and the client crosses naturally at
+10:51:05 UTC. `{"seq_d_o2_10": {"0":"$now","4":1}, "seq_d_o2_30": {...}}` by control at
+10:51:07 shows the HUD **GHOST speaker indicator** for about 12 s and an ~18 dB audio
+rise in the native recording: host-stepped dialogue sequences play. "THE BREACH / OLD
+RUSSIA, EARTH" appears at the crossing. No subtitles are shown and no torch appears.
+
+`tv_fallen_above` is x 327.2–342.1, y −805.2..−792.5 inside the Wall, before the doorway.
+Arming `pt_fallen_above` (`0x3c2f5ed5/0x1d/47`) and walking back produces player-trigger
+incident 2665 at ~3 Hz until it is disarmed; playing `seq_fallen_above` then shows no
+Ghost indicator or audible rise, so its effect is unverified. Owned cleanup at
+10:53:59 UTC is clean.
+
+Mission change: the Wall handover now plays `seq_d_o2_10` and arms `pt_fallen_above`;
+its report plays `seq_fallen_above` and disarms it; `seq_d_o2_30` plays 2 s after
+current 24. Three new checks; all server checks and the real-schema preflight (45
+reactive changes) pass. These automatic rules have not had their own native run.
