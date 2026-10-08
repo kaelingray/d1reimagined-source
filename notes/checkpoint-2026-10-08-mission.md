@@ -627,3 +627,49 @@ radar marker after the bubble-3 reset, so the companion (`sq_ghost`) actor is th
 candidate. Incident IDs come from `scripts/d1_incident_summary.py` (private output).
 The 900-second bound stops the client at 15:23:34 UTC (owned stop, exit 0xffffffff);
 cleanup is clean.
+## pf_104a_pwr has no cinematic content; Breach line mapping
+
+Offline, read-only package comparison (base disc and 01.24 update chains). The
+`pf_104a_pwr` definition `0x80cb9110` (`0x992bb471/6/10`) matches the revival
+definitions except at `+0x264`: cinematic hash `0x0b975b3d` and flag 0. The three
+cinematics the game plays (`pf_104_res` `0xaccc0f17`, `pf_104_res_fp` `0xafcc146d`,
+outro `pf_105_cto` `0xf8555412`) carry flag 1 in the final build and each has a content
+tag listing its scenes (`0x80cb8d65` with nine scene entries, `0x80cb8d5b`, `0x80cb8715`).
+`0x0b975b3d` occurs in no content tag of any base or update package; the update chains
+patch the revival definition (flag 0 → 1) but never this one. The client therefore has
+nothing to play, which explains the immediate 734 in JOIN188/203. The reference's power
+beat (07:50–08:16) is in-world: the companion Ghost, dialogue and Breach props.
+
+Dialogue lines resolve through each sequence's content resource
+(`0x3c2f5ed5/5/N` → `0x80cb9169+` → dialogue resource → localized string hash):
+
+| Sequence | Line |
+| --- | --- |
+| `o2_10` (9) | Ok… I need to find you a weapon before the Fallen find us. |
+| `o2_20` (10) | Quiet. They're right above us. |
+| `o2_40` (14) | Hang tight. Fallen thrive in the dark, we won't. We need more light… |
+| `o2_50`/`o2_60` (15/16) | Another one of these hardened military systems… |
+| `o2_70` (17) | They're coming for us! |
+| `o2_80` (18) | Here! I found a rifle! Grab it. |
+| `o2_90` (19) | I hope you know how to use that thing. |
+
+`o2_30`'s text is unresolved and `seq_fallen_above` has no dialogue resource. The mission
+now plays `o2_20` 2 s after current 24, matching reference 07:37, instead of `o2_30`.
+
+## JOIN204: Breach order test by control; companion Ghost renders black
+
+Source `d26acbb` plus mission aliases only (o2_40/50/80/90, `o_breach_control`,
+`o_breach_doors_lights`, `o_breach_gating_lights`, `o_chest_primary_weapon`; all share
+prop states `0x808007d9`/`0x80800387`). After the natural crossing and a guarded walk to
+the upper platform, live control arms `pt_nux_ghost_light_up_start`, then plays o2_40 and
+o2_50 10 s apart, creates the door/gating lights (generation 1, create true, absent
+reference), then `o_breach_control`, o2_80 and the chest. The host applies every state;
+the HUD **GHOST** speaker indicator shows during each line (audio not reviewed).
+
+No room lighting change is visible in the sampled views after the light props are created.
+The camera finds the authored companion Ghost hovering near the platform as a **solid black
+four-pointed silhouette** with no core glow, and the fuse panel the reference Ghost powers.
+JOIN104/111 saw a blue core only after a performance action. The 900-second bound stops the
+client at 16:19:38 UTC (owned stop); cleanup is clean. Next: why the companion Ghost
+renders black (its cosmetic/dye or lighting), which props or helper state light the room,
+then the chest and rifle grant.
