@@ -1,7 +1,7 @@
 # D1 Reimagined — local Destiny service stand-ins
 
 These tools support the active **PS3 BLES01857 01.24 / RPCS3** research target.
-Last status review: **2026-10-06**. The source repository is
+Last status review: **2026-10-08**. The source repository is
 [d1reimagined](https://github.com/p3n1cillin/d1reimagined); schemas and restricted
 research inputs are in [d1reimagined-data](https://github.com/p3n1cillin/d1reimagined-data).
 
@@ -11,8 +11,18 @@ The services are experimental stand-ins. Schema-valid default replies, host repo
 and a world-entry label do not establish playable missions or a complete backend.
 Reliable slice handoff, Ghost illumination, combat, rewards, progression, complete
 inventory semantics and multiplayer remain open. See the
-[current project status](../README.md), [renderer checkpoint](../notes/checkpoint-2026-10-06-renderer.md)
+[current project status](../README.md), [renderer checkpoint](../notes/checkpoint-2026-10-07-renderer.md)
 and [mission acceptance](../notes/guardian-rises-acceptance.md).
+
+The opening mission uses native cinematic-end incidents for handover and automatic
+Breach squad/dialogue rules. Equipment summaries now separate unit `appearance`
+from model `arrangement`; explicit custom values survive parsing and encoding.
+The [Ghost comparison](../notes/ghost-appearance-0124.md) records valid base/cache
+lookups alongside incorrect images and a reproducible Nav guest access violation.
+The appearance, cosmetic and shell-arrangement defaults remain unchanged after
+the negative native comparisons. All 196 server
+tests and 165 script tests pass; serialization and native lookup success are narrower
+than visual or end-to-end mission acceptance.
 
 Listeners bind only to loopback addresses. The DNS sinkhole answers locally and never
 forwards upstream. Private CA material, session keys, stores, schemas and captured

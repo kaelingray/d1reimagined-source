@@ -14,7 +14,7 @@ Legend: **OK** matches in the tested scope, **PARTIAL**, **MISSING**, **NOT REAC
 | --- | --- | --- | --- |
 | 04:25–04:50 | Fade in, "COSMODROME" location card, sunrise panorama, tree, bridge | Vista and tree shots present (JOIN188 09:51:42–09:52:15 UTC) | PARTIAL: location card not confirmed |
 | 04:50–05:25 | Car graveyard, towers, pull past the overturned truck, overhead shot of the cars | Same shots in order | OK (visual sample) |
-| 05:27–05:35 | Wrecked car; **the Ghost flies in through the window and turns to camera** | Identical camera move at 2 fps (JOIN192), daylight, **no Ghost in any frame** | MISSING (Ghost actor absent, not a lighting fault) |
+| 05:27–05:35 | Wrecked car; **the Ghost flies in through the window and turns to camera** | Matching sampled camera move at 2 fps (JOIN192), daylight, **no expected Ghost in the sampled frames** | MISSING (cause unresolved; lookup/binding/rendering must be distinguished) |
 | 05:37–05:40 | Ghost's scan POV (blue rings, green tint) | Present | OK |
 | 05:41–05:48 | Fallen captain and dregs on the ridge | Present | OK |
 | 05:49–05:56 | Low shot of the Wall, Ghost voice ("is it possible?") | Wall shots present | PARTIAL: audio not reviewed |
@@ -25,7 +25,10 @@ Legend: **OK** matches in the tested scope, **PARTIAL**, **MISSING**, **NOT REAC
 
 The host now hands over on the client's cinematic-end incidents (JOIN186–188), so timing
 follows the game. The remaining revival defects are visual: the Ghost is absent and the
-first-person part is too dark.
+first-person part is too dark. JOIN194–199 subsequently distinguish a valid base
+unit/cache from an optional cosmetic override and still show malformed geometry.
+The earlier claim that daylight absence ruled out a rendering/binding fault was
+too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 
 ## Highway to the Wall (slice 112)
 

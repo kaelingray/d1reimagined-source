@@ -47,8 +47,10 @@ an item hash.
 | Warlock | 392 → 374 | 386 → 371 | 388 → 372 | 394 → 375 | 390 → 373 |
 
 `--character-gear starter:01.24:CLASS` now supplies these selections to both
-peer and select summaries. Subclass and Ghost fields retain their existing
-behavior. The historical `starter:CLASS` fixture still uses 01.00 data.
+peer and select summaries. Subclass fields retain their existing behavior.
+The later [Ghost appearance investigation](ghost-appearance-0124.md) adds explicit
+unit-index support; its starter candidates remain unaccepted and are not defaults.
+The historical `starter:CLASS` fixture still uses 01.00 data.
 Overrides choose a model by the replacement item; an unknown replacement
 does not inherit the original piece's model.
 

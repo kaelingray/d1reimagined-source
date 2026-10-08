@@ -166,6 +166,84 @@ class CharacterGear(unittest.TestCase):
         self.assertNotIn(12, bap.investment.decode(
             schema, 0x8080183c, bap.investment.encode(schema, 0x8080183c, omitted)))
 
+    def test_explicit_appearance_is_separate_from_shell_arrangement(self):
+        layout = {**bap.LAYOUT_0100, "progression_items": 0x1e8,
+                  "slot_size": 0x30, "slot_dyes": 0x18}
+        for guardian in ("titan", "hunter", "warlock"):
+            with self.subTest(guardian=guardian):
+                gear = bap.gear_spec(f"starter:01.24:{guardian}")
+                gear[11]["appearance"] = 42
+                self.assertNotIn("arrangement", gear[11])
+                self.assertEqual(gear[11]["dyes"], [])
+                extra = bap.gear_objects(gear, layout)
+                for family, offset in (("peer", 0x30), ("select", 0x68)):
+                    self.assertEqual(extra[family][offset][0x1e8][11 * 0x30],
+                                     {0: 0x10b, 8: 862, 10: 42})
+
+    def test_unverified_appearance_defaults_are_not_inherited(self):
+        self.assertNotIn("appearance", bap.gear_spec("starter:01.24:titan,11=123")[11])
+        self.assertNotIn("appearance", bap.gear_spec("starter:01.24:titan,11=862")[11])
+        for guardian in ("titan", "hunter", "warlock"):
+            for prefix in ("starter:", "starter:01.24:"):
+                self.assertTrue(all("appearance" not in g for g in
+                                    bap.gear_spec(f"{prefix}{guardian}").values()))
+        self.assertNotIn("appearance", bap.gear_spec("11=862")[11])
+
+    def test_custom_appearance_signed_range_and_explicit_starter_override(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "gear.json"
+            for value in (-1, 0, 42, 32767):
+                with self.subTest(value=value):
+                    path.write_text(json.dumps({"11": {"item": 862, "appearance": value}}))
+                    gear = bap.gear_spec(f"starter:01.24:titan,@{path}")
+                    self.assertEqual(gear[11]["appearance"], value)
+                    self.assertEqual(bap.gear_objects(gear)["peer"][0x30][0x138][11 * 0x28][10],
+                                     value)
+            for value in (-2, 32768, True, 1.5, "42", None):
+                path.write_text(json.dumps({"11": {"item": 862, "appearance": value}}))
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, "appearance"):
+                    bap.gear_spec(f"@{path}")
+
+    def test_appearance_and_arrangement_can_be_supplied_independently(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "gear.json"
+            path.write_text(json.dumps({"11": {"item": 862, "appearance": 42,
+                                                "arrangement": 2706, "dyes": [[15, 1]]}}))
+            gear = bap.gear_spec(f"@{path}")
+            slot = bap.gear_objects(gear)["peer"][0x30][0x138][11 * 0x28]
+            self.assertEqual(slot, {0: 0x10b, 8: 862, 10: 42, 12: 2706,
+                                   14: {0: {0: 15, 2: 1}}})
+
+    def test_appearance_wire_matches_independent_bit_pattern(self):
+        # Four optional fields: 1+64 ID, 1+16 item, 1+16 appearance, 1 omitted arrangement.
+        # Signed indexes use bias 32768. This is 100 bits, then four zero padding bits.
+        fields = [{"off": off, "kind": kind, "opt": 1, "arr": 0,
+                   "nested": 0xffffffff, "min": minimum, "width": width}
+                  for off, kind, minimum, width in ((0, 6, 0, 64), (8, 4, 32768, 16),
+                                                   (10, 4, 32768, 16), (12, 4, 32768, 16))]
+        schema = {"0x8080183c": {"fields": fields, "size": 0x30}}
+        gear = bap.gear_spec("starter:01.24:titan")
+        gear[11]["appearance"] = 42
+        slot = bap.gear_objects(gear)["peer"][0x30][0x138][11 * 0x28]
+        expected = bytes.fromhex("8000000000000085e0d7b00540")
+        self.assertEqual(bap.investment.encode(schema, 0x8080183c, slot), expected)
+        self.assertEqual(bap.investment.decode(schema, 0x8080183c, expected),
+                         {0: 0x10b, 8: 862, 10: 42})
+
+    @unittest.skipUnless(final124_schema_path().exists(), "private final schema unavailable")
+    def test_appearance_survives_actual_final_peer_and_select_schema(self):
+        schema = bap.investment.load_schema(final124_schema_path())
+        layout = bap.character_layout(schema)
+        gear = bap.gear_spec("starter:01.24:titan")
+        gear[11]["appearance"] = 42
+        extras = bap.gear_objects(gear, layout)
+        for family, handle in (("peer", 0x808017fd), ("select", 0x80801954)):
+            wire = bap.investment.encode(schema, handle, extras[family])
+            decoded = bap.investment.decode(schema, handle, wire)
+            slot = decoded[layout[family + "_progression"]][layout["progression_items"]][11 * layout["slot_size"]]
+            self.assertEqual({key: slot[key] for key in (0, 8, 10)}, {0: 0x10b, 8: 862, 10: 42})
+            self.assertNotIn(12, slot)
+
     def test_gear_objects_fill_all_three_character_objects(self):
         extras = bap.character_extras({7: {"item": 100, "id": 0x107, "dyes": [(2, 5)]},
                                        12: {"item": 200, "id": 0x10c, "dyes": []}})

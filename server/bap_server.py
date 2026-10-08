@@ -253,8 +253,9 @@ def gear_spec(value):
     globals item list), "starter:CLASS[,SLOT=ITEM...]" (01.00),
     "starter:01.24:CLASS[,SLOT=ITEM...]" (01.24), or
     @FILE with JSON {"SLOT": {"item": N, "id": N, "dyes": [[ch, dye]],
-    "arrangement": N}}. The optional arrangement is a build-specific model
-    index, not an item index. Instance ids default to 0x100 + slot."""
+    "appearance": N, "arrangement": N}}. The optional appearance selects
+    a unit; arrangement selects model art. Both are build-specific indexes,
+    separate from the item index. Instance ids default to 0x100 + slot."""
     if value.startswith("starter:"):
         kit, _, rest = value[len("starter:"):].partition(",")
         kits = STARTER_GEAR
@@ -289,22 +290,25 @@ def gear_spec(value):
             raise ValueError(f"gear slot {slot}: at most 6 dyes")
         gear[slot] = {"item": int(entry["item"]), "id": int(entry.get("id", 0x100 + slot)),
                       "dyes": dyes}
-        if "arrangement" in entry:
-            arrangement = entry["arrangement"]
-            if (type(arrangement) is not int or not -1 <= arrangement <= 0x7fff):
-                raise ValueError(f"gear slot {slot}: arrangement must be an integer from -1 to 32767")
-            gear[slot]["arrangement"] = arrangement
+        for field in ("appearance", "arrangement"):
+            if field in entry:
+                index = entry[field]
+                if type(index) is not int or not -1 <= index <= 0x7fff:
+                    raise ValueError(f"gear slot {slot}: {field} must be an integer from -1 to 32767")
+                gear[slot][field] = index
     return gear
 
 
 def gear_objects(gear, layout=None):
-    """Field values that equip `gear` (optional model arrangement per slot) on the three character
+    """Field values that equip `gear` (optional appearance/arrangement per slot) on the three character
     objects: {"peer": ..., "select": ..., "self": ...}, for deep_merge into their values.
     `layout` is character_layout() of the target build (default 01.00)."""
     L = layout or LAYOUT_0100
     slots = {}
     for slot, g in gear.items():
         item = {0: g["id"], 8: g["item"]}
+        if "appearance" in g:
+            item[0xa] = g["appearance"]
         if "arrangement" in g:
             item[0xc] = g["arrangement"]
         if g["dyes"]:

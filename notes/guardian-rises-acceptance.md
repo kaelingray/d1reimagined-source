@@ -11,7 +11,14 @@ weapons, combat, completion, and Tower hand-off remain incomplete.
 
 ## Evidence and the next gate
 
-Latest repeat: JOIN176/177 complete the repaired 113→112 transition on the original
+Current checkpoint: JOIN196 repeats natural current24 arrival; JOIN196–199 advance
+through all authored revival scenes. The server supports explicit unit
+appearance separately from arrangement; no new starter default is promoted. Native base/cache lookups succeed, but
+the expected Ghost remains visually wrong, and JOIN197–199 reproduce a Nav guest
+access violation. Stable Breach lighting, torch, later waypoints and combined
+graphics remain open. See [Ghost appearance evidence](ghost-appearance-0124.md).
+
+Earlier repeat: JOIN176/177 complete the repaired 113→112 transition on the original
 host connection. JOIN177 dismisses the inspected dialogs and consumes guarded
 outdoor movement, stopping at its 45-second budget about 73 world units from its
 start. The character menu renders a full armoured Titan, but earlier outdoor

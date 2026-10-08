@@ -492,9 +492,76 @@ equipped-slot table's bucket bytes (+0xd, +0x10..+0x13) into cast fields
 (+0x1a4/+0x1cc/+0x1fc/+0x208). The world appearance path repeatedly calls
 `0x2e9124` with id `0xffffffff` for three player slots.
 
-So the cinematic Ghost is the **player's own Ghost**, supplied from the profile's
-equipped Ghost data; it is missing because that data resolves to nothing, not
-because of lighting. Next: decode which equipped-slot row and field `0x42f144`
-uses for the Ghost (bucket 14), what `0x71ec90` stores, and which profile field
-(likely a Ghost-specific appearance/arrangement or dye block) the fixture omits;
-then supply it and re-check the revival and Breach. JOIN193 cleanup is clean.
+This establishes a request for the **player's own equipped Ghost cache**. The
+initial interpretation that the data "resolves to nothing" and excludes lighting
+was too strong: key zero and an empty-looking descriptor do not prove a failed
+acquisition. JOIN194–199 distinguish the base unit, cosmetic override and cache
+handle; see the correction below. JOIN193 cleanup is clean.
+
+## JOIN194–199: separate Ghost unit, cosmetic and cache; visual failure remains
+
+Continuation from source `4f18e36`, unchanged C5 native binary and mission rules.
+Read-only static/native checks isolate equipped Ghost `+0xa=42` as the authored
+unit appearance. It resolves resource `0x80a6a008`; category-4 acquisition returns
+valid cache handle `0x3ef34000` in both revival bindings. Cast `+0x200`/actor
+`+0x304` is an optional cosmetic resource; the actual Ghost cache handle is actor
+`+0x31c`. Unset cosmetic data and initialized descriptor bytes were previously
+misinterpreted as a missing base unit. Native code and registry rechecks pass.
+
+JOIN196's appearance-only run completes all nine third-person scenes naturally,
+then the first-person scene, and ordinary walking reaches current24 at
+13:01:03.873 UTC. The route guard stops at the native slice change and releases
+its keys. The inspected Breach/Nav frame remains black with No Tracked Items and
+no verified held Ghost. This is a repeat of natural traversal, not torch acceptance.
+
+JOIN197 verifies cosmetic channel **15** from the native table. Its private 14/1
+pair used the inventory bucket by mistake and does not match. JOIN198's 15/1
+pair resolves `0x80a6bfe2` and populates the Ghost cache; JOIN199 also adds shell
+arrangement 2706. Neither restores the expected shell. Inspected output shows
+oversized floating geometry and dark/green first-person rendering. Dialogs obscure
+part of JOIN194/197/198/199; unobstructed sampled images are identified separately
+in the private receipts. JOIN197–199 each log a guest access violation reading
+`0x1c` after Nav input, with block PC `0x2ff2d8`. No error-free graphics or full
+cinematic acceptance is claimed.
+
+The server now accepts a separate validated explicit `appearance` index, preserving
+custom overrides and both historical/current starter defaults. Appearance 42 is a
+candidate extracted from the item record, not an accepted unit/model selection.
+Extra appearance/arrangement/cosmetic defaults remain private. Six new equipment checks
+cover delivery, signed bounds, independent bytes and compatibility;
+**196 server tests and 165 script tests pass**, including an independent 100-bit
+fixture. Actual final peer/select gear encode to 100 bytes each, with the correct
+instance/item/explicit appearance and no arrangement; all **46** mission-state changes pass
+the actual schema preflight.
+
+Clean shutdown UTC: JOIN194 12:25:09, JOIN195 12:40:16, JOIN196 13:05:29,
+JOIN197 13:21:16, JOIN198 13:29:52, JOIN199 13:38:45. Exact owned identities close,
+configuration/watch bytes and XInput restore, controls are empty and shared RPCN
+is preserved. Selected original JOIN195/196 clips fully decode with audio; this
+does not mean every recording or frame was reviewed. No final video is edited.
+
+Continue with the [Ghost appearance record](ghost-appearance-0124.md): capture
+the actual failing Nav component, identify the cinematic model/transform and
+require visible Ghost/hands/torch together with intact character/world rendering.
+
+## JOIN200: temporary default rejected; Nav null pointer captured
+
+The temporary working-tree default supplies 42 without an overlay, leaving other
+equipment, cosmetics, mission and renderer unchanged. Native base-unit/cache
+lookups repeat. Sampled untouched recording frames still show oversized floating
+geometry; the inspected first-person frames are dark. The same Nav input logs
+`0x1fb3c8`, LR `0x2ff330`, with **r4=0**, followed 2.8 ms later by the read of
+`0x1c`. Caller chain includes `0x709eb0`, `0x70b1d0` and `0x40ed94`.
+The matching component-pool row resolves to zero; its bytes/pool and relevant
+guest code are independently rechecked. The original component datum and reason
+for the null record remain open. Earlier finite watches did not identify it.
+
+The temporary starter default is **withdrawn before commit**. The final change
+supports explicit appearance fields only. Next: identify the candidate unit's
+actual model and trace `0x955918` at caller `0x709e98` through the failing datum's
+owner/lifetime; avoid treating a resolving resource as the correct Ghost.
+JOIN200 has 712 non-atomic performance samples with zero errors or failed
+rechecks. Cleanup at 13:51:48 UTC is clean; eleven exact identities and all three
+configuration hashes are independently checked. Two selected original clips
+(30.28/30.34 s, 1280×720, audio) fully decode. Sampled car/first-person evidence
+remains a failure, and no media is edited or published.

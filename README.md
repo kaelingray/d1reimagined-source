@@ -15,12 +15,22 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | JOIN176–180 repeat native 113→112 arrival. JOIN180 enters current24 and the initial Breach corridor on the same player through ordinary controls. JOIN182 fixes raw-position encoding and verifies the first normal-view Wall diamond, with native marker clearing after completion. The first four objective handovers now configure authored marker targets. Activity 229 uses scenario checksum `0x8fe07299`. | Stable idle24 remains unaccepted; JOIN182 ends current112/target24 with black scenery. Nav Mode shows No Tracked Items. Later waypoints, complete revival shots/Ghost, torch/power, authentic rifle pickup, combat, completion and Tower remain open. Earlier manual24 requests respawned the player. |
+| Opening mission | The revival now hands over on native cinematic-end incidents; JOIN196–199 progress through all nine third-person scenes and the first-person scene. JOIN182 verifies the first normal-view Wall diamond. JOIN188–192 verify ordinary Breach crossing and automatic squad/dialogue rules; JOIN196 repeats natural current24 arrival. Activity 229 uses checksum `0x8fe07299`. | Stable idle24 and usable Breach lighting remain unaccepted. Revival images still have missing Ghost/incorrect geometry. Later waypoints, torch/power, authentic rifle pickup, combat, completion and Tower remain open. Nav input after revival causes a guest access violation in JOIN197–199. |
 | Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons, with normal Titan proportions in some views. | Later views still show texture corruption/distortion; level/light values and stable combined character, outdoor and mission rendering remain open. |
-| Ghost | Authored member/performance bindings create one bound Ghost after the tested readiness/reset gate; helper components resolve. | The reset remains a protocol experiment. Visible torch behavior and automatic mission cues are unverified. |
+| Ghost | Both revival bindings request the player's Ghost cache. Explicit equipment appearance fields are now supported; private appearance/cosmetic comparisons resolve unit/cache resources. Automatic Breach squad activation and dialogue have bounded native evidence. | Candidate unit/model identity remains open. No new appearance/cosmetic/arrangement default is promoted. Held Ghost, torch and combined graphics remain unaccepted. See [appearance evidence](notes/ghost-appearance-0124.md). |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
+
+The [equipment appearance support](notes/ghost-appearance-0124.md) passes **196 server
+tests**, **165 script tests** and the actual final-schema preflight. It corrects
+the earlier claim that an empty-looking Ghost descriptor proved a missing lookup:
+the base unit and cache can be valid while the image remains wrong. The private
+field-combination runs reproduce oversized geometry, dark/green first-person
+output and a Nav guest access violation. JOIN200 directly captures the null
+component pointer before the crash; its temporary default is withdrawn.
+**Neither cinematics nor the joint
+flicker/distortion fix passes acceptance.**
 
 The [October 8 checkpoint](notes/checkpoint-2026-10-08-mission.md),
 [October 7 renderer checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
@@ -101,8 +111,9 @@ Priority is core gameplay, stability, fidelity, content coverage, multiplayer/ba
 completeness, then polish. The [reference comparison](notes/guardian-rises-reference-review.md)
 corrects earlier overbroad revival acceptance: the user reports missing shots,
 Ghost and waypoints. Full-duration five-second visual sampling now records the
-required sequence; this is not every-frame or full-audio review. Next: settle the
-client-requested Breach transition. Obtain a matching outdoor
+required sequence; this is not every-frame or full-audio review. Next: identify
+the failing Nav component and the cinematic Ghost's actual model/transform;
+then verify visible Ghost/torch and settled Breach progression. Obtain a matching outdoor
 RSX capture while the owned client is live. JOIN178 saves a mission-frame capture,
 but its replay does not match the lit original interior; capture/replay fidelity
 needs diagnosis before using that replay as evidence of the live fault.
