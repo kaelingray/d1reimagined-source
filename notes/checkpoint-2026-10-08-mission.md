@@ -441,3 +441,39 @@ Mission change: the Wall handover now plays `seq_d_o2_10` and arms `pt_fallen_ab
 its report plays `seq_fallen_above` and disarms it; `seq_d_o2_30` plays 2 s after
 current 24. Three new checks; all server checks and the real-schema preflight (45
 reactive changes) pass. These automatic rules have not had their own native run.
+
+## JOIN191–192: Ghost shell model selection (negative) and automatic Breach rules
+
+After the user's request for a 1:1 comparison, the reference was reviewed again end to
+end; the beat-by-beat result is [the reference script](guardian-rises-reference-script.md).
+Every place the reference shows the Ghost (revival shots, first-person conversation,
+Breach companion and its light) is missing in our runs.
+
+JOIN191 (read-only) resolves the gear-library root cached at `0x1ab5150` (a table of
+resource tags; +0x170 → the 3,969-entry, 16-byte model table used by `0x2a6474`).
+Scanning memory for `0x8080030a` arrays finds 23 loaded item records whose
+(class selector 0xff, arrangement) pairs exactly reproduce the verified armour values
+(Titan 188–192, Hunter 5–9, Warlock 371–375). Three others hold 2706, 2321 and 2363; the
+2706 record carries byte 0x0e (Ghost bucket 14) before its array. The investment item list
+names item 862 "Generalist Shell" (Ghost). The starter fixture sends 862 without an
+arrangement.
+
+JOIN192 equips the same Titan kit with Ghost arrangement 2706 (private gear file). The
+revival still shows **no Ghost** in front of the Wall (reference 05:57) or in the first-person
+conversation (06:19–06:45), and the Breach is still black. So the missing Ghost is not
+explained by the shell arrangement alone; 2706 is not promoted to the fixture.
+Open hypotheses: the scene/companion Ghost needs other state (the performance cast, or
+the player's Ghost unit), or the renderer drops/blackens the Ghost and its light. Codex's
+JOIN102 note ("views toward the Ghost remain dark") fits the second, but the Breach was
+also black before the Ghost spawned in JOIN188, so neither is established.
+
+JOIN192 also runs the new automatic rules without any control lines: the Wall trigger
+plays `seq_d_o2_10` and arms `pt_fallen_above` (+2 s); the trigger reports 12 s later and
+`seq_fallen_above` plays and disarms it; the natural crossing (12:19:02 local) plays
+`seq_d_o2_30` at +2 s and the bubble-3 reset at +30 s. All owned cleanups (JOIN191 at
+11:09:47 UTC, JOIN192 at 11:20:35 UTC) are clean.
+
+Reference-order gap found in the review: the original first shows "LEVEL UP / Level 2"
+after the Divide fight (14:21); our fixture shows a "Level Up — upgrade an ability" tip
+from the start of the highway. It probably comes from the starter subclass progression;
+not yet investigated.
