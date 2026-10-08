@@ -38,7 +38,8 @@ which deserializes as an all-zero response structure and no blob.
 """
 
 import argparse
-from mission_script import ReactionQueue, ReactionRule, TeleportReaction, reaction_scope
+from mission_script import (BubbleResetReaction, ReactionQueue, ReactionRule, TeleportReaction,
+                            reaction_scope)
 from incident_codec import INCIDENT_HANDLE, decode_incident, validate_schema as validate_incident_schema
 import datetime
 import hashlib
@@ -1153,12 +1154,21 @@ def expand_mission(mission, schema):
             ident, state_type, _, has_b = heads[name]
             changes.append((ident, state_type, mission_offset_keys(values, schema, state_type), has_b))
         if "at" in step:
+            if "bubble_reset" in step:
+                raise ValueError(f"mission step {number}: a bubble reset needs an \"on\" trigger")
             timed += [(float(step["at"]), change) for change in changes]
             continue
         if "teleport" in step:
             if changes:
                 raise ValueError(f"mission step {number}: separate teleport and state changes")
             changes.append(TeleportReaction(parse_slice_set(step["teleport"])))
+        if "bubble_reset" in step:
+            # JOIN188: the Breach squad gate (0x20f858) needs a fresh inactive generation for
+            # bubble 3 after the client reaches slice set 24; the startup 14:1 reset does not
+            # carry over. Reactive only: a timed reset could precede the slice transition.
+            if changes:
+                raise ValueError(f"mission step {number}: separate bubble resets and other changes")
+            changes.append(BubbleResetReaction(bubble_reset_spec(step["bubble_reset"])))
         on = step.get("on")
         if not on or "type" not in on:  # "type": "any" matches every client message type
             raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
@@ -1280,7 +1290,7 @@ def validate_mission_states(schema, timed, reactive):
             raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
 
     for spec in [s for _, s in timed] + [entry[3] for entry in reactive]:
-        if isinstance(spec, TeleportReaction):
+        if isinstance(spec, (TeleportReaction, BubbleResetReaction)):
             continue
         ident, state_type, values, _ = resolve_spec(spec, context)
         path = f"{ident[0]:#x}/{ident[4]:#x}/{ident[6]} state {state_type:#x}"
@@ -2058,6 +2068,7 @@ def handle(conn, peer, args):
                         if cancelled:
                             log(f"[{tag}] --ah-on rule {rule_index}: cancelled {cancelled} obsolete phase changes")
                         action = (f"teleport {spec.zone[0]}" if isinstance(spec, TeleportReaction) else
+                                  f"bubble reset {spec.resets}" if isinstance(spec, BubbleResetReaction) else
                                   f"object {spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]}")
                         log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: "
                             f"{action} in {delay:g} s")
@@ -2254,6 +2265,14 @@ def handle(conn, peer, args):
                         if isinstance(entry[1], TeleportReaction):
                             teleport_plan.insert(0, (entry[1].zone, 0.0))
                             log(f"[{tag}] teleport to slice set {entry[1].zone[0]} queued ({entry[2]})")
+                            continue
+                        if isinstance(entry[1], BubbleResetReaction):
+                            try:
+                                bubble_resets = update_bubble_resets(bubble_resets, entry[1].resets, slot_)
+                            except ValueError as exc:
+                                log(f"[{tag}] mission: ignored bubble reset {entry[1].resets}: {exc}")
+                                continue
+                            log(f"[{tag}] mission: simulation bubble reset -> {bubble_resets} ({entry[2]})")
                             continue
                         entry = (entry[0], resolve_spec(entry[1], mission_context()), entry[2])
                         ident = replace_object(objects_, entry[1])

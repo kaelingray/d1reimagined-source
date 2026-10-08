@@ -8,6 +8,12 @@ class TeleportReaction:
     zone: tuple
 
 
+@dataclass(frozen=True)
+class BubbleResetReaction:
+    """Fresh inactive roster generations, e.g. bubble 3 after the client reaches The Breach."""
+    resets: tuple
+
+
 def reaction_scope(step):
     """Return (lane, phase), or None for the original independent-rule behavior.
 

@@ -309,3 +309,61 @@ mission footage is claimed. The unknown sources are preserved without a cleanup
 toggle. Screenshots, exact owned state reads, route audit and native/host logs are
 the bounded evidence. JOIN181 originals remain private. Capture status later reads
 IDLE/NASconnected, but health alone does not turn the failed JOIN182 capture into footage.
+
+## JOIN187–188: unobstructed revival, natural entry and Breach squad reset
+
+JOIN187 (10:17–10:27 UK) runs the production incident-driven revival with the original
+20-second start. Third person ends at 10:22:24 (about 103 s), first person at 10:23:20
+(about 56 s), and the queued teleport reaches 112 at 10:23:29. No manual cinematic or
+teleport input is used. Its cleanup left `d1checkpoint`/`d1depthfp.on` active because
+the disabled names already existed; they were renamed before JOIN188 and its own
+cleanup is clean.
+
+JOIN188 uses the same C5 executable, Titan/highway fixture and the committed mission
+(source `2f6bc35`). An inspected Urgent Message is dismissed with one owned Cross before
+the cinematic starts. Native screenshots every ~10 s show, **without the dialog**, the
+Cosmodrome vista, car graveyard, the Ghost's scan view, the Fallen on the ridge, the
+Wall, the first-person fade-in and the highway (09:51:42–09:54:50 UTC). Start/end
+incidents drive both handovers; current112 arrives 09:54:32. This is the first
+unobstructed view of the sequence; the full cast/dialogue/audio is still not reviewed.
+
+`d1_guardian_route.py --allow-breach-preload --continue-breach --wait 60 --budget 300
+--final-radius 0.25` preloads 24 at 09:55:40, the Wall trigger completes objective 3 and
+starts 7 at 09:56:27, and the route reaches `[353.75,-796.29]`. The client crosses
+naturally (current24/target112) at 09:56:55; **no manual teleport is queued**. The same
+player then walks the recorded corridor to `[390.0,-801.8,16.7]` with ordinary pad input.
+All 3,731 non-atomic session samples retain session 6; 2,418 show current24/target112 in
+follow mode 3 for about ten minutes, without pumpkin or reconnect.
+
+Static 01.24 review explains the persistent target: `0x352968` (follow mode 3) picks
+the slice set named by the transition volume the player stands in, and only ends the
+request ("completed", `0x35023c`) when the player is in **no** transition volume. Every
+position reached in JOIN188 still reports classification 1 or 2 (the doorway volume on
+the 24 side points back to 112). So current24/target112/mode3 near the entrance is the
+client's normal streaming state, not by itself a failed handover.
+
+The Breach is rendered black except for the lit doorway seen through a window. The host
+sends the authored Ghost member and three Fallen squad generations 20 s after current24.
+A manual `{"bubble_reset":"3:1"}` control line at 09:58:20 is followed within one second
+by type-6 sensor updates naming Breach objects and a **Ghost blip on the radar**; no
+Ghost model, torch or enemy is visible in the dark. Arming triggers 120/121 by control
+and walking the corridor both ways produces no incident. The documented manual
+`of_ghostlight`/`ho_ghostlight`/`o_device_invis_light` candidates change nothing visible.
+Starting `cine_ghost_light` (`pf_104a_pwr`) by control produces an immediate incident 734
+with no 2120 start: the power cinematic does not play from that position.
+
+Source change: mission steps can now carry `"bubble_reset": "SLOT[:GEN]"` on an `on`
+trigger (timed or combined steps are rejected). The shipped mission resets bubble 3
+30 s after current24, 10 s after the member/squad states. Four new checks (expansion,
+rejection, shipped rule, encrypted session) and all 187 server checks pass; the real
+01.24 schema preflight passes with 40 reactive changes. **The automatic timing has not
+had a native run yet.**
+
+Owned cleanup ends 10:07:15 UTC: all identities closed, title/watch hashes restored,
+XInput restored, no active controls and no errors. Native recordings cover
+09:51:49–10:07 UTC; they carry native recorder notices with internal paths at segment
+boundaries and need review before any use.
+
+Next: find volumes 173/174 (triggers 120/121) and trigger 34's volume from the activity
+data so the route can reach them; resolve why the Breach interior renders black (scene
+lighting vs. renderer); verify the automatic bubble-3 reset produces the same Ghost blip.

@@ -51,6 +51,9 @@ The Ghost that floats beside the player is an **AI squad the host spawns**, not 
   reaches configured helper attachment creation and registration. Visible torch,
   Ghost movement/dialogue and Fallen encounter counts remain open. See
   [squad counts](squad-member-counts-0124.md) and [light evidence](ghost-light-0124.md).
+  JOIN188 (8 October): after a natural crossing, a bubble-3 reset is followed by a Ghost
+  radar blip and Breach sensor traffic; the shipped mission now sends that reset 30 s after
+  current 24 (automatic timing not yet run natively). The interior still renders black.
 
 ## Beat by beat
 

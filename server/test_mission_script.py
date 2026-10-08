@@ -104,7 +104,7 @@ class GhostAuthoredMember(unittest.TestCase):
                               "a_guardian_rises.json").read_text(encoding="utf-8"))
         from test_cinematic_completion import add_incident_schema
         _, reactions = bap.expand_mission(mission, add_incident_schema(schema))
-        ghost = [rule for rule in reactions if not isinstance(rule[3], bap.TeleportReaction) and rule[3][0] ==
+        ghost = [rule for rule in reactions if not isinstance(rule[3], (bap.TeleportReaction, bap.BubbleResetReaction)) and rule[3][0] ==
                  {0: 0xFC0E45A3, 4: 2, 6: 95}]
         self.assertEqual(len(ghost), 1)
         rule = ghost[0]
