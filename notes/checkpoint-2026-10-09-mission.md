@@ -108,3 +108,15 @@ sends the four states (rules 35–38). The recording shows Fight Through the Wal
 radar contacts, damage, "Guardian Down" (Dreg, House of Devils) and respawn, with no
 control lines. The extra "New Mission" banner and urgent dialog still appear after the
 grant.
+### Weapon stats (JOIN233–235)
+
+The final stat table `0x80a5e1d3` has 36 entries using the standard Destiny stat hashes
+(Attack `0x15f5c563` at index 11, Impact 13, Magazine `0xe6be4c5a` at 20). The item
+object's instance block (`0x80801846`, item object +0x28) holds a 36-byte u8 array at
++0x22, and its first sub-structure has the shape of a primary stat (three i32 and an
+i16). JOIN235 sent the Khvostov with primary stat {Attack, 5, 5, kinetic} and index 20
+= 25. The magazine still read 12, so that reading is wrong or the HUD takes the
+magazine from elsewhere; the experiment was not kept. JOIN233's aimed-fire helper
+(nearest moving entity from the `0x138e24` hook, position +0x40) fired 22 shots. One
+targeted Dreg stopped updating after 16 shots, but without video no kill is accepted.
+The Guardian died about every 20–30 s.
