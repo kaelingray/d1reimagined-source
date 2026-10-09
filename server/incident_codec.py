@@ -1,4 +1,4 @@
-"""Bounded decoder for native 01.24 activity incident envelopes."""
+"""Bounded codec for native 01.24 activity incident envelopes."""
 import investment
 
 INCIDENT_HANDLE = 0x8080097D
@@ -69,4 +69,32 @@ def decode_incident(schema, handle, payload):
     if any(not isinstance(value, int) or value < 0 for value in types):
         raise ValueError("incident type IDs must be nonnegative integers")
     return types, bytes(values[212][4])
+
+
+def encode_incident(schema, types, body):
+    """Encode a host incident envelope; the caller must establish the opaque body's meaning."""
+    validate_schema(schema, INCIDENT_HANDLE)
+    root = schema[f"{INCIDENT_HANDLE:#x}"]["fields"]
+    lists = [schema[f"{f['nested']:#x}"]["fields"] for f in root]
+    type_slots = schema[f"{lists[0][1]['nested']:#x}"]["fields"]
+    body_slots = schema[f"{lists[2][1]['nested']:#x}"]["fields"]
+    if not isinstance(types, (list, tuple)) or not 1 <= len(types) <= len(type_slots):
+        raise ValueError("host incident needs a nonempty bounded type chain")
+    for index, value in enumerate(types):
+        field = type_slots[index]
+        if (type(value) is not int or value < 0
+                or not 0 <= value + field['min'] < 1 << field['width']):
+            raise ValueError("host incident type ID does not fit its schema slot")
+    if not isinstance(body, bytes) or len(body) > len(body_slots):
+        raise ValueError("host incident body exceeds its schema capacity")
+    for fields, count in ((lists[0], len(types)), (lists[2], len(body))):
+        if count >= 1 << fields[0]['width']:
+            raise ValueError("host incident count does not fit its schema field")
+    # The second list carries no entries for this explicit host-event path.
+    values = {0: {0: len(types), 4: list(types)}, 104: {0: 0, 4: []},
+              212: {0: len(body), 4: list(body)}}
+    payload = investment.encode(schema, INCIDENT_HANDLE, values)
+    if len(payload) > MAX_PAYLOAD:
+        raise ValueError("host incident envelope exceeds the parser bound")
+    return payload
 

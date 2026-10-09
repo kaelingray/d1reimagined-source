@@ -40,7 +40,7 @@ which deserializes as an all-zero response structure and no blob.
 import argparse
 from mission_script import (BubbleResetReaction, ReactionQueue, ReactionRule, TeleportReaction,
                             reaction_scope)
-from incident_codec import INCIDENT_HANDLE, decode_incident, validate_schema as validate_incident_schema
+from incident_codec import INCIDENT_HANDLE, decode_incident, encode_incident, validate_schema as validate_incident_schema
 import datetime
 import hashlib
 import hmac
@@ -745,7 +745,7 @@ TELEPORT_SETTLE_SECONDS = 10
 # client is in the world (JOIN53: 14 s after the world state, again after each slice-set switch)
 AH_CLIENT_PROGRESS, CLIENT_IN_WORLD = 17, 0x8000000E
 # Activity-host message 18 is "incident" (name table at 0x1898168 in 01.24; payload 0x8080097d:
-# incident type list, 49-byte body). Clients send them (JOIN81: "player entered trigger"), and hosts
+# incident type list, bounded opaque body). Clients send them (JOIN81: "player entered trigger"), and hosts
 # can send them too (handler 0xe2e9ec).
 AH_INCIDENT = 18
 
@@ -1221,13 +1221,15 @@ class ControlChanges(list):
     def __init__(self):
         super().__init__()
         self.bubble_resets = []
+        self.incidents = []
 
 
 def control_steps(path, offset, objects, schema):
     """DEBUG TOOL (--ah-control): mission-script steps appended to a file, one JSON object per
     line ({"set": {NAME: {offset: value}}}, names from the mission's "objects"; or
-    {"teleport": SLICE_SET} or {"bubble_reset": "SLOT[:GEN],..."}), applied live. Returns
-    (ControlChanges object-spec list with bubble_resets metadata, [slice sets to teleport to],
+    {"teleport": SLICE_SET}, {"bubble_reset": "SLOT[:GEN],..."}, or
+    {"incident": {"types": [ID], "body": "HEX"}}), applied live. Returns
+    (ControlChanges object-spec list with bubble_resets/incidents metadata, [slice sets to teleport to],
     new offset, [errors]). Each connection reads from the file size at
     its start, so earlier lines are not replayed. Replacement: an operator console on the
     activity-instance service (notes/architecture-multiplayer.md)."""
@@ -1247,6 +1249,14 @@ def control_steps(path, offset, objects, schema):
             continue
         try:
             step = json.loads(line)
+            if "incident" in step:
+                event = step["incident"]
+                if (set(step) != {"incident"} or not isinstance(event, dict)
+                        or set(event) != {"types", "body"} or not isinstance(event["body"], str)
+                        or len(event["body"]) > 2 * 8192):
+                    raise ValueError("incident control needs only types and a bounded hex body")
+                specs.incidents.append(encode_incident(schema, event["types"], bytes.fromhex(event["body"])))
+                continue
             if "bubble_reset" in step:
                 specs.bubble_resets.append(bubble_reset_spec(step["bubble_reset"]))
                 continue
@@ -2264,6 +2274,10 @@ def handle(conn, peer, args):
                         args.ah_control, control_offset, args.mission_objects, args.activity_schema)
                     for error in errors:
                         log(f"[{tag}] control: ignored {error}")
+                    for incident in specs.incidents:
+                        conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                     bc_notification(AH_INCIDENT, incident, host_id)))
+                        log(f"[{tag}] control: sent explicit incident (type {AH_INCIDENT}, {len(incident)} bytes)")
                     for reset_changes in specs.bubble_resets:
                         try:
                             bubble_resets = update_bubble_resets(bubble_resets, reset_changes, sim_build[1])

@@ -24,6 +24,10 @@ it is kept outside Git). Encoding mirrors the client's deserializer (0x25d2dc ->
     despite schema width zero. The client stores a fourth coordinate w=1. This
     supports the local activity's disabled position quantizer; compressed position
     encoding is not implemented.
+  * kind 0x19 is a dynamic reference in 01.24. Only null is supported:
+    six-bit selector 0x16 followed by an absent nullable handle. The native reader
+    also accepts null with selectors 0x15 and 0x17. Non-null references need native
+    namespace/fixup handling and are rejected rather than silently consuming zero bits.
 
 `values` maps a struct offset to a value (or, for nested fields, a dict or list of dicts for
 that struct) at each level; everything not given is encoded as absent (optional) or zero.
@@ -48,6 +52,7 @@ MACHINE_ID_KIND = 0x23
 NULLABLE_HANDLE_KIND = 0x17
 TYPED_VALUE_KIND = 0x22
 POSITION_KIND = 13
+DYNAMIC_REFERENCE_KIND = 0x19
 NULL_HANDLE = 0xFFFFFFFF
 
 
@@ -99,6 +104,17 @@ def _write_handle(writer, value):
         raise ValueError("nullable handle must be null or an unsigned 32-bit handle")
 
 
+def _read_null_dynamic_reference(reader):
+    # 01.24 e4524c reads a six-bit primitive selector then delegates. Its
+    # nullable-handle aliases 21..23 use e45198; bee110 maps -1 to a null pair.
+    selector = reader.get(6)
+    if selector not in (0x15, 0x16, 0x17):
+        raise ValueError("unsupported dynamic-reference selector")
+    if reader.get(1):
+        raise ValueError("non-null dynamic references are not implemented")
+    return -1
+
+
 def _typed_handle(schema, value):
     try:
         handle = int(value, 0) if isinstance(value, str) else int(value)
@@ -135,6 +151,8 @@ def decode_from(reader, schema, handle, limit=None):
             values[off] = reader.get(64)
         elif kind == NULLABLE_HANDLE_KIND:
             values[off] = _read_handle(reader)
+        elif kind == DYNAMIC_REFERENCE_KIND:
+            values[off] = _read_null_dynamic_reference(reader)
         elif kind == TYPED_VALUE_KIND:
             # 0xe45604 reads a nullable type handle, then that type's fields.
             nested = _read_handle(reader)
@@ -182,6 +200,13 @@ def _primitive(w, field, value):
         return
     if kind == NULLABLE_HANDLE_KIND:
         _write_handle(w, value)
+        return
+    if kind == DYNAMIC_REFERENCE_KIND:
+        if value is not None and (type(value) is not int or value not in (-1, NULL_HANDLE)):
+            raise ValueError("non-null dynamic references are not implemented")
+        # e47fb4 classifies null as 0x16; e4524c reads that nullable selector.
+        w.put(0x16, 6)
+        w.put(0, 1)
         return
     width = 32 if kind == 11 else field["width"]
     if kind == 11:

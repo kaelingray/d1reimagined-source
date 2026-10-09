@@ -1,6 +1,6 @@
 # 01.24 incident and disconnect diagnostics
 
-Updated 2026-10-02. These findings come from the private BLES01857 01.24 ELF, corrected
+Updated 2026-10-09. These findings come from the private BLES01857 01.24 ELF, corrected
 runtime type export, and the saved JOIN81–83 activity-host logs. They identify differences
 between the runs; they do not establish the client error that produces `pumpkin`.
 Raw game data, logs, type exports and generated reports remain outside the tracked repository.
@@ -186,3 +186,88 @@ configuration hashes restored. No mission, renderer or inventory behaviour chang
 in this run, and no new gameplay or graphics acceptance is claimed. Next: trace
 the incoming incident's body decoding into the client action context, then verify
 the native cache insertion and service-601 claim for the unarmed starter.
+
+## JOIN219: incoming body selection
+
+Read-only native checks verify the game interface at `0x1ab9d7c`, vtable
+`0x13e7cf0`. Incoming wrapper `0x12f2e8` calls its `+0x1a0` method:
+`0x2fcd64 -> 0x92c134 -> 0x2700a4`. The last routine looks up the first
+catalog index, reads its payload selector and selects a body adapter through
+`0x26b74c`. Selectors can override the generic adapter; selector 1 does so.
+Selector 2 uses codec **`0x80800cb6`**, and selector 17 uses the already observed
+cinematic codec `0x80800792`.
+
+Catalog index 1504 has selector 2 and hash `0x7a0fd954`, registered to handler
+`0x5aede4`. That handler passes its decoded body to `0x2b2a60`. The latter reads
+the nonce at +0/+16, position at +96 and world ID at +112, matching the generic
+selector-2 codec. This identifies a candidate cache-recording route; it does not
+recover the original event name or the starter reward's identity.
+
+JOIN219 has three entries each into the local incident dispatch, selector
+preparation and cinematic handlers. Incoming-host, loot-recording and service-601
+watches have zero hits. No incident is sent in this metadata run. It closes at
+**22:47:17.519 UTC on 8 October**, with nine exact identities closed and all three
+baseline hashes restored by independent checks.
+
+The selector-2 body also exposes an encoder defect: nested field kind `0x19`
+has width zero but consumes a six-bit primitive selector and a nullable handle.
+The old encoder omitted it, shifting every later field. Native reader `0xe4524c`
+delegates selectors `0x15`/`0x16`/`0x17` to the nullable-handle reader, and
+`0xbee110` maps an absent handle to the null reference pair. The encoder now
+supports **null only**, emitting selector `0x16` and one absent bit. Present
+references and unknown selectors fail explicitly because their namespace/fixup
+semantics are still unsupported. Five independent regression methods fail on the
+previous implementation and pass with the repair; adjacent sentinel fields verify
+the seven-bit alignment.
+
+The existing private control file now accepts an explicit host incident:
+
+```json
+{"incident": {"types": [1504], "body": "<validated-private-body-hex>"}}
+```
+
+`encode_incident` validates the measured envelope schema, type-chain capacity,
+integer ranges and body/count bounds. A complete valid line is sent once through
+the existing host notification path; partial or invalid lines send nothing. The
+body remains opaque to this debug control. It supplies no ACK semantics, automatic
+mission event, reward authority or durable grant. Use only a body whose target-build
+layout and intended experiment have been checked; the example is not a replayable
+game payload. Five further tests cover an independent envelope bit fixture,
+capacity/range rejection, count overflow and control consumption.
+
+## JOIN220: synthetic body decodes; queue completion unverified
+
+This bounded native test uses the same C5 executable and an unarmed starter with
+one **synthetic** pending rifle record. Its nonce is diagnostic, not recovered
+reward authority. The explicit selector-2 body has 570 significant bits (72
+bytes); the complete incident envelope has 76 bytes. Two control lines reach
+`0x12f2e8` and `0x2700a4` through the existing host connection.
+
+The second event also reaches `0x27d744` with command type `0x19`. Its input
+contains the intended nonce key/ID, a null reference pair, XYZ
+`[410.644, -794.385, 17.723]`, homogeneous coordinate 1 and world ID 3. This is
+independent native evidence that the seven-bit field repair preserves the body
+layout. The live position quantizer is zero, agreeing with the raw-XYZ codec.
+
+`0x27d744` is a **queue submission routine**. Entry alone does not establish
+successful serialization, allocation, commit or later consumption. It checks
+`0x12f9d4`, serializes the native command, allocates via `0x1f6ec8` and commits
+via `0x1f6f88`; these inner stages are not watched in JOIN220. Earlier wording
+that this run proved an accepted queued event is narrowed to submission.
+
+Both post-event loot samples still have zero cached nonces. Handler `0x5aede4`,
+recording paths `0x2b2a60`/`0x2b2f74` and pickup-service entry `0x472518` have
+zero hits. No service-601 claim or weapon grant is accepted. The ordinary route
+releases input at its budget without moving from the initial outdoor position;
+the inspected view is black with the early Level Up coach. This run does not
+reproduce JOIN217's successful rifle approach, and its cause remains open.
+
+The dynamic reference name is intentionally broader than “tag reference”:
+native classification also handles actor and other namespaces. Only the null
+case is implemented. The source naming cleanup after this run does not change
+the encoded bytes. JOIN220 closes at **23:08:03.260 UTC on 8 October**
+(**00:08:03.260 UK on 9 October**), with nine exact identities closed, all three
+configuration hashes restored, XInput and shared RPCN preserved, and no cleanup
+errors or active diagnostic controls. Next: verify the queue gate, serialization
+and commit before attributing the missing callback to dispatch or the event's
+semantic identity.

@@ -10,7 +10,7 @@ Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1rei
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state — 2026-10-08
+## Current state — 2026-10-09
 
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The current backend and diagnostic changes pass **202 server tests**, **176 script tests**
+The current backend and diagnostic changes pass **212 server tests**, **176 script tests**
 and the actual final-schema preflight (1 timed / 58 reactive changes).
 The [rifle investigation](notes/rifle-pickup-0124.md) corrects the cue's object
 selection: the previous chest was about 137 units from the marker; `o_weapon`
@@ -34,8 +34,11 @@ read-only probe. JOIN217 verifies that the native manager reads diagnostic rifle
 records, but their nonce/position cache is empty and approach produces no claim.
 JOIN218 identifies the native incident catalog and corrects the scripting-resource
 address lookup. A bounded offline reader parses its 3,083 records; one selector
-matches an observed cinematic callback. Event names and the rifle incident body
-remain unresolved. See [incident diagnostics](notes/incident-diagnostics.md#join218-native-catalog-and-resource-address-correction).
+matches an observed cinematic callback. JOIN219 identifies the selector-2 body
+codec and a missing seven-bit null dynamic-reference field. JOIN220's explicit
+synthetic event decodes to the intended nonce/position/world and reaches native
+queue submission. Queue completion, the loot callback and authentic rifle pickup
+remain unverified. See [incident diagnostics](notes/incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
 Visible room illumination and companion
 Ghost glow remain unaccepted.
 
@@ -48,7 +51,8 @@ component pointer before the crash; its temporary default is withdrawn.
 **Neither cinematics nor the joint
 flicker/distortion fix passes acceptance.**
 
-The [October 8 checkpoint](notes/checkpoint-2026-10-08-mission.md),
+The [October 9 checkpoint](notes/checkpoint-2026-10-09-mission.md),
+[October 8 checkpoint](notes/checkpoint-2026-10-08-mission.md),
 [October 7 renderer checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
 [Vulkan conformance record](notes/rpcs3-vulkan-conformance.md) hold the latest renderer
 evidence. JOIN164 completes the 500-second interval and twenty input/capture phases

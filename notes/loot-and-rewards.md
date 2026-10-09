@@ -160,3 +160,10 @@ incident dispatch paths, not BAP reply handlers. The corrected script-event code
 is already present in the final schema. This narrows the missing rifle action
 investigation, but supplies neither its body nor its nonce/position. See
 [the catalog evidence and address correction](incident-diagnostics.md#join218-native-catalog-and-resource-address-correction).
+
+JOIN219 identifies the generic selector-2 body codec `0x80800cb6` and its route
+to handler `0x5aede4`. JOIN220's bounded explicit synthetic incident reaches
+native queue submission with its intended nonce and world position decoded.
+The ring remains empty, with no loot callback or service-601 entry. Queue entry
+is not a committed or consumed action, and the original reward/event semantics
+remain unverified. See [the decoding result and next boundary](incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
