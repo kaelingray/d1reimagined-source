@@ -40,3 +40,28 @@ the queue gate, command serialization and commit; then verify the cache callback
 native pickup request and durable replicated grant. Lighting, Ghost brightness,
 character distortion/flicker, Nav crash, banners, combat and mission completion
 remain open.
+
+## JOIN221–223: from queue submission to a live pickup claim
+
+JOIN221 follows the synthetic event past queue submission: it is committed,
+executed (`0x104ad30` → `0x92c774`), delivered to object 1 and dispatched to the
+generic handler `0x5aea30`. There the registered handler `0x5aede4` is filtered
+by a recipient check. JOIN222 identifies that recipient field: `0x80800e70`+40
+(body offset `0x40`) must hold the **activity player ID** (1 for the local
+player), not the character ID. With that value set, `0x5aede4` records the nonce
+and position, and the loot manager allocates a unit for the rifle record.
+JOIN223 finds that the Breach is world **3**. With world 3 the rifle unit is
+allocated in the Breach, and walking onto the rifle's position makes the client
+send a **service-601 claim** with the pending record's source kind and nonce.
+
+The event and pending record are still a private synthetic fixture, not the
+original reward authority. The stand-in does not yet answer 601 with a grant, so
+no item is added. The rifle model at the chest was not visually inspected.
+Details and addresses are in
+[incident diagnostics](incident-diagnostics.md#join223-the-rifle-spawns-in-the-breach-and-the-client-claims-it-service-601).
+All three runs end on their bounded time limit with clean, independently
+verified closure.
+
+Next: grant the claimed item through 601 and a self update, then move the event
+into the mission script so the rifle appears at the chest in the reference
+order.

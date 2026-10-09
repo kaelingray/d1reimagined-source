@@ -271,3 +271,101 @@ configuration hashes restored, XInput and shared RPCN preserved, and no cleanup
 errors or active diagnostic controls. Next: verify the queue gate, serialization
 and commit before attributing the missing callback to dispatch or the event's
 semantic identity.
+
+## JOIN221: the event is committed, executed and dispatched; the handler filter rejects it
+
+JOIN221 repeats JOIN220's private fixture (unarmed starter, one synthetic pending
+rifle record, the same 76-byte selector-2 envelope) with no movement. The watch list
+was re-armed between ten identical sends, each phase one stage further along the
+path. Gate watches filtered only by return address are exhausted by unrelated
+commands first. Filtering them to the incident frame (stack `0xd00fc960`; the
+`0x27d744` frame is `0x10150` bytes) isolates the event.
+
+Verified native path for catalog index 1504 (hash `0x7a0fd954`):
+
+| Stage | Native evidence |
+| --- | --- |
+| Queue submission `0x27d744`, type `0x19` | `0x12f9d4` gate passes; serialize `0x1db184` succeeds (`0x2051` bits, `0x40b` bytes); `0xbee268` passes; allocation `0x1f6ec8` and copy `0x99e380` run; commit `0x1f6f88` is called |
+| Commit | `0x27d4c4` routes type `0x19` to the second list; `0x27cbb8` appends it to the enabled list (`0x306169c0`) |
+| Execution, about 84 ms later | list executor `0x1f6b34` (per-frame `0x32f0f0`) calls fallback `0x27d600`; type-`0x19` handler `0x104ad30` deserializes and calls `0x92c774` |
+| Target lookup | `0x336708(1)` resolves object `0x6023e780`; delivery `0x1d97c8` passes both gates |
+| Dispatch | dispatcher `+0x40` = `0x5ae4dc`; `0x1cae2c` reaches interface `*(0x1a93300)` method `0x5aee80`; role gate `0x1ca6a4` passes; `0x1cb0b0` calls generic handler `0x5aea30` |
+| Per-event handler | `0x5ae7a4` finds registration 3 (`0x7a0fd954` → `0x5aede4`, schema `0x84f68b44`) and calls the check `0x269f10` → dispatcher `+0x28` = `0x5ae120` |
+| Handler filter | delivery filter kind 1 names the local character `0x0a3d4a2c8fbea6ba`; `0x26a544` receives schema `0x84f68b44` and the body (selector 2, codec `0x80800cb6`, adapter `0x1a93330`, nine schema records with the generic `0x1124697d` first) |
+
+`0x5aede4`, `0x2b2a60` and `0x472518` still have zero hits. The queue, executor,
+target lookup and dispatch are therefore **not** the missing step. `0x26a544`
+passes at once only for selector 0 or the generic schema. Otherwise it searches
+the body's 84-byte schema records (`0x26b9b0`), expands recipients (`0x26a3dc`) and
+matches each against the filter (`0x26a00c`). The selector-2 adapter vtable
+(`0x13e7770`, slot 5 `0x28cbbc`) registers `0x84f68b44` within its schema family,
+so the remaining candidates are a missing matching record or a recipient set that
+excludes the local character. JOIN222 watches that evaluation directly.
+
+The list's own enabled byte, the commit's second `0x12f9d4` check and the eight
+other registrations are recorded privately. No grant, loot-cache entry or
+service-601 claim is observed. JOIN221 closes at **07:44:58.8 UTC on 9 October**
+(owned stop `0xffffffff`), with all seven exact identities closed, the three
+configuration hashes restored, XInput and shared RPCN preserved, and no cleanup
+errors or active controls.
+
+## JOIN222: the recipient field admits the event; the rifle reaches the loot cache
+
+JOIN222 watches the evaluation inside `0x26a544`. The selector-2 body carries nine
+84-byte schema records; `0x84f68b44` is the record for `0x80800e70`+40 (body
+offset `0x40`), value kind 1 (a 64-bit ID). `0x26a3dc`/`0x26a1d8` turn that field
+into one recipient of type `0x80800e5d`, and `0x26a00c` compares it with the
+delivery filter. The kind-1 filter (vtable `0x13e70e0`) resolves its player slot
+through the table at `0x1a1d720` (`0x270bec`) and compares the slot entry's +0x30
+word. For the local player that word is **1**: the activity player ID, the same
+value as the last field of `--ah-sim-player`, not the 64-bit character ID.
+
+| Send (same nonce, position) | `0x80800e70`+40 | World | Result |
+| --- | --- | --- | --- |
+| 1 | 0 (JOIN220 body) | 3 | filter has no recipient; `0x5aede4` not called |
+| 2 | character ID | 3 | recipient compared and rejected |
+| 3 | **1** | 3 | **`0x5aede4` → `0x2b2a60`**; one cache entry (world 3); manager `0x2b36f8`/`0x2b3240` visits item 3598 |
+| 4 | 1 | **14** | second cache entry for world 14; the rifle record's unit reference becomes `0x5ad896f7`/`0x7bfb81c1` and its position matches the current world |
+
+The JOIN220 body re-encodes byte-for-byte from its recorded values. Only the
+recipient and world fields change. This is the first native evidence of the
+loot path allocating a world unit for the starter rifle. It is still a
+**synthetic** private record and event. The original event name, the authentic
+nonce authority, visibility at the chest, the native pickup request (service 601)
+and a durable grant remain unverified. The player stayed at the outdoor start,
+so the unit was not inspected. JOIN222 closes at **08:05:43.9 UTC on 9 October**
+with all exact identities closed, the configuration hashes restored, XInput and
+shared RPCN preserved, and no cleanup errors or active controls.
+
+## JOIN223: the rifle spawns in the Breach and the client claims it (service 601)
+
+JOIN223 uses the same private fixture, sends the JOIN222 event (recipient 1,
+world 14) once in the outdoor slice, then follows the ordinary guarded route
+into the Breach. The loot unit allocated outdoors (`0xed3763f5`/`0x7afb81c1`) is
+released when the slice changes: the Breach's current world ID is **3**
+(handle `0x18`), not 14. Codex's original world 3 was correct for the rifle position.
+A second event with world 3, sent at the wall, adds a world-3 cache entry. The rifle
+record then gets unit `0xee2f6847`/`0x23fb81bd`, and the bauble constructor
+`0x2b2c00` runs.
+
+Walking onto `(410.644, -794.385)` triggers the native pickup: the deferred
+callback (`0xcbb5f0`) calls `0x472518`. The client sends one **service-601
+request** to the backend (19 bytes, `02594800000010a3d000000002170800000010`). It
+decodes with the measured request type `0x80801757` as
+`{0: 3, 8: {0: {0: 1, 8: 0x0a3d000000002170}, 16: 1}}`: source kind 3 and exactly
+the pending record's nonce `{1, 0x0a3d000000002170}` and word 1. This is the first
+live pickup claim observed.
+
+The stand-in has no 601 handler, so it sends the generic default reply. The
+request is queued without a response callback (`0x47676c` with null callback
+arguments), so the grant must arrive as a character-state update. No update is
+sent: the pending record and the loot unit remain, and no item is granted.
+Recording segments stopped before the walk, so the visible rifle model was not
+inspected. JOIN223 closes at **08:24:36.0 UTC on 9 October** (owned stop
+`0xffffffff`), with all exact identities closed, the configuration hashes
+restored, XInput and shared RPCN preserved, and no cleanup errors or active
+controls.
+
+Next: answer service 601 by removing the claimed pending record and adding the
+item to the character, then publish the self update. After that, send the event
+from the mission script on Breach entry instead of the private control file.

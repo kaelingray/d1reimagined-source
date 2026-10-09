@@ -37,8 +37,10 @@ address lookup. A bounded offline reader parses its 3,083 records; one selector
 matches an observed cinematic callback. JOIN219 identifies the selector-2 body
 codec and a missing seven-bit null dynamic-reference field. JOIN220's explicit
 synthetic event decodes to the intended nonce/position/world and reaches native
-queue submission. Queue completion, the loot callback and authentic rifle pickup
-remain unverified. See [incident diagnostics](notes/incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
+queue submission. JOIN221–223 follow it through execution and dispatch. With the
+recipient player ID and the Breach world set, the handler records the nonce, the rifle
+unit is allocated, and walking onto it sends a live service-601 claim. The grant
+reply and an authentic (non-synthetic) event remain open. See [incident diagnostics](notes/incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
 Visible room illumination and companion
 Ghost glow remain unaccepted.
 
