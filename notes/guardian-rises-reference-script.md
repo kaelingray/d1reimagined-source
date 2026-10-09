@@ -128,3 +128,18 @@ Differences to fix, in order of play: the coach sequence (sprint → melee → a
 of the persistent Level Up tip; no urgent dialog or extra mission banner; the grimoire
 card on pickup; magazine 25 / reserve 184; then the Fight Through the Wall enemies,
 ammo pickups and the loot cache.
+### The urgent and MOTD dialogs (JOIN229–230)
+
+The in-world "Urgent Message" is investment-globals dialog `motd_urgent_1`
+(resource tag `0x80a581e5`, definition `0x80a58505`, title string `0x84cc7b33`, body
+`0x40e5f178`). The "Message of the Day" with the help.bungie.net notice is definition
+`0x80a5851c` (body `0x0a92c9d7`) in the MOTD list `0x80a581e6`. The dialog table
+`0x80a5802e` lists both alongside the announcement and new-player sequences. Each
+dialog carries a one-op unlock expression read as opcode 1 on index 1327 (urgent),
+1321 (this MOTD), and 1262–1321 for the rest of the list.
+
+Neither flag table explains it. JOIN229 sent universe overrides 1321/1327 = false,
+and JOIN230 sent account flags A1262–A1327 = false (verified by re-encoding the same
+arguments). Both runs still show the urgent message at world entry and again right
+after the self update that grants the rifle. The launch keeps the proven all-true
+account flags. Its trigger is still open; the self update re-showing it is the best lead.

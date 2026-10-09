@@ -434,6 +434,14 @@ class UnlockFlags(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside"):
             bap.account_flag_values("2@C2048", counts)
 
+    def test_bar_separates_layers_inside_semicolon_argument_lists(self):
+        # The final-build launch passes --self-flags through a ";"-separated argument list.
+        counts = {"A": 2560, "B": 256, "C": 2048}
+        values = bap.account_flag_values("2|1@A1262-1327", counts)
+        self.assertEqual(values, bap.account_flag_values("2;1@A1262-1327", counts))
+        self.assertEqual([values["A"][i] for i in (1261, 1262, 1327, 1328)], [2, 1, 1, 2])
+        self.assertEqual(set(values["B"].values()), {2})
+
 
 class MissionScript(unittest.TestCase):
     F = lambda off, kind, width, opt=0, minimum=0: {"off": off, "kind": kind, "opt": opt, "nested": -1,

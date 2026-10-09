@@ -585,10 +585,11 @@ def parse_flag_spec(spec, counts=None):
 
 
 def account_flag_values(spec, counts=None):
-    """Layered specs separated by ";" - later ones win, e.g. "1;2@B0" = every flag false
-    (1) except B0 true (2). Returns {"A": {index: value}, "B": {...}}."""
+    """Layered specs separated by ";" (or "|", for argument lists that split on ";") - later
+    ones win, e.g. "1;2@B0" = every flag false (1) except B0 true (2). Returns
+    {"A": {index: value}, "B": {...}}."""
     values = {"A": {}, "B": {}, "C": {}}
-    for part in filter(None, str(spec).split(";")):
+    for part in filter(None, re.split(r"[;|]", str(spec))):
         value, chosen = parse_flag_spec(part, counts)
         for table, indexes in chosen.items():
             values[table].update(dict.fromkeys(indexes, value))
