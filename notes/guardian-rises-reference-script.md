@@ -115,7 +115,7 @@ Hunter, so the class-specific cache weapon differs from a Titan's.
 | 09:42–09:58 | Red flare; blue Ghost light flies to the panel; Ghost lines about needing light and old military systems | Lines play in order; companion Ghost light not accepted |
 | 10:00–10:10 | Screen dark, then the room's lamps come on | Barrier opens; visible lamp light not accepted |
 | 10:12 | Objective **Grab the Rifle**; the Khvostov leans on the front of the blue chest; Ghost "Here! I found a rifle…" | Objective and line present; rifle model not inspected |
-| 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire; urgent dialog and extra banner |
+| 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire; extra banner (urgent dialog fixed in JOIN252) |
 | 10:18–10:20 | Objective **Fight Through the Wall**; Ghost hopes you can use it | Objective present; line not checked |
 | 10:40–10:46 | Ammo pickup (+108 reserve); Ghost "Eyes forward. Watch your tracker." | Not reached |
 | 10:58–11:04 | First enemy: a **Vandal** in the corridor; XP +55; grimoire "The Fallen" | JOIN231/232: Dregs spawn 30 s after the pickup, come to the rifle room and kill the Guardian (Guardian Down, respawn); no kill by the automated input; Vandal not identified; no XP or grimoire yet |
@@ -125,21 +125,19 @@ Hunter, so the class-specific cache weapon differs from a Titan's.
 | 11:54–12:00 | Loot cache, prompt "Collect Loot"; Ghost about the cache; class special weapon (Calcutta-LR2 sniper for this Hunter), +51 glimmer, grimoire "Special Weapons: Sniper Rifles" | Not reached |
 
 Differences to fix, in order of play: the coach sequence (sprint → melee → aim) instead
-of the persistent Level Up tip; no urgent dialog or extra mission banner; the grimoire
+of the persistent Level Up tip; no extra mission banner; the grimoire
 card on pickup; magazine 25 / reserve 184; then the Fight Through the Wall enemies,
 ammo pickups and the loot cache.
-### The urgent and MOTD dialogs (JOIN229–230)
 
-The in-world "Urgent Message" is investment-globals dialog `motd_urgent_1`
-(resource tag `0x80a581e5`, definition `0x80a58505`, title string `0x84cc7b33`, body
-`0x40e5f178`). The "Message of the Day" with the help.bungie.net notice is definition
-`0x80a5851c` (body `0x0a92c9d7`) in the MOTD list `0x80a581e6`. The dialog table
-`0x80a5802e` lists both alongside the announcement and new-player sequences. Each
-dialog carries a one-op unlock expression read as opcode 1 on index 1327 (urgent),
-1321 (this MOTD), and 1262–1321 for the rest of the list.
+### The urgent and MOTD dialogs (fixed in JOIN252)
 
-Neither flag table explains it. JOIN229 sent universe overrides 1321/1327 = false,
-and JOIN230 sent account flags A1262–A1327 = false (verified by re-encoding the same
-arguments). Both runs still show the urgent message at world entry and again right
-after the self update that grants the rifle. The launch keeps the proven all-true
-account flags. Its trigger is still open; the self update re-showing it is the best lead.
+The in-world "Urgent Message" is investment-globals dialog `motd_urgent_1` (definition
+`0x80a58505`, title string `0x84cc7b33`, body `0x40e5f178`). The reference shows no
+such dialog. The client's MOTD selector queues it when its unlock expression is true.
+That expression tests runtime universe flag 2065, which is true in the content defaults.
+The same group holds a second urgent record (`0x80a5e9fb`, flag 2066) and the
+help.bungie.net Message of the Day (`0x80a5851c`, flag 2059). The indexes in the tag
+files (1262–1327) are content-side and are resolved at load.
+
+The launch now sends universe overrides 2059, 2065 and 2066 = false. JOIN252 shows no
+dialog at world entry or after the rifle grant. See notes/checkpoint-2026-10-09-mission.md.

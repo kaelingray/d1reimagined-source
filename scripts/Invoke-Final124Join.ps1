@@ -67,10 +67,10 @@ if ($Stop) {
 
 $types = Join-Path $DataRepo 'ps3_updates\types_01.24.json'
 $services = Join-Path $DataRepo 'ps3_updates\services_01.24.json'
-# Universe flags 3390/309 open the highway activity. The in-world "Urgent Message" and
-# "Message of the Day" dialogs are not controlled by universe flags 1321/1327 (JOIN229) or
-# account flags A1262-A1327 (JOIN230); see notes/guardian-rises-reference-script.md.
-$bapArgs = '--mm-rsp;4=;--ahp-reply;00000000000000007f01018000003233;--self-flags;2;--universe-flag-values;3390=1,309=1'
+# Universe flags 3390/309 open the highway activity. 2065, 2066 and 2059 (true in the content
+# defaults) gate the "Urgent Message" pair and the help.bungie.net Message of the Day; the live
+# servers turned them on only for real notices (JOIN252). See notes/guardian-rises-reference-script.md.
+$bapArgs = '--mm-rsp;4=;--ahp-reply;00000000000000007f01018000003233;--self-flags;2;--universe-flag-values;3390=1,309=1,2059=1,2065=1,2066=1'
 if ($BapExtra) { $bapArgs += ";$BapExtra" }
 # c->ah mgr rsp: 02 | u64 host id 1 | char[128] host name (137 bytes, decoder 0x415be4 in 01.00)
 $mgr = [byte[]](@(2, 0, 0, 0, 0, 0, 0, 0, 1) + [Text.Encoding]::ASCII.GetBytes('d1local-host') + (,0 * 116))

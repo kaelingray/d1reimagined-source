@@ -139,3 +139,78 @@ The Guardian died about every 20–30 s.
   after respawning, no enemy pursues and the helper finds only fixtures. Dreg deaths, if any,
   produce no host incident. Killing a Dreg is still unverified; it needs a real enemy list
   (squad member actors) or manual play.
+### JOIN241–248: where the urgent dialog does not come from
+
+- **Expression layout in memory.** The unlock-expression evaluator `0xc5cbcc` reads the op
+  byte at array +0x14 and passes the low 16 bits of the word at +0x18 to the flag test
+  `0xc5be34`. That test is true only when the byte at `table[index]` is 2. The table it
+  is given (`0x600a1b9c` in JOIN242/246) holds 8192 tri-state bytes. It is the universe
+  table with content defaults (4333 true, 172 false, 3687 unset), and our universe
+  overrides appear in it (3390 and 309 read 1).
+- **Content indexes are not runtime indexes.** A MOTD-list expression that reads
+  `01000525 00000000` in the tag reads `01000000 00000b1f` in memory. The 1262–1327 values
+  in the tags are resolved at load, so the JOIN229/230 overrides at those numbers tested
+  unrelated flags.
+- **Negative results.**
+  - JOIN245: character flags C1262–1327 = false. The urgent dialog still appears about 1.5 s
+    after the grant.
+  - JOIN246: a census of evaluated expressions saw no flag test of 1327 or 101. The only
+    dialog-region evaluation, by `0x48a570`, tests runtime flag `0xb1f`; that function walks
+    a fixed 8-entry list.
+  - JOIN247: universe flag 2847 (`0xb1f`) = false. No urgent dialog was seen at world entry,
+    but it still appears right after the grant, so 2847 is not that dialog's gate.
+- **Dialog-manager trace (JOIN244).** The traced methods (`0x19cd24`, `0x19cdb0`,
+  `0x19d04c`, `0x19c604`) run periodically from job dispatch. `0x19c604` (called through
+  `0x19d708` with object +0x14) fired at the grant moment, but it is a generic handle
+  callback.
+- **Live dialog (JOIN248, read-only memory scans while it is on screen).**
+  - The urgent definition record sits at `0x70080ef4`. A second record with the same title
+    and body `0x40e5f17b` sits at `0x701786cc`. Neither has pointers to it.
+  - After the grant, the urgent tag `0x80a58505` appears in the UI module's globals: at
+    `0x1b39b20` next to `0x013ef488`, and in two queue elements at `0x1b3a410` and
+    `0x1b3a4a8` (stride 0x98), each with category `0xb57b5899`.
+  - The rendered text is a UTF-16 copy in the UI heap.
+  - That block belongs to the UI dialog queue at `0x1b3a3ec`. `0x752a14` shows a dialog by
+    hash (`r6+4`, empty `0x811c9dc5` skipped) and pushes it through `0x758bf4`; `0x7529d4`
+    → `0x758a9c` is a sibling path. Investment-side callers include `0x486aa0`.
+- **Recorder.** In JOIN246 the capture monitor was already recording, so the drive's F11
+  toggle stopped it and the run has no video. `rec.ps1` now leaves an active recording
+  running and stops only a recording it started (JOIN247 onward).
+
+### JOIN249–252: the urgent dialog's real gate, fixed
+
+- **UI side (JOIN249).** The UI tick `0x753248` holds the current dialog handle at
+  manager +0x98 (`0x1b3a410`); the urgent handle is its tag `0x80a58505`. The tick
+  re-shows that dialog whenever no widget is up, until the widget reports a finished
+  state. `0x752a14` → `0x758bf4` is the show path. Dialogs are queued with
+  `0x753430(manager, handle, …)`.
+- **Producer (JOIN250).** The urgent dialog is queued by `0x86ae1c` (via `0x7536d8`),
+  which reads the MOTD selector object (global `0x1ad61d8` → `0x600c2af0`):
+  - `0x48a8d0` turns the selected {group, entry} at +0x44 into a handle (entry record +0x2c).
+  - The selector `0x48a570` walks each group's entries (stride 0x38). For each it checks a
+    context i16 at +0x18, an unlock expression at +0x1c, optional checks at +0x24/+0x26,
+    a time slot at +0x30 with a cooldown at +0x38, and a second expression at +0x2c. It then
+    selects through `0x48a2e0`.
+  - After the grant's self update the selector re-walks the groups, re-selects the urgent
+    entry and queues it 26 ms later.
+  - The `0x4867e8` and `0xc39a94` paths (launch-eligibility flag word, bit 0x400) are not
+    involved.
+- **Gates (JOIN251, read from memory).** The urgent group's entries are each a one-op
+  universe flag test, and all three flags are true in the content-default universe table:
+
+  | Entry | Dialog | Flag | Slot | Cooldown |
+  |---|---|---|---|---|
+  | `0x80a58505` | Urgent Message | 2065 | 12 | 300 s |
+  | `0x80a5e9fb` | second urgent record | 2066 | 12 | — |
+  | `0x80a5851c` | help.bungie.net Message of the Day | 2059 | 26 | 21600 s |
+
+  The live servers would have switched these flags on only for real notices. The entry
+  expressions are nested (a wrapper array of class `0x808016e4` around the op array), and
+  content addresses move between runs.
+- **Fix (JOIN252).** `--universe-flag-values 3390=1,309=1,2059=1,2065=1,2066=1`. There are
+  zero dialog enqueues for the whole run, and the video shows no dialog at world entry or
+  after the grant (Khvostov toast only). This is now the launch default
+  (`scripts/Invoke-Final124Join.ps1`).
+- **Still open.** The extra "New Mission / The Taken King: Prelude" banner still appears
+  at the Wall and after the grant. "Grab the Rifle" shows after the pickup. The selector
+  keeps re-selecting entry `0x80a5857b` (flag 2847); its role is unknown.

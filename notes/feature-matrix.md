@@ -44,7 +44,7 @@ Last full review: 2026-10-02.
 | Item definitions / catalog (6,557 items, 17 buckets, strings) | WORKING (tooling) | `scripts/dump_mission_catalog.py`, private export | - | query tool; link to item-system doc |
 | Item instances, vault, Postmaster, transfers, equip changes | NOT INVESTIGATED (01.24) | 01.00 had partial character families | - | decode 01.24 inventory families |
 | Talent grids, perks, stats, Light | NOT INVESTIGATED | - | - | - |
-| Unlock / universe flags | PARTIAL | `--self-flags`, `--universe-flag-values 3390=1,309=1` | flag meanings mostly unknown | map flags to definitions |
+| Unlock / universe flags | PARTIAL | `--self-flags`, `--universe-flag-values 3390=1,309=1,2059=1,2065=1,2066=1` | flag meanings mostly unknown | map flags to definitions |
 | Grimoire, records | NOT INVESTIGATED | - | - | - |
 | Player database (durable store) | PARTIAL | `server/player_db.py` schema v1 (accounts, characters, items, idempotent grant ledger, migrations; concurrency tests) and `bap_server.py --player-db`; legacy JSON store still the default; legacy JSON store import keeping ids; live sign-in restore from the DB (JOIN69) | inventory families not served from it; 501/701 writes not exercised live | serve inventory from it; make it the default |
 
