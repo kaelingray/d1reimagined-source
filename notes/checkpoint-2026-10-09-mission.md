@@ -120,3 +120,22 @@ magazine from elsewhere; the experiment was not kept. JOIN233's aimed-fire helpe
 (nearest moving entity from the `0x138e24` hook, position +0x40) fired 22 shots. One
 targeted Dreg stopped updating after 16 shots, but without video no kill is accepted.
 The Guardian died about every 20–30 s.
+### JOIN236–240: blocked trigger, recorder cause, aimed-fire limits
+
+- **The urgent dialog blocks progress.** In JOIN236 the walker stalled the moment the
+  grant landed, because the urgent dialog takes input. The rifle trigger (`trig_get_weapon`,
+  `0x1d:35`) therefore never reported, and Fight Through the Wall and the Fallen step never
+  ran. Dismissing the dialog right after the pickup and then walking to (409.8, −797.5) makes
+  the trigger report reliably (JOIN237–240).
+- **Recorder cause.** RPCS3 registers the game-window shortcut `gw_toggle_recording` (F11)
+  only while that window is active. Runs without video have no "Shortcut pressed" line in the
+  emulator log. Posting `WM_ACTIVATE` before F11 registers the shortcut without taking focus
+  (JOIN238–240, confirmed from the log line); those runs record continuously until the same
+  toggle stops them.
+- **Aimed fire.** Entity pointers from the `0x138e24` hook are not a reliable enemy list.
+  In JOIN238 (134 aimed shots, 8 lives, 14 death/respawn incident pairs) Dregs fought at
+  1.5–3 m and the video shows melee, muzzle flashes and repeated Guardian Down, but no kill.
+  In JOIN239–240 the Guardian is shot at the rifle before any Dreg appears in the hook stream;
+  after respawning, no enemy pursues and the helper finds only fixtures. Dreg deaths, if any,
+  produce no host incident. Killing a Dreg is still unverified; it needs a real enemy list
+  (squad member actors) or manual play.
