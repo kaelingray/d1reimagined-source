@@ -51,8 +51,8 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | 07:50–07:59 | **Blue Ghost visible ahead**, "Hang tight… we need more light" | JOIN204: the companion Ghost hovers on the platform but renders as a black silhouette with no core glow | PARTIAL (rendering) |
 | 08:00–08:10 | Ghost flies up to a panel: "hardened military systems…"; screen goes dark | `pf_104a_pwr` has no cinematic content in any build (ends at once, as in retail). JOIN204: o2_40 "Hang tight" and o2_50 "hardened military systems" play by control; the companion Ghost is a black silhouette by the fuse panel | PARTIAL (dialogue); Ghost/lights MISSING |
 | 08:10–08:16 | Lights come on; Ghost glows | JOIN209 verifies allocation and pool membership of the control/light units; no visible illumination accepted. Optional secondary prop state is currently omitted by the host | PARTIAL (activation/rendering unresolved) |
-| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN205–207 show the dialogue and waypoint; JOIN209 corrects the selection to `o_weapon`. JOIN210–211: the prop activation opens the barrier, the rifle trigger reports and Fight Through the Wall starts (JOIN211 fully automatic) | PARTIAL (no visible pickup); see [rifle evidence](rifle-pickup-0124.md) |
-| 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | Objective Fight Through the Wall starts at the rifle (JOIN210–211); fixture rifle already held, no grant or grimoire | PARTIAL (authentic grant missing) |
+| 08:17–08:20 | Rifle chest; "Here! I found a rifle! Grab it." Objective **Grab the Rifle** | JOIN205–207 show the dialogue and waypoint; JOIN209 corrects the selection to `o_weapon`. JOIN210–211: the prop activation opens the barrier, the rifle trigger reports and Fight Through the Wall starts (JOIN211 fully automatic) JOIN228: the mission announces the rifle as a world-loot drop; walking onto it is the native pickup (no button, as in the reference) | PARTIAL (rifle model on the chest not inspected); see [rifle evidence](rifle-pickup-0124.md) |
+| 08:21–08:24 | Khvostov 7G-02 pickup, grimoire card, ammo 25, objective **Fight Through the Wall** | JOIN226/228: "Khvostov 7G-02" notification, rifle in first person, R1 fires, Fight Through the Wall. Magazine 12 (not 25), no grimoire card; an urgent "servers going offline" dialog and an extra "New Mission" banner appear | PARTIAL (grant works; ammo, grimoire and extra dialogs differ) |
 
 ## Fight through the Wall → the Divide
 
@@ -100,3 +100,31 @@ item 862 in slot 11 **without a model arrangement**, so the client receives −1
 no model art, as the armour did before JOIN118. Next: read item 862's arrangement from
 the live gear asset library (JOIN191), supply it, then compare the revival's Ghost shots
 and the Breach torch against this script.
+
+## Second reference: public PS4 walkthrough (Hunter), the Breach to the loot cache
+
+A public PS4 launch-version walkthrough was reviewed frame by frame (2 s contact sheets,
+captions for timing). Times are that video's; the private reference above runs about
+1:55 earlier at this point. HUD strings are the game's own labels. The player is a
+Hunter, so the class-specific cache weapon differs from a Titan's.
+
+| Video time | Original | Ours (JOIN228) |
+| --- | --- | --- |
+| 09:10–09:22 | Coach "Push in L3 to sprint"; objective **Find a Weapon**; Ghost about finding a weapon before the Fallen | "Level Up" coach shown instead throughout (known ordering fault) |
+| 09:22–09:40 | Ghost "Quiet…"; **THE BREACH / OLD RUSSIA, EARTH**; dark stairs with a circular torch light | Area card and torch present |
+| 09:42–09:58 | Red flare; blue Ghost light flies to the panel; Ghost lines about needing light and old military systems | Lines play in order; companion Ghost light not accepted |
+| 10:00–10:10 | Screen dark, then the room's lamps come on | Barrier opens; visible lamp light not accepted |
+| 10:12 | Objective **Grab the Rifle**; the Khvostov leans on the front of the blue chest; Ghost "Here! I found a rifle…" | Objective and line present; rifle model not inspected |
+| 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire; urgent dialog and extra banner |
+| 10:18–10:20 | Objective **Fight Through the Wall**; Ghost hopes you can use it | Objective present; line not checked |
+| 10:40–10:46 | Ammo pickup (+108 reserve); Ghost "Eyes forward. Watch your tracker." | Not reached |
+| 10:58–11:04 | First enemy: a **Vandal** in the corridor; XP +55; grimoire "The Fallen" | Not reached (next target) |
+| 11:14 | Coach "Push R1 to melee" (PS4 layout) | Not reached |
+| 11:26–11:34 | Coach "Press L2 to aim"; **Dregs** in the yellow-tank room; XP +40/+60 | Not reached |
+| 11:40–11:46 | Shock-blade Dreg; Ghost "There's more ahead! Keep it up!" | Not reached |
+| 11:54–12:00 | Loot cache, prompt "Collect Loot"; Ghost about the cache; class special weapon (Calcutta-LR2 sniper for this Hunter), +51 glimmer, grimoire "Special Weapons: Sniper Rifles" | Not reached |
+
+Differences to fix, in order of play: the coach sequence (sprint → melee → aim) instead
+of the persistent Level Up tip; no urgent dialog or extra mission banner; the grimoire
+card on pickup; magazine 25 / reserve 184; then the Fight Through the Wall enemies,
+ammo pickups and the loot cache.
