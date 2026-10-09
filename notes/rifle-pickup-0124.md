@@ -130,3 +130,42 @@ is created, or a successful grant. The run closes at **22:05:38.946 UTC**;
 independent verification confirms all nine exact owned processes closed and all
 three baseline configuration hashes restored. Next: recover the action that
 records the rifle's nonce/position, then verify the native claim and durable grant.
+
+## JOIN221–226: native pickup and service-601 grant (synthetic event)
+
+JOIN221–223 traced the explicit selector-2 rifle event from queue submission to a
+live claim ([incident diagnostics](incident-diagnostics.md#join223-the-rifle-spawns-in-the-breach-and-the-client-claims-it-service-601)).
+Two body fields decide it: `0x80800e70`+40 must hold the activity player ID (1),
+and the world ID must be the Breach's (3). With both set, the loot manager
+allocates a unit for the pending Khvostov record. Walking onto
+`(410.644, -794.385)` sends one service-601 request carrying the record's source
+kind (3) and nonce.
+
+The stand-in now answers 601 (`bap_server.py`). A claim that matches a pending
+self record by source kind and full nonce clears that slot, equips the item with
+its art record values (Khvostov: slot 6, appearance 19, arrangement 2364, dyes
+5/6036 and 6/6037), and records one durable instance when the player database is
+in use (idempotency key per nonce). It then publishes the next self and peer
+(family 0) versions. The reply echoes the nonce. Unmatched claims receive the same
+reply without a grant.
+
+| Run | Server change | Observed |
+| --- | --- | --- |
+| JOIN223 | none (default reply) | claim sent once; pending record and unit remain; no grant |
+| JOIN224 | grant, self update only | "Khvostov 7G-02" acquisition notification; the client drops the pending record; no weapon or ammo counter visible afterwards |
+| JOIN225 | grant, self and peer updates | same claim/grant/update sequence; no recording was produced |
+| JOIN226 | grant, self and peer updates | notification, then the rifle **in first person with crosshair and ammo counter**; R1 fires (muzzle flash, holographic sight; counter 12 → 5); Fight Through the Wall is shown |
+
+Fight Through the Wall begins after the rifle trigger, as before. The urgent
+"servers will go offline" dialog appears again right after the self update and
+must be dismissed. The extra "New Mission: The Taken King: Prelude" banner is also
+shown. The magazine is still 12, not 25. Whether the rifle model is visible on the
+chest before pickup is not established: it is dark and outside the recorded framing.
+
+Limits: the pending record and the event are still a private synthetic fixture
+(`--character-overlay` and the control file), not original reward authority. The
+art values are a stand-in table for one item. JOIN224 versus JOIN226 suggests the
+peer update is needed for the in-world weapon, but JOIN224 was not inspected at
+the same moment. Next: create the pending starter reward on the server, send the
+event from the mission script on Breach entry, and start unarmed without private
+inputs.

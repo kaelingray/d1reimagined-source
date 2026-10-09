@@ -167,3 +167,10 @@ native queue submission with its intended nonce and world position decoded.
 The ring remains empty, with no loot callback or service-601 entry. Queue entry
 is not a committed or consumed action, and the original reward/event semantics
 remain unverified. See [the decoding result and next boundary](incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
+
+JOIN223–226 observe the live service-601 claim and answer it. The request
+`{source kind, {nonce key, nonce id}, word}` matches the pending self record; the
+stand-in clears that record, equips the item and publishes self and peer
+updates. The client queues 601 without a response callback, so the grant is
+carried by the state update rather than the reply. See
+[the rifle pickup record](rifle-pickup-0124.md#join221226-native-pickup-and-service-601-grant-synthetic-event).

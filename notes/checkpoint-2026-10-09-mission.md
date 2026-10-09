@@ -65,3 +65,13 @@ verified closure.
 Next: grant the claimed item through 601 and a self update, then move the event
 into the mission script so the rifle appears at the chest in the reference
 order.
+
+## JOIN224–226: the claimed rifle is granted
+
+The stand-in now answers service 601. A matching claim clears the pending record,
+equips the Khvostov with its art values, and publishes self and peer updates. In
+JOIN226 the acquisition notification appears, then the rifle is in first person
+with crosshair and ammo counter, and R1 fires. The magazine still reads 12, and the
+urgent dialog and extra mission banner still appear. The event and pending record
+remain a private synthetic fixture. See the
+[rifle pickup record](rifle-pickup-0124.md#join221226-native-pickup-and-service-601-grant-synthetic-event).

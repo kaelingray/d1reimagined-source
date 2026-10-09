@@ -370,6 +370,55 @@ def character_extras(gear=None, overlay=None, layout=None):
     return extras
 
 
+# Service 601 claims a pending world-loot reward (JOIN223: walking onto the spawned rifle sends
+# {0: source kind, 8: {0: {0: nonce key, 8: nonce id}, 16: word}}). The client queues it without
+# a response callback, so the grant reaches it as a self update: the claimed pending slot is
+# cleared and the item equipped. Pending-loot state 0x80801701 sits at self +0x3bd0 in 01.24;
+# its 64 slots (0x80801829, stride 0x38) start at +8.
+LOOT_CLAIM_SERVICE = 601
+PENDING_LOOT_0124 = 0x3BD0
+PENDING_LOOT_SLOT = 0x38
+# Items the stand-in can grant from world loot, by item index: equipment slot and art.
+# Khvostov 7G-02: art record appearance 19, arrangement 2364, default dyes (JOIN216 renders it).
+WORLD_LOOT_GEAR_0124 = {3598: {"slot": 6, "appearance": 19, "arrangement": 2364,
+                               "dyes": [(5, 6036), (6, 6037)]}}
+
+
+def loot_claim_request(schema, payload):
+    """Decode a service-601 request body (after the service ID) to
+    (source kind, nonce key, nonce id, word)."""
+    values = investment.decode(schema, int(schema["services"][str(LOOT_CLAIM_SERVICE)][0], 16), payload)
+    nonce = values.get(8, {})
+    record = nonce.get(0, {})
+    return values.get(0, 0), record.get(0, 0), record.get(8, 0), nonce.get(16, 0)
+
+
+def claim_pending_loot(overlay, claim):
+    """Remove the self pending-loot slot that a 601 claim names. Returns (overlay, item index),
+    or (overlay, None) unchanged when no slot holds that source kind and nonce."""
+    kind, key, nonce_id, _ = claim
+    state = ((overlay or {}).get("self") or {}).get(PENDING_LOOT_0124) or {}
+    for offset, slot in sorted((state.get(8) or {}).items()):
+        record = (slot.get(16) or {}).get(0) or {}
+        if (slot.get(0, -1) >= 0 and slot.get(8) == kind
+                and record.get(0) == key and record.get(8) == nonce_id):
+            slots = {**state[8], offset: {0: -1}}
+            self_values = {**overlay["self"], PENDING_LOOT_0124: {**state, 8: slots}}
+            return {**overlay, "self": self_values}, slot[0]
+    return overlay, None
+
+
+def world_loot_gear(gear, item, instance_id=None):
+    """`gear` with a granted world-loot item equipped in its slot; None if the item is unknown."""
+    art = WORLD_LOOT_GEAR_0124.get(item)
+    if art is None:
+        return None
+    slot = art["slot"]
+    entry = {"item": item, "id": instance_id or 0x100 + slot, "dyes": list(art["dyes"]),
+             "appearance": art["appearance"], "arrangement": art["arrangement"]}
+    return {**(gear or {}), slot: entry}
+
+
 def character_item_objects(schema, character_id, profile):
     """Individual items for a character snapshot, using its merged inventory.
 
@@ -1747,6 +1796,7 @@ def handle(conn, peer, args):
     # one database handle per connection (thread); state is scoped by account/character ids
     player_db = PlayerDB(args.player_db) if getattr(args, "player_db", None) else None
     self_version = 1
+    peer_versions = {}  # family-0 subscription root -> last version pushed
     heartbeat_at = None  # next activity-host heartbeat push (--ah-heartbeat), set by the join
     sim_repeat = None  # simulation packet resent with each heartbeat (--ah-roster)
     sim_build = None  # (peer, slot, generation, objects, game-mode position, join time) for rebuilds
@@ -1784,6 +1834,11 @@ def handle(conn, peer, args):
     client_slice_fields = {}  # type 21 carries deltas; retain explicit fields for this connection
     confirm_repeat = None  # boot list resent with each heartbeat (--ah-boot)
     bubble_resets = tuple(getattr(args, "ah_bubble_reset", ()))  # generations belong to this connection
+    # character state this connection publishes; a service-601 grant changes it (claimed pending
+    # slot cleared, item equipped)
+    loot_overlay = getattr(args, "character_overlay", None)
+    loot_gear = getattr(args, "character_gear", None)
+    character_extras_now = getattr(args, "character_extras", None)
 
     def make_sim_packet(peer, slot, generation, **values):
         return sim_packet(args.activity_schema, peer, slot, generation,
@@ -1805,12 +1860,25 @@ def handle(conn, peer, args):
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
             version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags,
-            extras=args.character_extras, account_data=account_data))
+            extras=character_extras_now, account_data=account_data))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
             f"{character_id:#x}, active {active_id:#x}" if active_id else
             f"[{tag}] pushed self v{self_version} ({reason}), no active character")
+    def push_peer(number, reason):
+        # Deltas for the peer subscriptions (family 0), whose character summary carries the
+        # equipment others (and the in-world character) see; next version, like push_self.
+        if not args.peer_family:
+            return
+        for root in peer_versions:
+            peer_versions[root] += 1
+            push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
+                args.schema, FAMILY_TYPES["peer"], root, character_id, character_profile,
+                version=peer_versions[root], flags=0, peer=True, extras=character_extras_now))
+            conn.sendall(push)
+            folder.joinpath(f"{number:03}-server-peer-{reason}.bin").write_bytes(push)
+            log(f"[{tag}] pushed peer v{peer_versions[root]} root {root:#x} ({reason})")
     try:
         for number in itertools.count(1):
             head = exact(conn, 6)
@@ -1906,12 +1974,40 @@ def handle(conn, peer, args):
                 family_type, root = family_fetch_request(payload)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
                     family_type, root, blob=family_blob(args.schema, family_type, root, character_id,
-                                                       character_profile, extras=args.character_extras)))
+                                                       character_profile, extras=character_extras_now)))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
                 log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, "
                     f"character {character_id:#x}" if character_id is not None else
                     f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, no character")
+            elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
+                  and int.from_bytes(payload[:2], "big") == LOOT_CLAIM_SERVICE and args.schema):
+                claim = loot_claim_request(args.schema, payload[2:])
+                overlay, item = claim_pending_loot(loot_overlay, claim)
+                gear = world_loot_gear(loot_gear, item) if item is not None else None
+                if gear is not None and player_db is not None and account_id is not None:
+                    # one durable instance per claimed nonce; a repeated claim replays it
+                    instance, = player_db.grant_items(
+                        account_id, character_id, [{"item_hash": item, "location": "equipped",
+                                                    "equip_slot": WORLD_LOOT_GEAR_0124[item]["slot"]}],
+                        "world-loot", f"601:{character_id:#x}:{claim[1]}:{claim[2]:#x}")
+                    gear = world_loot_gear(loot_gear, item, instance)
+                values = {8: {0: {0: claim[1], 8: claim[2]}, 16: claim[3]}}
+                reply = encrypted_frame(tx, WS_RSP, msg_id, 200,
+                                        default_ws_response(args.schema, LOOT_CLAIM_SERVICE, values))
+                conn.sendall(reply)
+                folder.joinpath(f"{number:03}-server-ws-601.bin").write_bytes(reply)
+                if gear is None:
+                    log(f"[{tag}] loot claim: kind {claim[0]} nonce {claim[1]}:{claim[2]:#x} "
+                        f"matches no grantable pending record (item {item}); replied without a grant")
+                else:
+                    loot_overlay, loot_gear = overlay, gear
+                    character_extras_now = character_extras(loot_gear, loot_overlay,
+                                                            character_layout(args.schema))
+                    log(f"[{tag}] loot claim: kind {claim[0]} nonce {claim[1]}:{claim[2]:#x} "
+                        f"granted item {item} (slot {WORLD_LOOT_GEAR_0124[item]['slot']})")
+                    push_self(number, "after-601")
+                    push_peer(number, "after-601")
             elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
                   and int.from_bytes(payload[:2], "big") in args.ws_no_reply):
                 # Experiment switch: leaving 701 unanswered shows "Contacting Destiny Servers"
@@ -2383,10 +2479,12 @@ def handle(conn, peer, args):
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
                                                             self_flags=args.self_flags, peer=args.peer_family,
-                                                            extras=args.character_extras,
+                                                            extras=character_extras_now,
                                                             account_data=account_data))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
+                    if family_type == FAMILY_TYPES["peer"]:
+                        peer_versions[root] = 1
                     log(f"[{tag}] pushed family type {family_type} root {root:#x} "
                         f"({len(push)} bytes, root object {'yes' if args.schema and family_type in ROOT_OBJECTS else 'no'})")
             if msg_type == START_REQ and kind == 2:

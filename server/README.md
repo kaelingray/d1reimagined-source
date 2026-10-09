@@ -24,6 +24,12 @@ and Ghost dye 15/2493, which shows the authored shell in the revival (JOIN201). 
 tests and 165 script tests pass; serialization and native lookup success are narrower
 than visual or end-to-end mission acceptance.
 
+Service 601 (world-loot claim) is answered: a claim matching a pending self record by
+source kind and nonce clears that record, equips the item from a small art table (the
+Khvostov 7G-02 so far), records one durable instance per nonce in the player database, and
+publishes the next self and peer versions. In the opening mission this puts the rifle in
+first person after the native pickup (JOIN226), using a private synthetic pending record.
+
 Listeners bind only to loopback addresses. The DNS sinkhole answers locally and never
 forwards upstream. Private CA material, session keys, stores, schemas and captured
 requests/logs belong in `local/SIGNON_LOCAL` or the runtime selected by `D1_LOCAL`.
