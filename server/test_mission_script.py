@@ -104,7 +104,7 @@ class GhostAuthoredMember(unittest.TestCase):
                               "a_guardian_rises.json").read_text(encoding="utf-8"))
         from test_cinematic_completion import add_incident_schema
         _, reactions = bap.expand_mission(mission, add_incident_schema(schema))
-        ghost = [rule for rule in reactions if not isinstance(rule[3], (bap.TeleportReaction, bap.BubbleResetReaction)) and rule[3][0] ==
+        ghost = [rule for rule in reactions if not isinstance(rule[3], (bap.TeleportReaction, bap.BubbleResetReaction, bap.LootDropReaction)) and rule[3][0] ==
                  {0: 0xFC0E45A3, 4: 2, 6: 95}]
         self.assertEqual(len(ghost), 1)
         rule = ghost[0]
@@ -267,7 +267,7 @@ class BreachDialogueRules(unittest.TestCase):
         self.assertGreater(arm["delay"], reset["delay"])
         chain = [s for s in self.mission["steps"]
                  if s.get("on") == {"type": 18, "object": "trig_ghostlight"}]
-        order = sorted((s.get("delay", 0), name) for s in chain for name in s["set"])
+        order = sorted((s.get("delay", 0), name) for s in chain for name in s.get("set", {}))
         names = [name for _, name in order]
         self.assertEqual(names[:2], ["seq_d_o2_40", "trig_ghostlight"])
         self.assertLess(names.index("seq_d_o2_50"), names.index("o_breach_doors_lights"))
@@ -281,12 +281,17 @@ class BreachDialogueRules(unittest.TestCase):
         self.assertEqual(rifle["on"], {"type": 18, "object": "trig_ghostlight"})
         self.assertEqual(rifle["delay"], 30)
         self.assertIn("seq_d_o2_80", rifle["set"])
+        # JOIN221-226: the starter rifle is announced as a world-loot drop with the weapon object.
+        (drop,) = [s for s in chain if "loot_drop" in s]
+        self.assertEqual((drop["loot_drop"], drop["delay"]), ("starter_rifle", rifle["delay"]))
+        self.assertEqual(self.mission["loot"]["starter_rifle"],
+                         {"item": 3598, "position": [410.644, -794.385, 17.723], "world": 3})
         created = {"0": 1, "4": True, "8": {"0": 0x811C9DC5, "4": -1, "6": -1}}
         props = ("o_breach_control", "o_breach_doors_lights", "o_breach_gating_lights")
-        (create,) = [s for s in chain if set(props) <= set(s["set"]) and "16" not in s["set"][props[0]]]
-        (activate,) = [s for s in chain if set(props) <= set(s["set"]) and "16" in s["set"][props[0]]]
+        (create,) = [s for s in chain if set(props) <= set(s.get("set", {})) and "16" not in s["set"][props[0]]]
+        (activate,) = [s for s in chain if set(props) <= set(s.get("set", {})) and "16" in s["set"][props[0]]]
         self.assertGreater(activate["delay"], create["delay"])
-        self.assertLess(activate["delay"], [s["delay"] for s in chain if "seq_d_o2_70" in s["set"]][0])
+        self.assertLess(activate["delay"], [s["delay"] for s in chain if "seq_d_o2_70" in s.get("set", {})][0])
         # JOIN210: channels 0-2 at (1, 1, 1.0) open the barrier to the rifle.
         channels = {"0": 1, "4": 1, "8": 1.0, "12": 1, "16": 1, "20": 1.0, "24": 1, "28": 1, "32": 1.0}
         for name in props:

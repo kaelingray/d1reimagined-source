@@ -22,7 +22,7 @@ folders may still have their earlier names; use explicit paths for imported runt
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The current backend and diagnostic changes pass **217 server tests**, **176 script tests**
+The current backend and diagnostic changes pass **223 server tests**, **176 script tests**
 and the actual final-schema preflight (1 timed / 58 reactive changes).
 The [rifle investigation](notes/rifle-pickup-0124.md) corrects the cue's object
 selection: the previous chest was about 137 units from the marker; `o_weapon`
@@ -42,7 +42,8 @@ recipient player ID and the Breach world set, the handler records the nonce, the
 unit is allocated, and walking onto it sends a live service-601 claim. The stand-in now
 grants a matching claim (JOIN224–226): the acquisition notification appears, the pending
 record clears, and after the self and peer updates the Khvostov is in first person and
-fires. The event and pending record are still a private synthetic fixture; see the
+fires. Since JOIN228 the mission script announces the drop itself and the stand-in owns
+the pending record (`--world-loot`), with no private inputs; see the
 [rifle pickup record](notes/rifle-pickup-0124.md#join221226-native-pickup-and-service-601-grant-synthetic-event). See [incident diagnostics](notes/incident-diagnostics.md#join220-synthetic-body-decodes-queue-completion-unverified).
 Visible room illumination and companion
 Ghost glow remain unaccepted.

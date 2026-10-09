@@ -14,6 +14,12 @@ class BubbleResetReaction:
     resets: tuple
 
 
+@dataclass(frozen=True)
+class LootDropReaction:
+    """Announce a mission "loot" drop to the client, e.g. the starter rifle at the Breach chest."""
+    name: str
+
+
 def reaction_scope(step):
     """Return (lane, phase), or None for the original independent-rule behavior.
 

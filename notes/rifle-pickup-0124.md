@@ -169,3 +169,26 @@ peer update is needed for the in-world weapon, but JOIN224 was not inspected at
 the same moment. Next: create the pending starter reward on the server, send the
 event from the mission script on Breach entry, and start unarmed without private
 inputs.
+
+## JOIN227–228: the mission announces the rifle; no private inputs
+
+The mission script now owns the drop. `missions/a_guardian_rises.json` has a
+`loot` table (`starter_rifle`: item 3598 at the chest, world 3) and a `loot_drop`
+step 30 s after the light-up trigger, alongside `o_weapon`. The activity host
+encodes the selector-2 body itself: recipient 1, the drop's world and position,
+and a nonce derived from the character ID and loot name. The sign-in stand-in,
+given the same mission with `--world-loot`, publishes the matching pending
+record until it is claimed (or the item is already owned in the player
+database). Neither the private overlay nor the control file is used.
+
+JOIN227 exposed a host crash. The reaction-match log line treated the loot step as
+an object change, raised `TypeError` and ended the activity-host connection when the
+trigger matched. The log line now describes loot drops. JOIN228 runs the fixed
+code: the drop is sent at +30 s, the unit is allocated in the Breach, walking
+onto it sends the 601 claim, and the grant is published. The recording shows the
+crosshair and ammo counter afterwards; R1 fires (counter 12 → 5). One difference
+remains from the private-overlay runs: the client kept the granted pending record
+because the update omitted the pending state. The stand-in now publishes the
+cleared slots explicitly (unit test only; not yet observed live). JOIN227 closes at
+09:49:19.8 UTC and JOIN228 at 10:08:16.8 UTC on 9 October, each with independently
+verified closure.

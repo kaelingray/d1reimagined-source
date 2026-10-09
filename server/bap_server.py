@@ -38,8 +38,8 @@ which deserializes as an all-zero response structure and no blob.
 """
 
 import argparse
-from mission_script import (BubbleResetReaction, ReactionQueue, ReactionRule, TeleportReaction,
-                            reaction_scope)
+from mission_script import (BubbleResetReaction, LootDropReaction, ReactionQueue, ReactionRule,
+                            TeleportReaction, reaction_scope)
 from incident_codec import INCIDENT_HANDLE, decode_incident, encode_incident, validate_schema as validate_incident_schema
 import datetime
 import hashlib
@@ -55,6 +55,7 @@ import struct
 import sys
 import threading
 import time
+import zlib
 from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
@@ -406,6 +407,75 @@ def claim_pending_loot(overlay, claim):
             self_values = {**overlay["self"], PENDING_LOOT_0124: {**state, 8: slots}}
             return {**overlay, "self": self_values}, slot[0]
     return overlay, None
+
+
+# The host announces a world-loot drop with incident catalog index 1504 (hash 0x7a0fd954,
+# selector 2, body 0x80800cb6). Its handler 0x5aede4 records the drop's nonce and position for
+# the loot manager, which spawns the pending record's item there. JOIN222/223: 0x80800e70+40
+# (body +0x40) names the recipient by the local player's activity index (1 for the single local
+# player) and +112 must be the drop's world (3 in The Breach).
+LOOT_DROP_INCIDENT = 1504
+LOOT_DROP_BODY = 0x80800CB6
+
+
+def mission_loot(mission):
+    """A mission's "loot" table: {NAME: {"item": INDEX, "position": [x, y, z], "world": ID,
+    "source_kind": N (default 3, a world spawn), "recipient": N (default 1)}}, validated."""
+    table = {}
+    for name, entry in (mission.get("loot") or {}).items():
+        if not isinstance(entry, dict) or set(entry) - {"item", "position", "world", "source_kind",
+                                                       "recipient"}:
+            raise ValueError(f"loot {name!r}: unknown or missing fields")
+        if entry.get("item") not in WORLD_LOOT_GEAR_0124:
+            raise ValueError(f"loot {name!r}: item {entry.get('item')} has no grant definition")
+        position = entry.get("position")
+        if (not isinstance(position, list) or len(position) != 3
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in position)):
+            raise ValueError(f"loot {name!r}: position must be three numbers")
+        values = {k: entry.get(k, default) for k, default in
+                  (("world", None), ("source_kind", 3), ("recipient", 1))}
+        if not all(type(v) is int and v >= 0 for v in values.values()):
+            raise ValueError(f"loot {name!r}: world, source_kind and recipient must be nonnegative integers")
+        table[name] = {"item": entry["item"], "position": tuple(float(v) for v in position), **values}
+    return table
+
+
+def loot_nonce(character_id, name):
+    """(key, id) of a mission loot drop for one character, the same in every connection and process:
+    the character's top 16 bits and a CRC of the loot name."""
+    return 1, (character_id & 0xFFFF << 48) | zlib.crc32(name.encode())
+
+
+def loot_drop_body(schema, loot, character_id, name):
+    """Selector-2 body announcing `loot` (one mission_loot() entry) to its recipient."""
+    key, nonce = loot_nonce(character_id, name)
+    return investment.encode(schema, LOOT_DROP_BODY, {
+        0: {0: 1, 8: {0: key, 8: nonce}}, 24: {0: None, 40: loot["recipient"]},
+        96: list(loot["position"]), 112: loot["world"]})
+
+
+def pending_loot_record(loot, character_id, name):
+    """The self pending-loot slot (0x80801829) that a loot drop's claim must match."""
+    key, nonce = loot_nonce(character_id, name)
+    return {0: loot["item"], 4: 1, 8: loot["source_kind"], 16: {0: {0: key, 8: nonce}, 16: 1}}
+
+
+def add_pending_loot(overlay, records, publish_empty=False):
+    """`overlay` with `records` placed in free pending-loot slots (64, as in 0x80804671).
+    `publish_empty` writes the slots even without records: JOIN228's client kept a granted
+    record when the self update left the pending state out, but clears explicitly empty slots."""
+    if not records and not publish_empty:
+        return overlay
+    overlay = overlay or {}
+    self_values = overlay.get("self") or {}
+    state = self_values.get(PENDING_LOOT_0124) or {0: 1}
+    slots = {i * PENDING_LOOT_SLOT: {0: -1} for i in range(64)}
+    slots.update(state.get(8) or {})
+    free = [offset for offset, slot in sorted(slots.items()) if slot.get(0, -1) < 0]
+    if len(records) > len(free):
+        raise ValueError("no free pending-loot slot")
+    slots.update(zip(free, records))
+    return {**overlay, "self": {**self_values, PENDING_LOOT_0124: {**state, 8: slots}}}
 
 
 def world_loot_gear(gear, item, instance_id=None):
@@ -1222,8 +1292,8 @@ def expand_mission(mission, schema):
             ident, state_type, _, has_b = heads[name]
             changes.append((ident, state_type, mission_offset_keys(values, schema, state_type), has_b))
         if "at" in step:
-            if "bubble_reset" in step:
-                raise ValueError(f"mission step {number}: a bubble reset needs an \"on\" trigger")
+            if "bubble_reset" in step or "loot_drop" in step:
+                raise ValueError(f"mission step {number}: a bubble reset or loot drop needs an \"on\" trigger")
             timed += [(float(step["at"]), change) for change in changes]
             continue
         if "teleport" in step:
@@ -1237,6 +1307,13 @@ def expand_mission(mission, schema):
             if changes:
                 raise ValueError(f"mission step {number}: separate bubble resets and other changes")
             changes.append(BubbleResetReaction(bubble_reset_spec(step["bubble_reset"])))
+        if "loot_drop" in step:
+            # Reactive only, like a bubble reset: the drop's world must already be loaded.
+            if changes:
+                raise ValueError(f"mission step {number}: separate loot drops and other changes")
+            if step["loot_drop"] not in mission_loot(mission):
+                raise ValueError(f"mission step {number}: unknown loot {step['loot_drop']!r}")
+            changes.append(LootDropReaction(step["loot_drop"]))
         on = step.get("on")
         if not on or "type" not in on:  # "type": "any" matches every client message type
             raise ValueError(f"mission step {number}: needs \"at\" or \"on\": {{\"type\": ...}}")
@@ -1368,7 +1445,7 @@ def validate_mission_states(schema, timed, reactive):
             raise ValueError(f"{path}: encoded value changed from {expected} to {actual}")
 
     for spec in [s for _, s in timed] + [entry[3] for entry in reactive]:
-        if isinstance(spec, (TeleportReaction, BubbleResetReaction)):
+        if isinstance(spec, (TeleportReaction, BubbleResetReaction, LootDropReaction)):
             continue
         ident, state_type, values, _ = resolve_spec(spec, context)
         path = f"{ident[0]:#x}/{ident[4]:#x}/{ident[6]} state {state_type:#x}"
@@ -1839,6 +1916,24 @@ def handle(conn, peer, args):
     loot_overlay = getattr(args, "character_overlay", None)
     loot_gear = getattr(args, "character_gear", None)
     character_extras_now = getattr(args, "character_extras", None)
+    granted_nonces = set()  # (key, id) of world loot claimed on this connection
+
+    def pending_overlay():
+        # The private overlay plus the character's --world-loot drops not yet granted (claimed
+        # here, or already owned in the player database).
+        world = getattr(args, "world_loot", None)
+        if not world or character_id is None:
+            return loot_overlay
+        owned = ({item["item_hash"] for item in player_db.items(account_id, character_id)}
+                 if player_db is not None and account_id is not None else set())
+        records = [pending_loot_record(loot, character_id, name) for name, loot in sorted(world.items())
+                   if loot_nonce(character_id, name) not in granted_nonces and loot["item"] not in owned]
+        return add_pending_loot(loot_overlay, records, publish_empty=True)
+
+    def published_extras():
+        if not getattr(args, "world_loot", None) or character_id is None:
+            return character_extras_now
+        return character_extras(loot_gear, pending_overlay(), character_layout(args.schema))
 
     def make_sim_packet(peer, slot, generation, **values):
         return sim_packet(args.activity_schema, peer, slot, generation,
@@ -1860,7 +1955,7 @@ def handle(conn, peer, args):
         push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
             args.schema, 4, account_id, character_id, character_profile,
             version=self_version, flags=0, active_id=active_id, self_flags=args.self_flags,
-            extras=character_extras_now, account_data=account_data))
+            extras=published_extras(), account_data=account_data))
         conn.sendall(push)
         folder.joinpath(f"{number:03}-server-self-{reason}.bin").write_bytes(push)
         log(f"[{tag}] pushed self v{self_version} ({reason}): character "
@@ -1875,7 +1970,7 @@ def handle(conn, peer, args):
             peer_versions[root] += 1
             push = encrypted_frame_kind(tx, QZ_UPDATE, 0, family_blob(
                 args.schema, FAMILY_TYPES["peer"], root, character_id, character_profile,
-                version=peer_versions[root], flags=0, peer=True, extras=character_extras_now))
+                version=peer_versions[root], flags=0, peer=True, extras=published_extras()))
             conn.sendall(push)
             folder.joinpath(f"{number:03}-server-peer-{reason}.bin").write_bytes(push)
             log(f"[{tag}] pushed peer v{peer_versions[root]} root {root:#x} ({reason})")
@@ -1974,7 +2069,7 @@ def handle(conn, peer, args):
                 family_type, root = family_fetch_request(payload)
                 reply = encrypted_frame(tx, WS_RSP, msg_id, 200, family_fetch_response(
                     family_type, root, blob=family_blob(args.schema, family_type, root, character_id,
-                                                       character_profile, extras=character_extras_now)))
+                                                       character_profile, extras=published_extras())))
                 conn.sendall(reply)
                 folder.joinpath(f"{number:03}-server-ws-206.bin").write_bytes(reply)
                 log(f"[{tag}] sent family fetch rsp: type {family_type} root {root:#x}, "
@@ -1983,7 +2078,7 @@ def handle(conn, peer, args):
             elif (kind == 1 and msg_type == WS_REQ and len(payload) >= 2 and args.ws_signin
                   and int.from_bytes(payload[:2], "big") == LOOT_CLAIM_SERVICE and args.schema):
                 claim = loot_claim_request(args.schema, payload[2:])
-                overlay, item = claim_pending_loot(loot_overlay, claim)
+                _, item = claim_pending_loot(pending_overlay(), claim)
                 gear = world_loot_gear(loot_gear, item) if item is not None else None
                 if gear is not None and player_db is not None and account_id is not None:
                     # one durable instance per claimed nonce; a repeated claim replays it
@@ -2001,7 +2096,8 @@ def handle(conn, peer, args):
                     log(f"[{tag}] loot claim: kind {claim[0]} nonce {claim[1]}:{claim[2]:#x} "
                         f"matches no grantable pending record (item {item}); replied without a grant")
                 else:
-                    loot_overlay, loot_gear = overlay, gear
+                    granted_nonces.add(claim[1:3])
+                    loot_overlay, loot_gear = claim_pending_loot(loot_overlay, claim)[0], gear
                     character_extras_now = character_extras(loot_gear, loot_overlay,
                                                             character_layout(args.schema))
                     log(f"[{tag}] loot claim: kind {claim[0]} nonce {claim[1]}:{claim[2]:#x} "
@@ -2194,6 +2290,7 @@ def handle(conn, peer, args):
                             log(f"[{tag}] --ah-on rule {rule_index}: cancelled {cancelled} obsolete phase changes")
                         action = (f"teleport {spec.zone[0]}" if isinstance(spec, TeleportReaction) else
                                   f"bubble reset {spec.resets}" if isinstance(spec, BubbleResetReaction) else
+                                  f"loot drop {spec.name}" if isinstance(spec, LootDropReaction) else
                                   f"object {spec[0][0]:#x}:{spec[0][4]:#x}:{spec[0][6]}")
                         log(f"[{tag}] --ah-on rule {rule_index} matched type {ah_type}: "
                             f"{action} in {delay:g} s")
@@ -2395,6 +2492,19 @@ def handle(conn, peer, args):
                             teleport_plan.insert(0, (entry[1].zone, 0.0))
                             log(f"[{tag}] teleport to slice set {entry[1].zone[0]} queued ({entry[2]})")
                             continue
+                        if isinstance(entry[1], LootDropReaction):
+                            name = entry[1].name
+                            if not args.ah_sim_player:
+                                log(f"[{tag}] mission: loot drop {name} needs --ah-sim-player (owner)")
+                                continue
+                            body = loot_drop_body(args.activity_schema, args.mission_loot[name],
+                                                  args.ah_sim_player[2], name)
+                            incident = encode_incident(args.activity_schema, [LOOT_DROP_INCIDENT], body)
+                            conn.sendall(encrypted_frame_kind(tx, BC_NOT, 0,
+                                         bc_notification(AH_INCIDENT, incident, host_id)))
+                            log(f"[{tag}] mission: loot drop {name} item {args.mission_loot[name]['item']} "
+                                f"nonce {loot_nonce(args.ah_sim_player[2], name)[1]:#x} ({entry[2]})")
+                            continue
                         if isinstance(entry[1], BubbleResetReaction):
                             try:
                                 bubble_resets = update_bubble_resets(bubble_resets, entry[1].resets, slot_)
@@ -2479,7 +2589,7 @@ def handle(conn, peer, args):
                                                 family_blob(args.schema, family_type, root, character_id,
                                                             character_profile, active_id=active_id,
                                                             self_flags=args.self_flags, peer=args.peer_family,
-                                                            extras=character_extras_now,
+                                                            extras=published_extras(),
                                                             account_data=account_data))
                     conn.sendall(push)
                     folder.joinpath(f"{number:03}-server-qz-update.bin").write_bytes(push)
@@ -2599,6 +2709,9 @@ def parse_args(argv=None):
                     metavar="JSON|@FILE",
                     help='raw field values merged into the character objects: {"peer"|"select"|"self": '
                          '{offset: value}} (peer = 0x808017fd, select = 0x80801954, self = 0x80801714)')
+    ap.add_argument("--world-loot", type=Path, metavar="MISSION",
+                    help='a mission JSON whose "loot" drops the signed-in character has pending until '
+                         'claimed (service 601); the activity host announces them with "loot_drop" steps')
     ap.add_argument("--self-flags",
                     help='account flags: "2" (all), "2@A0-511,B0-255" (ranges), layered with ";" '
                          '(e.g. "1;2@B0": all false, B0 true)')
@@ -2763,9 +2876,22 @@ def parse_args(argv=None):
     args.ah_teleports = [args.ah_teleport] if args.ah_teleport else []
     args.mission_clock = "world"
     args.mission_objects = {}
+    args.mission_loot = {}
+    if args.world_loot:
+        try:
+            args.world_loot = mission_loot(json.loads(args.world_loot.read_text(encoding="utf-8")))
+        except ValueError as exc:
+            ap.error(f"--world-loot: {exc}")
     if args.ah_mission:
         if not args.activity_schema:
             ap.error("--ah-mission needs the activity schema (--activity-schema)")
+        try:
+            args.mission_loot = mission_loot(json.loads(args.ah_mission.read_text(encoding="utf-8")))
+            for name, loot in args.mission_loot.items():
+                encode_incident(args.activity_schema, [LOOT_DROP_INCIDENT],
+                                loot_drop_body(args.activity_schema, loot, 0, name))
+        except (ValueError, KeyError) as exc:
+            ap.error(f"--ah-mission loot: {exc}")
         timed, reactive = expand_mission(json.loads(args.ah_mission.read_text(encoding="utf-8")),
                                          args.activity_schema)
         try:

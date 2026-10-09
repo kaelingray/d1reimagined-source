@@ -75,3 +75,6 @@ with crosshair and ammo counter, and R1 fires. The magazine still reads 12, and 
 urgent dialog and extra mission banner still appear. The event and pending record
 remain a private synthetic fixture. See the
 [rifle pickup record](rifle-pickup-0124.md#join221226-native-pickup-and-service-601-grant-synthetic-event).
+Since JOIN228 the drop comes from the mission script: a `loot` table and a
+`loot_drop` step make the activity host send the event, and `--world-loot`
+(the same mission) gives the signed-in character the matching pending record.

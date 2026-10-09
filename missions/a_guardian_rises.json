@@ -36,7 +36,8 @@
     "Normal/Nav Mode objective text, complete revival shots/Ghost and stable Breach progression remain incomplete.",
     "JOIN205-207: the light-up start trigger (armed 35 s after current 24, after the bubble-3 reset) plays the reference order: o2_40 Hang tight, +10 s o2_50 hardened military systems, +22 s Breach control/door/gating light props created, +25 s o2_70 They're coming for us, +30 s o2_80 found a rifle. Visible lamp lighting remains unverified.",
     "JOIN208 static correction: o_chest_primary_weapon is placed at (534.865,-736.800,16.507), far from the rifle waypoint. The activity's o_weapon is at (410.644,-794.385,17.723), matching that waypoint. The rifle cue now creates o_weapon instead of the unrelated chest; native pickup and durable inventory grant remain unverified.",
-    "JOIN210 (manual): State A +0x10 carries typed command 0x8080279a, three (i32, i32, float) channels. With channels 0-2 at (1, 1, 1.0) on the Breach control/door/gating-light props the grey barrier opens; the player reaches the rifle, trigger 0x1d:35 reports and Fight Through the Wall starts. Channel 0 or 0-1 alone leave it closed; channel 2 at (2, 2, 0.0) closes it again. The chain now sends that activation 2 s after creating the props."
+    "JOIN210 (manual): State A +0x10 carries typed command 0x8080279a, three (i32, i32, float) channels. With channels 0-2 at (1, 1, 1.0) on the Breach control/door/gating-light props the grey barrier opens; the player reaches the rifle, trigger 0x1d:35 reports and Fight Through the Wall starts. Channel 0 or 0-1 alone leave it closed; channel 2 at (2, 2, 0.0) closes it again. The chain now sends that activation 2 s after creating the props.",
+    "JOIN221-226: the starter Khvostov is a world-loot drop. The host announces it with incident 1504 (selector 2) when the Breach props light up; its body names the recipient by the local player index (1) and the Breach world (3). The loot manager then spawns it at the chest; walking onto it sends a service-601 claim, which the stand-in grants (with --world-loot naming this mission)."
   ],
   "clock": "ready",
   "objects": {
@@ -90,6 +91,17 @@
     "o_breach_doors_exit": "0xfc0e45a3:0x4:2:0x808007d9:1",
     "o_breach_gating_back": "0xfc0e45a3:0x4:5:0x808007d9:1",
     "o_breach_nut_back": "0xfc0e45a3:0x4:6:0x808007d9:1"
+  },
+  "loot": {
+    "starter_rifle": {
+      "item": 3598,
+      "position": [
+        410.644,
+        -794.385,
+        17.723
+      ],
+      "world": 3
+    }
   },
   "steps": [
     {
@@ -811,6 +823,14 @@
           }
         }
       }
+    },
+    {
+      "on": {
+        "type": 18,
+        "object": "trig_ghostlight"
+      },
+      "delay": 30,
+      "loot_drop": "starter_rifle"
     }
   ]
 }
