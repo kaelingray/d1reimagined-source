@@ -299,6 +299,17 @@ class BreachDialogueRules(unittest.TestCase):
             self.assertEqual(activate["set"][name], {**created, "16": {"0": 1, "16": [
                 {"type": "0x8080279a", "values": channels}]}})
 
+    def test_first_fallen_spawn_after_the_rifle_pickup(self):
+        # JOIN231: one desired Vandal plus three authored Dreg members create attacking Fallen.
+        (step,) = [s for s in self.mission["steps"] if "sq_fallen_first_vandal" in s.get("set", {})]
+        self.assertEqual((step["on"], step["delay"]), ({"type": 18, "object": "trig_get_weapon"}, 30))
+        self.assertEqual(step["set"]["sq_fallen_first_vandal"],
+                         {"0x2c": {"0": 1, "4": [1]}, "0x44": 2, "squad_existing_members": -1})
+        member = {"0": 1, "4": -1, "5": 0, "6": True}
+        for name in ("sq_fallen_floor_a__dreg", "sq_fallen_floor_b__dreg", "sq_fallen_wall_l_a__dreg"):
+            self.assertEqual(step["set"][name], member)
+            self.assertTrue(self.mission["objects"][name].startswith("0xfc0e45a3:0x2:"))
+
     def test_fallen_above_is_armed_at_the_wall_and_disarmed_on_its_report(self):
         armed = [s for s in self.steps_setting("trig_fallen_above")
                  if s["set"]["trig_fallen_above"].get("0") is True]

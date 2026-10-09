@@ -78,3 +78,33 @@ remain a private synthetic fixture. See the
 Since JOIN228 the drop comes from the mission script: a `loot` table and a
 `loot_drop` step make the activity host send the event, and `--world-loot`
 (the same mission) gives the signed-in character the matching pending record.
+
+## JOIN231–232: first Fallen combat in the Breach
+
+The Breach group (`0xfc0e45a3`, catalog `0x80cb8167`) lists every Fallen
+encounter of Fight Through the Wall: `sq_fallen_first_vandal` (index 21, no
+authored member), then floor, wall and dropdown Dreg squads with authored members
+(`…__dreg`). The mission restarted three of these squads but sent no desired
+counts or member states, so no Fallen spawned.
+
+JOIN231 sent, through the control file after the rifle grant, a one-member desired
+count for `sq_fallen_first_vandal` and the authored member state used for the Ghost
+(`{0: 1, 4: -1, 5: 0, 6: true}`) for `sq_fallen_floor_a__dreg`,
+`sq_fallen_floor_b__dreg` and `sq_fallen_wall_l_a__dreg`. Within seconds the radar
+shows red contacts, Dregs reach the rifle room and attack, and the screen reddens
+with damage. The Guardian is killed twice ("Guardian Down", killed by a Dreg of the
+House of Devils) and respawns each time. A targeted Dreg shows its name and health
+bar. The automated input fires in a fixed direction and does not aim, so no kill is
+established. No Vandal was identified in the sampled frames.
+
+This is the first native Fallen AI, damage, death and respawn in the 01.24
+restoration. The mission now sends the same four states 30 s after the rifle trigger
+(near the reference's first contact, about 40 s after the pickup); JOIN232 tests that
+automatic step. Still open: aiming and kills, encounter placement relative to the
+reference (Vandal in the corridor, Dregs in the tank room), XP and grimoire
+popups, and later squads.
+JOIN232 repeats it with the mission step alone: 30 s after the rifle trigger the host
+sends the four states (rules 35–38). The recording shows Fight Through the Wall, red
+radar contacts, damage, "Guardian Down" (Dreg, House of Devils) and respawn, with no
+control lines. The extra "New Mission" banner and urgent dialog still appear after the
+grant.

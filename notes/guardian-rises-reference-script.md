@@ -118,7 +118,7 @@ Hunter, so the class-specific cache weapon differs from a Titan's.
 | 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire; urgent dialog and extra banner |
 | 10:18–10:20 | Objective **Fight Through the Wall**; Ghost hopes you can use it | Objective present; line not checked |
 | 10:40–10:46 | Ammo pickup (+108 reserve); Ghost "Eyes forward. Watch your tracker." | Not reached |
-| 10:58–11:04 | First enemy: a **Vandal** in the corridor; XP +55; grimoire "The Fallen" | Not reached (next target) |
+| 10:58–11:04 | First enemy: a **Vandal** in the corridor; XP +55; grimoire "The Fallen" | JOIN231/232: Dregs spawn 30 s after the pickup, come to the rifle room and kill the Guardian (Guardian Down, respawn); no kill by the automated input; Vandal not identified; no XP or grimoire yet |
 | 11:14 | Coach "Push R1 to melee" (PS4 layout) | Not reached |
 | 11:26–11:34 | Coach "Press L2 to aim"; **Dregs** in the yellow-tank room; XP +40/+60 | Not reached |
 | 11:40–11:46 | Shock-blade Dreg; Ghost "There's more ahead! Keep it up!" | Not reached |
