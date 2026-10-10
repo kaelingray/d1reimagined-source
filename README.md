@@ -10,25 +10,27 @@ Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1rei
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state — 2026-10-09
+## Current state — 2026-10-10
 
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |
 | Local sign-in and characters | 01.24 signs in, persists a stored character and setup answers, and joins the local activity host. | This uses local stand-ins; complete account/profile semantics and broader character coverage are incomplete. |
-| Opening mission | The revival hands over on native cinematic-end incidents; JOIN196–199 progress through all nine third-person scenes and the first-person scene. The Wall and rifle objective diamonds have native evidence. Automatic Breach dialogue and prop activation open the rifle barrier (JOIN211). Activity 229 uses checksum `0x8fe07299`. | First person remains too dark; usable room lighting and companion Ghost glow are unaccepted. Reaching the rifle volume advances the objective without granting a weapon. Authentic pickup, combat, completion and Tower remain open. Nav input after revival causes a guest access violation in JOIN197–199. |
-| Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons. JOIN216's privately pre-equipped Khvostov renders and fires on R1, reducing its magazine from 12 to 11. Database grant retries and item moves now enforce account/character ownership. | The rifle fixture is not a world pickup; ammunition differs from the reference's 25/184, and damage is untested. Texture corruption/distortion, level/light values and stable combined rendering remain open. Native loot/equipment services are not wired to durable item grants. |
+| Opening mission | The revival hands over on native cinematic-end incidents; the Wall and rifle objective diamonds have native evidence. Automatic Breach dialogue and prop activation open the rifle barrier. Since JOIN228, the mission announces the rifle drop and an unarmed Guardian can claim it through the native pickup path. JOIN232's mission-spawned Dregs attack, kill the Guardian and allow respawn. JOIN252 suppresses unwanted urgent notices; JOIN253 shows the Wall objective handover without the extra mission banner. | First person remains too dark; usable room lighting and companion Ghost glow are unaccepted. Enemy kills, original encounter placement, ammunition fidelity, later encounters, completion and Tower remain open. JOIN253 loses its activity connection and rejoins; post-grant banner acceptance is incomplete. Nav input after revival causes a guest access violation in JOIN197–199. |
+| Guardian and inventory | Arrangement indexes and fixed equipment bucket ranges repair missing armour and misplaced item records. Bounded runs resolve five armour slots, Ghost and subclass icons. A matching service-601 rifle claim clears pending loot, equips the Khvostov and publishes self/peer updates; JOIN226/228 show first-person firing. With the player database enabled, the handler records a durable item instance with a retry key. Database grant retries and item moves enforce account/character ownership. | The stand-in covers one rifle definition; magazine 12 differs from the reference's 25/184. Native reconnect/reload inventory acceptance and broader loot/equipment semantics remain incomplete. Texture corruption/distortion, level/light values and stable combined rendering remain open. |
 | Ghost | The starter Generalist Shell now uses its art record's world appearance (row 0) and dye 15/2493. JOIN201 shows the authored shell fly in through the car window and turn to camera, matching the reference. Automatic Breach squad activation and dialogue have bounded native evidence. | JOIN202 repeats the revival through the default, including the resurrection sphere and first-person Ghost, and the Breach torch follows the camera. JOIN201 exited once on the resurrection light. First-person brightness, held Ghost, the power beat and combined graphics remain unaccepted. See [appearance evidence](notes/ghost-appearance-0124.md). |
 | Vulkan stability | Actual-source CPU checks and bounded native comparisons support queue serialization and matching query scopes. GC and fence cleanup contracts have further CPU checks. | Descriptor-pool resets and depth/stencil layout errors remain under investigation. A longer run without device loss does not establish a graphics fix. |
 | Automated evidence capture | Native game/audio recording, event deduplication, durable outbox, schema-1 packages, full decoding, hashes and automatic verified transfer have live acceptance. The capture suite passes 82 tests; 11 actual-controller checks cover pending source retention. Finalized originals now remain locally available after rolling buffer expiration. | Rotation gaps and intermittent native source-identification failures remain explicit. Background start/stop still needs a reliable native control path. Encounter/reward/multiplayer milestones require further reliable signals. |
 | Broader content and multiplayer | Static package/scenario research and local protocol experiments provide a basis for later work. | Complete destinations, activities, AI, combat, progression, vendors, rewards, fireteams and multiplayer are not accepted. |
 
-The current backend and diagnostic changes pass **225 server tests**, **176 script tests**
-and the actual final-schema preflight (1 timed / 58 reactive changes).
+The current backend and diagnostic changes pass **225 server tests** and **176 script tests**,
+rerun on 10 October. Earlier actual final-schema preflight passes cover 1 timed / 58
+reactive changes; that preflight was not rerun for the October 10 evidence handoff.
 The [rifle investigation](notes/rifle-pickup-0124.md) corrects the cue's object
 selection: the previous chest was about 137 units from the marker; `o_weapon`
 matches it. JOIN209 verifies native creation and occupied unit-pool membership;
-JOIN211 verifies automatic barrier opening. The chest renders, but an unarmed
-Guardian still cannot acquire its rifle. The [loot mapping](notes/loot-and-rewards.md)
+JOIN211 verifies automatic barrier opening. Earlier unarmed runs could reach the
+chest without acquiring a rifle; later runs accept the native pickup described
+below. The [loot mapping](notes/loot-and-rewards.md)
 now identifies the separate pending-loot table and nonce/position cache, with a
 read-only probe. JOIN217 verifies that the native manager reads diagnostic rifle
 records, but their nonce/position cache is empty and approach produces no claim.
@@ -57,7 +59,8 @@ component pointer before the crash; its temporary default is withdrawn.
 **Neither cinematics nor the joint
 flicker/distortion fix passes acceptance.**
 
-The [October 9 checkpoint](notes/checkpoint-2026-10-09-mission.md),
+The [October 10 evidence review](notes/checkpoint-2026-10-10-mission.md),
+[October 9 checkpoint](notes/checkpoint-2026-10-09-mission.md),
 [October 8 checkpoint](notes/checkpoint-2026-10-08-mission.md),
 [October 7 renderer checkpoint](notes/checkpoint-2026-10-07-renderer.md) and
 [Vulkan conformance record](notes/rpcs3-vulkan-conformance.md) hold the latest renderer
