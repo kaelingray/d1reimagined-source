@@ -38,7 +38,7 @@ too strong; see [the corrected diagnosis](ghost-appearance-0124.md).
 | --- | --- | --- | --- |
 | 07:00–07:20 | Run through the cars to the Wall, through the gap and up the ramp to the door | Guarded route walk (automated input) | OK (route) |
 | 07:20–07:27 | Door with fallen panel, stairs inside | Same | OK |
-| 07:27–07:33 | Ghost: "need to find you a weapon before the Fallen find us"; objective becomes **Find a Weapon** | Objective handover plus an extra "NEW MISSION / The Taken King: Prelude" banner (JOIN202) that the reference does not show; `seq_d_o2_10` plays (JOIN190 audio) | PARTIAL: remove the extra banner; line unconfirmed (no subtitles) |
+| 07:27–07:33 | Ghost: "need to find you a weapon before the Fallen find us"; objective becomes **Find a Weapon** | Objective handover; the extra "NEW MISSION / The Taken King: Prelude" banner (JOIN202) is gone since JOIN253 (objectives start at state 5); `seq_d_o2_10` plays (JOIN190 audio) | PARTIAL: remove the extra banner; line unconfirmed (no subtitles) |
 | 07:31–07:35 | Lit corridor with windows, diamond ahead | Same corridor, lit (JOIN188/190) | OK |
 
 ## The Breach (slice 24)
@@ -115,7 +115,7 @@ Hunter, so the class-specific cache weapon differs from a Titan's.
 | 09:42–09:58 | Red flare; blue Ghost light flies to the panel; Ghost lines about needing light and old military systems | Lines play in order; companion Ghost light not accepted |
 | 10:00–10:10 | Screen dark, then the room's lamps come on | Barrier opens; visible lamp light not accepted |
 | 10:12 | Objective **Grab the Rifle**; the Khvostov leans on the front of the blue chest; Ghost "Here! I found a rifle…" | Objective and line present; rifle model not inspected |
-| 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire; extra banner (urgent dialog fixed in JOIN252) |
+| 10:14–10:16 | Walk-over pickup (no prompt); **Khvostov 7G-02** notification; **NEW GRIMOIRE CARD ACQUIRED**; ammo **25 / 184** | Walk-over pickup and notification; magazine 12; no grimoire (urgent dialog fixed in JOIN252, banner in JOIN253) |
 | 10:18–10:20 | Objective **Fight Through the Wall**; Ghost hopes you can use it | Objective present; line not checked |
 | 10:40–10:46 | Ammo pickup (+108 reserve); Ghost "Eyes forward. Watch your tracker." | Not reached |
 | 10:58–11:04 | First enemy: a **Vandal** in the corridor; XP +55; grimoire "The Fallen" | JOIN231/232: Dregs spawn 30 s after the pickup, come to the rifle room and kill the Guardian (Guardian Down, respawn); no kill by the automated input; Vandal not identified; no XP or grimoire yet |
@@ -125,7 +125,7 @@ Hunter, so the class-specific cache weapon differs from a Titan's.
 | 11:54–12:00 | Loot cache, prompt "Collect Loot"; Ghost about the cache; class special weapon (Calcutta-LR2 sniper for this Hunter), +51 glimmer, grimoire "Special Weapons: Sniper Rifles" | Not reached |
 
 Differences to fix, in order of play: the coach sequence (sprint → melee → aim) instead
-of the persistent Level Up tip; no extra mission banner; the grimoire
+of the persistent Level Up tip; the grimoire
 card on pickup; magazine 25 / reserve 184; then the Fight Through the Wall enemies,
 ammo pickups and the loot cache.
 

@@ -214,3 +214,14 @@ The Guardian died about every 20–30 s.
 - **Still open.** The extra "New Mission / The Taken King: Prelude" banner still appears
   at the Wall and after the grant. "Grab the Rifle" shows after the pickup. The selector
   keeps re-selecting entry `0x80a5857b` (flag 2847); its role is unknown.
+
+### JOIN253: no "NEW MISSION" banner
+
+The reference walkthrough never shows the "NEW MISSION / The Taken King: Prelude" banner:
+"ENTER THE WALL" simply appears at the left of the HUD (reference 08:28). The banner
+was our objective state 1 (incoming). The mission script now starts each objective at
+state 5. In JOIN253, world entry shows only the "ENTER THE WALL" line, and the handover
+shows "Enter the Wall" (state 3) and then "FIND A WEAPON", with no banner. The run then
+lost its activity connection after a ~16 s client stall in the Breach and rejoined from
+the start. That rejoin is unrelated to this change (it happened after both checked
+moments) and is still open.

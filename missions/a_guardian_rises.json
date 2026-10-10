@@ -13,10 +13,11 @@
     "01.24 JOIN99/101: sq_nux_ghost desired counts at +0x2c = {0:1,4:[1]} create one physical member after bubble readiness and a manual protocol reset.",
     "The Breach state changes are scheduled 20 s after current slice set 24; Fallen desired counts remain unverified.",
     "Objective states (01.24, JOIN60): 1 = incoming (the 'NEW MISSION' banner with the activity name, about 4 s), 5 = active:",
-    "the title (and on change its description) shows at the left of the HUD. Each objective is set to 1 and 6 s later to 5.",
+    "the title (and on change its description) shows at the left of the HUD. The reference walkthrough never shows the 'NEW MISSION'",
+    "banner, so each objective starts at 5 (with its incoming sequence) and is set to 5 again 6 s later with its waypoint (JOIN253).",
     "3 is still used for completion (special-cased by the handler); its on-screen effect is not confirmed yet.",
     "Handover (JOIN70): the completed objective goes to 3 (with its completion sequence), 4 s later to 0 while the next",
-    "objective starts (1, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5.",
+    "objective starts (5, incoming sequence step 1, trigger armed), and 6 s after that the next objective goes to 5.",
     "01.24 JOIN77/81: player-trigger reports are type-18 incidents. Objective lane phases cancel delayed updates from earlier handovers.",
     "Breach object names now resolve each signed relative name pointer; the old printable-string scan shifted names by six records.",
     "pf_104a_pwr is the separate power beat; the ho_ghostlight alias enables a bounded manual selector test, with no automatic torch action yet.",
@@ -181,7 +182,7 @@
       "delay": 20,
       "set": {
         "obj_enter_wall": {
-          "0": 1,
+          "0": 5,
           "0x2c0": -1,
           "0x40": {
             "0": {
@@ -276,7 +277,7 @@
           }
         },
         "obj_investigate": {
-          "0": 1,
+          "0": 5,
           "0x2c0": -1,
           "0x40": {
             "0": {
@@ -375,7 +376,7 @@
           }
         },
         "obj_get_weapon": {
-          "0": 1,
+          "0": 5,
           "0x2c0": -1,
           "0x40": {
             "0": {
@@ -492,7 +493,7 @@
           }
         },
         "obj_graveyard": {
-          "0": 1,
+          "0": 5,
           "0x2c0": -1,
           "0x40": {
             "0": {
