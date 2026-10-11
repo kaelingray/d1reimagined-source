@@ -12,6 +12,11 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `wsl-controls-ps4.sh` | Run responder, shadNet and d1 controls in Ubuntu, retaining individual logs and actual exit codes. Fail the aggregate if any tool fails. |
 | `Install-D1WSLEntrypoints.sh` | Connect the 15 built Linux tools under `/opt/d1-target` to the ignored paths expected by the documented generators. Refuse unrelated existing files; preserve Windows `.exe` files. |
 | `Prepare-D1PS4Artifacts.sh` | Require the exact decrypted 01.29 identity before using the existing package/schema/atlas generators and their controls. Refuse missing or unidentified game inputs. |
+| `Build-D1PfsReader.ps1` | Build the separately retained LGPL reader with a PFSC read-until-filled loop for modern .NET. Pin the original PFSC source hash, retain modified source and all compiler-input hashes, and refuse replacing an existing build. |
+| `Export-D1RepackHeaders.ps1` | Export 320-byte Bungie header clips through the existing Sony/PFS reader, plus a source-size inventory. Clips are not an installed content estate. |
+| `d1-pkg-header-audit.rs` | Install as a bin in the separate PS4 `d1-pkg` crate. Reuse that crate's parser, manifest selection/codec and block verification. Five scoped controls gate a header audit; `probe` verifies an extracted package's tables and every stored block. |
+| `Export-D1RepackContent.ps1` | Recover the 1,647 older packages selected by an exact-reference header audit. Require the corrected PFSC reader, record its hash in the recovery plan, retain partial files and resume only matching, individually hash-checked output. It does not accept payloads or recover an executable. |
+| `Test-D1RecoveredContent.ps1` | After complete recovery, run the existing pinned package controls, all table/stored-block checks, manifest generator and direct manifest controls. Refuse incomplete or existing validation output; record content-only acceptance after every gate passes. |
 
 The default paths match this user's Windows installation. Installed copies are
 under `F:\d1\tools`; source copies here were hash-compared with them on 2026-10-11.
@@ -44,3 +49,34 @@ identifies itself as build `56578.17.04.12.1251.evil`, later than the target.
 The joined 01.29 update's image key was not recovered by the repack route.
 See `notes/ps4-transition-2026-10-11.md` for controls, private receipt paths and limits.
 Neither external tool is vendored here, and the preparation identity gates remain.
+
+## Content rollback from the supplied repack
+
+The repack retains earlier package generations. The header audit selects builds
+through 52553 and reproduces the pinned English manifest; full-file recovery must
+then pass the existing `d1-pkg` controls and `verify --blocks` before acceptance.
+The corrected reader addresses [the .NET partial-read behavior](https://learn.microsoft.com/en-us/dotnet/core/compatibility/core-libraries/6.0/partial-byte-reads-in-streams).
+Original LGPL sources remain unchanged. Modified PFSC source, LGPL license and
+build receipts remain beside the separate library, outside both project repos.
+
+```powershell
+# Copy the Rust source into d1-server/crates/d1-pkg/src/bin/ in the PS4 tree,
+# then from that workspace:
+cargo test -p d1-pkg --bin d1-pkg-header-audit
+cargo build --release -p d1-pkg --bin d1-pkg-header-audit --bin d1-pkg
+# Existing header output and DLL builds are deliberately not overwritten:
+& F:\d1\tools\Build-D1PfsReader.ps1
+& F:\d1\tools\Export-D1RepackHeaders.ps1
+# Audit command (redirect stdout to the private rollback-header-audit.json):
+.\target\release\d1-pkg-header-audit.exe audit --dir ..\cfw-staging\2026-10-11\rollback-headers --independent ..\cfw-staging\2026-10-11\base-extracted\CUSA00219\packages
+& F:\d1\tools\Export-D1RepackContent.ps1
+# On a matching completed/checkpointed plan, use -Resume.
+& F:\d1\tools\Test-D1RecoveredContent.ps1
+```
+
+The initial unmodified-.NET recovery is rejected and retained as
+`cfw-staging/2026-10-11/recovered-01.29-content`. The corrected recovery uses
+`recovered-01.29-content-v2`; do not resume or publish files from the first folder.
+The original game packages are opened read-only. All recovered content stays
+private. See the transition note for the actual acceptance result and remaining
+executable gate; a content rollback does not recreate the old executable.

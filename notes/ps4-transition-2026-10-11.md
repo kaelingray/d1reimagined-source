@@ -91,6 +91,59 @@ in `capture-rig/CFW-DUMP-RUNBOOK.md`. Its example `ftp_dump.py` is absent from t
 supplied snapshot; do not present that invocation as a locally runnable command.
 An actual collector must be restored or supplied before a console transfer.
 
+### Follow-up: recovering retained 01.29 content
+
+The user asked to keep trying a rollback. The supplied later repack retains older
+Bungie package generations. Its inner PFS inventory contains **2,119 files**,
+including **2,105 content packages** and exactly one `eboot.bin`. No earlier
+executable, backup ELF or nested archive is listed.
+
+The existing PFS reader exported 320-byte header clips. An original Rust instrument,
+installed as a bin in the separate PS4 `d1-pkg` crate, reuses its existing parser,
+selection and manifest codec. Five scoped controls pass; 46 headers agree with the
+independent GPL extractor. Selecting builds through 52553 gives **1,647 files**,
+totalling **49,917,028,352 bytes**. English/neutral selection gives **1,033 rows**,
+52,797 bytes, SHA-256
+`0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be`:
+the exact pinned manifest. This initial result concerns headers, not payloads.
+
+The first payload probe rejected the unmodified LibOrbisPkg output: layout and
+length were valid, but both entry-table and block-table hashes failed. The modern
+.NET reader returned short decompression reads; the upstream PFSC implementation
+called `DeflateStream.Read` only once per sector and ignored its count.
+[Microsoft documents this behavior change](https://learn.microsoft.com/en-us/dotnet/core/compatibility/core-libraries/6.0/partial-byte-reads-in-streams).
+The first bulk copy was stopped at **309 files / 9,548,271,616 bytes**. Rejected files
+and an unfinished partial remain in `recovered-01.29-content`; they are not accepted
+and must not be resumed into a correct estate.
+
+`Build-D1PfsReader.ps1` builds a separate LGPL reader with a read-until-filled loop,
+an early-EOF error and a short-read counter. Original upstream sources remain
+unchanged; modified source, license and source/build receipts remain outside Git.
+No cryptographic algorithm or keyset changed. The first corrected 233,091,072-byte
+package, `ps4_arch_cabal_0059_0.pkg`, completed **115 short reads** and exactly matches
+the independent native extractor's full-file SHA-256:
+`0b2bb108849e78a2313831dcc8530b091a0461cb8dec6c2813af35402983c36a`.
+The existing Rust reader verifies its tables and **all 1,434 stored-block hashes**.
+The uncorrected file remains a discriminating negative control. The corrected
+recovery uses a fresh `recovered-01.29-content-v2` folder and a plan pinned to the
+reader hash. Full-estate acceptance is recorded below when completed.
+
+The update was also checked for a possible keyless route: its PFS header explicitly
+sets `Encrypted`, and the existing reader refuses it without a decryption key.
+The digest-verified base image key does **not** verify against the update's image-key
+digest, despite their matching content IDs. No retail image key was recovered.
+The later base executable is not an inverse patch from which the exact older
+executable can be reconstructed by removing the retained content generations.
+Executable rollback remains unaccepted; the original build pin is preserved.
+
+Private rollback evidence is under `cfw-staging/2026-10-11`: `repack-file-inventory.json`,
+`rollback-header-audit.json`, `rollback-reader-positive-control.json`,
+`rollback-payload-probe-v2.json`, `rollback-payload-negative-control.json`,
+`rollback-key-reuse-review.json`, `rollback-update-keyless-control.json` and the
+recovery plan/ledger/progress files. Header clips, full game files and receipts
+containing private input paths are not copied into either Git repository or NAS
+production packages. No PS4 native run is claimed.
+
 ## PC checks
 
 - F: is NTFS with ample free space. The project was not moved onto exFAT.
