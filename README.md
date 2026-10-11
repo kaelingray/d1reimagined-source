@@ -1,16 +1,31 @@
 # D1 Reimagined
 
-An experimental Destiny 1 preservation and emulation project. The active target is
-**PS3 BLES01857 01.24 (Destiny 2.3.1 / The Taken King)** in a patched RPCS3 build,
-using local service stand-ins. Earlier PS3 01.00 work remains
-research history. **The full game is not yet playable.**
+An experimental Destiny 1 preservation and emulation project. On **2026-10-11** the
+user selected **PS4 CUSA00219 patch 01.29** as the active engineering target, using
+the supplied `d1preservation-main` project in a separate working tree with shadPS4.
+This repository retains the **PS3 BLES01857 01.24 / RPCS3** implementation and its
+verified research; earlier PS3 01.00 work remains history.
+**The full game is not yet playable.**
 
 Source and engineering notes: [d1reimagined](https://github.com/p3n1cillin/d1reimagined).
 Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1reimagined-data).
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state — 2026-10-10
+## Current state - 2026-10-11
+
+PS4 setup follows the supplied project's `BOOTSTRAP.md`, `CLAUDE.md` and status
+documents. The local US base package reports APP_VER 01.00; the eight CUSA00219
+01.29 update chunks are now merged with a verified full read-back hash. The pinned,
+decrypted 01.29 executable and effective content directory are still missing, and
+the console is currently unavailable with GoldHEN FTP. The local firewall,
+redirects and 37 firmware-module hashes pass a fresh configuration check. Responder
+controls pass; shadNet has 32 passes and one explicit skip. No PS4 native gameplay
+or successful Windows/WSL launcher is claimed. See the
+[PS4 transition checkpoint](notes/ps4-transition-2026-10-11.md) and
+[original setup helpers](tools/ps4_setup/README.md).
+
+The table below is the retained PS3 checkpoint from **2026-10-10**, not PS4 acceptance.
 
 | Area | Verified scope | Remaining work |
 | --- | --- | --- |

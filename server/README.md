@@ -1,7 +1,9 @@
 # D1 Reimagined — local Destiny service stand-ins
 
-These tools support the active **PS3 BLES01857 01.24 / RPCS3** research target.
-Last status review: **2026-10-08**. The source repository is
+These tools support the retained **PS3 BLES01857 01.24 / RPCS3** implementation.
+Active engineering switched to the separate PS4 01.29 tree on **2026-10-11**;
+see the [PS4 checkpoint](../notes/ps4-transition-2026-10-11.md).
+Last status review: **2026-10-11**. The source repository is
 [d1reimagined](https://github.com/p3n1cillin/d1reimagined); schemas and restricted
 research inputs are in [d1reimagined-data](https://github.com/p3n1cillin/d1reimagined-data).
 
@@ -9,8 +11,10 @@ The current local flow signs in, persists a stored character/setup answers, ente
 local activity-host flow and has reached the opening mission in bounded native tests.
 The services are experimental stand-ins. Schema-valid default replies, host reports
 and a world-entry label do not establish playable missions or a complete backend.
-Reliable slice handoff, Ghost illumination, combat, rewards, progression, complete
-inventory semantics and multiplayer remain open. See the
+Ghost illumination, enemy-kill acceptance, rewards, progression, complete
+inventory semantics and multiplayer remain open. Native rifle pickup/firing,
+mission-spawned Dreg attacks, player death and respawn now have bounded PS3 evidence.
+See the
 [current project status](../README.md), [renderer checkpoint](../notes/checkpoint-2026-10-07-renderer.md)
 and [mission acceptance](../notes/guardian-rises-acceptance.md).
 
@@ -20,8 +24,8 @@ from model `arrangement`; explicit custom values survive parsing and encoding.
 The [Ghost comparison](../notes/ghost-appearance-0124.md) records valid base/cache
 lookups alongside incorrect images and a reproducible Nav guest access violation.
 The 01.24 starter Generalist Shell now sends its art record's world appearance (row 0)
-and Ghost dye 15/2493, which shows the authored shell in the revival (JOIN201). All 197 server
-tests and 165 script tests pass; serialization and native lookup success are narrower
+and Ghost dye 15/2493, which shows the authored shell in the revival (JOIN201). The October 10
+checkpoint passes 225 server tests and 176 script tests; serialization and native lookup success are narrower
 than visual or end-to-end mission acceptance.
 
 Service 601 (world-loot claim) is answered: a claim matching a pending self record by
