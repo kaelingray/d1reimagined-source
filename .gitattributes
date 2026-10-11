@@ -20,3 +20,4 @@ patches/rpcs3-native-rsx-capture-marker.patch -text whitespace=-blank-at-eol,-sp
 patches/rpcs3-native-rsx-replay-context.patch -text whitespace=-blank-at-eol,-space-before-tab
 patches/rpcs3-native-rsx-replay-display.patch -text whitespace=-blank-at-eol,-space-before-tab
 tools/ps4_setup/*.sh text eol=lf
+tools/ps4_setup/d1-pkg-local-owner.patch -text whitespace=-blank-at-eol,-space-before-tab

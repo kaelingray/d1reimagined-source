@@ -1,0 +1,147 @@
+diff --git a/crates/d1-pkg/src/lib.rs b/crates/d1-pkg/src/lib.rs
+--- a/crates/d1-pkg/src/lib.rs
++++ b/crates/d1-pkg/src/lib.rs
+@@ -480,7 +480,12 @@ impl Estate {
+     }
+ 
+     /// The file that physically holds `block`'s bytes, following the generation chain.
+-    pub fn owner<'a>(&'a self, pkg: &Package, block: &Block) -> Option<&'a Package> {
++    /// Local blocks belong to this exact file: the engine's unpatchable twins share
++    /// (id, locale, gen), so the chain's last-insert winner is not their identity.
++    pub fn owner<'a>(&'a self, pkg: &'a Package, block: &Block) -> Option<&'a Package> {
++        if block.gen == pkg.gen() {
++            return Some(pkg);
++        }
+         let chain = self.by_id.get(&(pkg.id(), pkg.locale()))?;
+         chain.get(&block.gen).map(|&i| &self.packages[i])
+     }
+@@ -511,6 +516,88 @@ impl Estate {
+     }
+ }
+ 
++/// Data-independent positive and negative controls for stored-block ownership.
++/// Synthetic byte files exercise the existing resolver and SHA-1 verifier; they
++/// do not implement or generate another copy of the package format.
++pub fn block_owner_controls() -> anyhow::Result<Vec<manifest::ControlRow>> {
++    use std::sync::atomic::{AtomicU64, Ordering};
++    static NEXT: AtomicU64 = AtomicU64::new(0);
++    let root = std::env::temp_dir().join(format!(
++        "d1-pkg-owner-controls-{}-{}-{}",
++        std::process::id(),
++        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos(),
++        NEXT.fetch_add(1, Ordering::Relaxed)
++    ));
++    std::fs::create_dir(&root)?;
++    // Remove only this invocation's named fixture files, even on an error.
++    struct FixtureDir(PathBuf);
++    impl Drop for FixtureDir {
++        fn drop(&mut self) {
++            for name in ["original", "twin", "locale", "older", "newer"] {
++                let _ = std::fs::remove_file(self.0.join(name));
++            }
++            let _ = std::fs::remove_dir(&self.0);
++        }
++    }
++    let _cleanup = FixtureDir(root.clone());
++    let fixture = |name: &str, id: u16, locale: u16, gen: u16, bytes: &[u8]| -> anyhow::Result<Package> {
++        let path = root.join(name);
++        std::fs::write(&path, bytes)?;
++        let mut header = Header::parse(&[0; 0x140]);
++        header.id = id;
++        header.locale = locale;
++        header.gen = gen;
++        Ok(Package {
++            path, name: name.into(), file_size: bytes.len() as u64, header,
++            raw: [0; 0x140], ent: Vec::new(), blk: Vec::new(), sym: Vec::new(),
++        })
++    };
++    let original = b"first";
++    let twin = b"other";
++    let locale = b"local";
++    let older = b"prior";
++    let packages = vec![
++        fixture("original", 0x179, 0, 0, original)?,
++        fixture("twin", 0x179, 0, 0, twin)?,
++        fixture("locale", 0x179, 1, 0, locale)?,
++        fixture("older", 0x172, 0, 0, older)?,
++        fixture("newer", 0x172, 0, 1, b"newer")?,
++    ];
++    // The duplicate key deliberately points at the twin, reproducing the old
++    // last-insert-wins condition without duplicating any on-disk parser.
++    let by_id = BTreeMap::from([
++        ((0x179, 0), BTreeMap::from([(0, 1)])),
++        ((0x179, 1), BTreeMap::from([(0, 2)])),
++        ((0x172, 0), BTreeMap::from([(0, 3), (1, 4)])),
++    ]);
++    let estate = Estate { packages, by_id };
++    let block = |bytes: &[u8], gen| Block {
++        index: 0, offset: 0, stored_size: bytes.len() as u32,
++        gen, flags: 0, sha1: Sha1::digest(bytes).into(),
++    };
++    let reads = |pkg: usize, bytes: &[u8], gen| {
++        estate.read_block_stored(&estate.packages[pkg], &block(bytes, gen))
++            .is_ok_and(|v| v == bytes)
++    };
++    let mut rows = Vec::new();
++    let mut row = |name: &str, passed| rows.push(manifest::ControlRow {
++        name: name.into(), passed, skipped: false,
++        detail: "synthetic stored-byte ownership fixture".into(),
++    });
++    row("local block keeps exact package identity despite duplicate key", reads(0, original, 0));
++    row("duplicate twin reads its own stored bytes", reads(1, twin, 0));
++    row("locale stays separate from duplicate neutral package", reads(2, locale, 0));
++    row("inherited block resolves older generation", reads(4, older, 0));
++    row("missing generation rejected", estate.read_block_stored(&estate.packages[4], &block(older, 2)).is_err());
++    row("different locale cannot supply missing generation", estate.read_block_stored(&estate.packages[2], &block(locale, 1)).is_err());
++    let mut inverted = block(original, 0);
++    inverted.sha1[0] ^= 1;
++    row("inverted stored digest rejected", estate.read_block_stored(&estate.packages[0], &inverted).is_err());
++    std::fs::write(&estate.packages[0].path, b"fault")?;
++    row("changed stored payload rejected", estate.read_block_stored(&estate.packages[0], &block(original, 0)).is_err());
++    Ok(rows)
++}
++
+ // ───────────────────────────── decompressed-block verification ──────────────────────
+ 
+ /// `class_tag` of an entry that is a raw blob - image/mesh bytes with no record header.
+@@ -628,6 +715,15 @@ pub fn check_self_lengths(pkg: &Package, block_index: u32, plain: &[u8]) -> Vec<
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn block_ownership_positive_and_negative_controls_pass() {
++        let rows = block_owner_controls().unwrap();
++        assert_eq!(rows.len(), 8);
++        for row in rows {
++            assert!(row.passed && !row.skipped, "{}", row.name);
++        }
++    }
++
+     #[test]
+     fn tag_round_trips_through_package_id_and_index() {
+         // The real tag of entry 106 of package 300 (ps4_investment_globals_012c).
+diff --git a/crates/d1-pkg/src/bin/d1-pkg.rs b/crates/d1-pkg/src/bin/d1-pkg.rs
+--- a/crates/d1-pkg/src/bin/d1-pkg.rs
++++ b/crates/d1-pkg/src/bin/d1-pkg.rs
+@@ -395,7 +395,7 @@ fn main() -> Result<ExitCode> {
+             // An unreadable estate is not an error to bubble up: it means the controls could not
+             // run, which is exactly what exit 2 is for. Bubbling it out as exit 1 would let a
+             // caller that only checks `!= 2` treat an unverified tool as verified.
+-            let rows = manifest::controls(&cli.dir, Some(&served)).unwrap_or_else(|e| {
++            let mut rows = manifest::controls(&cli.dir, Some(&served)).unwrap_or_else(|e| {
+                 vec![manifest::ControlRow {
+                     name: "estate readable".into(),
+                     passed: false,
+@@ -403,6 +403,12 @@ fn main() -> Result<ExitCode> {
+                     detail: format!("{e}"),
+                 }]
+             });
++            rows.extend(block_owner_controls().unwrap_or_else(|e| {
++                vec![manifest::ControlRow {
++                    name: "stored-block ownership controls runnable".into(),
++                    passed: false, skipped: false, detail: format!("{e}"),
++                }]
++            }));
+             let pass = rows.iter().all(|r| r.passed);
+             if json {
+                 let v: Vec<_> = rows

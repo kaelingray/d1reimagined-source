@@ -1,8 +1,9 @@
 # PS4 preparation helpers
 
 Original Windows/WSL preparation code for the separate, user-supplied
-`F:\d1\d1preservation-main` tree. No upstream PS4 server, format reader, emulator,
-game or firmware code is copied here. Follow that project's documentation for
+`F:\d1\d1preservation-main` tree. The PS4 server and format reader remain in that
+separate tree; only our original helper code and a minimal crate patch live here.
+No emulator, game or firmware code is vendored. Follow that project's documentation for
 builds, dump identity, generated artifacts and canonical boot settings.
 
 | Helper | Purpose |
@@ -17,6 +18,8 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `d1-pkg-header-audit.rs` | Install as a bin in the separate PS4 `d1-pkg` crate. Reuse that crate's parser, manifest selection/codec and block verification. Five scoped controls gate a header audit; `probe` verifies an extracted package's tables and every stored block. |
 | `Export-D1RepackContent.ps1` | Recover the 1,647 older packages selected by an exact-reference header audit. Require the corrected PFSC reader, record its hash in the recovery plan, retain partial files and resume only matching, individually hash-checked output. It does not accept payloads or recover an executable. |
 | `Test-D1RecoveredContent.ps1` | After complete recovery, run the existing pinned package controls, all table/stored-block checks, manifest generator and direct manifest controls. Refuse incomplete or existing validation output; record content-only acceptance after every gate passes. |
+| `Test-D1RepackInodes.ps1` | Inspect the existing PFS reader's super-root and parsed inode objects for files outside the game directory and unlinked file records. Require the known executable positive control; report the scope separately from raw-sector carving. |
+| `Apply-D1PkgOwnershipFix.ps1` / `d1-pkg-local-owner.patch` | Apply our GPL-2.0-or-later fix to the separate `d1-pkg` crate, guarded by before/after source hashes. Local blocks retain their exact file identity when engine packages share an ID/generation. The existing hash verifier is retained; eight positive/negative ownership controls join its `controls` command. |
 
 The default paths match this user's Windows installation. Installed copies are
 under `F:\d1\tools`; source copies here were hash-compared with them on 2026-10-11.
@@ -61,8 +64,10 @@ build receipts remain beside the separate library, outside both project repos.
 
 ```powershell
 # Copy the Rust source into d1-server/crates/d1-pkg/src/bin/ in the PS4 tree,
-# then from that workspace:
+# then install the guarded change and build from that workspace:
+& F:\d1\tools\Apply-D1PkgOwnershipFix.ps1
 cargo test -p d1-pkg --bin d1-pkg-header-audit
+cargo test -p d1-pkg --lib block_ownership_positive_and_negative_controls_pass
 cargo build --release -p d1-pkg --bin d1-pkg-header-audit --bin d1-pkg
 # Existing header output and DLL builds are deliberately not overwritten:
 & F:\d1\tools\Build-D1PfsReader.ps1
@@ -71,7 +76,7 @@ cargo build --release -p d1-pkg --bin d1-pkg-header-audit --bin d1-pkg
 .\target\release\d1-pkg-header-audit.exe audit --dir ..\cfw-staging\2026-10-11\rollback-headers --independent ..\cfw-staging\2026-10-11\base-extracted\CUSA00219\packages
 & F:\d1\tools\Export-D1RepackContent.ps1
 # On a matching completed/checkpointed plan, use -Resume.
-& F:\d1\tools\Test-D1RecoveredContent.ps1
+& F:\d1\tools\Test-D1RecoveredContent.ps1 -Output F:\d1\d1preservation-main\cfw-staging\2026-10-11\rollback-content-validation-v2
 ```
 
 The initial unmodified-.NET recovery is rejected and retained as
@@ -80,3 +85,21 @@ The initial unmodified-.NET recovery is rejected and retained as
 The original game packages are opened read-only. All recovered content stays
 private. See the transition note for the actual acceptance result and remaining
 executable gate; a content rollback does not recreate the old executable.
+
+The first full scan reported 1,119 block failures, caused by the original
+`Estate::owner` selecting the `_unpatchable_0` twin for the `_unp3_0` file.
+Checking the three `_unp3_0` files alone passes all 1,119 hashes. The patch's
+regression fails against the old resolver and passes against the fix; changed
+payloads and inverted digests remain rejected. The first validation directory is
+retained as failed evidence. Use a fresh output directory for any new validation.
+The full crate tests require populated default dump and manifest paths: the
+supplied tests treat an existing empty packages directory as an estate to test.
+
+The corrected full scan now passes **all 1,647 package tables/layouts and 701,164
+stored-block hashes**. The final **28 controls / 0 skips** pass. Content-only
+acceptance and installation receipts are in `rollback-content-validation-v2`.
+The default packages path is an NTFS junction to the validated private estate;
+the empty predecessor is preserved. The manifest is installed at the documented
+path with its exact reference hash. All **19 library tests and 2 audit-bin tests**
+pass against these installed defaults. This does not satisfy the executable or
+native-launcher gates. No game inputs are tracked or copied into NAS packages.

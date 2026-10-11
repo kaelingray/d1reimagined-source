@@ -136,11 +136,62 @@ The later base executable is not an inverse patch from which the exact older
 executable can be reconstructed by removing the retained content generations.
 Executable rollback remains unaccepted; the original build pin is preserved.
 
+The corrected recovery completed **1,647 files / 49,917,028,352 bytes** at
+**13:12:37 UTC (14:12:37 UK)**, completing **338,983 short-sector reads**.
+The first full Rust scan passed every package layout and table but reported
+700,045 stored blocks passing and 1,119 failing. Those failures are a verifier
+ownership bug, not evidence that the extracted files have bad payloads: all
+1,119 blocks pass when the three `_unp3_0` packages are isolated. Their
+`_unpatchable_0` twins share `(id, locale, generation)`, and the original chain
+lookup silently chose the other file for blocks owned by the current generation.
+
+Our minimal GPL-2.0-or-later patch to the existing `d1-pkg` crate returns the
+exact current package for local blocks, preserving the existing chain lookup for
+inherited blocks and every stored-byte hash check. Eight data-independent
+controls exercise both twins, locale separation, inheritance, missing generations,
+inverted digests and changed payloads. The regression fails on the original
+resolver and passes on the fix. A guarded installer reproduces the exact source
+changes and refuses unrelated source edits. Failed validation and the original
+binary remain in private staging; the full repeat scan writes a fresh
+`rollback-content-validation-v2` directory. The corrected full scan passed:
+**1,647 layouts/table sets and all 701,164 stored-block hashes**, zero failures.
+The final package controls give **28 PASS / 0 SKIP** and the regenerated manifest
+exactly matches the pinned 52,797-byte SHA-256 above. Content-only acceptance was
+recorded at **13:38:06 UTC (14:38:06 UK)**; this does not accept an executable or boot.
+
+At **13:39:16 UTC**, the empty default packages directory was preserved as
+`packages.empty-before-2026-10-11` and replaced with an NTFS junction to the
+validated private estate. Resolved move paths were checked to stay in the named
+dump directory before moving. The exact manifest was copied to the documented
+`capture-rig/manifests/full_en.bin`; an unrelated existing manifest would have been
+refused. Installation receipt, accepted log digest and verifier/reader hashes are
+retained alongside acceptance. No game content was committed or sent to the NAS.
+
+All **19 crate tests and 2 audit-bin tests** pass against these default paths.
+Before installation, eight existing dump-dependent tests failed because the default
+directory existed but was empty; that failed log is retained. The new regression
+passed then, and the complete suite passes now. Windows and the canonical Ubuntu
+package tools were rebuilt; generators still use their existing Linux entrypoints.
+Ubuntu's installed-default `d1-pkg controls --json` independently returns exit 0,
+**28 PASS / 0 SKIP**, confirming the junction and manifest work through WSL too.
+
+The user explicitly selected **keeping exact 01.29**, rather than retargeting the
+owned April 2017 executable. A further metadata review examined the full PFS
+super-root and all **2,135 inode records** through the existing library. All
+**2,120 regular-file inodes** are reachable; there are **zero unlinked regular-file
+records**. The sole file outside `/uroot` is `/flat_path_table` (17,056 bytes).
+The known 29,276,248-byte executable positive control passes and only one
+`eboot.bin` is listed. This closes an unlinked-file metadata route; it is not a
+claim that raw unallocated-sector carving was performed. Receipt:
+`rollback-repack-inode-review.json`.
+
 Private rollback evidence is under `cfw-staging/2026-10-11`: `repack-file-inventory.json`,
 `rollback-header-audit.json`, `rollback-reader-positive-control.json`,
 `rollback-payload-probe-v2.json`, `rollback-payload-negative-control.json`,
 `rollback-key-reuse-review.json`, `rollback-update-keyless-control.json` and the
-recovery plan/ledger/progress files. Header clips, full game files and receipts
+recovery plan/ledger/progress files. The isolated package control and regression,
+patch-replay, installer and build evidence are retained in `package-owner-fix`
+and `rollback-unp3-isolated-control.log`. Header clips, full game files and receipts
 containing private input paths are not copied into either Git repository or NAS
 production packages. No PS4 native run is claimed.
 
@@ -162,8 +213,10 @@ production packages. No PS4 native run is claimed.
 - Fifteen Linux executable entrypoints now link the `/opt/d1-target` builds to
   the project's ignored `target/release` paths. This repairs the generator/build
   path mismatch without replacing the separately built Windows `.exe` files.
-- Readiness exits 2: decrypted build, installed content, full manifest and validated
-  Windows/WSL canonical-launcher adaptation are missing. No native boot is claimed.
+- After content installation, a fresh child-process readiness check exits **2**:
+  **10 checks pass**, including installed packages and the exact manifest. Only
+  the decrypted executable and validated Windows/WSL canonical-launcher adaptation
+  fail. No native boot is claimed. Report: `readiness-after-content-recovery-v2.json`.
 
 ## Verification and continuation
 
@@ -189,8 +242,8 @@ On the current tree it refuses the missing executable with exit 2 before generat
 anything. That negative check is accepted; successful artifact generation awaits
 the actual game input.
 
-After a valid owned dump: follow `BOOTSTRAP.md` to generate the full English
-content manifest (52,797 bytes, pinned by the package controls), extract schema
+After supplying the matching owned executable: follow `BOOTSTRAP.md`, retain/check
+the now-generated full English manifest (52,797 bytes, pinned by package controls), extract schema
 tag `0x80A5E37A`, then pass the dump-dependent tools' controls. Implement the
 Windows/WSL adaptation using `run-boot.sh` and its actual delegate
 `run-signon-experiment.sh`, with fail-closed containment and recorded settings.

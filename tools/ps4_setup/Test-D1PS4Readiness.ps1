@@ -20,7 +20,7 @@ function CheckHash([string]$name, [string]$path, [string]$hash, [long]$size = -1
 $game = Join-Path $Repo 'dumps\patch-01.29-CUSA00219'
 CheckHash 'Decrypted CUSA00219 01.29 eboot' (Join-Path $game 'eboot.bin') '7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954' 29148264
 $packages = @(Get-ChildItem -LiteralPath (Join-Path $game 'packages') -File -Filter '*.pkg' -ErrorAction SilentlyContinue)
-Check 'Installed Bungie content packages' ($packages.Count -gt 0) "files=$($packages.Count); install PKGs do not satisfy this check"
+Check 'Installed Bungie content packages' ($packages.Count -eq 1647) "files=$($packages.Count); expected 1647 pinned-estate files; install PKGs do not satisfy this check"
 CheckHash 'Full English content manifest' (Join-Path $Repo 'capture-rig\manifests\full_en.bin') '0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be' 52797
 $patch = Join-Path $Repo 'patches\CUSA00219-lab-manifest-T1.xml'
 try { $xml = [xml](Get-Content -LiteralPath $patch -Raw); Check 'Lab patch XML' $true $patch }

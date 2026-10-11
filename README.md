@@ -16,12 +16,17 @@ folders may still have their earlier names; use explicit paths for imported runt
 
 PS4 setup follows the supplied project's `BOOTSTRAP.md`, `CLAUDE.md` and status
 documents. The local US base package reports APP_VER 01.00; the eight CUSA00219
-01.29 update chunks are now merged with a verified full read-back hash. The pinned,
-decrypted 01.29 executable and effective content directory are still missing, and
-the console is currently unavailable with GoldHEN FTP. The local firewall,
+01.29 update chunks are merged with a verified full read-back hash. All **1,647
+retained 01.29 content packages** are now recovered and installed: every table and
+all **701,164 stored-block hashes** pass, and the generated English manifest matches
+the exact pinned reference. Two extraction/verification bugs were corrected.
+The user selected keeping the exact 01.29 target. Its decrypted executable is still
+missing; the repack's only executable is a later April 2017 build, and the console
+is currently unavailable with GoldHEN FTP. The local firewall,
 redirects and 37 firmware-module hashes pass a fresh configuration check. Responder
 controls pass; shadNet has 32 passes and one explicit skip. No PS4 native gameplay
-or successful Windows/WSL launcher is claimed. See the
+or successful Windows/WSL launcher is claimed. Package tools pass **28 controls**
+with no skips, and their **21 tests** pass with the installed estate. See the
 [PS4 transition checkpoint](notes/ps4-transition-2026-10-11.md) and
 [original setup helpers](tools/ps4_setup/README.md).
 
