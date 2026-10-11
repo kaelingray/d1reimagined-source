@@ -205,12 +205,12 @@ production packages. No PS4 native run is claimed.
   outbound block for the exact portable `shadPS4.exe`, all profiles.
 - All 50 unique expected service names resolve to loopback on Windows; the reference
   has 51 redirect rows because the CDN occurs twice. Linux signon resolution also
-  returns loopback.
+  returns loopback outside the sealed run namespace.
 - Portable shadNet/WebAPI targets remain local, UPnP disabled. All 37 firmware-11.00
   module hashes match their local receipt. Upstream used firmware 10.01 modules;
   compatibility has not been established by a game run.
 - No existing RPCS3 or shadPS4 process was found before preparation.
-- Fifteen Linux executable entrypoints now link the `/opt/d1-target` builds to
+- Sixteen Linux executable entrypoints now link the `/opt/d1-target` builds to
   the project's ignored `target/release` paths. This repairs the generator/build
   path mismatch without replacing the separately built Windows `.exe` files.
 - After content installation, a fresh child-process readiness check exits **2**:
@@ -254,3 +254,73 @@ guest transport. Resolve that condition in the port before claiming sign-in.
 The October 10 PS3 checkpoint remains committed and pushed at `3d1d669`;
 no PS3 protocol/gameplay change was made during this transition. This day's
 preparation created no new gameplay footage or NAS media package.
+
+## Canonical platform preparation - later on 11 October
+
+The user cannot obtain the remaining console inputs now and asked for the work
+that can proceed without them. The exact build target and both native acceptance
+gates remain in place. An original Rust `d1-platform` bin was added to the separate
+`d1-pkg` workspace, with PowerShell orchestration and a minimal, source-pinned
+patch to **the existing canonical `run-boot.sh` -> `run-signon-experiment.sh`**.
+No competing containment launcher or game-format reader was introduced.
+
+`--plan` records the actual exported environment after creator overrides and
+produces a private Windows preparation receipt. `--server-check` runs the existing
+servers and resolver/namespace setup without a game, emulator, activity host or
+input. Native mode now refuses an executable or English manifest that differs
+from the exact size/hash pins before invoking the delegate. Existing preparation
+output is refused. Delegate cleanup targets its own namespace children; server
+mode never closes an unrelated emulator or copies a guest crash report.
+
+The real server check completed at approximately **14:22 UTC (15:22 UK)**:
+**19/19 PASS**, exit 0. The two server children are confirmed gone in the subsequent
+receipt. Tests cover a separate namespace, only loopback/dummy interfaces, no
+IPv4/IPv6 default route, immediate off-box TCP failure, failed upstream DNS,
+four redirected hostnames, shadNet and BAP TCP listeners, exact manifest bytes
+over HTTP/WebAPI/TLS, untrusted certificate rejection and an unknown-route 404.
+The namespace uses dummy `10.77.0.2/24`; the host's loopback redirects are not
+mistaken for the game transport configuration. This is server-only acceptance,
+not a BAP guest session, gameplay, UDP/STUN guest acceptance or a Windows native port.
+
+On both Windows and Ubuntu, **10 platform controls and 2 unit tests pass**, using
+real curl with bounded synthetic loopback FTP fixtures. A fixture advertised a
+public PASV address; the client used the original loopback endpoint. Interrupted
+transfers retain the exact partial bytes; wrong digest, existing destination,
+existing partial, public source and path/name escape controls refuse the input.
+Early Windows fixture failures were retained and corrected by resetting accepted
+sockets to blocking mode and ending the deliberate truncated transfer cleanly.
+These were fixture defects, not a game/console observation.
+
+Canonical integration controls pass: wrong manifest exit 2, missing game exit 1,
+same-size wrong executable exit 2, reused preparation output exit 2. None reached
+the delegate. The creator plan withholds `D1_PROFILE_FILE` and sets push family `4`,
+while the ordinary plan retains `4,3`. All preparation input is disabled. Exact
+patch replay, idempotence and refusal/preservation of an unrelated source edit pass.
+Both canonical scripts pass Bash syntax checks; PowerShell parsing/name guards pass.
+
+The supplied default `profile-old-russia.bin` fixture is present: **20,318 bytes**,
+SHA-256 `94f166e6803d4bc702ea006a7eb1829142ee5593393185863f9d83a060e6afd9`.
+The actual plan finds no missing configured fixture paths; native acceptance of
+the supplied fixture and newly generated dump-dependent artifacts is still open.
+Do not describe the existing profile as absent or regenerate it from another build.
+
+The narrow `pull-bootstrap` collector is now available for the already isolated
+owned console. It collects only the exact `eboot.bin` and `param.sfo`; the executable
+must pass the existing pin before promotion. Metadata is hashed but not version
+accepted, and nothing is installed. Console isolation is an explicit precondition,
+not established by private-address validation. No real console was contacted.
+This does not recover the retail update's image key or supply the missing eboot.
+
+At **14:24:43 UTC**, fresh readiness returns **12 PASS / 2 FAIL**, native exit 2.
+The two added checks validate installed canonical patch hashes. Remaining failures:
+exact eboot and native Windows/WSL runtime acceptance (guest transport/probe hooks
+and dump-dependent artifacts). Preparation receipts explicitly keep native boot
+and Windows transport acceptance false.
+
+Private evidence: `cfw-staging/2026-10-11/platform-preparation`, including retained
+failed Windows fixture logs, successful build/test/control receipts, patch replay
+and integration controls; and `cfw-staging/launch-preparation` for the canonical
+plan, server checks and child cleanup. Fresh readiness is
+`readiness-after-platform-preparation.json`. All source helpers are installed
+under `F:\d1\tools`. No production input, TLS key, binary, dump or fixture is tracked
+or copied to the NAS. No new video or native PS4 game run was produced.

@@ -6,7 +6,7 @@ for tree in d1-server d1-trace d1-observe; do
     target="$repo/$tree/target/release"
     mkdir -p "$target"
     if [[ "$tree" == d1-server ]]; then
-        names=(d1 d1-activity-host d1-bap d1-eboot d1-forge d1-harness d1-live d1-loadout d1-oracle d1-pkg d1-replay d1-responder shadnet-server)
+        names=(d1 d1-activity-host d1-bap d1-eboot d1-forge d1-harness d1-live d1-loadout d1-oracle d1-pkg d1-platform d1-replay d1-responder shadnet-server)
     else
         names=("$tree")
     fi

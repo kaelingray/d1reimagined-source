@@ -30,6 +30,13 @@ with no skips, and their **21 tests** pass with the installed estate. See the
 [PS4 transition checkpoint](notes/ps4-transition-2026-10-11.md) and
 [original setup helpers](tools/ps4_setup/README.md).
 
+The canonical PS4 launcher now supports preparation and a contained **server-only
+test**, invoked from Windows through WSL. All **19 live server/containment checks**
+pass, including the pinned manifest over HTTP, WebAPI and TLS; both owned server
+processes shut down cleanly. The new bootstrap transfer helper passes 10 controls
+on Windows and Linux and is ready for the owned console when available. This does
+not decrypt the retail update or establish Windows guest transport or a game boot.
+
 The table below is the retained PS3 checkpoint from **2026-10-10**, not PS4 acceptance.
 
 | Area | Verified scope | Remaining work |
