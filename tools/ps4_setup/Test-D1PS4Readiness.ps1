@@ -68,7 +68,7 @@ try {
     Check 'Firmware 11.00 module receipt' ($moduleCount -eq 37 -and $moduleFailures.Count -eq 0) "modules=$moduleCount; failed=$($moduleFailures -join ','); upstream reference used firmware 10.01"
 } catch { Check 'Firmware 11.00 module receipt' $false $_.Exception.Message }
 Check 'No existing emulator process' (@(Get-Process shadPS4,rpcs3 -ErrorAction SilentlyContinue).Count -eq 0) 'One emulator at a time'
-CheckHash 'Canonical preparation launcher installed' (Join-Path $Repo 'capture-rig\run-boot.sh') 'a2217479a5bf32870259569b89e3dde1e05ef224594768f9dc298cd55b7ac345'
+CheckHash 'Canonical preparation launcher installed' (Join-Path $Repo 'capture-rig\run-boot.sh') '22536378f698e53671848fa4307e9b0bbfccf21510c383f5545eb5c3b8d1cac6'
 CheckHash 'Canonical server-check delegate installed' (Join-Path $Repo 'capture-rig\run-signon-experiment.sh') '6a3b2c89b098d9bd00f7dae2e0a0e7f5557a9bd483b7fc92af0e733c2c190d2d'
 # Static file/config checks cannot establish a successful Windows/WSL runtime port.
 Check 'Native Windows/WSL runtime validated' $false 'Canonical preparation and contained Linux servers validated separately. Windows guest transport, probe hooks and dump-dependent fixtures remain unaccepted.'

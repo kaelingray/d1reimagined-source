@@ -6,10 +6,10 @@ param(
 $ErrorActionPreference = 'Stop'
 # Minimal changes to the supplied canonical launchers; refuse unrelated edits.
 $taskPins = @(
-    @{Path='capture-rig/run-boot.sh';Before='04bd05f0406b27c0a4fa32cce5c019eb18ffc4389ece367460c2f26542b59908';After='a2217479a5bf32870259569b89e3dde1e05ef224594768f9dc298cd55b7ac345'},
+    @{Path='capture-rig/run-boot.sh';Before='04bd05f0406b27c0a4fa32cce5c019eb18ffc4389ece367460c2f26542b59908';After='22536378f698e53671848fa4307e9b0bbfccf21510c383f5545eb5c3b8d1cac6'},
     @{Path='capture-rig/run-signon-experiment.sh';Before='6ba220308343c4508231a5604fecbbd8c275cc4173bc8e7edc48fea341f7b224';After='6a3b2c89b098d9bd00f7dae2e0a0e7f5557a9bd483b7fc92af0e733c2c190d2d'}
 )
-if ((Get-FileHash -LiteralPath $Patch).Hash.ToLowerInvariant() -ne '7909f7922b79a6ad7e29e97fdfc8b3b15ced2c73fc4e9c3f2463d1707c44c890') {
+if ((Get-FileHash -LiteralPath $Patch).Hash.ToLowerInvariant() -ne '3f67edd29e940b740837a6d46bf5e5928122fcbe04bf72bb658384d5ce88bb50') {
     throw 'Canonical preparation patch identity differs'
 }
 $taskStates = @($taskPins | ForEach-Object {

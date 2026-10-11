@@ -21,7 +21,7 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `Test-D1RepackInodes.ps1` | Inspect the existing PFS reader's super-root and parsed inode objects for files outside the game directory and unlinked file records. Require the known executable positive control; report the scope separately from raw-sector carving. |
 | `Apply-D1PkgOwnershipFix.ps1` / `d1-pkg-local-owner.patch` | Apply our GPL-2.0-or-later fix to the separate `d1-pkg` crate, guarded by before/after source hashes. Local blocks retain their exact file identity when engine packages share an ID/generation. The existing hash verifier is retained; eight positive/negative ownership controls join its `controls` command. |
 | `d1-platform.rs` | Install as a bin in the separate `d1-pkg` crate. Reuse its manifest digest/pins for platform controls, a private canonical launch contract, contained live server checks and a narrowly scoped FTP bootstrap collector. No game format parser is added. |
-| `Apply-D1PS4Preparation.ps1` / `canonical-preparation.patch` | Hash-guarded changes to the existing `run-boot.sh` and its delegate. Add explicit `--plan` and `--server-check` modes, exact executable/manifest gates and owned server cleanup. Preserve the canonical native path. |
+| `Apply-D1PS4Preparation.ps1` / `canonical-preparation.patch` | Hash-guarded changes to the existing `run-boot.sh` and its delegate. Add explicit `--plan` and `--server-check` modes, exact executable/manifest gates and owned server cleanup. Native title taps respect `OPERATOR_PAD=1`; driver cancellation stops its delayed child and FIFO writes have a deadline. |
 | `Prepare-D1PS4Launch.ps1` | Windows orchestration of those canonical modes. Record effective settings after the creator overrides; verify server child shutdown after a server-only run. Never start an emulator or controller. |
 
 The default paths match this user's Windows installation. Installed copies are
@@ -81,6 +81,13 @@ The supplied default profile fixture exists (20,318 bytes); its presence does no
 establish native acceptance. The stock Windows emulator also lacks the supplied
 project's private probe hooks. Do not forward Linux Vulkan or controller paths
 blindly, or treat a Linux network namespace as containment of a Windows executable.
+
+After the 11 October daily cutoff, the original unconditional title-input task
+was corrected: operator mode or `PRESS=0` creates no driver. Six actual-function
+checks with a real Linux FIFO verify autonomous taps, those two no-input modes,
+delayed child cleanup, preservation of an unrelated child and bounded writes
+without a reader. The game remains untested; these checks exercise input
+orchestration only. This later evidence belongs to the next eligible daily report.
 
 When the owned console becomes available, `d1-platform pull-bootstrap` can retrieve
 only the exact missing executable and its metadata into a new private staging

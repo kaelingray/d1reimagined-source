@@ -324,3 +324,33 @@ plan, server checks and child cleanup. Fresh readiness is
 `readiness-after-platform-preparation.json`. All source helpers are installed
 under `F:\d1\tools`. No production input, TLS key, binary, dump or fixture is tracked
 or copied to the NAS. No new video or native PS4 game run was produced.
+
+## After daily delivery: input ownership
+
+The 11 October consolidated text-only handoff reached the NAS at
+**18:00:06.868279 UTC (19:00 UK)**; all three payloads and the manifest were
+independently verified. No prior footage was resent and no media decode was
+claimed for text. That ready package remains immutable at checkpoint `12467f3`.
+
+Engineering resumed with a concrete canonical-launcher defect: the original
+script scheduled virtual title taps even with `OPERATOR_PAD=1`, contrary to its
+input ownership rule, and a delayed task could survive an early run exit.
+Operator mode and zero taps now create no driver. The driver owns and cleans its
+sleep/write child; the parent uses its shell job table to stop only its own
+running input job. FIFO writes have a two-second deadline instead of blocking
+forever when the reader disappears. The normal autonomous delay remains 60 seconds.
+
+At approximately **18:06 UTC**, six checks execute the actual canonical input
+functions with a real Linux FIFO: two observed autonomous taps, no driver for
+operator/zero-tap modes, cancelled delayed child gone, unrelated child preserved,
+and no-reader writes bounded. Bash syntax passes; fresh source-pinned patch replay
+and idempotence pass. Fresh readiness remains 12 PASS/2 FAIL, exit 2. The first
+fixture attempt used the Windows-mounted filesystem, which cannot create the
+Linux FIFO; that failed output is preserved, and the successful fixture uses a
+private Linux temporary directory that is removed afterward.
+
+This is input orchestration acceptance, not a native game/controller run. Exact
+build and manifest gates remain intact. These results are post-cutoff evidence
+for the next eligible daily edition. Local receipts are under
+`cfw-staging/2026-10-11/late-title-input-controls-v2`, `late-patch-controls` and
+`readiness-after-input-ownership.json`. No ready report or game input was changed.

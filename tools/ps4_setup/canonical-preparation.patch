@@ -1,5 +1,5 @@
 diff --git a/capture-rig/run-boot.sh b/capture-rig/run-boot.sh
-index 17c2173..a280d7b 100644
+index 17c2173..edd4de0 100644
 --- a/capture-rig/run-boot.sh
 +++ b/capture-rig/run-boot.sh
 @@ -26,8 +26,17 @@
@@ -69,7 +69,7 @@ index 17c2173..a280d7b 100644
  
  echo "run dir:  $RUN_OUT"
  echo "trace:    $D1_ACCOUNT_TRACE_OUT"
-@@ -416,6 +444,17 @@ for m in E.parse(sys.argv[1]).getroot():
+@@ -416,13 +444,64 @@ for m in E.parse(sys.argv[1]).getroot():
                  print(f"  {ln.get('Address'):>8} = {ln.get('Value'):<18} | {m.get('Name')}")
  EOF
  
@@ -85,8 +85,56 @@ index 17c2173..a280d7b 100644
 +fi
 +
  # ── Launch, then press cross at the title screen ──────────────────────────────────────────────────
++start_title_input() {
++    TITLE_INPUT_PID=""
++    # Respect the operator controller; only autonomous runs can use the virtual pad.
++    [[ "${OPERATOR_PAD:-0}" != "1" && "${PRESS:-0}" != "0" ]] || return 0
++    (
++        child=""
++        cleanup_input_child() {
++            if [[ -n "$child" ]]; then
++                kill "$child" 2>/dev/null || true
++                wait "$child" 2>/dev/null || true
++            fi
++        }
++        trap cleanup_input_child EXIT
++        trap 'exit 130' INT
++        trap 'exit 143' TERM
++        sleep "${D1_TITLE_INPUT_DELAY_SECONDS:-60}" & child=$!
++        wait "$child"; child=""
++        for _ in $(seq 1 "$PRESS"); do
++            # A disappearing FIFO reader must not leave this driver blocked forever.
++            timeout 2 bash -c 'printf "press a\n" > "$1"' _ "$PAD_FIFO" & child=$!
++            wait "$child" 2>/dev/null || true; child=""
++            sleep 3 & child=$!
++            wait "$child"; child=""
++        done
++    ) &
++    TITLE_INPUT_PID=$!
++}
++stop_title_input() {
++    if [[ -n "${TITLE_INPUT_PID:-}" ]]; then
++        # The shell job table proves ownership even if an old PID has been reused.
++        local running
++        for running in $(jobs -pr); do
++            [[ "$running" != "$TITLE_INPUT_PID" ]] || kill "$running" 2>/dev/null || true
++        done
++        wait "$TITLE_INPUT_PID" 2>/dev/null || true
++    fi
++}
++trap stop_title_input EXIT
++trap 'exit 130' INT
++trap 'exit 143' TERM
  "$REPO/capture-rig/run-signon-experiment.sh" "$GAME" "$RUN_NAME" &
  RUNNER=$!
+ 
+ # The title screen appears ~55s in; taps before that are simply dropped, so an early first tap is
+ # harmless and a late one costs a whole boot.
+-( sleep 60; for _ in $(seq 1 "$PRESS"); do echo 'press a' > "$PAD_FIFO" 2>/dev/null || true; sleep 3; done ) &
++start_title_input
+ 
+ wait $RUNNER
+ 
 diff --git a/capture-rig/run-signon-experiment.sh b/capture-rig/run-signon-experiment.sh
 index d8ef0e5..9cd4792 100644
 --- a/capture-rig/run-signon-experiment.sh
