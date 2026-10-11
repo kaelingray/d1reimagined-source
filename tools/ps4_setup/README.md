@@ -35,3 +35,12 @@ The separately installed package extractor is
 [AzaharPlus/shadPS4Plus](https://github.com/AzaharPlus/shadPS4Plus), GPL-2.0,
 `PKG_EXTRACTOR_1_1`. It is not vendored. Its downloaded Windows archive matched
 the SHA-256 release digest published by GitHub; the source/license receipt is local.
+
+The later PC decryption review used separately installed
+[maxton/LibOrbisPkg](https://github.com/maxton/LibOrbisPkg), LGPL-3.0, source commit
+`643477263b2644e0803e0f58b8726ea4e3f3b7d4`. It recovered and verified the base's
+repack image key and independently extracted the same executable. That executable
+identifies itself as build `56578.17.04.12.1251.evil`, later than the target.
+The joined 01.29 update's image key was not recovered by the repack route.
+See `notes/ps4-transition-2026-10-11.md` for controls, private receipt paths and limits.
+Neither external tool is vendored here, and the preparation identity gates remain.

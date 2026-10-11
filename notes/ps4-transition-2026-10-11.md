@@ -36,6 +36,55 @@ The project's required decrypted ELF is 29,148,264 bytes, SHA-256
 Keep that identity gate. Changing the pin to an unidentified build would make
 the documented diagnostic addresses and oracle calls unsafe to interpret.
 
+### Follow-up: PC decryption and executable identity
+
+The complete eight-part update is the correct CUSA00219 **01.29 install package**.
+The earlier layout comparison examined the separately supplied base package's
+executable, not an executable extracted from that update. It does not establish
+that the update is the wrong version.
+
+The base executable now has an independently observed build identifier:
+`56578.17.04.12.1251.evil`, dated **2017-04-12**, at SELF file offset `0x18e3d5a`.
+The reference 01.29 executable is documented as `52553.16.09.28.1551.evil`, dated
+**2016-09-28** (`design/content-and-packages.md:1056` and
+`design/signon-and-entitlement.md:43` in the supplied PS4 tree).
+Thus the base package's APP_VER 01.00 describes its repack metadata; its executable
+is a later build than the target. Its exact Sony patch number is not established.
+The second LOAD starts 98,304 bytes (`0x18000`) later in virtual memory than the
+reference. Do not apply reference codec addresses to this build.
+
+An existing LGPL-3.0 reader, [maxton/LibOrbisPkg](https://github.com/maxton/LibOrbisPkg),
+was compiled separately from unmodified source commit
+`643477263b2644e0803e0f58b8726ea4e3f3b7d4`, under `F:\d1\tools\liborbispkg\0.2.245`.
+No external reader source was copied into either project. Its existing cryptographic
+methods and PFS reader were used; no second package-format reader was written.
+
+| Check | Supplied base | Joined 01.29 update |
+| --- | --- | --- |
+| Shared metadata key digest | Verified | Verified |
+| Fake-package image-key recovery and digest | Recovered, 32 bytes, verified | No key recovered |
+| Conventional 32-zero repack passcode | Matches | Does not match |
+| Wrong-passcode negative control | Rejected | Rejected |
+
+The update fails at the final image-key RSA unwrap with the fake-package keyset;
+that method succeeds on the base in the same review. This tests the ordinary repack
+route, not every conceivable retail decryption method. No matching retail image
+key or passcode was recovered, and no update executable was extracted.
+
+The base's PFS was actually decrypted and its executable selectively extracted
+with this second reader at **11:55:32 UTC**. Its SHA-256 exactly matches the earlier
+GPL extractor's output. The inner filesystem lists 2,119 files, including 2,105
+Bungie content packages; only the executable was copied in this check. All eight
+SELF segment headers have encryption and compression flags clear. A plaintext
+SELF wrapper does not need cryptographic decryption and is not the pinned ELF.
+
+Private receipts: `pc-decryption-review.json`, `patch-key-envelope-review.json`,
+`base-build-identity-review.json` and `pc-decrypt-check/extraction-receipt.json`,
+under the PS4 tree's ignored `cfw-staging/2026-10-11`. The library source/build
+receipt is beside the separate DLL. No keys were printed or recorded, originals
+were opened read-only, and nothing was promoted into the pinned dump directory.
+No emulator was launched. The matching decrypted 01.29 input gate remains open.
+
 The user confirmed that a console with GoldHEN FTP is not currently available.
 The game-input gate therefore remains the owned patched union dump described
 in `capture-rig/CFW-DUMP-RUNBOOK.md`. Its example `ftp_dump.py` is absent from the
