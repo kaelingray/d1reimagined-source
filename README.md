@@ -14,6 +14,11 @@ folders may still have their earlier names; use explicit paths for imported runt
 
 ## Current state - 2026-10-11
 
+The [12 October recovery checkpoint](notes/ps4-recovery-2026-10-12.md) adds a
+complete scan of logical repack nonpayload space and inspection of the original
+second owned package. Both controls pass; neither recovers the exact executable.
+The new scanner passes nine controls and three unit tests on Windows and Linux.
+
 PS4 setup follows the supplied project's `BOOTSTRAP.md`, `CLAUDE.md` and status
 documents. The local US base package reports APP_VER 01.00; the eight CUSA00219
 01.29 update chunks are merged with a verified full read-back hash. All **1,647

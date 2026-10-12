@@ -23,11 +23,17 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `d1-platform.rs` | Install as a bin in the separate `d1-pkg` crate. Reuse its manifest digest/pins for platform controls, a private canonical launch contract, contained live server checks and a narrowly scoped FTP bootstrap collector. No game format parser is added. |
 | `Apply-D1PS4Preparation.ps1` / `canonical-preparation.patch` | Hash-guarded changes to the existing `run-boot.sh` and its delegate. Add explicit `--plan` and `--server-check` modes, exact executable/manifest gates and owned server cleanup. Native title taps respect `OPERATOR_PAD=1`; driver cancellation stops its delayed child and FIFO writes have a deadline. |
 | `Prepare-D1PS4Launch.ps1` | Windows orchestration of those canonical modes. Record effective settings after the creator overrides; verify server child shutdown after a server-only run. Never start an emulator or controller. |
+| `d1-byte-scan.rs` | Generic bounded byte-range planning and scanning in the existing `d1-pkg` crate. Reconstruct the complete plan, require a pinned full known-executable control, and reject altered/missing ranges or existing outputs. Nine controls and three unit tests pass on Windows and Linux. |
+| `Export-D1RepackSlack.ps1` | Read-only adapter to the existing licensed PFS reader. Export only nonpayload logical image ranges and the known executable control into fresh private staging; require the corrected reader hash and contiguous uncompressed file model. No new package parser or executable acceptance path. |
 
 The default paths match this user's Windows installation. Installed copies are
 under `F:\d1\tools`; source copies here were hash-compared with them on 2026-10-11.
 Preparation output lives in the PS4 tree's ignored `cfw-staging/2026-10-11` directory.
 Do not commit any output, install packages, decrypted dump, module files or capture.
+
+The [12 October recovery review](../../notes/ps4-recovery-2026-10-12.md) records
+the complete 73,943,032-byte logical nonpayload scan and inspection of the
+original second owned package. Neither yielded the exact 01.29 executable.
 
 ```powershell
 & F:\d1\tools\Join-D1Update.ps1
