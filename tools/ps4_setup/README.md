@@ -25,6 +25,7 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `Prepare-D1PS4Launch.ps1` | Windows orchestration of those canonical modes. Record effective settings after the creator overrides; verify server child shutdown after a server-only run. Never start an emulator or controller. |
 | `d1-byte-scan.rs` | Generic bounded byte-range planning and scanning in the existing `d1-pkg` crate. Reconstruct the complete plan, require a pinned full known-executable control, and reject altered/missing ranges or existing outputs. Nine controls and three unit tests pass on Windows and Linux. |
 | `Export-D1RepackSlack.ps1` | Read-only adapter to the existing licensed PFS reader. Export only nonpayload logical image ranges and the known executable control into fresh private staging; require the corrected reader hash and contiguous uncompressed file model. No new package parser or executable acceptance path. |
+| `d1-synthetic-gate.rs` | Install in the standalone `d1-trace` crate. Reuse its record encoder/decoder to generate the public gate-control source fixture with synthetic registers; two positive/rejection controls and one unit test pass. No native input is read. |
 
 The default paths match this user's Windows installation. Installed copies are
 under `F:\d1\tools`; source copies here were hash-compared with them on 2026-10-11.

@@ -8,6 +8,9 @@ verified research; earlier PS3 01.00 work remains history.
 **The full game is not yet playable.**
 
 Source and engineering notes: [d1reimagined](https://github.com/p3n1cillin/d1reimagined).
+Public source and contributions: [d1reimagined-source](https://github.com/p3n1cillin/d1reimagined-source).
+The [12 October publication checkpoint](notes/publication-2026-10-12.md) records
+the active PS4 source export and its actual public-source checks.
 Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1reimagined-data).
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
