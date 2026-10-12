@@ -11,6 +11,7 @@ name = "d1"
 path = "src/main.rs"
 
 [dependencies]
+d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
 d1-run = { path = "../d1-run" }
 # The native probe-record decoder (the one Rust description of the 232-byte tracer record) lives
 # in d1-trace, which depends on d1-run - so the CLI, above both, is where the two are wired

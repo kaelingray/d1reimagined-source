@@ -207,7 +207,12 @@ fn run_boot_defaults() -> Option<BTreeMap<String, String>> {
     Some(
         shell_defaults(&text)
             .into_iter()
-            .map(|(k, v)| (k, v.replace("${REPO}", &repo).replace("$REPO", &repo)))
+            .map(|(k, v)| {
+                // The build registry's exports (`d1build.py shell`) are expanded the same way.
+                let manifest = format!("{repo}/{}", d1_build::selected().manifest);
+                let v = v.replace("${D1_BUILD_MANIFEST}", &manifest).replace("$D1_BUILD_MANIFEST", &manifest);
+                (k, v.replace("${REPO}", &repo).replace("$REPO", &repo))
+            })
             .collect(),
     )
 }

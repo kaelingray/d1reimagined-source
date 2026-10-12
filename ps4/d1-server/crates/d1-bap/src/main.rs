@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 use d1_bap::derive::{self, Reader, Thunk};
 use d1_eboot::descriptors;
-use d1_eboot::image::PINNED_EBOOT;
+use d1_eboot::image::default_eboot;
 
 const USAGE: &str = "\
 d1-bap - derivation and controls for the BAP tables (d1-bap/src/tables.rs)
@@ -51,7 +51,7 @@ fn parse_args() -> Result<Args, String> {
     }
     let mut args = Args {
         cmd,
-        eboot: PINNED_EBOOT.to_string(),
+        eboot: default_eboot(),
         defs: derive::PINNED_DEFS.to_string(),
         tsv: None,
     };

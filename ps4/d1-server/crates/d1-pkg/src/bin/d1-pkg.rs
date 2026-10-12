@@ -13,20 +13,15 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const DEFAULT_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/packages");
-
-/// The served manifest, for the W2.4 byte-compare. Untracked (it is derived from retail content),
-/// so its absence is expected on a clone and the control says so rather than passing quietly.
-const SERVED_MANIFEST: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../../capture-rig/manifests/full_en.bin");
+// Defaults come from the build registry (`capture-rig/builds.json`, `$D1_BUILD`). The pinned
+// controls are goldens of the 01.29 reference estate: run them with `D1_BUILD=01.29`.
 
 #[derive(Parser)]
 #[command(name = "d1-pkg", about = "Destiny 1 PS4 .pkg container reader (read-only)")]
 struct Cli {
-    /// Directory holding the package estate.
-    #[arg(long, global = true, default_value = DEFAULT_DIR)]
-    dir: PathBuf,
+    /// Directory holding the package estate (default: the selected build's packages).
+    #[arg(long, global = true)]
+    dir: Option<PathBuf>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -127,9 +122,11 @@ enum Cmd {
 
     /// Pinned controls. **Exit 2 means the output of this tool may not be cited.**
     Controls {
-        /// The served manifest to byte-compare against.
-        #[arg(long, default_value = SERVED_MANIFEST)]
-        served: PathBuf,
+        /// The served manifest to byte-compare against (default: the selected build's).
+        /// Untracked (it is derived from retail content), so its absence is expected on a clone
+        /// and the control says so rather than passing quietly.
+        #[arg(long)]
+        served: Option<PathBuf>,
         #[arg(long)]
         json: bool,
     },
@@ -137,9 +134,10 @@ enum Cmd {
 
 fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
+    let dir = cli.dir.clone().unwrap_or_else(|| d1_build::selected().packages_path());
     match cli.cmd {
         Cmd::Info { pkg } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let p = find(&est, &pkg)?;
             let h = &p.header;
             println!("{}", p.name);
@@ -155,7 +153,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::Blocks { pkg, compressed_only, json } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let p = find(&est, &pkg)?;
             let mut rows = Vec::new();
             for b in p.blocks() {
@@ -181,7 +179,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::Entries { pkg, block, json } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let p = find(&est, &pkg)?;
             let list: Vec<Entry> = p
                 .entries()
@@ -200,7 +198,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::ExtractBlock { pkg, index, out } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let p = find(&est, &pkg)?;
             let b = p.block(index).context("block index out of range")?;
             let data = est.read_block_stored(p, &b)?;
@@ -214,7 +212,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::VerifyPlain { pkg, index, plain, min_agree, json } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let p = find(&est, &pkg)?;
             let data = std::fs::read(&plain).with_context(|| format!("reading {}", plain.display()))?;
             let checks = check_self_lengths(p, index, &data);
@@ -260,7 +258,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::Verify { blocks } => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let (mut ok, mut bad) = (0usize, 0usize);
             let (mut bok, mut bbad) = (0usize, 0usize);
             for p in &est.packages {
@@ -295,7 +293,7 @@ fn main() -> Result<ExitCode> {
         }
 
         Cmd::Stats => {
-            let est = Estate::load(&cli.dir)?;
+            let est = Estate::load(&dir)?;
             let (mut nb, mut nc, mut ne, mut ns) = (0usize, 0usize, 0usize, 0usize);
             let (mut raw_max, mut comp_max) = (0u32, 0u32);
             for p in &est.packages {
@@ -350,7 +348,7 @@ fn main() -> Result<ExitCode> {
             let sel = Select { policy, only, lang };
             // dry-run reports the selection without the cap, because nothing is written and so
             // nothing can be handed to a client.
-            let built = manifest::build(&cli.dir, &sel, &guid, &config_guid, allow_overflow || dry_run)?;
+            let built = manifest::build(&dir, &sel, &guid, &config_guid, allow_overflow || dry_run)?;
 
             if verbose {
                 for r in &built.rows {
@@ -395,7 +393,8 @@ fn main() -> Result<ExitCode> {
             // An unreadable estate is not an error to bubble up: it means the controls could not
             // run, which is exactly what exit 2 is for. Bubbling it out as exit 1 would let a
             // caller that only checks `!= 2` treat an unverified tool as verified.
-            let mut rows = manifest::controls(&cli.dir, Some(&served)).unwrap_or_else(|e| {
+            let served = served.unwrap_or_else(|| d1_build::selected().manifest_path());
+            let mut rows = manifest::controls(&dir, Some(&served)).unwrap_or_else(|e| {
                 vec![manifest::ControlRow {
                     name: "estate readable".into(),
                     passed: false,

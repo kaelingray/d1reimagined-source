@@ -47,6 +47,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import d1build  # noqa: E402  (capture-rig/builds.json; D1_BUILD selects)
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 D1_EBOOT = REPO / "d1-server" / "target" / "release" / "d1-eboot"
 TRACER_SOURCE = pathlib.Path(
@@ -253,8 +256,9 @@ def main() -> int:
     parser.add_argument(
         "--eboot",
         type=pathlib.Path,
-        default=REPO / "dumps" / "patch-01.29-CUSA00219" / "eboot.bin",
-        help="image the guards are derived from; its sha256 is stamped into the catalog",
+        default=d1build.path(d1build.selected(), "eboot"),
+        help="image the guards are derived from (default: the selected build, D1_BUILD); "
+        "its sha256 is stamped into the catalog",
     )
     args = parser.parse_args()
 

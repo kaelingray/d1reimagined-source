@@ -15,6 +15,7 @@ name = "d1-harness"
 path = "src/main.rs"
 
 [dependencies]
+d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
 anyhow.workspace = true
 clap.workspace = true
 serde.workspace = true

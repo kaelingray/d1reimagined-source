@@ -198,8 +198,8 @@ fn options(a: &LayoutArgs) -> Options {
     if let Some(r) = &a.repo {
         o.repo = r.clone();
         o.root = format!("{r}/runs");
-        o.game = format!("{r}/dumps/patch-01.29-CUSA00219/eboot.bin");
-        o.patch = format!("{r}/patches/CUSA00219-lab-manifest-T1.xml");
+        o.game = format!("{r}/{}", d1_build::selected().launch);
+        o.patch = d1_harness::layout::build_patch(r);
     }
     if let Some(r) = &a.root {
         o.root = r.clone();

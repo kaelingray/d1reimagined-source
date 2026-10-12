@@ -56,8 +56,6 @@ pub const TEXT_HI: u64 = 0x1900000;
 pub const MAX_BACK: usize = 0x6000;
 /// How far forward from the prologue the string scan disassembles.
 pub const SCAN_SPAN: usize = 0x900;
-/// Where the eboot lives, relative to the repository root.
-pub const EBOOT_REL: &str = "dumps/patch-01.29-CUSA00219/eboot.bin";
 
 /// One symbolized frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,13 +115,13 @@ pub fn load_eboot_from(path: &Path) -> Result<Vec<u8>, String> {
     Ok(data)
 }
 
-/// Locate and load the pinned eboot via repo-root discovery.
+/// Locate and load the selected build's eboot (`capture-rig/builds.json`, `$D1_BUILD`).
 pub fn load_eboot() -> Result<Vec<u8>, String> {
     let root = find_repo_root().ok_or(
         "could not locate the repository root (a directory holding both capture-rig/ and runs/); \
          set D1_REPO",
     )?;
-    load_eboot_from(&root.join(EBOOT_REL))
+    load_eboot_from(&root.join(&d1_build::selected().eboot))
 }
 
 /// Load the eboot only if some address actually needs it (the prototype loaded lazily, so a

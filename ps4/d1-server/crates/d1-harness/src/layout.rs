@@ -456,12 +456,18 @@ impl Default for Options {
             root: format!("{repo}/runs"),
             emulator_bin: concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../shadPS4-d1trace/build-d1trace/shadps4").into(),
             emulator_cwd: concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../shadPS4-main").into(),
-            game: format!("{repo}/dumps/patch-01.29-CUSA00219/eboot.bin"),
-            patch: format!("{repo}/patches/CUSA00219-lab-manifest-T1.xml"),
+            game: format!("{repo}/{}", d1_build::selected().launch),
+            patch: build_patch(&repo),
             anchor_a: true,
             repo,
         }
     }
+}
+
+/// The selected build's client patch (`capture-rig/builds.json`). Patches are address-specific:
+/// a build with no patch of its own gets an empty path, never the reference build's patch.
+pub fn build_patch(repo: &str) -> String {
+    d1_build::selected().diag_patch.as_ref().map(|p| format!("{repo}/{p}")).unwrap_or_default()
 }
 
 /// Repo root: `$D1_REPO` if set, else derived from this crate's compile-time location.
@@ -485,7 +491,7 @@ pub fn build(opts: &Options) -> Layout {
     let run_id = format!("p2p-{}", token(seed, "run", 12));
     let base = format!("{}/{}", opts.root, run_id);
 
-    let manifest = format!("{}/capture-rig/manifests/full_en.bin", opts.repo);
+    let manifest = format!("{}/{}", opts.repo, d1_build::selected().manifest);
     let profile = format!("{}/capture-rig/profiles/profile-old-russia.bin", opts.repo);
     let responder = format!("{}/d1-server/target/release/d1-responder", opts.repo);
     let shadnet = format!("{}/d1-server/target/release/shadnet-server", opts.repo);
@@ -716,16 +722,13 @@ pub fn build(opts: &Options) -> Layout {
                 format!("{proot}/config/tls.key"),
             ],
         );
-        argv.insert(
-            "emulator".into(),
-            vec![
-                opts.emulator_bin.clone(),
-                "-p".into(),
-                opts.patch.clone(),
-                "-g".into(),
-                opts.game.clone(),
-            ],
-        );
+        // No `-p` at all when the selected build has no patch of its own (see `build_patch`).
+        let mut emulator = vec![opts.emulator_bin.clone()];
+        if !opts.patch.is_empty() {
+            emulator.extend(["-p".into(), opts.patch.clone()]);
+        }
+        emulator.extend(["-g".into(), opts.game.clone()]);
+        argv.insert("emulator".into(), emulator);
         // 2026-08-11: the pad is `d1-harness pad run` (the Rust port of
         // `capture-rig/virtual-pad.py`), which grew `--vendor/--product` precisely for this
         // seam - the Python hardcodes one identity, so two of it are one device to SDL.

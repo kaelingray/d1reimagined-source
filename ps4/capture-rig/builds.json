@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "comment": "Executable builds this project can target. D1_BUILD selects one; otherwise `default`. The `reference` build is the one every address in design/, the probe-site catalogues and the fixed BAP tables was measured against. A build with addresses_valid=false has no re-derived addresses yet: tools that use fixed game addresses must refuse it, never reuse the reference's.",
+  "default": "later-56578",
+  "reference": "01.29",
+  "builds": {
+    "01.29": {
+      "app_version": "01.29",
+      "build_label": "52553.16.09.28.1551.evil",
+      "title_id": "CUSA00219",
+      "game_dir": "dumps/patch-01.29-CUSA00219",
+      "packages": "dumps/patch-01.29-CUSA00219/packages",
+      "eboot": "dumps/patch-01.29-CUSA00219/eboot.bin",
+      "eboot_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
+      "eboot_bytes": 29148264,
+      "launch": "dumps/patch-01.29-CUSA00219/eboot.bin",
+      "launch_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
+      "launch_bytes": 29148264,
+      "manifest": "capture-rig/manifests/full_en.bin",
+      "manifest_sha256": "0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be",
+      "manifest_bytes": 52797,
+      "diag_patch": "patches/CUSA00219-lab-manifest-T1.xml",
+      "addresses_valid": true
+    },
+    "later-56578": {
+      "app_version": null,
+      "package_version": "01.33",
+      "package_version_source": "repack sce_sys/param.sfo VERSION=01.33 (APP_VER=01.00 is the repack's) and every sce_sys/changeinfo app_ver=01.33; the executable has not yet reported its own version",
+      "build_label": "56578.17.04.12.1251.evil",
+      "title_id": "CUSA00219",
+      "game_dir": "dumps/later-56578-CUSA00219/CUSA00219",
+      "packages": "dumps/later-56578-CUSA00219/CUSA00219/packages",
+      "eboot": "dumps/later-56578-CUSA00219/eboot.elf",
+      "eboot_sha256": "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833",
+      "eboot_bytes": 29249016,
+      "launch": "dumps/later-56578-CUSA00219/CUSA00219/eboot.bin",
+      "launch_sha256": "ebee5df27aca00057f223b96edab461917e1a7e837b4017b7d6d84b0ae7a2a02",
+      "launch_bytes": 29276248,
+      "manifest": "capture-rig/manifests/later-56578/full_en.bin",
+      "manifest_sha256": "50f2b13866773d7143f65218c3205179147406ac3d32d50c536028d9de515bb0",
+      "manifest_bytes": 71003,
+      "manifest_note": "d1-pkg default policy (all generations, neutral + en): 1,392 packages, above the 1,325-descriptor cap measured on the 01.29 client; this client's cap is not yet measured",
+      "diag_patch": null,
+      "addresses_valid": false
+    }
+  }
+}

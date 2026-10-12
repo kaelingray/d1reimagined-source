@@ -44,16 +44,32 @@ pub const PF_X: u32 = 1;
 /// `push rbp; mov rbp,rsp` - the only start a disassembly may be anchored on (ATLAS §4.5).
 pub const PROLOGUE: [u8; 4] = [0x55, 0x48, 0x89, 0xE5];
 
-/// The pinned build this project analyses. Everything in `design/` is measured against it.
+/// The 01.29 **reference** build. Everything in `design/` is measured against it, and every
+/// fixed address in this workspace is an address in this image. Which build a tool actually
+/// opens is [`default_eboot`] (`$D1_EBOOT`, else the `capture-rig/builds.json` selection).
 pub const PINNED_EBOOT: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/eboot.bin");
 
-/// SHA-256 of the pinned 01.29 eboot - the build-identity gate (ATLAS Layer 1).
+/// SHA-256 of the 01.29 reference eboot - the address-reference identity (ATLAS Layer 1).
 /// Re-derived here from the file, and cross-checked against
 /// `dumps/patch-01.29-CUSA00219/MANIFEST.sha256` line 1650 (`eboot.bin  29148264`).
 pub const PINNED_EBOOT_SHA256: &str =
     "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954";
 pub const PINNED_EBOOT_LEN: usize = 29_148_264;
+
+/// The image a tool opens when not told otherwise: `$D1_EBOOT`, else the selected build's ELF.
+pub fn default_eboot() -> String {
+    std::env::var("D1_EBOOT")
+        .unwrap_or_else(|_| d1_build::selected().eboot_path().to_string_lossy().into_owned())
+}
+
+/// Whether `sha256` is an image whose fixed addresses have been derived (today: the reference).
+/// Address-bearing code must refuse any other image rather than read a neighbour's bytes.
+pub fn addresses_apply(sha256: &str) -> bool {
+    d1_build::builds()
+        .map(|b| b.all.iter().any(|x| x.addresses_valid && x.eboot_sha256 == sha256))
+        .unwrap_or(sha256 == PINNED_EBOOT_SHA256)
+}
 
 #[derive(Debug)]
 pub enum ImageError {

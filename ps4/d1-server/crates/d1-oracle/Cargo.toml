@@ -9,6 +9,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
 # ── LICENCE AUDIT (CLAUDE.md non-negotiable) ─────────────────────────────────────────────────────
 # `unicorn-engine` 2.1.5 and `unicorn-engine-sys` 2.1.5 are **GPL-2.0** (crates.io metadata and the
 # vendored `COPYING`).  It bundles QEMU (GPL-2.0) and `glib_compat` (LGPL-2.1, `COPYING.LGPL2`).

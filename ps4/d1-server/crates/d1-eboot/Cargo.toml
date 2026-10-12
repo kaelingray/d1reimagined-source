@@ -9,6 +9,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
 # Licences checked (CLAUDE.md non-negotiable: nothing incompatible with GPL-2.0-or-later,
 # and nothing sourced from AGPL-3.0 or unlicensed prior art).
 anyhow.workspace = true            # MIT OR Apache-2.0

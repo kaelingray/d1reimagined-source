@@ -48,7 +48,7 @@ use d1_eboot::disasm::{self, Anchor};
 use d1_eboot::dynsym;
 use d1_eboot::fieldxref;
 use d1_eboot::functions;
-use d1_eboot::image::{Image, PINNED_EBOOT, PINNED_EBOOT_SHA256};
+use d1_eboot::image::{addresses_apply, default_eboot, Image, PINNED_EBOOT_SHA256};
 use d1_eboot::ladder;
 use d1_eboot::nametab;
 use d1_eboot::reloc;
@@ -69,7 +69,7 @@ fn parse_int(s: &str) -> std::result::Result<u64, String> {
 #[derive(Parser)]
 #[command(name = "d1-eboot", about = "Static analysis of the Destiny 1 PS4 eboot", version)]
 struct Cli {
-    /// Image to analyse. Defaults to $D1_EBOOT, else the pinned 01.29 eboot.
+    /// Image to analyse. Defaults to $D1_EBOOT, else the selected build (capture-rig/builds.json, $D1_BUILD).
     #[arg(long, global = true)]
     eboot: Option<String>,
     /// Machine-readable output.
@@ -322,8 +322,7 @@ fn run() -> Result<ExitCode> {
     let path = cli
         .eboot
         .clone()
-        .or_else(|| std::env::var("D1_EBOOT").ok())
-        .unwrap_or_else(|| PINNED_EBOOT.to_string());
+        .unwrap_or_else(default_eboot);
     let image = Image::open(&path).with_context(|| format!("opening {path}"))?;
 
     match &cli.cmd {
@@ -1429,10 +1428,20 @@ fn cmd_controls(image: &Image, json: bool) -> Result<ExitCode> {
     let mut rows: Vec<(String, bool, String)> = Vec::new();
 
     let sha = image.sha256();
+    let known = d1_build::builds()
+        .ok()
+        .and_then(|b| b.all.iter().find(|x| x.eboot_sha256 == sha).map(|x| x.id.clone()));
     rows.push((
-        "build identity (sha256)".into(),
-        sha == PINNED_EBOOT_SHA256,
-        sha.clone(),
+        "build identity (sha256) is a registered build".into(),
+        known.is_some(),
+        format!("{sha} = {}", known.as_deref().unwrap_or("UNREGISTERED")),
+    ));
+    // Every row below is a historical constant of the 01.29 reference. On any other build they
+    // are expected to fail until re-derived; this row says so up front instead of 20 red rows.
+    rows.push((
+        "fixed addresses apply to this image (reference, or re-derived)".into(),
+        addresses_apply(&sha),
+        if sha == PINNED_EBOOT_SHA256 { "01.29 reference".into() } else { "not re-derived".into() },
     ));
 
     let t = reloc::tables(image)?;

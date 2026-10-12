@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-build"
+description = "The executable-build registry (capture-rig/builds.json): which owned build a tool targets, and its identity pins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true             # MIT OR Apache-2.0
+serde_json.workspace = true        # MIT OR Apache-2.0
+
+[lib]
+name = "d1_build"
+path = "src/lib.rs"

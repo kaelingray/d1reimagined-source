@@ -82,12 +82,23 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("capstone is required:  pip install capstone")
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import d1build  # noqa: E402  (capture-rig/builds.json; D1_BUILD selects)
+
 REPO = Path(__file__).resolve().parent.parent
-EBOOT = REPO / "dumps" / "patch-01.29-CUSA00219" / "eboot.bin"
+BUILD = d1build.selected()
+EBOOT = d1build.path(BUILD, "eboot")
+# The census controls below were measured on the 01.29 reference, whose ELF hash this is. On any
+# other build they are expected to fail until re-derived, and outputs go to a per-build directory
+# so the reference catalogue in design/ is never overwritten by another build's scan.
 EBOOT_SHA256 = "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954"
 RUNS = REPO / "runs"
-OUT_MD = REPO / "design" / "diagnostic-catalogue.md"
-OUT_TSV = REPO / "capture-rig" / "diagnostic-catalogue.tsv"
+if BUILD["is_reference"]:
+    OUT_MD = REPO / "design" / "diagnostic-catalogue.md"
+    OUT_TSV = REPO / "capture-rig" / "diagnostic-catalogue.tsv"
+else:
+    OUT_MD = REPO / "capture-rig" / "derived" / BUILD["id"] / "diagnostic-catalogue.md"
+    OUT_TSV = REPO / "capture-rig" / "derived" / BUILD["id"] / "diagnostic-catalogue.tsv"
 
 PROLOGUE = b"\x55\x48\x89\xe5"
 
@@ -718,7 +729,8 @@ def controls(img: Image, scan: Scan, rows: list[Row], rtti: list[Row],
     def c(name: str, ok: bool, detail: str = "") -> None:
         out.append((name, bool(ok), detail))
 
-    c("build identity (sha256) == pinned 01.29 eboot", img.sha256 == EBOOT_SHA256, img.sha256)
+    c("build identity (sha256) == 01.29 reference the census was measured on",
+      img.sha256 == EBOOT_SHA256, f"{img.sha256} ({BUILD['id']})")
 
     # -- the decoder, against guest-diagnostics.md §3's independently-derived census -------
     c("`call 0xe4da0` sites == 1632 (guest-diagnostics.md §3)",
@@ -1123,6 +1135,7 @@ def main() -> int:
         print(f"wrote {args.json}", file=sys.stderr)
 
     if args.write:
+        OUT_TSV.parent.mkdir(parents=True, exist_ok=True)
         written = write_tsv(OUT_TSV, rows, thresholds, img.sha256)
         # ⭐ READ THE GUARD BACK, in the same breath as the write: a guard that is never parsed
         # is decoration.  ⚠ The axis tested is "does the provenance line ROUND-TRIP", NOT "is the

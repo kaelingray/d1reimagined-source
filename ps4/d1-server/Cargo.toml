@@ -4,6 +4,7 @@ members = [
     "crates/d1",
     "crates/d1-activity-host",
     "crates/d1-bap",
+    "crates/d1-build",
     "crates/d1-eboot",
     "crates/d1-forge",
     "crates/d1-harness",

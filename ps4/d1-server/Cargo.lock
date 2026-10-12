@@ -1092,6 +1092,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "d1-build",
  "d1-run",
  "d1-trace",
  "iced-x86",
@@ -1126,12 +1127,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "d1-build"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "d1-eboot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
  "clap",
+ "d1-build",
  "iced-x86",
  "serde",
  "serde_json",
@@ -1162,6 +1172,7 @@ dependencies = [
  "anyhow",
  "clap",
  "d1-bap",
+ "d1-build",
  "libc",
  "serde",
  "serde_json",
@@ -1199,6 +1210,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "d1-build",
  "d1-eboot",
  "d1-pkg",
  "serde",
@@ -1212,6 +1224,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "d1-build",
  "serde",
  "serde_json",
  "sha1",

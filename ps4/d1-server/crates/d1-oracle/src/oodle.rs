@@ -81,9 +81,12 @@ const IO_SPAN: u64 = 0x10_0000;
 pub const PINNED_PKGDIR: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/packages");
 
-/// The default package directory: `$D1_PKGDIR`, else [`PINNED_PKGDIR`].
+/// The default package directory: `$D1_PKGDIR`, else the selected build's packages
+/// (`capture-rig/builds.json`). [`PINNED_PKGDIR`] remains the 01.29 reference estate.
 pub fn default_pkgdir() -> PathBuf {
-    std::env::var_os("D1_PKGDIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(PINNED_PKGDIR))
+    std::env::var_os("D1_PKGDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| d1_build::selected().packages_path())
 }
 
 /// One decode's result. `consumed != stored.len()` is a **failure**, surfaced rather than truncated.

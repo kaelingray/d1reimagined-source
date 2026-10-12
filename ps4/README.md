@@ -1,23 +1,42 @@
 # D1 Reimagined — PS4 preservation source
 
-The active target is **Destiny 1, CUSA00219, patch 01.29**, using shadPS4 and
-the local Rust services in this tree. **The complete game is not playable.**
-This source publication includes the supplied preservation project's servers,
-protocol libraries, diagnostic tools and generators, with our tested preparation
-and content-reader fixes. Game inputs, firmware, generated catalogues, native
-fixtures and private run evidence are excluded.
+The active target is **Destiny 1, CUSA00219, executable build `56578.17.04.12`**
+(package metadata 01.33), using shadPS4 and the local Rust services in this tree.
+**The complete game is not playable.** This source publication includes the
+supplied preservation project's servers, protocol libraries, diagnostic tools and
+generators, with our tested preparation and content-reader fixes. Game inputs,
+firmware, generated catalogues, native fixtures and private run evidence are
+excluded.
+
+## Builds — `capture-rig/builds.json`
+
+The executable build is a parameter. `D1_BUILD` selects an entry in
+`capture-rig/builds.json`; the default is `later-56578`. Its identity pins drive
+every executable, manifest and client-patch gate (`d1-build` crate for Rust,
+`capture-rig/d1build.py` for Python and shell). **01.29 stays the address
+reference**: every fixed address in `design/`, the probe-site catalogues and the
+BAP tables was measured on it. Those catalogues keep their 01.29 derivation hash
+and fail their build gate on any other image. A build with
+`addresses_valid: false` gets no client patch, and address-bearing tools refuse
+it until its addresses are re-derived. Run the 01.29 golden controls with
+`D1_BUILD=01.29`.
 
 ## Current local checkpoint — 12 October 2026
 
-All 1,647 retained 01.29 content packages were recovered from the owned local
-repack: all tables/layouts and 701,164 stored-block hashes pass. The regenerated
-English manifest matches the pinned reference. The contained server-only run
-passes 19 checks. Neither result establishes guest transport or a native boot.
+The owned repack's executable is build 56578 (April 2017), not 01.29, so the
+target was moved to it. Its full game directory (2,119 files, 2,105 content
+packages) was extracted privately. The default English manifest policy selects
+1,392 packages, above the 1,325-descriptor cap measured on the 01.29 client; the
+cap for this build is not yet measured. Address-independent static controls pass
+on the new executable (RTTI, NID resolution, name hashes, character/roster
+schemas); account/profile schemas and all fixed-address controls fail, as
+expected until re-derivation.
 
-The exact executable is still missing. The available later US and original EU
-executables fail its identity/layout gates; a complete scan of logical repack
-nonpayload space found no hidden executable or build marker. Do not substitute
-those executables or relax the target pins. See [the current evidence summary](../docs/STATUS.md).
+First contained Windows boots run the game's code through graphics
+initialisation, then fault before the title screen at executable address
+`0xFAAF4`. A non-worker thread waits on an unfinished job and dereferences a
+null job-worker pointer. No request reaches the local servers yet. See
+[the current evidence summary](../docs/STATUS.md).
 
 The supplied project's `status/` and `design/` documents preserve its August 2026
 research checkpoint. Its Guardian-in-world observations involved explicitly

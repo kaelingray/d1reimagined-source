@@ -38,12 +38,18 @@ if [[ "$D1_LAUNCH_MODE" != native ]]; then
     export OPERATOR_PAD=1 PRESS=0 D1_ACTIVITY_HOST=0
 fi
 
+# ── The selected executable build (capture-rig/builds.json; D1_BUILD selects, default = registry) ──
+# Every identity gate below reads these. Fixed addresses (patches, probe sites) belong to ONE build:
+# a build with D1_BUILD_ADDRESSES_VALID=0 has none re-derived and gets no client patch by default.
+eval "$(python3 "$REPO/capture-rig/d1build.py" shell)"
+echo "build:    $D1_BUILD_ID ($D1_BUILD_LABEL) addresses_valid=$D1_BUILD_ADDRESSES_VALID"
+
 # ── The pinned environment ────────────────────────────────────────────────────────────────────────
 # Each line is a gate that is already passed.  Removing one re-closes that gate.
 
 # The content manifest.  Without it the responder serves a 2-byte body and the client halts at
 # bap_signin with `failed to load bootstrap_patchable`.  Requires the unsigned-manifest lab patch.
-export D1_MANIFEST_FILE="${D1_MANIFEST_FILE:-$REPO/capture-rig/manifests/full_en.bin}"
+export D1_MANIFEST_FILE="${D1_MANIFEST_FILE:-$D1_BUILD_MANIFEST}"
 
 # The investment message-206 (`fetch_family`) RESPONSE BODY.
 #
@@ -281,12 +287,13 @@ mkdir -p "$RUN_OUT"
 export D1_ACCOUNT_TRACE_OUT="${D1_ACCOUNT_TRACE_OUT:-$RUN_OUT/account-trace.bin}"
 
 # The patch.  Default is the lab baseline: diagnostics T=1 + unsigned manifest, no experiment.
-export DIAG_PATCH="${DIAG_PATCH:-${PATCH_ARG:-$REPO/patches/CUSA00219-lab-manifest-T1.xml}}"
+export DIAG_PATCH="${DIAG_PATCH:-${PATCH_ARG:-$D1_BUILD_PATCH}}"
+[[ -n "$DIAG_PATCH" ]] || { echo "REFUSING: build $D1_BUILD_ID has no client patch of its own (patches are address-specific); pass one explicitly" >&2; exit 2; }
 [[ -n "$PATCH_ARG" ]] && DIAG_PATCH="$(cd "$(dirname "$PATCH_ARG")" && pwd)/$(basename "$PATCH_ARG")"
 
 # ⚠ ABSOLUTE path required: run-signon-experiment.sh `cd`s into the emulator directory before exec,
 # so a relative game path becomes "Game ID or file path not found" and the run dies in 2 seconds.
-GAME="${GAME:-$REPO/dumps/patch-01.29-CUSA00219/eboot.bin}"
+GAME="${GAME:-$D1_BUILD_LAUNCH}"
 [[ "$GAME" = /* ]] || { echo "GAME must be an absolute path" >&2; exit 1; }
 
 # Input ownership. TWO MODES, and picking the wrong one wastes a boot.
@@ -354,13 +361,13 @@ if [[ "${OPERATOR_PAD:-0}" != "1" ]]; then
 fi
 [[ $fail -eq 0 ]] || exit 1
 if [[ "$D1_LAUNCH_MODE" != plan ]]; then
-    [[ "$(stat -c%s "$D1_MANIFEST_FILE")" == 52797 && "$(sha256sum "$D1_MANIFEST_FILE" | cut -d' ' -f1)" == 0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be ]] || {
-        echo "REFUSING: manifest does not match exact 01.29 English pin" >&2; exit 2;
+    [[ -n "$D1_BUILD_MANIFEST_SHA256" && "$(stat -c%s "$D1_MANIFEST_FILE")" == "$D1_BUILD_MANIFEST_BYTES" && "$(sha256sum "$D1_MANIFEST_FILE" | cut -d' ' -f1)" == "$D1_BUILD_MANIFEST_SHA256" ]] || {
+        echo "REFUSING: manifest does not match the recorded $D1_BUILD_ID English pin" >&2; exit 2;
     }
 fi
 if [[ "$D1_LAUNCH_MODE" == native ]]; then
-    [[ "$(stat -c%s "$GAME")" == 29148264 && "$(sha256sum "$GAME" | cut -d' ' -f1)" == 7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954 ]] || {
-        echo "REFUSING: executable does not match exact CUSA00219 01.29" >&2; exit 2;
+    [[ "$(stat -c%s "$GAME")" == "$D1_BUILD_LAUNCH_BYTES" && "$(sha256sum "$GAME" | cut -d' ' -f1)" == "$D1_BUILD_LAUNCH_SHA256" ]] || {
+        echo "REFUSING: executable does not match build $D1_BUILD_ID" >&2; exit 2;
     }
 fi
 
