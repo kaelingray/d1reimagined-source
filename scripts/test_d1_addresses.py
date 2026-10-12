@@ -7,11 +7,15 @@ import d1_addresses  # noqa: E402
 
 
 class AddressIndexTest(unittest.TestCase):
+    @unittest.skipUnless((d1_addresses.REPO / "notes/eboot-labels.tsv").is_file(),
+                         "private derived label index is not distributed")
     def test_every_label_is_backed_by_a_mention(self):
         index = d1_addresses.build()
         for addr, label in d1_addresses.load_labels().items():
             self.assertTrue(index[addr]["mentions"], f"0x{addr:x} {label['name']} has no mention")
 
+    @unittest.skipUnless((d1_addresses.REPO / "notes/eboot-labels.tsv").is_file(),
+                         "private derived label index is not distributed")
     def test_labels_are_unique_identifiers(self):
         names = [label["name"] for label in d1_addresses.load_labels().values()]
         self.assertEqual(len(names), len(set(names)))

@@ -1,0 +1,13 @@
+[package]
+name = "shadnet-proto"
+description = "Generated ShadNet protobuf types (see proto/PROVENANCE.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+prost.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true

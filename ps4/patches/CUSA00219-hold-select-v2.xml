@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Destiny 1 (PS4) CUSA00219 patch 01.29 - unlock the built-in `networking:` diagnostic log.
+
+  Apply with:   shadps4 -p $HOME/dev/destiny1-preservation/patches/CUSA00219-guest-diagnostics.xml <game>
+
+  Rationale, addresses and byte-level derivation: design/guest-diagnostics.md
+
+  Address convention: shadPS4's XML path leaves patchInfo::isOffset unset, so
+  PatchMemory computes  g_eboot_address + (Address - 0x400000).
+  Therefore  Address = eboot vaddr + 0x400000.   (eboot vaddr = file offset - 0x4000)
+
+  AppVer MUST match param.sfo APP_VER ("01.29") or non-mask lines are silently skipped.
+
+  ============================================================================
+  ENABLE BOTH:  the "sink" patch below, PLUS exactly ONE threshold patch.
+  The sink patch alone emits only what the game's own thresholds already allow.
+  A threshold patch alone emits nothing at all - the sink is the binding gate.
+  ============================================================================
+-->
+<!--
+  ============================================================================
+  ⚠ THIS FILE CARRIES A CLIENT MODIFICATION THAT BYPASSES A SIGNATURE CHECK.
+  ============================================================================
+
+  It is `CUSA00219-guest-diagnostics.xml` **plus** one extra data byte that disables the CDN
+  content-manifest RSA envelope, so we can serve an unsigned manifest to our own client in the
+  sealed lab. It is a SEPARATE file on purpose: shadPS4 accepts only one `-p`, and keeping this
+  out of the diagnostics patch means a run that used it is identifiable from `RUN-INFO.txt`
+  (`diag patch:`) rather than the bypass being silently on forever.
+
+  PROVENANCE: anything reached through this patch is a client modification. Tag findings
+  `synthetic_ancestor` and never promote them to protocol contract. Full reasoning:
+  design/content-manifest-gate.md §5.4.
+
+  Generated from CUSA00219-guest-diagnostics.xml - if you change the diagnostics patches, this
+  file must be regenerated or it will drift.
+-->
+<Patch>
+
+  <!--
+    REQUIRED. Gives the diagnostic sink an actual output.
+
+    retail_log_emit(edi = site_id, rsi = formatted_text)  @ eboot vaddr 0xe4ad0
+    Stock behaviour: memcpy 0x140 bytes of the text into an in-memory ring buffer at
+    g_retail_log+0x19860 (1124 slots x 0x150) and set a ready flag. It never calls any
+    output function, which is why ~1,285 of the 1,287 `networking:` strings never appear.
+
+    Replacement (14 bytes) - tail-call printf("%s\n", text):
+        48 8D 3D F9 07 52 01    lea rdi, [rip+0x15207f9]   ; -> "%s\n" @ vaddr 0x16052d0
+        30 C0                   xor al, al                 ; 0 vector regs (varargs ABI)
+        E9 72 89 1B 01          jmp 0x129d450              ; printf PLT stub; rsi = text
+
+    rsi already holds the text, so no shuffling is needed. The tail jmp leaves
+    rsp%16 == 8, exactly what printf expects on entry. 0x129d450 is confirmed to reach
+    shadPS4's [stdout] Logger - it is the same stub that prints `networking:sessionid:`.
+
+    TRADE-OFF: this replaces the ring-buffer write, so the game's in-game network-status
+    overlay stops being fed. Harmless for log capture, but it is a real behaviour change.
+  -->
+  <Metadata Name="D1 diagnostics: route retail_log sink to stdout (REQUIRED)"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4AD0" Value="488D3DF907520130C0E972891B01"/>
+    </PatchList>
+  </Metadata>
+
+  <!--
+    Threshold patches. Enable EXACTLY ONE.
+
+    retail_log_check(edi = system, esi = level) -> bool   @ eboot vaddr 0xe4da0
+    Stock behaviour: return g_retail_log->thresholds[system] <= level, i.e. a HIGHER
+    threshold is QUIETER. 22 thresholds, initialised to 4, then overwritten from a
+    game-data config blob (0x1db440 -> *(void**)0x267b1b8 + 0x26ec, fields 0x30..0x84)
+    whose contents we cannot read - so the live thresholds are UNKNOWN.
+
+    Replacement (7 bytes) applies one uniform threshold T and ignores both the array and
+    the config blob, which removes that unknown:
+        83 FE <T>               cmp esi, T
+        0F 9D C0                setge al       ; al = (level >= T) == (T <= level)
+        C3                      ret
+
+    Site counts measured over all 1,614 resolvable gate call sites:
+        T=0 -> 1614 (100%)   T=1 -> 1534 (95%)   T=2 -> 1269 (79%)
+        T=3 ->  992  (61%)   T=4 ->  626 (39%)   T=5 ->    0  (0%)
+
+    START AT T=4 AND WALK DOWN. T=0 turns on 1,614 sites including `session` (754 sites)
+    and `simulation`, which sit in per-frame paths; that is potentially tens of thousands
+    of printf calls per second, and extra host load is known to cause init-race failures
+    in this title.
+  -->
+  <Metadata Name="D1 diagnostics: threshold T=4 (626 sites, 39%) - START HERE"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE040F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=3 (992 sites, 61%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE030F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=2 (1269 sites, 79%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE020F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=1 (1534 sites, 95%)"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE010F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=0 (all 1614 sites) - FIREHOSE, expect load"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE000F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <!--
+    Disable the CDN content-manifest signature envelope. ONE BYTE.
+
+    `cdn_content_manifest` download handler @ eboot vaddr 0x2b0030 reads a bool at
+    vaddr 0x18c4974 (file offset 0x18c8974, shipped value 0x01 - verified by direct read).
+    Exactly one reference to that byte exists in the whole binary.
+
+    When 1 (stock), the downloaded body must be:
+        [0:4)   LE == 1
+        [4:8)   == 0
+        [8:0x108)  256-byte RSA-2048 signature over body[0x108:]
+    verified against a single live 270-byte DER key at vaddr 0x1591800. This is the same
+    envelope as sku_config.txt. WE CANNOT FORGE IT.
+
+    When 0, the handler skips the envelope entirely (jumps to 0x2b0132) and parses the whole
+    body as the manifest protobuf. Acceptance then needs only that manifest field 5 (`guid`)
+    is PRESENT and strncmp-equal (0x25 bytes) to Engine Configuration key 101 - which defaults
+    to "", so an empty guid on both sides matches.
+
+    Address convention (same as above): Address = eboot vaddr + 0x400000.
+                                        0x18c4974 + 0x400000 = 0x1CC4974
+  -->
+  <Metadata Name="D1 lab: accept UNSIGNED cdn content manifest (client modification)"
+            isEnabled="true" AppVer="01.29" Author="content-manifest-gate" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="1CC4974" Value="00"/>
+      <Line Type="bytes" Address="BA01B8" Value="B00190909090"/>
+    </PatchList>
+  </Metadata>
+
+
+  <!--
+    D1 lab: guard the 4-slot session-id lookups against NOT-FOUND (client modification)
+
+    WHY. Run 20260807-175730 passed the character gate for the first time
+    (character:signin -> character:prologue -> cleanup(normal_flow)), began creating a fireteam
+    session as host, and then died:
+
+        Unhandled access violation at code address 0x800b45e20: Read from address 0x8
+
+    0xB45E20 is a three-instruction accessor thunk:
+
+        mov edi, dword ptr [rdi + 8]     << FAULT, rdi == NULL
+        movzx esi, sil
+        jmp 0x129e510
+
+    Its two callers 0xB471E0 and 0xB47260 are the same shape - a linear search over FOUR slots
+    of stride 0x24 for one whose [slot+0x40] equals the requested id:
+
+        xor edi, edi                 ; rdi = NULL
+      loop:
+        cmp edx, 3
+        jg  not_found                ; << exits the loop with rdi STILL NULL
+        mov esi, [rax + 0x40]
+        add rax, 0x24
+        cmp esi, ecx
+        mov rdi, rax                 ; match -> rdi = the slot
+        jne loop
+      not_found:                     ; ALSO the fall-through target on a match
+        xor esi, esi
+        call 0xB45E20                ; called with NULL when nothing matched
+        mov al, 1
+        pop rbp / ret
+
+    There is NO null-guard on the not-found path. The matching allocator is 0xB46F50, which
+    claims a slot by scanning for [slot+0x1c] == -1; nothing had registered one, so the lookup
+    found nothing and handed NULL to the accessor.
+
+    WHAT THIS DOES. Retarget the `jg` so the NOT-FOUND exit skips the call and returns false,
+    which is the semantically correct answer for "no matching slot". `al` is already 0 from each
+    function's own `xor al, al` prologue, and the retarget lands exactly on `5d c3`
+    (pop rbp; ret) - verified byte-for-byte against the eboot before writing this.
+
+        0xB47237  7F 0E (jg 0xB47247)  ->  7F 17 (jg 0xB47250)
+        0xB472B7  7F 0E (jg 0xB472C7)  ->  7F 1A (jg 0xB472D3)
+
+    The MATCH path is untouched: it reaches the call by fall-through, not by this jump.
+
+    [U] This treats the symptom. The cause is that no slot was ever registered via 0xB46F50, and
+    what should have registered one is unknown. A run with this patch that behaves sensibly is
+    evidence the lookup is genuinely optional; a run that misbehaves downstream says the slot is
+    required and we must find its producer.
+
+    ============================================================================================
+    /!\ CORRECTION 2026-08-07 : THE "al IS ALREADY 0" CLAIM ABOVE IS FALSE.  [C] observed-live
+    ============================================================================================
+    Measured by EXECUTING these bytes on a real memory snapshot (`d1-replay`, 10/10 controls PASS;
+    design/replay-oracle.md Section 5.3).  RAX is REUSED AS THE TABLE CURSOR between the prologue
+    and the loop, so the prologue's `xor al, al` is destroyed long before the retargeted exit:
+
+        v:0xb471e4  xor al, al          ; al = 0
+        v:0xb4721b  add rax, [rcx]      ; rax = G+0xd8      << al DESTROYED HERE
+        v:0xb4723c  add rax, 0x24       ; ...and again, every iteration
+
+    At the guarded exit `al` is the low byte of the table cursor.  Measured on a live snapshot:
+    every not-found call returned **al = 0xe8**, i.e. TRUE.
+
+    So this patch does NOT turn "crash" into "correctly report not-found".  It turns it into
+    "SILENTLY CLAIM THE LOOKUP SUCCEEDED", and the caller then proceeds on a slot it never got.
+    That is a different wrong behaviour, not a fix, and every run since 20260807-180823 carried it.
+
+    A correct guard must land on a `xor eax, eax` (or write al) before the `ret`.  NOT CHANGED HERE:
+    editing a patch line mid-experiment would confound whatever run is in flight.  Recorded in place
+    because ATLAS 4.3 : a retraction recorded only elsewhere does not stop the next tool
+    re-asserting the old model.
+
+    Also measured on the same snapshot (taken AFTER the shadPS4 sceVoiceCreatePort fix): the table
+    is no longer empty.  Slot 0 is registered with id 0 and the searched key `[G+0xf8]` is 0, so the
+    lookup HITS : this guard may now be unnecessary.  Re-measure before keeping it.
+
+    ⛔⛔ DISABLED 2026-08-07 - THIS PATCH WAS WRONG AND WORSE THAN THE CRASH.
+
+    The reasoning above says "al is already 0 from each function's own `xor al, al` prologue".
+    IT IS NOT. `0xB471E4` does zero it, but `0xB47216` does `mov eax, 0xd8` and `0xB4721B`
+    `add rax, [rcx]` - RAX becomes the TABLE CURSOR, incremented by 0x24 per iteration. So at the
+    retargeted `jg`, `al` is the low byte of a heap address: non-zero. The "guard" therefore made the
+    not-found path return TRUE - a silent false "lookup succeeded" - instead of crashing.
+
+    A crash is a loud, locatable failure. A function that lies about success is the exact defect class
+    this project has been burned by all night (sceVoiceCreatePort, sceNpParty*, our own header-only
+    BAP replies). This patch converted the good kind into the bad kind, and every run from
+    20260807-180823 onward carried it.
+
+    Found by `d1-replay` executing the real function on a captured snapshot - invisible to static
+    reading, to a memory dump, and to the offline oracle. It is the first thing that instrument found.
+
+    It is also NO LONGER NEEDED: the root cause was shadPS4's `sceVoiceCreatePort()` discarding its
+    out-parameter, so no voice channel was ever registered. With that fixed the table is populated and
+    the lookup hits. Do not re-enable. If a guard is ever wanted again, it must set `al` explicitly.
+
+    Address convention: Address = eboot vaddr + 0x400000.
+  -->
+  <Metadata Name="DISABLED - BROKEN: D1 lab: guard 4-slot session-id lookup against not-found"
+            isEnabled="false" AppVer="01.29" Author="character-and-orbit-26.77" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="F47237" Value="7F17"/>
+      <Line Type="bytes" Address="F472B7" Value="7F1A"/>
+    </PatchList>
+  </Metadata>
+
+</Patch>

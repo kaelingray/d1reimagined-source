@@ -1,0 +1,31 @@
+[package]
+name = "d1-harness"
+description = "Two-instance lab apparatus: layout generation, activation preflight, and shutdown safety. Generates and validates; never launches."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "d1_harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-harness"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"       # MIT OR Apache-2.0 - deterministic derivation and binary provenance
+libc = "0.2"        # MIT OR Apache-2.0 - kill(2) by resolved pid only; no shelling out to pkill
+
+[dev-dependencies]
+# ⭐ TEST-ONLY, and only to stop one constant drifting. `INV_503_TEMPLATE_HEX` is a hand-maintained
+# copy of `d1_bap::INVESTMENT_503_UNLOCKS_RAW`; the harness exports it as `D1_503_RAW`, and env
+# beats the responder's default, so a stale copy here silently un-ships the unlock flags for every
+# multi-participant run while single-participant runs keep working. Dev-only keeps the wire codec
+# (and its crypto) out of the shipped harness binary.
+d1-bap = { path = "../d1-bap" }

@@ -1,0 +1,53 @@
+[package]
+name = "d1-trace"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+publish = false
+description = "Read-only unified four-stream trace viewer for Destiny 1 preservation run directories"
+
+# Standalone crate, deliberately OUTSIDE the d1-server workspace: whole-workspace vs `-p` builds in
+# d1-server produce different binaries via feature unification (this already cost a silent-TLS
+# debugging session). Mirrors the d1-observe precedent. See historicaldocs/design/trace-viewer.md §5.
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The run-provenance reader and the quietness predicate are ALREADY WRITTEN (`Provenance::quiet`,
+# `summarize_run`). Re-deriving them here is the failure this project pays for most often. d1-run
+# depends only on serde/serde_json - it drags no eframe/wgpu into anything.
+d1-run = { path = "../d1-server/crates/d1-run" }
+# egui/eframe pinned to =0.36.1 as a SET - the exact known-good graph d1-observe ships and this box
+# was validated against (historicaldocs/design/egui-practices.md, historicaldocs/design/trace-viewer.md §3). glow backend, no wgpu.
+eframe = { version = "=0.36.1", optional = true, default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+
+[[bin]]
+name = "d1-trace"
+path = "src/main.rs"
+
+# The LIVE lane. A second binary over the same library rather than a mode on the viewer above:
+# `d1-trace` asserts its own idleness (it calls `request_repaint` nowhere, on purpose) and a live
+# tail needs producer-side repaint. Shared ingest, shared controls, separate event loop.
+# See historicaldocs/design/d1-dashboard.md §1.
+[[bin]]
+name = "d1-dash"
+path = "src/bin/d1-dash.rs"
+
+# The WRITE door. The dash read side embedded by composition, plus a gated/ledgered poke console.
+# A third binary over the same library for the same reason d1-dash is a second one: it shares the
+# ingest/model/controls but adds a live surface (here, one that writes). See design/d1-ghost.md.
+[[bin]]
+name = "d1-ghost"
+path = "src/bin/d1-ghost.rs"

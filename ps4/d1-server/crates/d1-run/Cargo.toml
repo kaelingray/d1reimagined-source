@@ -1,0 +1,11 @@
+[package]
+name = "d1-run"
+description = "Parse run artifacts into structured, deterministic, diffable summaries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

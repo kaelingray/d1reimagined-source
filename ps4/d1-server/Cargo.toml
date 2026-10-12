@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/d1",
+    "crates/d1-activity-host",
+    "crates/d1-bap",
+    "crates/d1-eboot",
+    "crates/d1-forge",
+    "crates/d1-harness",
+    "crates/d1-live",
+    "crates/d1-loadout",
+    "crates/d1-oracle",
+    "crates/d1-pkg",
+    "crates/d1-replay",
+    "crates/d1-responder",
+    "crates/d1-run",
+    "crates/shadnet-proto",
+    "crates/shadnet-wire",
+    "crates/shadnet-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+publish = false
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+axum = "0.8"
+bytes = "1"
+clap = { version = "4", features = ["derive"] }
+prost = "0.13"
+prost-build = "0.13"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "signal", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "time"] }

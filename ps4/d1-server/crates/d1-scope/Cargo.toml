@@ -1,0 +1,119 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# ⭐⭐ THIS CRATE IS ITS OWN WORKSPACE ROOT - THE EMPTY `[workspace]` TABLE BELOW IS LOAD-BEARING.
+#
+# Two problems, one line:
+#   1. `d1-server/Cargo.toml`'s `members` is an EXPLICIT LIST with no glob, and this lane may not
+#      edit it. A nested package that declares its own `[workspace]` needs no such edit.
+#   2. `d1-forge` pins `eframe = "=0.36.1"` with DEFAULT features, which puts `wgpu 30.0.0` in the
+#      d1-server workspace graph. Feature unification means a whole-workspace `cargo build
+#      --release` would link wgpu into d1-scope EVEN WITH `default-features = false` - and
+#      "whole-workspace and `-p` builds produce DIFFERENT binaries" is a standing non-negotiable
+#      that already cost this project a session to a silent TLS failure.
+#   Own workspace root ⇒ own Cargo.lock ⇒ own feature resolution ⇒ glow only, always, by
+#   construction rather than by remembering to type `-p`. This is the same reason `d1-observe/`
+#   and `d1-trace/` sit outside the workspace.
+#
+# ⛔ Build it from THIS directory: `cd d1-server/crates/d1-scope && cargo build --release`.
+#    A `cargo build` at d1-server/ does not see this package at all - that is the point.
+[workspace]
+
+[package]
+name = "d1-scope"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+publish = false
+description = "The live client as TWO PLANES: a read-only state sampler and one leased d1-live event child, rendered as one immutable Frame."
+
+[dependencies]
+# ⭐ THE ADDRESS GRAMMAR IS NOT FORKED. `d1_live::addr` + `d1_live::symbols` are used as a LIBRARY
+#    so that `capture-rig/surfaces/registry.toml` means exactly what `d1-live watch --addr` means.
+#    ⚠ HONEST RESIDUAL: the d1-live library also contains `ptrace.rs`/`watch.rs`, so linking it
+#    brings that CODE into the binary. The invariant d1-scope enforces is stronger than linkage and
+#    is what actually matters: NO CALL PATH. ⛔ CORRECTED 2026-08-10 (BUILD 4 review): the control
+#    is `controls::c4_readonly_and_no_debug_surface`, and the description that used to sit here was
+#    wrong in both directions. **`controls::no_ptrace_call_path` DOES NOT EXIST** - a comment
+#    asserting a symbol that is not there is the same failure family as an invented version pin -
+#    and the real control is STRONGER than the one described: it checks the shipped binary's
+#    UNDEFINED DYNAMIC SYMBOLS for the debug-API import (a blanket string ban would accuse a
+#    diagnostic message inside linked-but-uncalled code), pins the one residual occurrence by
+#    identity, requires every occurrence of the hard-kill signal name to sit inside libstd's
+#    signal-NAME table, and scans this crate's sources with THREE needles assembled at runtime -
+#    debug-API, debug-constant, hard-kill. ⚠ `d1_live::watch` is NOT among them: that literal
+#    appears in `child_mgr.rs`, `lib.rs` and `events.rs` today, in prose, and fails nothing.
+#    Every debug-register operation is performed by the CHILD.
+#    ⇒ If d1-live ever gains a `ptrace` cargo feature, switch to `default-features = false` here and
+#      the residual disappears. That edit belongs to d1-live's owner, not to this lane.
+d1-live = { path = "../d1-live" }
+
+# ⭐ THE SNAPSHOT FORMAT IS NOT DESCRIBED TWICE. `d1_replay::snapshot::{Snapshot, Manifest}` is the
+#    ONE reader of `runs/snapshots/*.snap` (magic `D1SNAP\x01\x00`, u32 manifest length, JSON
+#    manifest, concatenated region payloads at their recorded `file_off`). d1-scope's `SnapMem`
+#    wraps it and adds NOTHING about the byte layout - `design/format-description.md`'s
+#    no-format-twice rule, applied.
+#    ⚠ HONEST COST, stated rather than hidden: d1-replay has no cargo features, so this edge pulls
+#      `unicorn-engine 2.1.5` (GPL-2.0, bundles QEMU) into the link even though d1-scope never
+#      constructs a `Machine`. That is a build-time cost and a licence surface we already carry
+#      workspace-wide; it is NOT a second copy of the format, which is the thing that actually goes
+#      wrong silently. ⇒ If d1-replay ever gains a `snapshot-only` feature, take it here.
+d1-replay = { path = "../d1-replay" }
+
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ⭐ READ-ONLY TOML, DELIBERATELY: `default-features = false` drops the `display` feature (and with
+#   it `toml_writer`, which is NOT vendored on this offline box - "just add the dep" is a build
+#   failure here, not a convenience). d1-scope PARSES the registry and never rewrites it: a tool
+#   that regenerates its own input eats its own output (LESSONS.md #4).
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+
+# ⭐ PINNED TO THE LOCK-FILE VERSION, EXACTLY, WITH `=`. `d1-server/Cargo.lock`, `d1-observe/Cargo.lock`
+#   and `d1-trace/Cargo.lock` independently resolve 0.36.1 for the whole egui set - three lock files,
+#   one answer. ⚠ egui breaks API on purpose between minors; a caret here is how a `cargo update`
+#   silently floats you to 0.37 (d1-forge's `egui_kittest = "0.36.1"` dev-dep is exactly that bug).
+#   ⛔ NO default features: eframe's defaults include `wgpu` and NOT `glow`.
+#   ⚠⚠ BUILD-1 DEVIATION, FLAGGED FOR RATIFICATION (see historicaldocs/design/d1-scope.md §9.3 and the BUILD-1
+#   report): the egui set is `optional = true` behind a NON-DEFAULT `gui` feature. BUILD 1 is
+#   "scaffold + state plane, NO egui", and a dependency that is declared but unused is a dependency
+#   whose failure mode is discovered by whoever is *not* looking for it. The PINS ARE UNCHANGED -
+#   `=0.36.1`, `default-features = false`, glow-only - so BUILD 2 turns the UI on with
+#   `--features gui` and inherits every decision above verbatim. Nothing here re-litigates the pin.
+eframe = { version = "=0.36.1", optional = true, default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+egui = { version = "=0.36.1", optional = true }
+egui_extras = { version = "=0.36.1", optional = true }
+
+# ⭐⭐ THE HEADLESS WIDGET-TREE HARNESS IS A REAL DEPENDENCY, NOT A DEV ONE, AND THAT IS THE POINT.
+#   Control #11's render half is what catches a column the window draws and the JSON does not carry,
+#   and the project's rule is that every control is a `#[test]` **and** a `controls` subcommand that
+#   exits 2 - a dev-dependency can only be the first of those. Binding it to the SAME `gui` feature
+#   makes the coupling structural: **you cannot build the window without the control that audits
+#   it.** ⚠ HONEST COST: ~200 KB of `kittest` + `accesskit_consumer` in a binary that has a window.
+#   ⛔ `default-features = false` is load-bearing - the `wgpu` feature would drag `egui-wgpu` and
+#   `wgpu` into the graph, and "glow only, by construction" is why this crate is its own workspace
+#   root. It renders through AccessKit, so #11 runs on a box with no display.
+egui_kittest = { version = "=0.36.1", optional = true, default-features = false }
+
+[features]
+default = []
+# BUILD 3 flips this on. `cargo build --release --features gui`.
+gui = ["dep:eframe", "dep:egui", "dep:egui_extras", "dep:egui_kittest"]
+
+# ⛔ DO NOT ADD: egui_plot, egui_tiles, egui_dock, puffin, syntect. None is in any lock file in this
+#    tree and none is vendored in the offline registry cache on this box - on an offline lab machine
+#    "just add the dep" is a build failure, not a convenience. The node/edge canvas is drawn with
+#    `egui::Painter` (~200 lines, ours); no external graph or plot crate.
+
+# ⚠ BUILD 3: there are no dev-dependencies. `egui_kittest` moved UP into `[dependencies]` behind the
+#   `gui` feature - see the note there. A dev-dependency cannot be `optional`, so leaving it here
+#   would have built the whole egui stack on every `cargo test` of the state plane, which is exactly
+#   the cost the `gui` feature exists to defer.

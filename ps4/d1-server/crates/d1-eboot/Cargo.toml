@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-eboot"
+description = "Static analysis of the Destiny 1 PS4 eboot: per-segment address map, relocations, prologue-anchored disassembly, four-kind cross-references, RSAT anchored descriptors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Licences checked (CLAUDE.md non-negotiable: nothing incompatible with GPL-2.0-or-later,
+# and nothing sourced from AGPL-3.0 or unlicensed prior art).
+anyhow.workspace = true            # MIT OR Apache-2.0
+clap.workspace = true              # MIT OR Apache-2.0
+serde.workspace = true             # MIT OR Apache-2.0
+serde_json.workspace = true        # MIT OR Apache-2.0
+sha2 = "0.10"                      # MIT OR Apache-2.0  (build-identity gate)
+sha1 = "0.10"                      # MIT OR Apache-2.0  (PS4 NID oracle - dynsym.rs)
+base64 = "0.22"                    # MIT OR Apache-2.0  (PS4 NID oracle - dynsym.rs)
+iced-x86 = { version = "1", default-features = false, features = ["std", "decoder", "intel", "instr_info"] } # MIT
+
+[lib]
+name = "d1_eboot"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-eboot"
+path = "src/main.rs"
+
+[features]
+# Owned-input golden files are deliberately excluded from the public source.
+private-fixtures = []

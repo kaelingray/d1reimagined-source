@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Destiny 1 (PS4) CUSA00219 patch 01.29 - unlock the built-in `networking:` diagnostic log.
+
+  Apply with:   shadps4 -p $HOME/dev/destiny1-preservation/patches/CUSA00219-guest-diagnostics.xml <game>
+
+  Rationale, addresses and byte-level derivation: design/guest-diagnostics.md
+
+  Address convention: shadPS4's XML path leaves patchInfo::isOffset unset, so
+  PatchMemory computes  g_eboot_address + (Address - 0x400000).
+  Therefore  Address = eboot vaddr + 0x400000.   (eboot vaddr = file offset - 0x4000)
+
+  AppVer MUST match param.sfo APP_VER ("01.29") or non-mask lines are silently skipped.
+
+  ============================================================================
+  ENABLE BOTH:  the "sink" patch below, PLUS exactly ONE threshold patch.
+  The sink patch alone emits only what the game's own thresholds already allow.
+  A threshold patch alone emits nothing at all - the sink is the binding gate.
+  ============================================================================
+-->
+<Patch>
+
+  <!--
+    REQUIRED. Gives the diagnostic sink an actual output.
+
+    retail_log_emit(edi = site_id, rsi = formatted_text)  @ eboot vaddr 0xe4ad0
+    Stock behaviour: memcpy 0x140 bytes of the text into an in-memory ring buffer at
+    g_retail_log+0x19860 (1124 slots x 0x150) and set a ready flag. It never calls any
+    output function, which is why ~1,285 of the 1,287 `networking:` strings never appear.
+
+    Replacement (14 bytes) - tail-call printf("%s\n", text):
+        48 8D 3D F9 07 52 01    lea rdi, [rip+0x15207f9]   ; -> "%s\n" @ vaddr 0x16052d0
+        30 C0                   xor al, al                 ; 0 vector regs (varargs ABI)
+        E9 72 89 1B 01          jmp 0x129d450              ; printf PLT stub; rsi = text
+
+    rsi already holds the text, so no shuffling is needed. The tail jmp leaves
+    rsp%16 == 8, exactly what printf expects on entry. 0x129d450 is confirmed to reach
+    shadPS4's [stdout] Logger - it is the same stub that prints `networking:sessionid:`.
+
+    TRADE-OFF: this replaces the ring-buffer write, so the game's in-game network-status
+    overlay stops being fed. Harmless for log capture, but it is a real behaviour change.
+  -->
+  <Metadata Name="D1 diagnostics: route retail_log sink to stdout (REQUIRED)"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4AD0" Value="488D3DF907520130C0E972891B01"/>
+    </PatchList>
+  </Metadata>
+
+  <!--
+    Threshold patches. Enable EXACTLY ONE.
+
+    retail_log_check(edi = system, esi = level) -> bool   @ eboot vaddr 0xe4da0
+    Stock behaviour: return g_retail_log->thresholds[system] <= level, i.e. a HIGHER
+    threshold is QUIETER. 22 thresholds, initialised to 4, then overwritten from a
+    game-data config blob (0x1db440 -> *(void**)0x267b1b8 + 0x26ec, fields 0x30..0x84)
+    whose contents we cannot read - so the live thresholds are UNKNOWN.
+
+    Replacement (7 bytes) applies one uniform threshold T and ignores both the array and
+    the config blob, which removes that unknown:
+        83 FE <T>               cmp esi, T
+        0F 9D C0                setge al       ; al = (level >= T) == (T <= level)
+        C3                      ret
+
+    Site counts measured over all 1,614 resolvable gate call sites:
+        T=0 -> 1614 (100%)   T=1 -> 1534 (95%)   T=2 -> 1269 (79%)
+        T=3 ->  992  (61%)   T=4 ->  626 (39%)   T=5 ->    0  (0%)
+
+    START AT T=4 AND WALK DOWN. T=0 turns on 1,614 sites including `session` (754 sites)
+    and `simulation`, which sit in per-frame paths; that is potentially tens of thousands
+    of printf calls per second, and extra host load is known to cause init-race failures
+    in this title.
+  -->
+  <Metadata Name="D1 diagnostics: threshold T=4 (626 sites, 39%) - START HERE"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE040F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=3 (992 sites, 61%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE030F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=2 (1269 sites, 79%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE020F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=1 (1534 sites, 95%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE010F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=0 (all 1614 sites) - FIREHOSE, expect load"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE000F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+</Patch>

@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "name": "Y1 Warlock - Vault of Glass, Voidwalker",
+  "notes": "Year-1 Vault of Glass Warlock: the Hezen Lords set with Obsidian Mind as the exotic, and all-legendary Vault of Glass weapons. Obsidian Mind 3455371673 is the Year-1 copy; 1519376147 is the later re-issue and is a DIFFERENT item with the same name. Era: each item's `era` field is the extractor's verdict from Bungie reward sources, and `sources_in_era` means 'NO EVIDENCE AGAINST', not 'confirmed present in 01.29' - the 2020 manifest has no date-added field. What is measured, not assumed, is that every gear item here carries qualityLevel > 0, the Year-1 marker (historicaldocs/design/loadout-framework.md §Era). Subclasses have qualityLevel 0 by construction and are exempt. Nothing in this file has been confirmed against the 01.29 client. [U] level 30 / light 30 are the Year-1 caps; 01.29 is a Rise of Iron build with a level-40 cap, and we have never observed what that client does with Year-1 gear.",
+  "class": "warlock",
+  "race": "human",
+  "gender": "female",
+  "level": 30,
+  "light": 30,
+  "equipped": [
+    {
+      "slot": "subclass",
+      "item": {
+        "hash": 3828867689,
+        "name": "Voidwalker",
+        "tier": "common",
+        "bucket_hash": 3284755031,
+        "item_type_name": "Warlock Subclass",
+        "icon": "/common/destiny_content/icons/602276d222a9037c3363db5b5deda85b.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Character Creation"
+      }
+    },
+    {
+      "slot": "primary",
+      "item": {
+        "hash": 2149012811,
+        "name": "Vision of Confluence",
+        "tier": "legendary",
+        "bucket_hash": 1498876634,
+        "item_type_name": "Scout Rifle",
+        "icon": "/common/destiny_content/icons/6871909234b94f192e2f94153536ef04.jpg",
+        "class_type": 3,
+        "damage": "solar",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "special",
+      "item": {
+        "hash": 1267053937,
+        "name": "Praetorian Foil",
+        "tier": "legendary",
+        "bucket_hash": 2465295065,
+        "item_type_name": "Fusion Rifle",
+        "icon": "/common/destiny_content/icons/097438a2e20efc35c939ab69c5ad13e1.jpg",
+        "class_type": 3,
+        "damage": "solar",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "heavy",
+      "item": {
+        "hash": 3807770941,
+        "name": "Hezen Vengeance",
+        "tier": "legendary",
+        "bucket_hash": 953998645,
+        "item_type_name": "Rocket Launcher",
+        "icon": "/common/destiny_content/icons/ed2b5218ca7a359f7917ed82a9b3288b.jpg",
+        "class_type": 3,
+        "damage": "solar",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "head",
+      "item": {
+        "hash": 3455371673,
+        "name": "Obsidian Mind",
+        "tier": "exotic",
+        "bucket_hash": 3448274439,
+        "item_type_name": "Helmet",
+        "icon": "/common/destiny_content/icons/c3a0ca4d04214bb376579384753de1c8.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Nightfall, Prison of Elders, Xûr, Agent of the Nine; 1 undated source(s)"
+      }
+    },
+    {
+      "slot": "arms",
+      "item": {
+        "hash": 1883484055,
+        "name": "Gloves of the Hezen Lords",
+        "tier": "legendary",
+        "bucket_hash": 3551918588,
+        "item_type_name": "Gauntlets",
+        "icon": "/common/destiny_content/icons/8aa2322faab1cfcbeb88ff451f9812aa.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "chest",
+      "item": {
+        "hash": 4079606241,
+        "name": "Cuirass of the Hezen Lords",
+        "tier": "legendary",
+        "bucket_hash": 14239492,
+        "item_type_name": "Chest Armor",
+        "icon": "/common/destiny_content/icons/35c4a9430cb21777d14bb9b45979d740.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "legs",
+      "item": {
+        "hash": 3267664569,
+        "name": "Tread of the Hezen Lords",
+        "tier": "legendary",
+        "bucket_hash": 20886954,
+        "item_type_name": "Leg Armor",
+        "icon": "/common/destiny_content/icons/6915ed7bf06e1daa2efb9f9d991275d5.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "class_item",
+      "item": {
+        "hash": 991704636,
+        "name": "Fragment of the Prime",
+        "tier": "legendary",
+        "bucket_hash": 1585787867,
+        "item_type_name": "Warlock Bond",
+        "icon": "/common/destiny_content/icons/f0b9a7173bb6055dce82019b694f916a.jpg",
+        "class_type": 2,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    }
+  ]
+}

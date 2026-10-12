@@ -1,0 +1,26 @@
+[package]
+name = "shadnet-server"
+description = "Layer A: local ShadNet server for Destiny 1 preservation (NP identity surface)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "shadnet_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "shadnet-server"
+path = "src/main.rs"
+
+[dependencies]
+shadnet-proto = { path = "../shadnet-proto" }
+shadnet-wire = { path = "../shadnet-wire" }
+anyhow.workspace = true
+clap.workspace = true
+prost.workspace = true
+sha2 = "0.10"                      # MIT OR Apache-2.0  (re-derives the vendored schema's hash)
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

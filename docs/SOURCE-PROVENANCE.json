@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-12",
+  "private_project_commit": "85f1d7397151f6fd2f2f2e49da2e634b34759308",
+  "ps4_source": "User-supplied d1preservation-main source snapshot plus documented local fixes",
+  "files": 344,
+  "history_imported": false,
+  "game_inputs_included": false,
+  "exclusions": [
+    "game/firmware binaries",
+    "native derived fixtures and catalogues",
+    "captures and raw logs",
+    "private machine status and operator instructions",
+    "build output and third-party tool installations"
+  ]
+}

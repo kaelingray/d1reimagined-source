@@ -6,7 +6,15 @@ Project website: https://d1reimagined.com
 
 ## Scope
 
-The retained PlayStation 3 implementation targets version 01.24 with RPCS3. PlayStation 4 version 01.29 preparation helpers are included, but the separate preservation runtime is not vendored here. Preparation and synthetic service checks do not establish a successful native game run. Native stability, rendering, combat, progression, complete activities and multiplayer remain incomplete.
+The active target is **PlayStation 4 CUSA00219 version 01.29** with shadPS4.
+The [PS4 source tree](ps4/README.md) now includes the Rust services, protocol
+libraries, diagnostic tools, canonical harness and generators from the supplied
+preservation project, with the latest preparation and content-reader fixes.
+The retained PlayStation 3 implementation targets version 01.24 with RPCS3.
+See [current results and contribution priorities](docs/STATUS.md). The exact
+PS4 executable remains missing, and there is no accepted native PS4 boot here.
+Native stability, rendering, combat, progression, complete activities and
+multiplayer remain incomplete.
 
 This is a source publication, not a game distribution or a ready-to-play installer. Game assets, firmware, executables, cryptographic materials, account data, private runtime inputs and captures are not included. Supply only inputs you are authorised to use. No public service, console, account or third-party system is a testing target.
 
@@ -19,8 +27,10 @@ This is a source publication, not a game distribution or a ready-to-play install
 | `missions/` | Original experimental mission and traversal rules |
 | `patches/` | Scoped source increments for a separately obtained RPCS3 tree |
 | `tools/content_capture/` | Optional private evidence capture and durable handoff tools |
-| `tools/ps4_setup/` | Original preparation helpers and narrow patches for a separate runtime |
+| `tools/ps4_setup/` | Original preparation helpers and narrow patches for the PS4 runtime |
 | `tests/` | Additional regression cases |
+| `ps4/` | Active Rust preservation services, tools, research docs and canonical harness |
+| `docs/` | Current contributor checkpoint and publication provenance |
 
 ## Development
 

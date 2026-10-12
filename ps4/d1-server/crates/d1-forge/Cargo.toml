@@ -1,0 +1,36 @@
+[package]
+name = "d1-forge"
+description = "Loadout/spawn editor - browse the item catalogue, build loadouts, apply them over the control plane"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "d1-forge"
+path = "src/main.rs"
+
+[dependencies]
+d1-loadout = { path = "../d1-loadout" }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# egui/eframe/egui_extras are pinned AS A SET and upgraded as a set - egui breaks API on purpose
+# between minors (historicaldocs/design/egui-practices.md, "Version pinning"). Resolved by `cargo search`/`cargo
+# add`, not from memory: 0.36.1 on 2026-08-08. eframe's `App` trait at this version is the
+# `logic(&mut self, ctx, frame)` + `ui(&mut self, ui, frame)` split - checked by reading
+# eframe-0.36.1/src/epi.rs, not by trusting historicaldocs/design/interface-architecture.md §5b.
+# ⚠ `=` not a caret: a caret pin floats to 0.37 on any `cargo update`, and egui breaks API on
+# purpose between minors. d1-observe/d1-trace already use the `=` form; this was the odd one out.
+eframe = "=0.36.1"
+egui = "=0.36.1"
+egui_extras = "=0.36.1"
+# Blocking HTTP on a plain thread, per historicaldocs/design/interface-architecture.md §5b: "no tokio runtime
+# inside the GUI". rustls rather than native-tls so there is no OpenSSL build dependency; the
+# control plane is loopback HTTP anyway.
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+# Same pinned set. Drives the app through the AccessKit tree - no GPU, no pixel diffing.
+egui_kittest = "0.36.1"

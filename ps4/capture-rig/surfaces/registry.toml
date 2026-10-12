@@ -1,0 +1,2048 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# ============================================================================================
+# d1-scope SURFACE REGISTRY - DRAFT (RECON C, 2026-08-10)
+# ============================================================================================
+#
+# WHAT THIS IS
+# ------------
+# One address book for every [C] runtime surface this project has earned, expressed in
+# **d1-live's address grammar, verbatim** (crates/d1-live/src/addr.rs):
+#
+#     bare 0xNNN   an EBOOT VADDR   -> base + N          (the project idiom)
+#     v:0xNNN      an eboot vaddr   -> base + N          (explicit form)
+#     a:0xNNN      an ABSOLUTE addr -> N                 (heap pointers read OUT of memory)
+#     [ EXPR ]     deref u64
+#     EXPR + N     after `+`, a bare number is an OFFSET, never a vaddr
+#     NAME         a capture-rig/guest-symbols.json symbol
+#
+# ⛔ DO NOT FORK THE GRAMMAR. d1-scope resolves every `addr` here by handing the string to
+#    d1-live. A second parser is how "same address, different space" ships twice.
+#
+# HOW d1-scope USES IT
+# --------------------
+#   rw = "write"  the surface is DATA:  d1-live watch --addr <addr>+<field.off> --len <n>
+#   rw = "exec"   the surface is CODE:  d1-live watch --rw exec --addr <addr>
+#   rw = "read"   snapshot-only: no watchpoint is meaningful (it is a layout, not an event)
+#
+# ⛔ d1-scope links NO ptrace. It SPAWNS d1-live as a child, always with a bounded
+#    --max-seconds lease, and stops it with SIGTERM. NEVER SIGKILL: a tracer that dies armed
+#    kills its target (measured, not theoretical).
+#
+# THE FIELDS OF A SURFACE
+# -----------------------
+#   name        stable id (snake_case). d1-scope's CLI handle.
+#   group       one of: ladder wire-kept queuez derived session simulation game world
+#   addr        d1-live address expression for the surface BASE.
+#               ⛔ THREE RESERVED VALUES, and they are NOT addresses:
+#                 "[U]"              the address is unknown - see the matching [[open]] entry
+#                 "NOT-EXPRESSIBLE"  the address needs arithmetic the grammar does not have
+#                                    (shifts, masks, multiplies). Such a surface carries
+#                                    `addr_input` + `addr_input_width` (a legal ADDRESS
+#                                    expression and the width to load from it, yielding the
+#                                    resolver's argument) and `resolver` (the name of the
+#                                    surface whose documented algorithm turns it into an
+#                                    address). ⚠ `addr_input` is an ADDRESS, never a value
+#                                    expression - `u32@…` belongs in `addr_input_width`, not
+#                                    in the string, because d1-live's grammar deliberately
+#                                    treats a bare number differently in the two positions.
+#               ⭐ THE RAIL THIS ENFORCES: rather than smuggle a pseudo-function like
+#                 `resolve(...)` into an addr string, say out loud that the grammar cannot
+#                 express it. A second grammar is how "same address, different space" ships
+#                 twice. d1-scope implements resolvers in Rust and hands d1-live only `a:0x…`.
+#               ⚠ `controls[].expr` is PROSE-WITH-EXPRESSIONS, not grammar - it may contain
+#                 `resolve(…)`, `popcount(…)`, `count(type == 9)`. Only `addr` and `addr_input`
+#                 are parsed.
+#   rw          write | exec | read
+#   confidence  [C] [O] [R] [I] [U]  (CLAUDE.md's convention)
+#   reach       observed-live | static-client-inference | synthetic_ancestor | ...
+#   liveness    a PREDICATE that must hold before any read of this surface is admissible.
+#               ⚠ Written as an expression + expected relation, NOT as prose. A surface whose
+#               liveness predicate fails yields "not measurable", never "was zero".
+#   source      where it came from (doc §, script, or this session's verification)
+#   fields      [{name, off, ty, note}]
+#   controls    [{snap, expr, ty, value, verified, note}]
+#               verified = true means THIS SESSION read it back offline with d1-replay.
+#
+# ============================================================================================
+# ⛔⛔ THREE THINGS TO READ BEFORE TRUSTING ANY CONTROL BELOW
+# ============================================================================================
+#
+# 1. `runs/snapshots/rung36-biped-chain.snap` IS POKE-CONTAMINATED IN THREE FIELDS.
+#    `historicaldocs/design/player-creation-chain.md` §4 journals six pokes taken before that capture. Three
+#    of them are surfaces in this registry, and the snapshot therefore records the POKED value,
+#    not the client's own:
+#        session_player_set  +0x90    -1,-1,-1  ->  0,-1,-1   (poke 6)
+#        sim_player_set      +0x10     0        ->  1         (poke 3)
+#        sim_player_set      +0x18 slot 0       <- copied from P (pokes 4/5)
+#    ⭐ The PRISTINE values are carried by `rung34-task8-cleared-registry.snap` and
+#    `orbit-all.snap`, which read `-1,-1,-1` and `0`. Every such control below names BOTH.
+#
+# 2. ⛔ THE SOBJECT LIVENESS RULE IN THE BRIEF IS A SUPERSET, NOT THE PREDICATE.
+#    "u16 @ sobject+0x08 has 0xFF in the high byte" counts 577 in-world and **63** in orbit.
+#    The pool's OWN occupancy bit vector popcounts **567 / 577 / 53**. Measured this session:
+#        only-highbyte = 10 (indices 0..9, occupancy bit CLEAR)   only-bit = 0 (always)
+#    ⇒ the high-byte rule NEVER misses a live object (safe for a "zero type 9" negative) but
+#      over-counts stale slots. **One of those stale slots is type 11 = WEAPON.** Using the
+#      high-byte rule alone reports "1 weapon in-world"; the bit vector says zero, and
+#      `biped-census.md` §4.1's zero is the right answer.
+#    ⭐ THIS IS WHY `CLAUDE.md` SAYS "63 in orbit" AND `biped-census.md` SAYS "53" - two
+#      predicates, never reconciled. `sobjects_bitvec` below is authoritative; the high-byte
+#      rule is retained as `sobject_element.typeword` and labelled a SUPERSET.
+#
+# 3. A read outside a captured region is UNMAPPED, not zero. `d1-replay` exits 1 and says so.
+#    Every control row carries the snapshot it was read from because coverage differs wildly:
+#    `--preset content` (rung36-biped-chain, 61 MB) has P/Q/sobjects/players but NOT the SSTM,
+#    the cinematic manager, the activity loader, game globals or the unlock plane.
+#    `orbit-all.snap` (1.6 GB) has everything and is the coverage reference.
+#
+# ============================================================================================
+
+[meta]
+version = "1.0.0"
+generated = "2026-08-10"
+generator = "RECON C (manual harvest + offline d1-replay verification); edges + U8-U10 by the ARCHITECT pass from RECON D"
+eboot_sha256 = "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954"
+eboot = "dumps/patch-01.29-CUSA00219/eboot.bin"
+grammar = "d1-server/crates/d1-live/src/addr.rs"
+symbols = "capture-rig/guest-symbols.json"
+groups = ["ladder", "wire-kept", "queuez", "derived", "session", "simulation", "game", "world"]
+edge_states = ["green", "red", "grey", "unknown", "retired"]  # ⛔ collapsing any two mis-accuses an edge - see the EDGES header
+
+# The snapshots this registry's controls were read from, and what each covers.
+[[meta.snapshot]]
+id = "orbit-all"
+path = "runs/snapshots/orbit-all.snap"
+state = "setup:orbit (rung 27)"
+run = "20260808-011129-DEST-OFFSET-PROBE"
+size = "1.6 GB"
+coverage = "whole heap - the COVERAGE REFERENCE. Every surface here that is not marked [U] resolves in it."
+poked = false
+
+[[meta.snapshot]]
+id = "rung34-task8-cleared-registry"
+path = "runs/snapshots/rung34-task8-cleared-registry.snap"
+state = "activity:initial_slice_set_loading (rung 34), pvp_moonbase / 407"
+run = "20260809-120451-MOONBASE-FRESH"
+size = "330 MB"
+coverage = "heap + object registry. Carries the PRISTINE P/Q values."
+poked = false
+
+[[meta.snapshot]]
+id = "rung36-biped-chain"
+path = "runs/snapshots/rung36-biped-chain.snap"
+state = "activity:in_world (rung 36), pvp_moonbase (First Light) / 407 Elimination"
+run = "20260810-002807-LIGHT385"
+size = "61 MB"
+coverage = "--preset content. HAS P/Q/sobjects/players/observer/registry. LACKS sstm, cinematic mgr, activity loader, game globals, unlock plane, activity manager."
+poked = true
+poked_fields = ["session_player_set+0x90", "sim_player_set+0x10", "sim_player_set+0x18(slot 0)", "sim_player_set+0x20"]
+
+
+# ============================================================================================
+# GROUP: ladder - the world-controller state machine. 38 states, one C++ handler per rung.
+# ============================================================================================
+
+[[surface]]
+name = "world_controller_state_manager"
+group = "ladder"
+addr = "[v:0x26B13E8]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@([v:0x26B13E8]+0x1B0) in 0..=37"
+source = "historicaldocs/design/rung34-task7.md §283; capture-rig/state-machine.py (pump 0x782300 disasm); verified offline this session"
+note = "The singleton c_world_controller_state_manager. +0x1B0 is what the transition pump reads as CURRENT, +0x1C0 as REQUESTED - the two `movsxd` immediately after its own Leaving/Entering printfs."
+fields = [
+  { name = "handler_table", off = 0x80, ty = "ptr[38]", note = "sm + 0x80 + state*8. Slots 0/15/16 are NULL." },
+  { name = "current_state", off = 0x1B0, ty = "i32", note = "the rung the client IS in" },
+  { name = "requested_state", off = 0x1C0, ty = "i32", note = "the rung it has been asked to enter" },
+]
+controls = [
+  { snap = "orbit-all", expr = "i32@([v:0x26B13E8]+0x1B0)", value = "27", verified = true, note = "= setup:orbit. THE ladder positive control." },
+  { snap = "orbit-all", expr = "i32@([v:0x26B13E8]+0x1C0)", value = "27", verified = true, note = "at rest, requested == current" },
+  { snap = "orbit-all", expr = "[[v:0x26B13E8]+0x80+0x110]", value = "v:0x26B5588", verified = true, note = "state 34 -> the rung-34 handler, cross-checked against state-machine.py's RTTI vtable 0x192D9B0" },
+]
+
+[[surface]]
+name = "state_handler_table"
+group = "ladder"
+addr = "[v:0x26B13E8]+0x80"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[[v:0x26B13E8]+0x80+27*8] == v:0x26B4C08"
+source = "this session - the whole 38-entry table read offline and cross-validated against capture-rig/state-machine.py's RTTI vtables (35/35 agree)"
+note = """⭐ ALL 35 HANDLERS ARE STATIC BSS OBJECTS, so their addresses are stable across runs.
+The table (state -> handler vaddr / vtable vaddr), read offline from orbit-all:
+  1 media_check 0x26b37b0/0x192e640   2 bootload 0x26b3860/0x192dd90
+  3 intro_screen 0x26b3978/0x192e490  4 start 0x26b39b8/0x192ed30
+  5 platform_signin 0x26b3a10/0x192e8b0  6 platform_warn 0x26b3a68/0x192e7e0
+  7 enum_content_rights 0x26b3ac0/0x192e2d0  8 account_signin 0x26b3af0/0x192dbb0
+  9 eula 0x26b3c70/0x192e350  10 upsell 0x26b3cb0/0x192ee60  11 email 0x26b3cf0/0x192e160
+ 12 confirm_xfer 0x26b3d48/0x192de40  13 content_check 0x26b3d90/0x192dfb0
+ 14 content_install 0x26b3dd0/0x192e030  17 queuing 0x26b3e58/0x192ebe0
+ 18 package_registration 0x26b3fb8/0x192e6f0  19 bap_signin 0x26b3ff0/0x192dcf0
+ 20 investment_signin 0x26b4030/0x192e5c0  21 profile_setup 0x26b4070/0x192eaa0
+ 22 prepare_for_orbit 0x26b40b0/0x192ea20  23 character:signin 0x26b4a80/0x192f000
+ 24 character:prologue 0x26b4bd0/0x192ef80  25 cleanup 0x26b41f0/0x192f140
+ 26 orbit_loading 0x26b4900/0x192f490  27 orbit 0x26b4c08/0x192f410
+ 28 activity_session_creation 0x26b4c68/0x192f290  29 matchmaking 0x26b4da0/0x192f390
+ 30 activity_host_setup 0x26b4e00/0x192f210  31 prologue_intro_loading 0x26b4e40/0x192f590
+ 32 orbit_outro 0x26b4e80/0x192f510  33 activity_world_transition 0x26b4eb0/0x192f310
+ 34 initial_slice_set_loading 0x26b5588/0x192d9b0  35 physics_join 0x26b5740/0x192dab0
+ 36 in_world 0x26b5778/0x192da30  37 watch_video 0x26b57f8/0x192db30
+⛔ states 0, 15, 16 are NULL - `pregame`, `insufficient_content_space`, `illegal_dlc_media`."""
+fields = [
+  { name = "entry", off = 0x00, ty = "ptr", note = "stride 8, indexed by state id" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[[v:0x26B13E8]+0x80+0x118]", value = "v:0x26B5740", verified = true, note = "state 35 = physics_join; its vtable reads 0x192DAB0 = c_world_controller_state_activity_physics_join_handler" },
+  { snap = "orbit-all", expr = "[[v:0x26B13E8]+0x80+0x120]", value = "v:0x26B5778", verified = true, note = "state 36 = in_world, vtable 0x192DA30" },
+]
+
+[[surface]]
+name = "handler34_task_masks"
+group = "ladder"
+addr = "v:0x26B5720"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B5588] == v:0x192D9B0   # the rung-34 handler's own vptr"
+source = "historicaldocs/design/rung34-task7.md §283, §484; verified offline this session on rung36-biped-chain and orbit-all"
+note = """handler34 = v:0x26B5588 (BSS, static); these fields are handler+0x198/0x1A0/0x1A8/0x1B0/0x1B4.
+⭐ v:0x26B5730 (`done`) is THE load-bearing poke of the 34->36 walk, and it SKIPS tasks 9 and 10.
+⚠ `d1-eboot xref 0x26b5730` returns 0 references - the access mode is register-relative
+  (`mov [rbx+0x1a8], eax`), invisible to an absolute xref BY CONSTRUCTION. Use d1-live watch."""
+fields = [
+  { name = "requested", off = 0x00, ty = "u32", note = "handler+0x198 - the task bitmask the rung wants" },
+  { name = "started", off = 0x08, ty = "u32", note = "handler+0x1A0" },
+  { name = "done", off = 0x10, ty = "u32", note = "handler+0x1A8 - v:0x26B5730" },
+  { name = "task7_timer", off = 0x18, ty = "u32", note = "handler+0x1B0 - 0x96 only while cinematic playback runs; 0 = NEVER ARMED" },
+  { name = "task10_field", off = 0x1C, ty = "u32", note = "handler+0x1B4" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B5720", value = "0x7FF", verified = true, note = "requested" },
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B5728", value = "0x3FF", verified = true, note = "started - task 9 ran, a first" },
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B5730", value = "0x7FF", verified = true, note = "done - ⚠ FORCED. 0x1FF was the honest value; 9/10 never completed." },
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B5738", value = "0x0", verified = true, note = "task 7's timer, never armed" },
+  { snap = "orbit-all", expr = "u32@v:0x26B5720", value = "0x0", verified = true, note = "⭐ NEGATIVE CONTROL - the whole 0x20 block reads zero in orbit. A non-zero read here means the rung-34 handler has been entered." },
+]
+
+[[surface]]
+name = "handler35_countdown"
+group = "ladder"
+addr = "v:0x26B5740"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B5740] == v:0x192DAB0"
+source = "historicaldocs/design/rungs-31-to-36-preflight.md §1.3 (0x7963B0 is one instruction: mov dword [rdi+0x30],0x96); CLAUDE.md's 34->36 recipe; handler base derived offline this session"
+note = """⚠ THIS IS A MINIMUM DWELL, NOT A GATE. ticks_in_rung_35 = 0x96 - [handler35+0x30], exactly;
+re-armed on every entry (slot 4) and decremented unconditionally. CLAUDE.md's own honesty note:
+the counter was ALREADY counting down (0x53 -> 0x1a between two reads) when it was poked -
+**rung 35 would likely have advanced unaided.**"""
+fields = [
+  { name = "vptr", off = 0x00, ty = "ptr", note = "0x192DAB0 = c_world_controller_state_activity_physics_join_handler" },
+  { name = "countdown", off = 0x30, ty = "u32", note = "= v:0x26B5770, the address CLAUDE.md's recipe pokes to 0" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26B5740]", value = "v:0x192DAB0", verified = true, note = "identity control - the handler object is static BSS, present even in orbit" },
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B5770", value = "0x0", verified = true, note = "run down (or poked) by the time in_world was reached" },
+]
+
+[[surface]]
+name = "transition_pump"
+group = "ladder"
+addr = "0x782300"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "capture-rig/state-machine.py module docstring (disasm of 0x782300)"
+note = """The function that emits `Leaving state '%s' for reason '%s'` / `Entering state …` and
+dispatches EXIT (vtable +0x28, slot 5) on the OLD handler then ENTER (+0x20, slot 4) on the NEW.
+⭐ An exec watch here is the cheapest "did the ladder move, and to what" instrument that exists -
+one hit per transition, with the state indices readable at sm+0x1B0/+0x1C0 in the same stop."""
+fields = []
+controls = [
+  { snap = "n/a", expr = "d1-eboot disasm 0x782300", value = "call qword ptr [rax+0x28] @ 0x78243a; call qword ptr [rax+0x20] @ 0x78253c", verified = false, note = "the two dispatches; each sits immediately after its own printf" },
+]
+
+[[surface]]
+name = "state_request_primitive"
+group = "ladder"
+addr = "0x782720"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "capture-rig/state-machine.py THE TRANSITION PRIMITIVES"
+note = "0x782720(new_state, reason, arg3) is the real one. 0x783690(s,r) and 0x782710(s) tail into it. ⭐ THE STATE ID IS LITERALLY THE RUNG NUMBER - `mov edi,0x1d ; call 0x783690` is request(setup:matchmaking)."
+fields = []
+controls = []
+
+[[surface]]
+name = "profile_setup_handler"
+group = "ladder"
+addr = "v:0x26B4070"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B4070] == v:0x192EAA0"
+source = "capture-rig/guest-symbols.json symbols[profile_setup_handler]"
+note = "Whole-process vptr search returned EXACTLY ONE hit. +0x38 is the three-screen substage counter read by 0x79E830. ⚠ The BRIGHTNESS screen is a SLIDER - it ignores every digital input."
+fields = [
+  { name = "vptr_primary", off = 0x00, ty = "ptr" },
+  { name = "flags", off = 0x08, ty = "u32" },
+  { name = "vptr_secondary", off = 0x30, ty = "ptr", note = "vt2, offset-to-top -0x30" },
+  { name = "substage", off = 0x38, ty = "u32", note = "0->screen bounds, 2->BRIGHTNESS, 4->subtitles, 6->7; >6 marks setup done" },
+]
+controls = []
+
+
+# ============================================================================================
+# GROUP: wire-kept - fields WE publish that the client keeps its OWN copy of.
+# ⭐ THE RULE THIS GROUP EXISTS FOR: a server receipt proves you BUILT it, never that the
+#    client KEPT it. Every field here is one we assert on the wire and must read back.
+# ============================================================================================
+
+[[surface]]
+name = "activity_client"
+group = "wire-kept"
+addr = "[[v:0x27E7F18]+0x12A78+0x10]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "[[v:0x27E7F18]+0x12A78+0x20] == 0xD1A0000000000001   # the AH id from our own EST-Y receipt"
+source = "historicaldocs/design/player-creation-chain.md §2 (the machine record carries it); CLAUDE.md (ac = FUN_0075BE80(0,0), membership ac+0xE68, control ac+0xE70 == 1); all fields verified offline this session"
+note = """⭐ THE ADDRESSING TRICK, and it is the reason this surface is reachable at all: there is no
+BSS singleton for the activity client in this registry. It is reached through the SESSION player
+set's machine record - `[v:0x27E7F18]+0x12A78+0x10`. Live: 0x22D5A6E00.
+⚠ ACTIVITY-LIFETIME ONLY. In orbit `+0x10` and `+0x20` are both zero, so the liveness predicate
+correctly refuses. That is a feature: it is exactly the discriminator player-creation-chain.md §2
+uses to fix the P-vs-Q subject."""
+fields = [
+  { name = "vptr", off = 0x00, ty = "ptr" },
+  { name = "private_public_index", off = 0x18, ty = "u32", note = "⭐ index into {PRIVATE, PUBLIC}. FUN_00299100 uses it to pick scenario_record+0x0C vs +0x10." },
+  { name = "current_target_index", off = 0x1C, ty = "u32", note = "index into {CURRENT, TARGET}" },
+  { name = "label", off = 0x20, ty = "char[]", note = "sprintf'd '%s %s' - the client prints it as [AC PRIVATE CURRENT …]" },
+  { name = "launch_request", off = 0x138, ty = "struct", note = "FUN_002990F0 is literally `lea rax,[rdi+0x138]; ret` - see activity_launch_request" },
+  { name = "membership", off = 0xE68, ty = "struct", note = "replicate_membership, udt 11" },
+  { name = "membership_update_id", off = 0xE70, ty = "u32", note = "⭐ the MEM-%d the client renders" },
+  { name = "pah_region_array", off = 0x3CB8, ty = "u8[40*0xD8]", note = "⛔ the PAH-tabulated region records - ALL ZERO, and that is the rung-34 task-8 bug in one read" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x10]", value = "a:0x22D5A6E00", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@([[v:0x27E7F18]+0x12A78+0x10]+0x18)", value = "0", verified = true, note = "⭐ PRIVATE ⇒ the checksum gate reads scenario_record+0x0C, not +0x10" },
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x10]+0x20", value = "\"PRIVATE CURRENT\"", verified = true, note = "ASCII, adjacent to the index - the client's own corroboration. ⛔ CORRECTED 2026-08-10: the field is the sprintf'd `%s %s` and reads \"PRIVATE CURRENT\" (NUL at +0x2F), immediately followed at +0x30 by the rendered \"[AC PRIVATE CURR…\". The old receipt recorded a PREFIX, which a prefix-tolerant comparison would have silently accepted - this one is exact." },
+  { snap = "rung36-biped-chain", expr = "u32@([[v:0x27E7F18]+0x12A78+0x10]+0xE70)", value = "1", verified = true, note = "⭐ MEM-1 - the membership WAS accepted" },
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x10]+0x3CB8", value = "all zero (0x20 read)", verified = true, note = "⛔ the identity echo is byte-correct while THIS array is zeros - the last-writer-wins bug" },
+]
+
+[[surface]]
+name = "activity_launch_request"
+group = "wire-kept"
+addr = "[[v:0x27E7F18]+0x12A78+0x10]+0x138"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "i16@([[v:0x27E7F18]+0x12A78+0x10]+0x138+0x0E) != -1"
+source = "capture-rig/session-params.py THE KTOBUCKET READER (fields read off FUN_00782720's call site); activity id verified offline this session"
+note = """⭐ THIS IS THE STRUCT BEHIND THE KTOBUCKET LOG BLOCK. Every field the client prints on a
+failed transition has a pokeable address here. The levers currently left at sentinel:
+insp = -1, override activity = \"\", bubbles = \"\", ACTNAME = NONE, SLICESET = 0x811C9DC5
+(the FNV-1 offset basis - the hash of the empty string, i.e. \"no slice set\")."""
+fields = [
+  { name = "nonce", off = 0x04, ty = "u32", note = "per-attempt launch nonce; the only field that changes between retries" },
+  { name = "activity_id", off = 0x0E, ty = "i16", note = "⭐ the activity-definition index. 393..413 bypass matchmaking; 407 = Elimination." },
+  { name = "insertion_point", off = 0x10, ty = "i8", note = "which spawn/phase to enter at. -1 = none chosen." },
+  { name = "override_activity", off = 0x98, ty = "char[]", note = "names a definition that REPLACES the one the id selects" },
+  { name = "bubbles", off = 0x198, ty = "char[]", note = "which map sub-regions to load" },
+  { name = "reservations", off = 0x698, ty = "u32", note = "player-slot reservation count" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "i16@([[v:0x27E7F18]+0x12A78+0x10]+0x146)", value = "407", verified = true, note = "⭐⭐ 0x0197 = ELIMINATION, read out of the client's own launch request at the in_world instant" },
+  { snap = "rung36-biped-chain", expr = "u32@([[v:0x27E7F18]+0x12A78+0x10]+0x13C)", value = "0x971", verified = true, note = "the nonce of the successful attempt" },
+]
+
+[[surface]]
+name = "global_activity_state_blob"
+group = "wire-kept"
+addr = "[U]"
+rw = "write"
+confidence = "[U]"
+reach = "static-client-inference"
+liveness = "[U]"
+source = "historicaldocs/design/activity-checksum.md; d1-server/crates/d1-activity-host/src/messages.rs (GlobalActivityState); CLAUDE.md's MODE/MAP split"
+note = """⛔⛔ THE ONE SURFACE IN THIS REGISTRY WITH NO LIVE ADDRESS, AND IT IS THE MOST-ASSERTED
+OBJECT WE PUBLISH. Every D1_AH_* knob writes into this blob (udt 1, tag 0x80800E76) and we have
+never read it back out of client memory.
+
+Searched this session and NOT found: `pvp_moonbase` does not appear anywhere in
+[activity_client .. +0x10000] on rung36-biped-chain, so the blob is NOT embedded in the activity
+client. It is a QueueZ registry object.
+
+⭐ THE INSTRUMENTS THAT CLOSE IT, cheapest first:
+  1. `d1-eboot disasm 0x299100` - trace the provenance of `rax` at `0x29919a mov eax,[rax+0x5c]`.
+     Two instructions of dataflow name the accessor; the accessor names the global.
+  2. Resolve tag 0x80800E76 through `queuez.object_registry` and read +0x680 / +0x688 -
+     if the ASCII world name is there, the address is confirmed by its own content.
+  3. `d1-live watch --addr <blob>+0x5C` during a rung-33 attempt - the checksum is written once
+     per publish, so ONE hit names the writer with no candidate list.
+⚠ This is [U] WITH A MECHANISM, which is a finding. Do not ship a guessed base."""
+fields = [
+  { name = "bubble_count", off = 0x10, ty = "u32", note = "must equal scenario_record+0x48. D1_AH_BUBBLE_COUNT." },
+  { name = "bubble_states", off = 0x14, ty = "u8[64]", note = "each must be 0xFF (unchosen). ⚠ 0x00 FAILS where 0xFF passes." },
+  { name = "checksum", off = 0x5C, ty = "u32", note = "must equal scenario_record + 0x0C + ac[+0x18]*4. D1_AH_ACTIVITY_CHECKSUM." },
+  { name = "activity_index", off = 0x680, ty = "u16", note = "⭐ MODE - index into the 540-entry activity table. D1_AH_ACTIVITY_INDEX." },
+  { name = "activity_name", off = 0x688, ty = "char[0x28]", note = "⭐ MAP - NUL-terminated ASCII world name. D1_AH_ACTIVITY. Neither is derived from the other." },
+]
+controls = []
+
+[[surface]]
+name = "unlock_plane"
+group = "wire-kept"
+addr = "[v:0x26A34E8]+0x0C"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "[v:0x26A34E8] != 0"
+source = "historicaldocs/design/rung34-task7.md §69; CLAUDE.md's rung-33 urchin fix"
+note = """One byte per unlock flag, indexed directly: `[v:0x26A34E8]+0xC+index`.
+⭐ The ten-flag body that clears rung 33's BOTH permission walls on the wire, no poke:
+{98, 308, 419, 440, 834, 2667, 3389, 5015, 5987, 6018}. Union-8 is missing {2667, 5987}.
+⚠ NOT captured by --preset content (rung36-biped-chain misses it); use orbit-all or a wider preset."""
+fields = [
+  { name = "flag", off = 0x00, ty = "u8", note = "stride 1, indexed by unlock id. 0x02 = granted." },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26A34E8]+0x0C", value = "all zero (0x10 read)", verified = true, note = "⚠ orbit-all predates the unlock work - this is a coverage control, not a value control" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26A34E8]+0x0C", value = "UNMAPPED", verified = true, note = "⭐ NOT CAPTURED. 'not captured' and 'was zero' are different facts - this row exists to keep them apart." },
+]
+
+[[surface]]
+name = "pah_region_records"
+group = "wire-kept"
+addr = "[[v:0x27E7F18]+0x12A78+0x10]+0x3CB8"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "i32@([[v:0x27E7F18]+0x12A78+0x10]+0x3CB8) != -1   # -1 in record 0 terminates the 40-record scan"
+source = "historicaldocs/design/rung34-task7.md §'The struct, derived twice and agreeing on four offsets' - replicate_membership field [3] @ +0x2E48, 40 x 0xD8"
+note = """⭐⭐ THE SURFACE THAT PROVES THE RULE. FUN_007775B0 copies a record into sstm+0x490 iff
+record.region_id == sstm+0x138 AND record.peer_tokens[sstm+0x3B4] == sstm+0x1D0. We send zeros,
+nothing matches, and rung 34 task 8 hangs forever behind a 15-second 'Waiting.' line.
+⛔ The bug was that RequestStateRefresh rebuilt replicate_membership from the client's own ECHO
+and never re-applied set_pah_region. **A field that is OURS to assert must be re-applied on EVERY
+re-publish path - enumerate them, do not spot-check.**"""
+fields = [
+  { name = "region_id", off = 0x00, ty = "i32", note = "-1 TERMINATES the scan. Must equal sstm+0x138 (PENDING region id)." },
+  { name = "advertised_public", off = 0x04, ty = "u32", note = "== 1 -> advertised public session / host broadcast" },
+  { name = "ambassadorship", off = 0x09, ty = "u8", note = "1 = assigned, 2 = revoking" },
+  { name = "ambassador_peer_index", off = 0x0A, ty = "u8" },
+  { name = "pah_session_lock", off = 0x2C, ty = "u32" },
+  { name = "peer_tokens", off = 0x38, ty = "u8[20]", note = "⭐ indexed by sstm+0x3B4 (local peer index); the value must equal sstm+0x1D0 (the transition token)" },
+  { name = "advertised_session", off = 0x4C, ty = "u8[132]" },
+  { name = "advertised_activity_host", off = 0xD0, ty = "u64" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x10]+0x3CB8", value = "all zero", verified = true, note = "⛔ still zero at the in_world instant - task 8 was cleared by a poke, not by this" },
+]
+
+
+# ============================================================================================
+# GROUP: queuez - the object registry and the package/tag registry. Everything family/type.
+# ============================================================================================
+
+[[surface]]
+name = "object_registry"
+group = "queuez"
+addr = "[v:0x26A2040]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26A2040] != 0 AND the family-4/type-0 element's key qword == $D1_ACCOUNT_SOID (default 0xD100000000000001)"
+source = "capture-rig/guest-symbols.json symbols[object_registry_ptr] + registry_layout; d1guest.py's L3 liveness ladder"
+note = """⛔⛔ THE LIVENESS PREDICATE IS NOT OPTIONAL HERE. Registry OBJECTS are cleared on connection
+teardown while DESCRIPTORS survive at state 3, so a read after a disconnect shows zeros and is
+INDISTINGUISHABLE from 'delivery never worked'. That mistake has been made twice.
+Live value in both orbit-all and rung36-biped-chain: 0x37F8DFE80 (shadPS4's allocator is
+deterministic - ⛔ which makes 'same address' a control that ALWAYS passes. Never use it as one)."""
+fields = [
+  { name = "descriptor_table", off = 0x60, ty = "struct[257]", note = "stride 0x40 - the QueueZ replication descriptors" },
+  { name = "element_base", off = 0x40A0, ty = "ptr" },
+  { name = "entry_table", off = 0x4F800, ty = "struct[]", note = "family stride 0x60, type stride 0x10" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26A2040]", value = "a:0x37F8DFE80", verified = true },
+  { snap = "rung36-biped-chain", expr = "[v:0x26A2040]", value = "a:0x37F8DFE80", verified = true, note = "⚠ identical across two runs on two days - a deterministic-allocator artefact, NOT evidence" },
+]
+
+[[surface]]
+name = "package_tag_registry"
+group = "queuez"
+addr = "[v:0x1A0B420]"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x1A0B420] != 0"
+source = "capture-rig/scenario-checksum.py (verbatim disasm of FUN_00299100 @ 0x29916b..0x299190); resolution reproduced end-to-end offline this session"
+note = """⭐ DOUBLE INDIRECTION, and getting it wrong is silent: `registry_base = *(u64*)[v:0x1A0B420]`.
+The resolver, from the client's own instructions:
+    slot      = (tag >> 13) & 0xFFFF          bucket = registry_base + slot*0x40
+    data_base = u64 @ bucket+0x10
+    esz       = i32 @ bucket+0x30
+    mask      = i32 @ bucket+0x34   (SIGNED, sign-extended to 64)
+    p         = data_base + (tag & 0x1FFF) * esz
+    record    = p - (mask & u64@(p+8))
+⭐ REPRODUCED OFFLINE THIS SESSION on orbit-all: tag 0x80B52003 -> slot 0x5A9 -> record 0x38422DFF0,
+whose name string reads \"orbit\" and whose +0x0C reads 0x33F044D3. Three independent constants
+(name, checksum, bubble count) all land - that is the resolver's positive control."""
+fields = [
+  { name = "bucket", off = 0x00, ty = "struct[]", note = "stride 0x40, indexed by (tag>>13)&0xFFFF" },
+  { name = "bucket.data_base", off = 0x10, ty = "ptr" },
+  { name = "bucket.entry_size", off = 0x30, ty = "i32" },
+  { name = "bucket.mask", off = 0x34, ty = "i32", note = "SIGNED. -1 live." },
+]
+controls = [
+  { snap = "orbit-all", expr = "resolve(0x80B52003)", value = "a:0x38422DFF0", verified = true },
+  { snap = "orbit-all", expr = "bucket(0x5A9).entry_size", value = "24", verified = true },
+  { snap = "orbit-all", expr = "bucket(0x5A9).mask", value = "-1", verified = true },
+]
+
+[[surface]]
+name = "schema_handles"
+group = "queuez"
+addr = "v:0x1966280"
+rw = "write"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "[v:0x1966310] != 0   # fam4/t0 account handle filled at runtime"
+source = "design/eboot-map.md §3; capture-rig/guest-symbols.json"
+note = "BSS slots filled at runtime with instance-type handles. ⚠ ZERO IN THE FILE - a file read returns nothing."
+fields = [
+  { name = "fam3_t1_character", off = 0x00, ty = "ptr", note = "v:0x1966280" },
+  { name = "fam4_t1_profile", off = 0x08, ty = "ptr", note = "v:0x1966288" },
+  { name = "fam3_root_roster", off = 0x88, ty = "ptr", note = "v:0x1966308" },
+  { name = "fam4_t0_account", off = 0x90, ty = "ptr", note = "v:0x1966310" },
+  { name = "fam4_t4_prologue_gate", off = 0xB8, ty = "ptr", note = "v:0x1966338 - the object the prologue/veteran gate consults" },
+]
+controls = []
+
+[[surface]]
+name = "roster_store"
+group = "queuez"
+addr = "v:0x26A37C8"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@v:0x26B6630 == 3 AND [v:0x26A37C8] != 0"
+source = "historicaldocs/design/orbit-hud-blank.md STEP 1 (0x581900 = `if (0x78DEE0()==3 && DAT_026a37c8) return DAT_026a37c8`); verified offline this session"
+note = """⭐ THE PAIR THAT DISCRIMINATES TWO IDENTICAL-LOOKING FAILURES. 0xA3F000 skips its ENTIRE
+binding block when 0x581900() returns NULL, and the container then keeps its constructor's
+{0, 0, 0xFF} - byte-identical to the NULL-two-hop outcome. These two reads tell them apart.
+⛔ MEASURED NON-NULL AND ==3, so the store IS reachable: the HUD blank is at hop 1, not here."""
+fields = [
+  { name = "store_ptr", off = 0x00, ty = "ptr", note = "DAT_026a37c8" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26A37C8]", value = "a:0x20500F0D0", verified = true, note = "non-NULL" },
+  { snap = "orbit-all", expr = "u32@v:0x26B6630", value = "3", verified = true, note = "DAT_026b6630 - 0x78DEE0's entire body is `return DAT_026b6630;`" },
+  { snap = "rung36-biped-chain", expr = "u32@v:0x26B6630", value = "3", verified = true, note = "stable in-world too" },
+]
+
+[[surface]]
+name = "investment_roster_game_system"
+group = "queuez"
+addr = "[v:0x26A37C0]+0x08"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26A37C0] != 0"
+source = "historicaldocs/design/rung34-task7.md §142 - c_investment_roster_game_system, singleton 0x26A37C0, store at +0x08"
+note = "⚠ Do NOT confuse with roster_store (0x26A37C8). Adjacent addresses, different objects - rung34-task7.md §142 exists because one was read for the other."
+fields = [
+  { name = "store", off = 0x00, ty = "ptr" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[[v:0x26A37C0]+0x08]", value = "a:0x800581860", verified = true, note = "⛔ CORRECTED 2026-08-10 (d1-scope control #1 + d1-replay, agreeing): the expression needed the OUTER deref. `[v:0x26A37C0]+0x08` is the vtable SLOT (a:0x801927988); a:0x800581860 is the slot's CONTENTS, and it points at a function prologue `55 48 89 e5`. The receipt recorded the pointee while the expression named the pointer." },
+]
+
+[[surface]]
+name = "memory_arena_table"
+group = "queuez"
+addr = "v:0x1ABCB80"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u64@v:0x1ABCB80 != 0"
+source = "capture-rig/guest-symbols.json symbols[memory_arena_table] (read out of FUN_001072C0)"
+note = """⭐ THE CLIENT'S NAMED-HEAP TABLE, and it beats a guessed capture window because an arena is
+an EXACT extent. SELF-RELATIVE: arr = 0x1ABCB80 + *(u64*)0x1ABCB80. Stride = *(u64*)(0x1ABCB80+0x10)
+= 0x140. Record: name[0x30] NUL-terminated, base @+0x30, size @+0x50.
+199 arenas / 345 MiB at bootflow:prepare_for_orbit. [1] = 'Datum Array Table Manager', [2] = 'Tag
+Memory', [182] = 'client reference manager'. Live index at v:0x25BE338 (u16)."""
+fields = [
+  { name = "self_rel", off = 0x00, ty = "u64", note = "add to 0x1ABCB80 to get the array" },
+  { name = "stride", off = 0x10, ty = "u64", note = "0x140 live" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u64@v:0x1ABCB80", value = "0x30", verified = true },
+  { snap = "orbit-all", expr = "u64@(v:0x1ABCB80+0x10)", value = "0x24568", verified = false, note = "⚠ the 0x140 stride claim needs re-reading against the self-relative array, not the header word - see guest-symbols.json" },
+]
+
+
+# ============================================================================================
+# GROUP: derived - values the CLIENT computes from content, which our wire fields must MATCH.
+# ⛔ Nothing here is settable. These are the right-hand operands of the gates.
+# ============================================================================================
+
+[[surface]]
+name = "scenario_record"
+group = "derived"
+addr = "NOT-EXPRESSIBLE"
+addr_input = "[v:0x26B13F8]+0x278"
+addr_input_width = "u32"
+resolver = "package_tag_registry"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@([v:0x26B13F8]+0x278) != 0xFFFFFFFF   # -1 makes FUN_00299100 SKIP the check entirely"
+source = "capture-rig/scenario-checksum.py; historicaldocs/design/activity-checksum.md; resolved end-to-end offline this session"
+note = """⭐⭐ THESE ARE PROPERTIES OF THE **WORLD**, NOT THE ACTIVITY. D1_AH_ACTIVITY_INDEX cannot
+change them; D1_AH_ACTIVITY (the world name) can.
+⚠⚠ A PvP map's record is resident ONLY WHILE ITS WORLD IS LOADED. Sample with
+`scenario-checksum.py watch --hz 500` during the ~100 ms between 'load successful' and 'returning
+to pregame'. **--hz 50 MISSES the window and reads like 'the world never loaded' - a FALSE
+NEGATIVE, measured both ways.**"""
+fields = [
+  { name = "name_hash", off = 0x08, ty = "u32", note = "FNV-1 of the name string - self-check for the resolver" },
+  { name = "checksum_private", off = 0x0C, ty = "u32", note = "⭐ what blob+0x5C must equal (ac+0x18 == 0)" },
+  { name = "checksum_public", off = 0x10, ty = "u32", note = "the ac+0x18 == 1 arm; never taken so far" },
+  { name = "name", off = 0x30, ty = "i64 selfrel", note = "self-relative char* - add to (record+0x30)" },
+  { name = "bubble_count", off = 0x48, ty = "i64", note = "⭐ what blob+0x10 must equal. A PvP map is ONE bubble; orbit is 16." },
+  { name = "slices", off = 0x50, ty = "i64 selfrel", note = "elements at record + selfrel + 0x60 + i*0x18; hash @+0x00, valid @+0x08" },
+]
+controls = [
+  { snap = "orbit-all", expr = "name(resolve(0x80B52003))", value = "\"orbit\"", verified = true },
+  { snap = "orbit-all", expr = "u32@(resolve(0x80B52003)+0x0C)", value = "0x33F044D3", verified = true, note = "⭐ D1_AH_ACTIVITY_CHECKSUM for orbit - reproduced offline, matching CLAUDE.md exactly" },
+  { snap = "orbit-all", expr = "u32@(resolve(0x80B52003)+0x10)", value = "0x718882D2", verified = true, note = "PUBLIC" },
+  { snap = "orbit-all", expr = "i64@(resolve(0x80B52003)+0x48)", value = "16", verified = true, note = "⭐ D1_AH_BUBBLE_COUNT for orbit" },
+  { snap = "n/a", expr = "pvp_moonbase", value = "checksum 0x5966E491, bubbles 1", verified = false, note = "[R] from CLAUDE.md's two-poke capture; not re-derivable offline (the record is not resident in an orbit snapshot)" },
+]
+
+[[surface]]
+name = "activity_manager"
+group = "derived"
+addr = "[v:0x26B13F8]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B13F8] != 0"
+source = "capture-rig/scenario-checksum.py ACTIVITY_MANAGER_PTR; FUN_007669A0 returns it; FUN_0075B8B0 writes +0x270/+0x274/+0x278"
+note = "The scenario handle at +0x278 is the client's OWN - written by c_online_world_controller::vfunc[3]. It is named by the client's `world_controller:activity_manager: No valid scenario handle …` diagnostic."
+fields = [
+  { name = "scenario_handle", off = 0x278, ty = "u32", note = "a 0x8080xxxx content tag; -1 disables the checksum gate" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u32@([v:0x26B13F8]+0x278)", value = "0x80B52003", verified = true, note = "⭐ the orbit scenario tag, matching CLAUDE.md" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26B13F8]+0x278", value = "UNMAPPED", verified = true, note = "⚠ --preset content does not reach it" },
+]
+
+[[surface]]
+name = "slice_set_transition_manager"
+group = "derived"
+addr = "[v:0x26B1408]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "u8@([v:0x26B1408]+0x88) != 0   # 0 = disabled. ⭐ measured to MOVE 0x01 -> 0x00 on the fallback to orbit, so it is a real state axis, not a stable wrong address."
+source = "historicaldocs/design/rung34-task7.md §467 (the full live measurement, taken parked in rung 34)"
+note = """⭐ THE CONTROL AGAINST A STALE READ, and it is the model for every surface here: after the
+client fell back to orbit, +0x88 re-read 0x00 where it had read 0x01, and +0x89 went 0x02 -> 0xFF.
+**A wrong address is perfectly stable; this one moved on the axis that matters.**
+⛔ +0x490 (PAH PENDING) reading -1 IS the rung-34 task-8 failure, in one read."""
+fields = [
+  { name = "mode", off = 0x88, ty = "u8", note = "0 = disabled, 1 = initial_slice_set_precaching" },
+  { name = "transition_state", off = 0x89, ty = "u8" },
+  { name = "switch_assigned", off = 0x8A, ty = "u8", note = "bit 7 = the slice-set-switch task was assigned" },
+  { name = "current_region_index", off = 0x90, ty = "i32" },
+  { name = "current_region_id", off = 0x98, ty = "i32" },
+  { name = "pending_region_index", off = 0x130, ty = "i32" },
+  { name = "pending_region_id", off = 0x138, ty = "i32", note = "⭐ what a PAH record's +0x00 must equal" },
+  { name = "private_public", off = 0x13C, ty = "u8", note = "0 = PRIVATE, the arm FUN_0077F6B0 takes" },
+  { name = "transition_token", off = 0x1D0, ty = "u8", note = "⭐ what record.peer_tokens[local_peer_index] must equal. RESETS on the fallback - D1_AH_SLICE_TOKEN=1 is correct for EVERY poke." },
+  { name = "transition_type", off = 0x1D2, ty = "u8" },
+  { name = "last_membership_update_id", off = 0x3B0, ty = "u32", note = "FUN_0077E5A0 writes 0xFFFFFFFF here at every transition ⇒ the membership is RE-SCANNED for free" },
+  { name = "local_peer_index", off = 0x3B4, ty = "u32", note = "FUN_0029FE70. A solo membership resolves to slot 0." },
+  { name = "pah_current", off = 0x3B8, ty = "i32" },
+  { name = "pah_pending", off = 0x490, ty = "i32", note = "⛔⛔ -1 = THE FAILING GATE" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u8@([v:0x26B1408]+0x88)", value = "0x00", verified = true, note = "disabled in orbit - the negative half of the moving-axis control" },
+  { snap = "orbit-all", expr = "u8@([v:0x26B1408]+0x1D0)", value = "0x00", verified = true, note = "⭐ the token IS 0 at rest - the retraction in rung34-task7.md §5 confirmed offline" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26B1408]+0x88", value = "UNMAPPED", verified = true },
+]
+
+[[surface]]
+name = "slice_set_switch_object"
+group = "derived"
+addr = "[v:0x26B1438]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B1438] != 0"
+source = "historicaldocs/design/rung34-task7.md §399 - FUN_0077A150 is four instructions: `call 0x766a10; mov al,[rax+2]; shr al,7`"
+note = """⭐ RUNG 34 TASK 8 IS ONE BIT. `FUN_0077A150() = [obj+2] >> 7`. Live at the stall: 0x00.
+⚠ A byte scan for `or byte [reg+2], 0x80` found 15 sites, NONE in 0x76-0x78 - with a working
+positive control. ⇒ the setter is not a literal OR of that shape. `d1-live watch` on the byte
+during a run that reaches rung 34 is the instrument that closes it."""
+fields = [
+  { name = "switch_bit", off = 0x02, ty = "u8", note = "bit 7 = the slice-set switch was requested" },
+  { name = "field_08", off = 0x08, ty = "i32", note = "FUN_0077A120() reads it; -1 live" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u8@([v:0x26B1438]+0x02)", value = "0x00", verified = true, note = "⛔ bit 7 clear" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26B1438]", value = "UNMAPPED", verified = true },
+]
+
+[[surface]]
+name = "world_tag_loader_cache"
+group = "derived"
+addr = "[v:0x26A3BA0]+0x08"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26A3BA0] != 0"
+source = "historicaldocs/design/rung34-task7.md §145 - ctx = *(u64*)(0x26A3BA0 + 8), 0xE48-stride world-tag loader cache"
+note = "⚠ [U] ON THE STATE-BYTE OFFSET. The doc names the stride (0xE48) and the mechanism (a cache state byte stuck at 1, needs >= 5, because family 0/type 0 is unserved) but not the offset within the record. *Instrument:* `d1-eboot field-xref` on the ctx class, or `d1-live watch` across the 0xE48 record while the task-7 lookup runs."
+fields = [
+  { name = "record", off = 0x00, ty = "struct", note = "stride 0xE48" },
+  { name = "state", off = 0x00, ty = "[U]", note = "⚠ offset unknown. 1 = stuck, >= 5 = loaded." },
+]
+controls = [
+  { snap = "orbit-all", expr = "[[v:0x26A3BA0]+0x08]", value = "a:0x80057DFE0", verified = true, note = "ctx resolves; the field within it is [U]. ⛔ CORRECTED 2026-08-10, SAME SHAPE AS investment_roster_game_system: the expression named the slot (a:0x8019284a8) while the receipt recorded its contents (a:0x80057DFE0, a function prologue). ⭐ TWO instances of one mistake in one registry - the pattern is `[BSS]+0x08` where BSS holds a VTABLE POINTER, so +0x08 is slot 1 and the interesting value is one deref further." },
+]
+
+
+# ============================================================================================
+# GROUP: session - the network session parameter set. The activity-launch seam.
+# ⭐ This is a REPLICATED-PROPERTY system and THE SERVER IS THE AUTHORITY. Populating it
+#   locally is a poke and never a fix.
+# ============================================================================================
+
+[[surface]]
+name = "network_session_manager"
+group = "session"
+addr = "v:0x26B1850"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B1850] != 0 AND u8@[v:0x26B1850] != 0 AND (u32@(session_params_base(0) - 0x6B38 + 0x8C58)) in 4..=10"
+source = "capture-rig/session-params.py (disasm of 0x773FC0); the whole chain reproduced offline this session"
+note = """THE RESOLUTION CHAIN, and every step of it is a place to be wrong:
+    manager = [v:0x26B1850]                   ⚠ eboot BSS vaddr
+    if byte@manager == 0: no session
+    slot    = manager + idx*0x131C8           ⚠ HEAP from here on - a: / absolute
+    inner   = i32@(slot + 8) * 0x98E0
+    state   = u32@(inner + slot + 0x8C58)     must be 4..10  (`bt 0x7F0, state`)
+    PARAMS  = inner + slot + 0x6B38           <- what FUN_00773FC0 RETURNS
+⚠⚠ ALL PARAMETER OFFSETS ARE RELATIVE TO WHAT THE ACCESSOR RETURNS, because that is what the
+client indexes (`FUN_00773fc0(0) + 0x9b8`). A sibling derivation puts the set at session+0x6B28;
+the 0x10 difference is the inner-array base. DO NOT MIX THE TWO BASES.
+⚠ session-params.py's DISPLAY TABLE prints the wrong slot (off by one); --launch-poke is right."""
+fields = [
+  { name = "present", off = 0x00, ty = "u8", note = "0 = no session" },
+  { name = "inner_index", off = 0x08, ty = "i32", note = "scaled by 0x98E0" },
+  { name = "state", off = 0x8C58, ty = "u32", note = "relative to inner+slot. Valid mask 0x7F0 ⇒ 4..10." },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26B1850]", value = "a:0x204F0D440", verified = true },
+  { snap = "orbit-all", expr = "u8@[v:0x26B1850]", value = "1", verified = true, note = "a session exists" },
+  { snap = "orbit-all", expr = "i32@([v:0x26B1850]+0x08)", value = "0", verified = true, note = "inner index 0" },
+  { snap = "orbit-all", expr = "u32@([v:0x26B1850]+0x8C58)", value = "6", verified = true, note = "⭐ in 4..10 ⇒ the parameter set is admissible" },
+]
+
+[[surface]]
+name = "session_param_activity"
+group = "session"
+addr = "[v:0x26B1850]+0x6B38+0x9B8"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u8@([v:0x26B1850]+0x6B38+0x9B8+0xE0) & 1 == 1"
+source = "capture-rig/session-params.py PARAMS[0x09B8] = s_activity_information; verified offline this session"
+note = """⭐⭐ THIS SINGLE u16 IS WHAT TAKES THE CLIENT OUT OF ORBIT. `0x7AAF60` (orbit's per-frame
+update) leaves rung 27 for rung 28 when it is populated and != -1 - not on account state, not on
+an unlock, not through the director.
+⚠ The addr above assumes inner_index == 0. d1-scope MUST recompute it from the chain, not pin it.
+⚠⚠ A poke here is synthetic_ancestor TWICE OVER - nothing crossed a wire, so it is not even
+evidence about our own server."""
+fields = [
+  { name = "version_ack_vector", off = 0x38, ty = "u8[0xA8]", note = "per-peer, all 0xFF" },
+  { name = "has_value", off = 0xE0, ty = "u8", note = "FUN_00B8D600 returns this & 1" },
+  { name = "value", off = 0xE8, ty = "struct[0xA8]", note = "m_value then m_pending" },
+  { name = "activity_id", off = 0xEA, ty = "u16", note = "⭐ 0xB8C130 reads word[param+0xEA]. 0xFFFF = unset." },
+]
+controls = [
+  { snap = "orbit-all", expr = "u8@([v:0x26B1850]+0x6B38+0x9B8+0xE0)", value = "1", verified = true, note = "has_value - the parameter exists in orbit" },
+  { snap = "orbit-all", expr = "u16@([v:0x26B1850]+0x6B38+0x9B8+0xEA)", value = "0xFFFF", verified = true, note = "⭐ UNSET in orbit - the negative control. --launch-poke writes 393/407 here." },
+]
+
+[[surface]]
+name = "session_param_world_controller_goal"
+group = "session"
+addr = "[v:0x26B1850]+0x6B38+0x0000"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u8@([v:0x26B1850]+0x6B38+0xE0) & 1 == 1"
+source = "capture-rig/session-params.py PARAMS[0x0000]; GOAL_VALUE = 0xE4 (0xB91090 reads [param+0xE4]); verified offline this session"
+note = "⭐ goal_a is a RUNG NUMBER. 0x1B = 27 = setup:orbit; --launch-poke writes 0x24 = 36 = activity:in_world."
+fields = [
+  { name = "has_value", off = 0xE0, ty = "u8" },
+  { name = "goal_a", off = 0xE4, ty = "u32", note = "⭐ the destination rung" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u32@([v:0x26B1850]+0x6B38+0xE4)", value = "27", verified = true, note = "⭐⭐ 0x1B = setup:orbit - the goal and the ladder's current_state AGREE. Two unrelated surfaces, one answer." },
+]
+
+[[surface]]
+name = "session_parameter_set"
+group = "session"
+addr = "[v:0x26B1850]+0x6B38"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@([v:0x26B1850]+0x8C58) in 4..=10"
+source = "capture-rig/session-params.py PARAMS map"
+note = """The eleven parameters, by offset from the accessor's return:
+  0x0000 world_controller_goal      (value @0xE4, 0xC)
+  0x0100 active_join_controls       (value @0xE2, 0x6)
+  0x01F0 atomic_cascade_join_data   (value @0xE8, 0x5C)
+  0x0390 activity_host              (value @0xE8, 0x20)  s_activity_host_connection_information
+  0x04B8 orbit                      (value @0xE4, 0x4)
+  0x05A8 desired_activity           (value @0xE4, 0x9C)
+  0x07C8 desired_roster_join_activity (value @0xE4, 0x4)
+  0x08B8 activity_start_status      (value @0xE4, 0xC)
+  0x09B8 activity                   (value @0xE8, 0xA8)  ⭐ the launch seam
+  0x0BF0 user_join_controls         (value @0xE2, 0x2)
+Universal shape (c_network_session_parameter_base, 0xB8D440, 0xE1 bytes): vptr @0, ack vector
+0x38..0xE0, has_value @0xE0, then align(0xE1, alignof(T)) then m_value, m_pending."""
+fields = []
+controls = []
+
+[[surface]]
+name = "orbit_handler_debounce"
+group = "session"
+addr = "v:0x26B4C08+0x38"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B4C08] == v:0x192F410"
+source = "CLAUDE.md's --launch-poke third write; capture-rig/session-params.py ORBIT_HANDLER_VTABLE/ORBIT_DEBOUNCE_OFFSET; handler address derived offline this session"
+note = "⭐ The -1 timestamp that actually holds orbit shut. --launch-poke writes 0. Reads -1 pristine."
+fields = [
+  { name = "debounce", off = 0x00, ty = "i64", note = "v:0x26B4C40" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26B4C08]", value = "v:0x192F410", verified = true, note = "identity - matches session-params.py's ORBIT_HANDLER_VTABLE (0x8019_2F410 with base)" },
+  { snap = "orbit-all", expr = "i64@v:0x26B4C40", value = "-1", verified = true, note = "⭐ PRISTINE" },
+  { snap = "rung36-biped-chain", expr = "i64@v:0x26B4C40", value = "0", verified = true, note = "⚠ poked (or cleared) - the run that reached in_world used --launch-poke" },
+]
+
+
+# ============================================================================================
+# GROUP: simulation - the player SETS. ⭐⭐ "The session knows our Guardian. The simulation
+#        does not. Nothing copies one into the other."
+# ============================================================================================
+
+[[surface]]
+name = "session_player_set"
+group = "simulation"
+addr = "[v:0x27E7F18]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "u32@([v:0x27E7F18]+0x5B180) != 0xFFFFFFFF   # the local player index; -1 ⇒ FUN_00BA3A40 returns"
+source = "historicaldocs/design/player-creation-chain.md §1, §1.1, §2; every field verified offline this session"
+note = """⛔⛔ THE DEREF TRAP, AND IT IS SETTLED IN BYTES. P and Q are a MUTUAL BACK-POINTER PAIR
+(*(u64*)P == Q and *(u64*)Q == P), so a single-deref and a triple-deref of the same Ghidra
+expression BOTH look coherent: `[[v:0x27E7F18]]+0x5B180` reads 0xFFFFFFFF while
+`[v:0x27E7F18]+0x5B180` reads 0. Two plausible, OPPOSITE answers.
+Settled by `d1-eboot disasm 0xba3a40`: `mov r15,rdi` / `mov rdi,[r15]` - **ONE deref ⇒ P is the
+subject** and the index is 0, valid. ⭐ Use `[v:0x27E7F18]`, never `[[v:0x27E7F18]]`, for P.
+
+⚠⚠ `+0x90` IS POKE-CONTAMINATED IN rung36-biped-chain.snap. Pristine is -1,-1,-1 (verified in
+orbit-all AND rung34-task8-cleared-registry). The newest snapshot reads 0,-1,-1 - poke 6."""
+fields = [
+  { name = "back_ptr", off = 0x00, ty = "ptr", note = "= Q, the simulation player set" },
+  { name = "occupancy_mask", off = 0x10, ty = "u32", note = "⭐ 0x00FA6551 live - the SESSION knows about players" },
+  { name = "slots", off = 0x18, ty = "struct[]", note = "stride 0xE8" },
+  { name = "slot.name", off = 0x1C, ty = "char[]", note = "⭐ slot base +0x04. Reads \"orb@D1Guardian@\" - the Guardian, by name, in the client's memory." },
+  { name = "machine_user_controller", off = 0x90, ty = "i32[3]", note = "⭐ FUN_00BB4050(P,i,0) tests P+0x90+i*0x200 != -1. -1 ⇒ THE ADD (FUN_00BB3FD0) is unreachable." },
+  { name = "local_player_index", off = 0x5B180, ty = "u32", note = "GATE 4; -1 returns" },
+  { name = "machine_record", off = 0x12A78, ty = "struct", note = "stride 0x18258 - see machine_record" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[v:0x27E7F18]", value = "a:0x204F58310", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x27E7F18]+0x10)", value = "0x00FA6551", verified = true },
+  { snap = "rung36-biped-chain", expr = "[v:0x27E7F18]+0x1C", value = "\"orb@D1Guardian@\"", verified = true, note = "⭐ THE POSITIVE CONTROL for this whole group. ⚠ CORRECTION TO THE BRIEF: the string starts at +0x1C, not +0x18. +0x18 is the 0xE8 SLOT base; the name is at slot+0x04." },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x27E7F18]+0x5B180)", value = "0", verified = true, note = "⭐ valid index - P is the right subject" },
+  { snap = "rung34-task8-cleared-registry", expr = "i32[3]@([v:0x27E7F18]+0x90)", value = "-1, -1, -1", verified = true, note = "⭐⭐ PRISTINE. THE BREAK, on an unpoked snapshot." },
+  { snap = "orbit-all", expr = "i32[3]@([v:0x27E7F18]+0x90)", value = "-1, -1, -1", verified = true, note = "same in orbit - a second unpoked witness" },
+  { snap = "rung36-biped-chain", expr = "i32[3]@([v:0x27E7F18]+0x90)", value = "0, -1, -1", verified = true, note = "⚠⚠ POKED (poke 6). DO NOT cite this as the client's value." },
+]
+
+[[surface]]
+name = "sim_player_set"
+group = "simulation"
+addr = "[[v:0x27E7F18]]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "[[[v:0x27E7F18]]] == [v:0x27E7F18]   # the back-pointer closes: *(u64*)Q == P"
+source = "historicaldocs/design/player-creation-chain.md §1 (FUN_00BA3B00, the sweep), §4, §5; verified offline this session"
+note = """⛔⛔ THE SWEEP'S GATE 7 IS A DISCRIMINATOR, AND SATISFYING THE PAYLOAD BREAKS IT.
+`if ((mask>>i & 1) && *(char*)(Q + i*0xE8 + 0x20) == 0)`. Poke 4 copied the SESSION's own 0xE8
+record into the simulation slot - reasoning that a record the client itself authored beats zeroes.
+The session record's byte at slot+0x08 is the 'D' of D1Guardian, so **from that poke onward the
+sweep was skipping the very slot it was meant to fill.**
+⭐ THE RULE: before writing a whole structure across a boundary, enumerate the fields the consumer
+reads as PREDICATES. One of them was a discriminator.
+
+⚠ OPEN, MEASURED THIS SESSION: after poke 5 set the skip byte to 0x00, it now reads **0x01**.
+Either the client wrote it, or the poke did not land as journalled. [U] - closable by
+`d1-live watch --addr '[[v:0x27E7F18]]+0x20' --len 1` across the next attempt."""
+fields = [
+  { name = "back_ptr", off = 0x00, ty = "ptr", note = "= P" },
+  { name = "sweep_mask", off = 0x10, ty = "u32", note = "⭐ GATE 6 - occupancy bitmask over 20 slots. 0 ⇒ the loop body never runs." },
+  { name = "slots", off = 0x18, ty = "struct[]", note = "stride 0xE8" },
+  { name = "slot.skip_byte", off = 0x20, ty = "u8", note = "⭐ GATE 7 - must be 0 for the slot to be swept (slot 0's copy of slot+0x08)" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u32@([[v:0x27E7F18]]+0x10)", value = "0x0", verified = true, note = "⭐⭐ PRISTINE - the simulation set is EMPTY while the session set reads 0x00FA6551" },
+  { snap = "rung34-task8-cleared-registry", expr = "u32@([[v:0x27E7F18]]+0x10)", value = "0x0", verified = true, note = "second unpoked witness, at rung 34 on a real PvP map" },
+  { snap = "rung36-biped-chain", expr = "u32@([[v:0x27E7F18]]+0x10)", value = "0x1", verified = true, note = "⚠⚠ POKED (poke 3). The client never clears it - it PERSISTED." },
+  { snap = "rung36-biped-chain", expr = "u8@([[v:0x27E7F18]]+0x20)", value = "0x01", verified = true, note = "⚠ neither the pristine 0x00 nor the poked-then-repaired 0x00 - see the [U] above" },
+]
+
+[[surface]]
+name = "machine_record"
+group = "simulation"
+addr = "[v:0x27E7F18]+0x12A78"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "[[v:0x27E7F18]+0x12A78+0x20] == 0xD1A0000000000001"
+source = "historicaldocs/design/player-creation-chain.md §1 (FUN_00BA3A40), §2, §4; verified offline this session"
+note = """⭐⭐ THE SUBJECT-FIXING CONTROL of the whole simulation group: +0x10 is the ACTIVITY CLIENT
+(the address the snapshot's own --map names) and +0x20 is the AH ID from the client's own
+`EST-Y AH->D1A00000:00000001` receipt. At the other deref level BOTH read zero.
+⚠ In ORBIT both read zero at EITHER level - they are activity-lifetime values, so this control
+only discriminates while in an activity. That is stated in the liveness predicate above.
+
+⭐ +0xFC IS A FREE POSITIVE CONTROL: `rec[0xFC] = 0` is reachable ONLY inside the taken branch, so
+poking it to 1 and watching it come back to 0 PROVES the producer runs. Done 6x live."""
+fields = [
+  { name = "back_ptr", off = 0x00, ty = "ptr", note = "= P" },
+  { name = "activity_client", off = 0x10, ty = "ptr", note = "⭐ the identity control" },
+  { name = "ah_id", off = 0x20, ty = "u64", note = "⭐ 0xD1A0000000000001 - our own AH id, echoed back" },
+  { name = "payload_id", off = 0x4C, ty = "u32", note = "copied to P+0x12DC" },
+  { name = "payload", off = 0x5C, ty = "u8[0xA0]", note = "memcpy'd to P+0x12EC" },
+  { name = "dirty", off = 0xFC, ty = "u8", note = "⭐ GATE 5. SELF-CLEARING - the producer sets it back to 0." },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x20]", value = "0xD1A0000000000001", verified = true, note = "⭐⭐ verified byte-exact" },
+  { snap = "rung36-biped-chain", expr = "[[v:0x27E7F18]+0x12A78+0x10]", value = "a:0x22D5A6E00", verified = true },
+  { snap = "rung36-biped-chain", expr = "u8@([v:0x27E7F18]+0x12A78+0xFC)", value = "0x00", verified = true, note = "consumed - the producer ran" },
+]
+
+[[surface]]
+name = "sim_add_player"
+group = "simulation"
+addr = "0xBB3FD0"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/player-creation-chain.md §1 (THE ADD), §4 (the closing [U])"
+note = """⭐⭐ THE SINGLE REMAINING UNKNOWN IN THE CHAIN, AND IT IS ONE RUN.
+`[U]`: does FUN_00BB3FD0 run, and does it create the player?
+*Instrument, named:* `d1-live watch --rw exec --addr 0xbb3fd0` while poking rec+0xFC.
+**One hit is proof, with no candidate list.** This is the whole reason d1-scope needs rw=exec."""
+fields = []
+controls = []
+
+[[surface]]
+name = "sim_sweep"
+group = "simulation"
+addr = "0xBA3B00"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/player-creation-chain.md §1"
+note = "FUN_00BA3B00(Q) - reads the occupancy mask at Q+0x10 and the skip byte at Q+i*0xE8+0x20."
+fields = []
+controls = []
+
+[[surface]]
+name = "sim_producer"
+group = "simulation"
+addr = "0xBA3A40"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/player-creation-chain.md §1.1 (disassembled to settle the deref trap)"
+note = "FUN_00BA3A40(Q). `0xBA3A54 mov r15,rdi` / `0xBA3A57 mov rdi,[r15]` - the ONE deref that fixes P as the subject."
+fields = []
+controls = []
+
+[[surface]]
+name = "sim_queue_element_0D_apply"
+group = "simulation"
+addr = "v:0x2670908"
+rw = "write"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "[v:0x2670908] == v:0xBB1BC0"
+source = "historicaldocs/design/player-creation-chain.md §1 - FUN_00BB1B90: `FUN_002ff640(0xd, &DAT_01956d28); DAT_02670908 = FUN_00bb1bc0;`"
+note = """⭐ Element type 0x0D IS the player update. The apply fn is stored in this global.
+⚠ FUN_00BB1BC0 has NO VTABLE ENTRY - it is materialised by `lea` at 0xBB1BA5, which is exactly
+`eboot-callgraph.tsv`'s blind spot (it fails 4/11 controls on lea-materialised pointers).
+`d1-eboot xref` finds it; the callgraph would not. ⇒ never use the callgraph for gate discovery."""
+fields = [
+  { name = "apply_fn", off = 0x00, ty = "ptr", note = "-> FUN_00BB1BC0" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x2670908]", value = "v:0xBB1BC0", verified = false, note = "⚠ NOT verified this session - read it before citing" },
+]
+
+
+# ============================================================================================
+# GROUP: game - game globals, the roster, the player pool, and the sobject census.
+# ⭐⭐ THE ROOT CAUSE LIVES HERE: the world instantiated with an EMPTY ROSTER.
+# ============================================================================================
+
+[[surface]]
+name = "game_globals"
+group = "game"
+addr = "[v:0x2724950]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "u8@([v:0x2724950]+0x2B48) == 1   # world is up"
+source = "historicaldocs/design/biped-census.md §5.1; historicaldocs/design/player-creation-chain.md §3; verified offline this session"
+note = """⭐ THE WORLD ITSELF IS FINE. gg+0x2B48 = 1 (world is up) and gg+0x01 = 1 (game running) -
+the instantiate-world-and-start-game path RAN AND SUCCEEDED. This is not a failed load. It is a
+successful load of a world with nobody in it.
+⛔ gg is published ONCE, ZEROED: c_omaha_game_first_game_system::vfunc[1] does
+`memset(gamesys+8, 0, 0x2b58)` then tail-jumps FUN_009048A0, which memcpy's it into gg.
+FUN_009048A0 has EXACTLY ONE reference in the whole image ⇒ gg+0xD0 is ALWAYS empty at game
+start and FUN_00904AC0 legitimately adds nobody. **Do not chase FUN_00904AC0.**
+⚠ NOT captured by --preset content."""
+fields = [
+  { name = "start_in_progress", off = 0x00, ty = "u8" },
+  { name = "game_running", off = 0x01, ty = "u8", note = "⭐ FUN_00905170's gate - 'the gate that decides everything' - PASSES" },
+  { name = "roster", off = 0xD0, ty = "struct[20]", note = "⛔⛔ stride 0xE8. See player_roster_block." },
+  { name = "world_is_up", off = 0x2B48, ty = "u8", note = "⭐ set by c_omaha_world_controller_shim::vfunc[4]" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u8@([v:0x2724950]+0x01)", value = "1", verified = true, note = "game running" },
+  { snap = "orbit-all", expr = "u8@([v:0x2724950]+0x00)", value = "0", verified = true, note = "start not in progress" },
+  { snap = "orbit-all", expr = "u8@([v:0x2724950]+0x2B48)", value = "1", verified = true, note = "⭐ world is up - ALREADY TRUE IN ORBIT. A poke of the roster at rung 35 would have been too late." },
+  { snap = "rung36-biped-chain", expr = "[v:0x2724950]", value = "UNMAPPED", verified = true, note = "⚠ --preset content misses game globals entirely. Fix the preset before citing an in-world roster read." },
+]
+
+[[surface]]
+name = "player_roster_block"
+group = "game"
+addr = "[v:0x2724950]+0xD0"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "u8@([v:0x2724950]+0x2B48) == 1"
+source = "historicaldocs/design/biped-census.md §5.1 - the single most valuable open question in the project"
+note = """⛔⛔⛔ THE ROOT CAUSE, AND IT HAS NEVER BEEN NON-ZERO. All 0x1220 bytes are zero in every
+snapshot, so `FUN_00904AC0`'s `if (byte0 != 0)` adds ZERO players; nothing is allocated from the
+`player array` pool; `FUN_00411830` iterates an all-zero bit vector and returns.
+⭐⭐ **ANY non-zero read here is the finding, with NO candidate list.**
+*Instrument:* `d1-live watch --abs --addr '<gg+0xD0>' --len 8` across a boot.
+⛔ Static fallback FAILS BY SHAPE: `field-xref --global 0x2724950 --offset 0xD0` cannot see it -
+gg is itself a pointer, so this is `*(base) + 0xD0`, a double indirection.
+⚠ [I] that it is filled from the change-world command (adjacency: 0xD0 + 20*0xE8 = 0x12F0,
+immediately below the launch state block at [0x2724950]+8+0x12F8). The ZERO is [C]; the WRITER is [U]."""
+fields = [
+  { name = "slot", off = 0x00, ty = "struct[20]", note = "stride 0xE8" },
+  { name = "slot.enable", off = 0x00, ty = "u8", note = "⛔ non-zero ⇒ FUN_0090D1E0 is called for this slot" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x2724950]+0xD0", value = "all zero (0x20 read)", verified = true, note = "⛔ slot 0's enable byte is 0" },
+]
+
+[[surface]]
+name = "players_block"
+group = "game"
+addr = "[v:0x2725700]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x2725700]+0x20 reads \"players\" AND u32@([v:0x2725700]+0x40) == 0x64407440"
+source = "historicaldocs/design/biped-census.md §5.1; layout re-measured offline this session; magic/capacity/live_count RE-MEASURED and CORRECTED 2026-08-10 by d1-scope control #1 + d1-replay read"
+note = """⚠ THE GHIDRA EXPRESSION IS A DOUBLE DEREF. `lVar46 = *(long*)(DAT_02725700 + 8)` means
+`*(u64*)(<value at 0x2725700> + 8)` - i.e. `[[v:0x2725700]+8]`, NOT `[v:0x2725708]`.
+`[v:0x2725708]` reads 0 and would look exactly like an empty pool.
+⭐ MEASURED LAYOUT (rung36-biped-chain, block @ 0x37F815570) - note it is NOT the s_data_array
+pool shape (name at +0x41); this one puts its name at +0x20 and its magic at +0x40.
+
+⛔⛔ RETRACTION, 2026-08-10, MEASURED BY TWO INSTRUMENTS (d1-scope control #1 and `d1-replay read`,
+which agree byte for byte). This block previously stated **magic at +0x60 and capacity at +0x64**.
+Both are wrong by -0x20. The header actually reads:
+    +0x40  40 74 40 64   = 0x64407440   the magic
+    +0x44  14 00 00 00   = 20           the capacity
+    +0x60  00 00 00 00                  ZERO
+    +0x64  70 ec 8f 93   = 0x938FEC70   unrelated
+⭐ AND THE FIELD THAT MASKED IT: `live_count` was recorded at +0x5C, which reads 0 - but +0x3C
+reads 0 too, so THAT control passed either way and could never have caught the shift. It is moved
+to +0x3C for consistency with the measured pair and is marked NON-DISCRIMINATING: it cannot, on its
+own, distinguish a right offset from a wrong one. **A control that passes at two different
+addresses is not a control.**"""
+fields = [
+  { name = "array_base", off = 0x08, ty = "ptr", note = "-> the 20 x 0x2AF0 player records" },
+  { name = "stride", off = 0x10, ty = "u32", note = "0x2AF0" },
+  { name = "name", off = 0x20, ty = "char[]", note = "\"players\"" },
+  { name = "live_count", off = 0x3C, ty = "u32", note = "⛔ 0. ⚠ NON-DISCRIMINATING: +0x5C reads 0 as well, so this field cannot validate its own offset." },
+  { name = "magic", off = 0x40, ty = "u32", note = "0x64407440 - CORRECTED from +0x60, 2026-08-10" },
+  { name = "capacity", off = 0x44, ty = "u32", note = "20 - CORRECTED from +0x64, 2026-08-10" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[v:0x2725700]+0x20", value = "\"players\"", verified = true, note = "⭐ the name - base and bias, proved together" },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x2725700]+0x10)", value = "0x2AF0", verified = true, note = "⭐ the stride, read out of the header rather than transcribed" },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x2725700]+0x40)", value = "0x64407440", verified = true, note = "CORRECTED from +0x60 - see the retraction in this surface's note" },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x2725700]+0x44)", value = "20", verified = true, note = "CORRECTED from +0x64" },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x2725700]+0x3C)", value = "0", verified = true, note = "⛔ live count zero. ⚠ non-discriminating - it also read 0 at the wrong offset." },
+  { snap = "rung36-biped-chain", expr = "u32@([v:0x2725700]+0x60)", value = "0", verified = true, note = "⭐ THE INVERSION OF THE CORRECTION, kept as a row: the OLD magic offset reads ZERO. Without this the fix is unfalsifiable." },
+]
+
+[[surface]]
+name = "players_array"
+group = "game"
+addr = "[[v:0x2725700]+0x08]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@([v:0x2725700]+0x10) == 0x2AF0"
+source = "historicaldocs/design/biped-census.md §5.2; historicaldocs/design/arrival-handoff.md §655; verified offline this session"
+note = """⛔⛔ A LANDMINE FOR WHOEVER FIXES THIS: THE GATE DEFAULT IS 0, AND 0 PASSES.
+The spawn's inner gate is `if (*piVar43 != -1)` and the measured default at +0x1660 is **0**, so
+the gate PASSES on an uninitialised slot. The moment the roster is populated WITHOUT a real
+definition hash, FUN_00411830 calls FUN_00308230(&rec, 0) and builds a creation record from
+**definition hash 0**. ⇒ populating the roster is NECESSARY BUT NOT SUFFICIENT.
+⭐ And `+0x644 == 0` rather than -1 is itself a finding: -1 is written by add-player
+(0x90D78D/0x90D799), so a slot reading 0 was never initialised AT ALL - one step further back
+than either of the ladder's documented cases.
+⛔ `field-xref --global 0x2725700 --offset 0x1660` returns 0 tracked / 0 matches / 788 candidates
+WITH ALL FOUR CONTROLS PASSING. The instrument is fine; the QUESTION is mis-shaped -
+`players[i]` is `*(base+8) + i*0x2AF0`, a double indirection PLUS an index scale, which is
+neither `xref`'s nor `field-xref`'s shape. Enumerate through the named accessor (`xref 0x6697C0`)
+or watch the address at runtime."""
+fields = [
+  { name = "spawn_requested", off = 0x0C, ty = "u8", note = "bit 0 - FUN_00411830's per-player loop gate" },
+  { name = "player_index", off = 0x4C, ty = "u32" },
+  { name = "biped_handle", off = 0x644, ty = "u32", note = "⭐ 0 = never initialised; -1 = initialised, no biped" },
+  { name = "corpse_pair", off = 0x64C, ty = "u64" },
+  { name = "spawn_gate", off = 0x1660, ty = "i32", note = "⛔ `p != 0 && *p != -1`. Default 0 PASSES." },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "u32@([[v:0x2725700]+0x08]+0x644)", value = "0", verified = true },
+  { snap = "rung36-biped-chain", expr = "i32@([[v:0x2725700]+0x08]+0x1660)", value = "0", verified = true, note = "⛔ 0, not -1 - the landmine" },
+  { snap = "orbit-all", expr = "u32@([[v:0x2725700]+0x08]+0x644)", value = "0", verified = true, note = "identical in orbit - never initialised, in either state" },
+]
+
+[[surface]]
+name = "player_mapping_globals"
+group = "game"
+addr = "[v:0x27257F0]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x27257F0] != 0"
+source = "CLAUDE.md's WHY THERE IS NO GUARDIAN block; historicaldocs/design/arrival-handoff.md §575, §655; verified offline this session"
+note = """⛔⛔⛔ +0xC0 IS **THE BREAK**. The controller is never bound to a player, so no player record
+exists, so no biped is created, so there is nothing to render.
+⭐⭐ MEASURED THIS SESSION: it reads `ff ff ff ff ff ff ff ff` in **orbit-all** AND in
+**rung36-biped-chain** - i.e. IT IS BROKEN IN ORBIT TOO, not just in-world. That is a stronger
+statement than the one CLAUDE.md makes ('live value while parked in activity:in_world') and it
+narrows the suspect window enormously: whatever should write it never runs, at any rung.
+⭐ The only writer is FUN_00921790, reached only through FUN_0090D4F0 (add-player) - which is
+gated on the empty roster. **The local-player index, the NULL camera accessor and the absent
+biped are three symptoms of ONE cause.**
+⛔ The client emits ZERO diagnostics for player spawn (0x40E000-0x415FFF). This is memory-only -
+no log line will ever name it."""
+fields = [
+  { name = "controller_to_player", off = 0xC0, ty = "u8[8]", note = "⛔ 0xFF x 8 = unbound" },
+  { name = "camera_target", off = 0xC4, ty = "i32", note = "historicaldocs/design/arrival-handoff.md §575 - the observer's target" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "[v:0x27257F0]+0xC0", value = "ff ff ff ff ff ff ff ff", verified = true, note = "⛔ in_world" },
+  { snap = "orbit-all", expr = "[v:0x27257F0]+0xC0", value = "ff ff ff ff ff ff ff ff", verified = true, note = "⭐⭐ IDENTICAL IN ORBIT - new this session. The break is not activity-specific." },
+]
+
+[[surface]]
+name = "observer_globals"
+group = "game"
+addr = "[v:0x2723060]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x2723060] != 0"
+source = "historicaldocs/design/biped-census.md §7 (listed as an open [U]: 'Camera at the origin?'); measured offline this session"
+note = """⭐⭐ THIS SESSION CLOSES historicaldocs/design/biped-census.md §7's CAMERA [U], OFFLINE AND WITHOUT A BOOT.
+The camera is **NOT at the origin** - and it reads the SAME POINT in orbit, at rung 34, and
+in-world, across three snapshots from three different runs on three different days:
+    orbit-all                      42741f71 c1ea7c77 417ca26e   (61.031, -29.311, 15.790)
+    rung34-task8-cleared-registry  42741f71 c1ea7c77 417ca26e   (identical)
+    rung36-biped-chain             42741f79 c1ea7c7e 417ca276   (delta ~1e-5 in each component)
+⇒ **the camera has a position and it never moves.** That is exactly what the mechanism predicts:
+FUN_008F09A0 returns NULL whenever the local-player index is unset, so nothing ever writes it.
+⚠ Read THE FIELD, not the `game_camera_pos` printf - CLAUDE.md trap 10 (a log line is a rendering).
+⚠ [O] not [C] on the interpretation: three agreeing reads across states is strong, but no run has
+ever had a live player, so there is NO positive calibration for a camera that DOES move."""
+fields = [
+  { name = "camera_position", off = 0x46C, ty = "f32[3]" },
+]
+controls = [
+  { snap = "orbit-all", expr = "f32[3]@([v:0x2723060]+0x46C)", value = "61.031, -29.311, 15.790", verified = true },
+  { snap = "rung36-biped-chain", expr = "f32[3]@([v:0x2723060]+0x46C)", value = "61.031, -29.311, 15.790", verified = true, note = "⭐ the same point, in a different world, in a different run" },
+]
+
+[[surface]]
+name = "sobjects_pool"
+group = "game"
+addr = "v:0x26795E0"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u8@(v:0x26795E0+0x40) == 0x01 AND (v:0x26795E0+0x41) reads \"sobjects\""
+source = "historicaldocs/design/biped-census.md §2, §3; historicaldocs/design/player-creation-chain.md §8; every field re-verified offline this session on three snapshots"
+note = """⭐⭐ `+0x18` IS A MONOTONIC HIGH-WATER MARK AND THAT IS WHY A SNAPSHOT CAN ANSWER A QUESTION
+ABOUT A WHOLE PROCESS. FUN_0006E750 (the s_data_array allocator) ends every allocation with
+`hdr+0x18 = max(hdr+0x18, capacity - free)`. It NEVER decreases. ⇒ `hdr+0x18 == 0` means
+'not one element has EVER been allocated, at any point since process start' - not 'none right now'.
+⭐ Pool headers are INLINE IN BSS (not pointers), so the eboot window always carries them, even
+when the heap was not captured. 193 pools, whole-BSS scan, 2.7 s.
+⚠ THE MARK IS NOT THE CURRENT COUNT. On rung36-biped-chain the mark is 577 while the live count
+is 567. Use `sobjects_state` for 'now' and this for 'ever'."""
+fields = [
+  { name = "state_ptr", off = 0x00, ty = "ptr" },
+  { name = "element_base", off = 0x08, ty = "ptr" },
+  { name = "stride", off = 0x10, ty = "u32", note = "0xF0" },
+  { name = "capacity", off = 0x14, ty = "u32", note = "1500 (0x5DC)" },
+  { name = "high_water", off = 0x18, ty = "u32", note = "⭐ monotonic, whole-process, tamper-evident" },
+  { name = "magic", off = 0x40, ty = "u8", note = "0x01 - the pool-header signature" },
+  { name = "name", off = 0x41, ty = "char[]", note = "⭐ \"sobjects\" - THE positive control" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "v:0x26795E0+0x41", value = "\"sobjects\"", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@(v:0x26795E0+0x10)", value = "0xF0", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@(v:0x26795E0+0x14)", value = "1500", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@(v:0x26795E0+0x18)", value = "577", verified = true, note = "⭐ in-world high-water" },
+  { snap = "rung34-task8-cleared-registry", expr = "u32@(v:0x26795E0+0x18)", value = "577", verified = true },
+  { snap = "orbit-all", expr = "u32@(v:0x26795E0+0x18)", value = "63", verified = true, note = "⭐ 63 vs 577 - the pool MOVES across states, which is what makes a zero elsewhere evidence" },
+]
+
+[[surface]]
+name = "sobjects_state"
+group = "game"
+addr = "[v:0x26795E0]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u16@([v:0x26795E0]+0x1A) == u32@(v:0x26795E0+0x14)   # the two capacities agree"
+source = "historicaldocs/design/biped-census.md §4.3 (the same three-route method applied to `player array`); verified offline this session"
+note = "LIVE NOW = capacity - free. ⭐ Verified equal to the bit-vector popcount on all three snapshots (567/577/53) - two independent occupancy signals agreeing."
+fields = [
+  { name = "element_base", off = 0x00, ty = "ptr" },
+  { name = "bitvec_obj", off = 0x08, ty = "ptr" },
+  { name = "free", off = 0x18, ty = "u16" },
+  { name = "capacity", off = 0x1A, ty = "u16" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "u16@([v:0x26795E0]+0x18)", value = "933", verified = true, note = "⇒ live = 1500-933 = 567" },
+  { snap = "rung34-task8-cleared-registry", expr = "u16@([v:0x26795E0]+0x18)", value = "923", verified = true, note = "⇒ live = 577" },
+  { snap = "orbit-all", expr = "u16@([v:0x26795E0]+0x18)", value = "1447", verified = true, note = "⇒ live = 53" },
+]
+
+[[surface]]
+name = "sobjects_bitvec"
+group = "game"
+addr = "[[v:0x26795E0]+0x08]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "popcount(words[0..capacity]) == capacity - free"
+source = "verified offline this session on three snapshots; historicaldocs/design/biped-census.md §3 PC-3d"
+note = """⭐⭐ **THIS IS THE AUTHORITATIVE OCCUPANCY PREDICATE. USE IT, NOT THE TYPE-WORD RULE.**
+Measured this session across three snapshots: popcount == capacity - free, EXACTLY (567/577/53).
+⛔⛔ AND IT SETTLES A CONTRADICTION THE TREE HAS BEEN CARRYING: CLAUDE.md says '63 in orbit',
+biped-census.md §4.1 says '53'. **Both are right, for two different predicates.** The high-byte
+type-word rule counts 63; the bit vector counts 53. The 10 extra are indices 0..9, whose
+occupancy bits are CLEAR - freed or reserved slots whose type word was never cleared.
+⛔ AND ONE OF THOSE TEN IS **TYPE 11 = WEAPON** (index 4). A census using the type-word rule alone
+reports '1 weapon in-world'; the bit vector says zero, and biped-census.md §4.1's zero is right.
+⭐ The direction that matters is safe: only-bit-set-but-not-highbyte = **0** on all three
+snapshots, so the type-word rule NEVER MISSES a live object ⇒ **'zero type 9' holds under BOTH
+predicates**, and the biped negative survives."""
+fields = [
+  { name = "words_ptr", off = 0x10, ty = "ptr", note = "the bit words; bit i ⇔ element i is live" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "popcount(words[0..1500])", value = "567", verified = true },
+  { snap = "rung34-task8-cleared-registry", expr = "popcount(words[0..1500])", value = "577", verified = true },
+  { snap = "orbit-all", expr = "popcount(words[0..1500])", value = "53", verified = true },
+  { snap = "rung36-biped-chain", expr = "set(highbyte) - set(bitvec)", value = "{0,1,2,3,4,5,6,7,8,9}", verified = true, note = "⛔ types {24,3,1,3,11,3,3,3,3,14} - stale slots, including the phantom weapon" },
+  { snap = "rung36-biped-chain", expr = "set(bitvec) - set(highbyte)", value = "{} (empty)", verified = true, note = "⭐ the direction that makes the biped negative safe" },
+]
+
+[[surface]]
+name = "sobject_element"
+group = "game"
+addr = "[v:0x26795E0]+0x08"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "(u32@(elem+0x0C) & 0x1FFF) == index   # the self-handle check; 577/577 and 63/63 this session"
+source = "historicaldocs/design/player-creation-chain.md §8; historicaldocs/design/biped-census.md §4.1; census re-run offline this session"
+note = """⭐ THE LIVENESS RULE THAT COST A FIRST WRONG READING: the type enum is the **LOW** byte of
+the u16 at +0x08; the HIGH byte is 0xFF. Reading the whole u16 as the type yields t65281, t65304 …
+and a plausible-looking census of nothing.
+⚠⚠ BUT THE HIGH-BYTE TEST IS A SUPERSET OF LIVENESS, NOT LIVENESS - see sobjects_bitvec. Gate on
+the bit vector and read the type here.
+⭐ THE CENSUS, re-run offline this session (bit-vector-gated types would drop indices 0..9):
+    rung36-biped-chain: {1:21, 2:98, 3:6, 4:19, 8:36, 11:1, 14:40, 24:356}  TYPE 9 = 0
+    rung34-…-registry : {1:23, 2:98, 3:6, 4:19, 8:36,        14:39, 24:356}  TYPE 9 = 0
+    orbit-all         : {1:7,  2:1,  3:9,       8:1,         14:2,  24:43 }  TYPE 9 = 0
+⭐ THE CENSUS IS TRUSTWORTHY BECAUSE IT DISCRIMINATES: eight distinct types in-world, types 4 and
+8 absent from orbit entirely, type 2 goes 1 -> 98 and type 24 goes 43 -> 356. **The world
+populated; the player did not.** 'No type 9' is a real absence, not a broken scan."""
+fields = [
+  { name = "typeword", off = 0x08, ty = "u16", note = "⭐ LOW byte = type enum (9 = biped), HIGH byte = 0xFF" },
+  { name = "self_handle", off = 0x0C, ty = "u32", note = "(& 0x1FFF) == the element's own index - proves base and stride together" },
+  { name = "position", off = 0xE0, ty = "f32[3]" },
+]
+controls = [
+  { snap = "rung36-biped-chain", expr = "count(type == 9)", value = "0", verified = true, note = "⭐⭐ ZERO BIPEDS, under BOTH predicates" },
+  { snap = "rung36-biped-chain", expr = "self_handle check", value = "577 / 577", verified = true, note = "0 mismatches - base and stride are right" },
+  { snap = "orbit-all", expr = "self_handle check", value = "63 / 63", verified = true },
+]
+
+[[surface]]
+name = "player_array_pool"
+group = "game"
+addr = "v:0x2670940"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@(v:0x2670940+0x14) == 20   # capacity"
+source = "historicaldocs/design/biped-census.md §4.2, §4.3, §5; verified offline this session on three snapshots"
+note = """⛔⛔ `+0x18 == 0` IN EVERY SNAPSHOT - not one element has EVER been allocated, at any point
+in any of these processes. Three agreeing routes: the monotonic BSS mark, the state object's
+free/capacity pair (20/20), and the raw bit vector (not one bit set).
+⚠ NOT VESTIGIAL: `d1-eboot xref 0x2670940` returns **421 confirmed references** across four
+reference kinds (controls PASS). It is a live, heavily used pool that has simply never been given
+an element.
+⛔ THE HONEST LIMIT: no client with a live player has EVER been observed, so there is **no positive
+calibration for a non-zero `player array`.** §5's mechanism closes it, a measurement does not."""
+fields = [
+  { name = "state_ptr", off = 0x00, ty = "ptr" },
+  { name = "bitvec_holder", off = 0x08, ty = "ptr", note = "[[v:0x2670940]+0x8] -> the bit vector" },
+  { name = "stride", off = 0x10, ty = "u32", note = "0x1C0" },
+  { name = "capacity", off = 0x14, ty = "u32", note = "20" },
+  { name = "high_water", off = 0x18, ty = "u32", note = "⛔ 0 everywhere" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u32@(v:0x2670940+0x18)", value = "0", verified = true },
+  { snap = "rung34-task8-cleared-registry", expr = "u32@(v:0x2670940+0x18)", value = "0", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@(v:0x2670940+0x18)", value = "0", verified = true, note = "⛔ still 0 at the in_world instant, after six pokes" },
+  { snap = "orbit-all", expr = "u32@(v:0x2670940+0x14)", value = "20", verified = true, note = "capacity - proves the header is real, not a wrong address" },
+]
+
+[[surface]]
+name = "component_accessors_pool"
+group = "game"
+addr = "v:0x2670BB0"
+rw = "read"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u32@(v:0x2670BB0+0x14) == 0x2000"
+source = "historicaldocs/design/biped-census.md §4.2; verified offline this session"
+note = """⭐⭐ THE MANDATORY COMPANION TO EVERY ZERO IN THIS GROUP. CLAUDE.md: *a scan that finds
+nothing must be accompanied by one that finds something.* This pool is that one.
+MEASURED THIS SESSION, +0x18: orbit **326** -> rung 34 **1383** -> in_world **1419**.
+⇒ the client went on allocating right through the interval in which `player array` stayed at 0
+and `sobjects` stayed at 577. **The zeros are real zeros, not a broken address.**"""
+fields = [
+  { name = "stride", off = 0x10, ty = "u32", note = "0x20" },
+  { name = "capacity", off = 0x14, ty = "u32", note = "0x2000" },
+  { name = "high_water", off = 0x18, ty = "u32" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u32@(v:0x2670BB0+0x18)", value = "326", verified = true },
+  { snap = "rung34-task8-cleared-registry", expr = "u32@(v:0x2670BB0+0x18)", value = "1383", verified = true },
+  { snap = "rung36-biped-chain", expr = "u32@(v:0x2670BB0+0x18)", value = "1419", verified = true, note = "⭐ the positive control fires: 326 -> 1383 -> 1419" },
+]
+
+[[surface]]
+name = "player_spawn_fn"
+group = "game"
+addr = "0x411830"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/biped-census.md §5, §5.1; historicaldocs/design/player-creation-chain.md's retraction banner"
+note = """⭐ IT RUNS EVERY SIMULATION TICK, since orbit - stage 1 of a 14-entry engine tick table
+(FUN_0074A780, profiling scope 'game_tick'), via FUN_00912DF0. ⇒ *'no biped at rung 34'* is NOT
+an expected-by-construction negative; the pass had been running for minutes.
+⚠ The atlas labels it `c_incident_player_interface_client::ctor_or_dtor` from an rtti-vptr guess -
+**the name is wrong, the address is right.**
+⛔ AND FUN_00414730 (the lifetime-state gate) IS NEVER CALLED: it sits inside this function's
+per-player loop, behind `players[i]+0x0C & 1`. With zero player records the loop body never
+executes ⇒ **the lifetime gate cannot have refused, because it was never asked.** It is the
+SECOND wall, not the current one."""
+fields = []
+controls = []
+
+
+# ============================================================================================
+# GROUP: world - the activity loader, the cinematic manager, and the world-transition gates.
+# ============================================================================================
+
+[[surface]]
+name = "activity_loader"
+group = "world"
+addr = "[v:0x26B1418]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B1418] != 0"
+source = "historicaldocs/design/activity-loader-writer.md; historicaldocs/design/rung34-task7.md §201; historicaldocs/design/arrival-handoff.md §175"
+note = """⛔⛔ THE WORKED EXAMPLE OF THE ACCESS-MODE RULE. `field-xref` on `c_activity_loader+8`
+reports **24 accesses, all READS, zero stores** - and is RIGHT to: `+8` is a POINTER, written once
+by an allocator through a call whose operands never mention `+8` (vfunc[1]:
+`FUN_0023DE00(loader+8, \"activity loader\", 0x3DC, 4)`).
+⭐ The thing anyone cares about is `**(char**)(loader+8)` - byte 0 of the POINTEE - and its writer
+is `memcpy(block, block+0x148, 0x145)` at 0x341798, promoting PENDING to CURRENT.
+⭐ **When +N holds a pointer, re-ask one indirection down, and search displacements 0 and 0x148,
+not 8.** The ESCAPE rows are the finding, not the store list.
+⭐ Rung 35's gate (FUN_00764560 ⇒ `iVar1 != -1`) reads the SAME `loader+0x80` that task 7 reads.
+**One world property clears both.** And the poke of it in CLAUDE.md's recipe was a NO-OP: it
+already read 0xFFFFFFFF."""
+fields = [
+  { name = "block", off = 0x08, ty = "ptr", note = "0x3DC bytes. CURRENT name at pointee+0x00, PENDING at pointee+0x148." },
+  { name = "prologue_filler_tag", off = 0x80, ty = "u32", note = "⭐ task 7's f18 AND rung 35's gate. Live 0x55A13D91 (a name key); the gate wants != -1." },
+  { name = "cinematic_selector", off = 0x94, ty = "u32", note = "written ONLY by sim-queue element type 0x3A, issued by task 6 - which is also suppressed" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x26B1418]+0x80", value = "87 e0 bd 66 0a 80 fb 43", verified = true, note = "⚠ present and non-zero in orbit; the 0xFFFFFFFF reading is from rung 34, a different instant" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26B1418]+0x80", value = "UNMAPPED", verified = true },
+]
+
+[[surface]]
+name = "cinematic_manager"
+group = "world"
+addr = "[v:0x26B10A0]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x26B10A0] != 0"
+source = "historicaldocs/design/rung34-task7.md §8, §334; historicaldocs/design/arrival-handoff.md §188, §199, §506"
+note = """⛔⛔ THE CINEMATIC HYPOTHESIS IS REFUTED FOUR WAYS - **DO NOT UN-SUPPRESS CINEMATICS.**
+tasks 4/6 were already `done` before the suppress poke existed, and rung 35's LEAVE
+unconditionally resets the phase. This surface is here to be READ as a falsifier, not poked.
+⚠ +0x23C reading 10/11/12 would mean rung 35's LEAVE did not run - that is arrival-handoff.md
+§1.6's falsifier and it has never been read live."""
+fields = [
+  { name = "wait_counter", off = 0x0C, ty = "i32", note = "FUN_007649D0() == 0 requires <= 0. Measured 0." },
+  { name = "playback_object", off = 0x10, ty = "ptr", note = "FUN_00764800() returns it" },
+  { name = "entry_gate", off = 0x28, ty = "i32", note = "rung 35 hang shape 1: < 0 on entry ⇒ 0x757560 returns early forever" },
+  { name = "phase", off = 0x23C, ty = "u32", note = "written by FUN_007648D0; a state-group broadcast follows" },
+]
+controls = [
+  { snap = "orbit-all", expr = "i32@([v:0x26B10A0]+0x0C)", value = "0", verified = true, note = "⭐ <= 0 ⇒ FUN_007649D0 is satisfied" },
+  { snap = "orbit-all", expr = "u32@([v:0x26B10A0]+0x23C)", value = "7", verified = true, note = "the orbit phase - a baseline for the §1.6 falsifier" },
+  { snap = "rung36-biped-chain", expr = "[v:0x26B10A0]", value = "UNMAPPED", verified = true, note = "⚠ --preset content misses it - the ONE read that would falsify §1.6 is not in the newest snapshot" },
+]
+
+[[surface]]
+name = "activity_selection_record"
+group = "world"
+addr = "[v:0x26A33E8]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live / synthetic_ancestor"
+liveness = "[v:0x26A33E8] != 0"
+source = "historicaldocs/design/rung34-task7.md §53, §183 - predicted from the decompile, confirmed OFFLINE by d1-replay before the boot, then reproduced live"
+note = """⭐ TASK 7'S ESCAPE IS ITS FIRST LINE: `if (FUN_00765070()) return 2;` (\"suppressing
+cinematics\"). One byte: this pointer's byte 0 = 1.
+⚠⚠ **IT RESETS TO 0 ON EVERY TEARDOWN - re-arm per attempt.**
+⭐ D1 has a user-facing 'skip fly-in animation' setting; if it backs FUN_00765070 this becomes a
+SERVED value instead of a poke. [U], cheap."""
+fields = [
+  { name = "suppress_cinematics", off = 0x00, ty = "u8", note = "1 = suppressed ⇒ task 7 returns 2 (DONE)" },
+]
+controls = [
+  { snap = "orbit-all", expr = "u8@[v:0x26A33E8]", value = "0x00", verified = true, note = "⭐ PRISTINE - the default is unsuppressed" },
+  { snap = "n/a", expr = "d1-replay --set-mem '[v:0x26a33e8]=01'", value = "AL = 0x01 (suppressed)", verified = false, note = "[R] rung34-task7.md §183 - the offline prediction that was then confirmed live" },
+]
+
+[[surface]]
+name = "scenario_checksum_gate"
+group = "world"
+addr = "0x299100"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/activity-checksum.md; capture-rig/scenario-checksum.py (verbatim disasm)"
+note = """`cmp eax, [rcx+rdx*4+0xc]` - OUR blob+0x5C against scenario_record + 0x0C + ac[+0x18]*4.
+⛔ THE 0xFFFFFFFF SKIP BRANCH IS UNREACHABLE: param_3 is `*(u32*)(manager+0x278)`, CLIENT-side
+state. **The value must MATCH, not be suppressed.**
+⛔ `activity_def+0xA4` is REFUTED as the source - shipped 0x0261283F for 407; the mismatch fired."""
+fields = []
+controls = []
+
+[[surface]]
+name = "bubble_state_gate"
+group = "world"
+addr = "0x2A0320"
+rw = "exec"
+confidence = "[C]"
+reach = "static-client-inference"
+liveness = "n/a - code"
+source = "historicaldocs/design/activity-checksum.md §8-§10"
+note = """The gate that fires the INSTANT the checksum passes. blob+0x10 must equal
+scenario_record+0x48, and blob+0x14[0..n] must all be 0xFF (unchosen).
+⚠⚠ **0x00 FAILS WHERE 0xFF PASSES** - orbit bubbles 5-8/15 have valid=0, so 'state 0 chosen'
+trips 'bubble state index was valid, but state itself was invalid'.
+✅ 'LOBSTER' error.sstm_slice_not_found is SOLVED: 0xFF PASSED rung 33 and then UNREGISTERED the
+slice-set region, guaranteeing rung 34's failure ⇒ D1_AH_BUBBLE_CHOSEN=0."""
+fields = []
+controls = []
+
+[[surface]]
+name = "command_queue"
+group = "world"
+addr = "[v:0x267B110]"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "[v:0x267B110] != 0"
+source = "CLAUDE.md 'The three mechanisms you will actually use'; capture-rig/queue-command.py"
+note = "Write a command to registry + 0x200 + slot*0x1C04, then state[slot] = 2 at registry + 0x1B4 + slot*4. The client's own pump dispatches. **Slot 3 = change-world.** ⚠ `--inspect` first."
+fields = [
+  { name = "state", off = 0x1B4, ty = "u32[]", note = "stride 4, indexed by slot. 2 = dispatch me." },
+  { name = "command", off = 0x200, ty = "u8[]", note = "stride 0x1C04" },
+]
+controls = [
+  { snap = "orbit-all", expr = "[v:0x267B110]", value = "a:0x205036210", verified = true },
+  { snap = "rung36-biped-chain", expr = "[v:0x267B110]", value = "a:0x205036210", verified = true },
+]
+
+[[surface]]
+name = "launch_state_block"
+group = "world"
+addr = "[v:0x2724950]+0x08+0x12F8"
+rw = "write"
+confidence = "[C]"
+reach = "observed-live"
+liveness = "u8@([v:0x2724950]+0x2B48) == 1"
+source = "CLAUDE.md 'The state block'; adjacency noted in historicaldocs/design/biped-census.md §5.1"
+note = """0x650 bytes. The launch command is literally `{u32 size} + this block`; **99% is invariant
+and only the world name differs.**
+⭐ ADJACENCY WORTH NOTING: the roster ends at gg+0xD0 + 20*0xE8 = gg+0x12F0, immediately below
+this block at gg+0x12F8. That is the [I] behind 'the roster is filled from the change-world
+command'. Adjacency is a lead, not a finding."""
+fields = []
+controls = [
+  { snap = "orbit-all", expr = "[v:0x2724950]+0x08+0x12F8", value = "01 00 00 00 … c5 9d 1c 81 ff ff ff ff", verified = true, note = "⭐ 0x811C9DC5 = the FNV-1 offset basis = 'no slice set' - the sentinel session-params.py names" },
+  { snap = "rung36-biped-chain", expr = "[v:0x2724950]+0x08+0x12F8", value = "UNMAPPED", verified = true },
+]
+
+
+# ============================================================================================
+# WHAT IS STILL [U] - each with the instrument that closes it, per the rails.
+# ============================================================================================
+
+[[open]]
+id = "U1"
+surface = "global_activity_state_blob"
+question = "Where does the replicated activity blob LIVE in client memory?"
+instrument = "d1-eboot disasm 0x299100 (trace rax's provenance two instructions back), OR resolve tag 0x80800E76 through queuez.object_registry and check that +0x688 reads the ASCII world name"
+why_it_matters = "It is the object EVERY D1_AH_* knob writes, and we have never read one back. Until it is addressable, 'the server built it' and 'the client kept it' are indistinguishable - the exact failure that cost the PAH-region day."
+
+[[open]]
+id = "U2"
+surface = "player_roster_block"
+question = "WHO writes gg + 0xD0 + i*0xE8?"
+instrument = "d1-live watch --abs --addr '<gg+0xD0>' --len 8 across a boot. ⭐ It has never been non-zero, so ANY hit is the answer, with NO candidate list."
+why_it_matters = "It is the actual fix for the missing Guardian. ⛔ The static fallback fails BY SHAPE (double indirection), so this is a runtime question or nothing."
+
+[[open]]
+id = "U3"
+surface = "sim_add_player"
+question = "Does FUN_00BB3FD0 run, and does it create the player?"
+instrument = "d1-live watch --rw exec --addr 0xbb3fd0 while poking machine_record+0xFC. One hit is proof."
+why_it_matters = "It is the LAST unknown link in player-creation-chain.md §1's ten-link chain, and it is one run."
+
+[[open]]
+id = "U4"
+surface = "sim_player_set"
+question = "Why does the sweep's skip byte at Q+0x20 read 0x01, when poke 5 journalled it back to 0x00?"
+instrument = "d1-live watch --addr '[[v:0x27E7F18]]+0x20' --len 1 across the next attempt"
+why_it_matters = "Either the client writes it (which would be the first observed simulation-side write to that slot, i.e. a POSITIVE signal) or a journalled poke did not land (which impeaches runs/guest-writes.jsonl). Both outcomes are worth a run. Found offline this session by reading the snapshot back against its own journal."
+
+[[open]]
+id = "U5"
+surface = "world_tag_loader_cache"
+question = "What is the offset of the cache state byte inside the 0xE48 record?"
+instrument = "d1-eboot field-xref on the ctx class, or d1-live watch across the record while task 7's lookup runs"
+why_it_matters = "rung34-task7.md names the stride and the mechanism (stuck at 1, needs >= 5) but not the offset. Without it the surface is a base address with no field."
+
+[[open]]
+id = "U6"
+surface = "activity_client"
+question = "Which field of replicate_membership (udt 11) or global_activity_state (udt 1) does activities:team_picker read?"
+instrument = "⭐ Offline first, no boot: rung36-biped-chain.snap holds the membership - replay the team-picker's own accessor against it (d1-replay replay --func <accessor>)."
+why_it_matters = "`Multiplayer Team=-1` on activity 407 (Elimination, a team mode), and d1-activity-host contains ZERO team handling. Same shape as the five walls before it: a field of the replicated blob we publish as 0/-1. ⚠ [I], not [C] - that a team of -1 stops the simulation binding a player is inference from the flow, not a measured gate."
+
+[[open]]
+id = "U7"
+surface = "observer_globals"
+question = "Is a camera that MOVES ever observable in this build?"
+instrument = "the same read, on any run that ever gets a live player"
+why_it_matters = "Three snapshots agree on one point across three ladder states, which is strong - but there is NO positive calibration for a moving camera, so 'it never moves' is [O], not [C]. This is the same honest gap as player_array_pool's."
+
+
+# ============================================================================================
+# EDGES - the flow graph. One row per DOCUMENTED hop between two surfaces.
+# ============================================================================================
+#
+# WHY EDGES LIVE HERE AND NOT IN CODE
+# -----------------------------------
+# A surface is an address. An edge is a CLAIM about causation, and every claim in this project
+# has to carry its evidence next to it or it gets re-derived wrong six hours later. Both halves
+# are data; `d1-scope` is the renderer, not the author.
+#
+# ⛔⛔ FOUR STATES, AND COLLAPSING ANY TWO OF THEM MIS-ACCUSES AN EDGE
+# --------------------------------------------------------------------
+#   green    upstream populated AND downstream populated.
+#   red      upstream populated AND downstream NOT. ⭐ This is the only state that accuses.
+#   grey     upstream NOT populated ⇒ the edge has never been exercised. It is UNTESTED, not
+#            broken. E-17 and E-20 are grey today: Q+0x10 == 0, so their upstream arm is false
+#            and rendering them red would charge them with E-15's failure.
+#   unknown  a field could not be READ - the region was not captured, or the address is [U].
+#            ⭐ "not captured" and "was zero" are different facts and only one is evidence.
+#            A surface read outside a snapshot's captured extent renders UNMAPPED, NEVER 0.
+#   retired  the edge is dead BY CONSTRUCTION and must never be drawn red again. E-18 only.
+#
+# FIELDS
+#   id                E-NN, stable. Cite it in prose.
+#   up / down         a `surface.name` from this file, OR `server:<name>` (a wire/receipt-side
+#                     endpoint that is NOT client memory and cannot be read offline), OR
+#                     `[U]:<name>` (a client surface whose address is still unknown - every one
+#                     of these has an [[open]] entry).
+#   mech              one phrase: what carries the value across.
+#   green / red       PREDICATES over surface fields, in this file's control-expression dialect
+#                     (prose-with-expressions: `resolve()`, `popcount()`, `count()` allowed).
+#                     ⚠ NOT the address grammar. Only `addr` / `addr_input` are parsed.
+#   state             green | red | grey | unknown | retired  - as last MEASURED, with `as_of`.
+#   evaluable_offline true iff both arms can be evaluated from a snapshot in [[meta.snapshot]].
+#   guard             a condition under which the predicate is INVALID and must not be shown.
+#
+# ⭐ THE GRAPH'S POSITIVE CONTROL IS E-19. A view with no green edge inside the failing region
+#   cannot tell "broken" from "not measured". E-19 is measured green on the simulation side and
+#   localises the break strictly downstream of the producer's four entry gates.
+
+[[edge]]
+id = "E-01"
+up = "server:signon"
+down = "world_controller_state_manager"
+mech = "HTTPS /SignOn protobuf -> account SOID, both BAP keys, BAP address, manifest URL, silo"
+green = "signon.body_len > 0 AND ladder.current_state > 8"
+red = "signon.body_len > 0 AND ladder.current_state == 8"
+state = "green"
+as_of = "2026-08-08"
+evaluable_offline = false
+source = "historicaldocs/design/THE-CHAIN.md §2.4; historicaldocs/design/SERVER-SURFACE-LEDGER.md §3.1"
+note = "⚠ `Unable to parse signon response` does NOT mean malformed bytes (signon-protocol.md §7.1)."
+
+[[edge]]
+id = "E-02"
+up = "server:manifest"
+down = "world_controller_state_manager"
+mech = "GET manifest.bin -> 1033 package registrations"
+green = "manifest.packages == 1033 AND ladder.current_state >= 18"
+red = "manifest.bytes > 0 AND client.packages_registered == 0"
+state = "green"
+as_of = "2026-08-08"
+evaluable_offline = false
+source = "historicaldocs/design/THE-CHAIN.md §2.5-§2.6; CLAUDE.md launcher section"
+note = """⛔ THE SHAPE THIS EDGE EXISTS TO MAKE VISIBLE: with D1_MANIFEST_FILE unset the responder
+serves a 2-byte manifest, the client ACCEPTS it, registers zero packages, and dies ~90 s later at
+bootflow:bap_signin. The symptom appears one rung LATER than the broken edge, which is why it read
+as a package/BAP regression twice."""
+
+[[edge]]
+id = "E-03"
+up = "server:queuez_push"
+down = "object_registry"
+mech = "BAP 123 queuez_to_client_update_notification, answered per-subscription right after the 0x000D ACK"
+green = "family[f].state == 3 AND family[f].object_count > 0"
+red = "f in responder.answer_families AND (family[f].state == 4 OR family[f].object_count == 0)"
+state = "green"
+as_of = "2026-08-08"
+evaluable_offline = true
+source = "historicaldocs/design/THE-CHAIN.md §2.8; historicaldocs/design/BRIEF-FOR-GPT-2026-08-08.md p.90"
+note = """state 3 = REPLICATING, state 4 = LOST and LOST refuses updates PERMANENTLY. Families 0 and 2
+were state 4 in every run in project history until D1_ANSWER_FAMILIES=0,2. ⚠ A one-shot
+D1_PUSH_FAMILY cannot substitute: it fires at seq 7, classes 0/2 subscribe at seq 20/21."""
+
+[[edge]]
+id = "E-04"
+up = "server:investment_503_205"
+down = "unlock_plane"
+mech = "503/505 unlock arrays -> the client's derived plane bytes"
+green = "forall idx in responder.unlock_flags: u8@([v:0x26A34E8]+0x0C+idx) == 0x02"
+red = "responder.unlock_flags nonempty AND exists idx: u8@([v:0x26A34E8]+0x0C+idx) == 0"
+state = "green"
+as_of = "2026-08-09"
+evaluable_offline = true
+source = "historicaldocs/design/rung33-unlock-gate.md live banner, run 20260809-075545-RUNG33-UNLOCK-98"
+note = """⭐ THE BEST CROSS-GROUP POSITIVE CONTROL IN THE FILE: the one server->derived edge measured
+green end to end (encoder -> 205/503 -> the client's own derived plane), at the exact addresses
+0x28CACD reads, with the neighbours zero."""
+
+[[edge]]
+id = "E-05"
+up = "object_registry"
+down = "[U]:availability_cache"
+mech = "a family-4 UPDATE clears the availability cache ([ctx+0x38]+8 via 0x25FF40); a BASELINE does not"
+green = "family[4][4].object_count > 0 AND availability_cache.stamped"
+red = "family[4][4].object_count > 0 AND NOT availability_cache.stamped"
+state = "unknown"
+as_of = "2026-08-10"
+evaluable_offline = false
+source = "historicaldocs/design/rung33-unlock-gate.md §1; historicaldocs/design/SERVER-SURFACE-LEDGER.md §2 L1/L14"
+note = """STRUCTURALLY RED, NOT MEASURED - and the downstream arm has no address yet (see [[open]] U9),
+so d1-scope must render it UNKNOWN, not red. Mechanism: `queuez_family_header_for` is the only
+family-header constructor in the tree and hardcodes flags=BASELINE, so every family can be delivered
+exactly once, ever, always as a CREATE; a byte-identical redelivery calls nothing."""
+
+[[edge]]
+id = "E-06"
+up = "object_registry"
+down = "[U]:roster_contact_container"
+mech = "family-2 two-hop 0x57F6F0 -> cui::c_roster_contact_id_container+0x08"
+green = "family[2].object_count > 0 AND roster_contact.key != 0"
+red = "family[2].object_count > 0 AND roster_contact == {0, 0, 0xFF}"
+state = "unknown"
+as_of = "2026-08-10"
+evaluable_offline = false
+source = "historicaldocs/design/orbit-hud-blank.md §0"
+note = """Container+0x08 is written by exactly ONE expression in the binary (0xA3F0C1/0xA3F0C4) whose
+rax is the hardcoded family-2 two-hop. ⛔ FAMILY 2 ONLY: a family-0 object substitutes the RICH fill
+and BLANKS a plate family 2 alone would have filled. Downstream address still [U] - see U10."""
+
+[[edge]]
+id = "E-07"
+up = "object_registry"
+down = "world_controller_state_manager"
+mech = "account field 3 (C offset +0x68) = profile SOID resolves family 4/1 (slot B)"
+green = "family[4][0].off68 != 0 AND family[4][1].present AND FUN_0078C5F0(0) == 6"
+red = "family[4][0].off68 != 0 AND ladder.current_state == 23"
+state = "green"
+as_of = "2026-08-09"
+evaluable_offline = true
+source = "historicaldocs/design/THE-CHAIN.md §2.11; status/aug9-big-picture.md §8a"
+note = """⚠ THE INTERLOCK: this polled predicate fires the instant slot B resolves - ONE TICK before the
+select/create branch is evaluated, which is why the client skips character select. To force CREATE,
+account+0x68 must NOT resolve AND the family-3 root count must be 0."""
+
+[[edge]]
+id = "E-08"
+up = "server:ah_udt1"
+down = "global_activity_state_blob"
+mech = "AH udt 1, tag 0x80800E76, struct 0x6B0 -> the client's blob at world+0x50B0"
+green = "blob+0x5C == ah.checksum AND blob+0x10 == ah.bubble_count AND u16@(blob+0x680) == ah.activity_index AND ascii@(blob+0x688) == ah.world_name"
+red = "ah.checksum != 0 AND u32@(blob+0x5C) == 0"
+state = "unknown"
+as_of = "2026-08-10"
+evaluable_offline = false
+guard = "blob address is [U] (see [[open]] U1) - render UNKNOWN until it resolves"
+source = "historicaldocs/design/ah-schema-codec.md §1157"
+note = "⭐ THE RULE THIS EDGE ENCODES: a server receipt proves you BUILT it, never that the client KEPT it."
+
+[[edge]]
+id = "E-09"
+up = "server:ah_udt11"
+down = "pah_region_records"
+mech = "udt 11, tag 0x808009ED -> ac+0xE68; control ac+0xE70 == 1 (the MEM-1 the client renders)"
+green = "u32@(ac+0xE70) == 1 AND any(ac+0x3CB8 array != 0)"
+red = "ah.published_membership AND u32@(ac+0xE70) == 1 AND all(ac+0x3CB8 == 0)"
+state = "red"
+as_of = "2026-08-09"
+evaluable_offline = true
+source = "CLAUDE.md rung-34 task-8 block; verified offline this session (pah_region_records surface)"
+note = """⭐⭐ THE CANONICAL CAUGHT RED, and the shape the whole graph view exists to make visible:
+upstream receipt green, downstream field zero. RequestStateRefresh rebuilt replicate_membership from
+the client's own ECHO and never re-applied set_pah_region; the client sends that refresh 0.37 s after
+the join, so the good record was overwritten by a zeroed one - LAST WRITER WINS, and both paths print
+the SAME server-side receipt."""
+
+[[edge]]
+id = "E-10"
+up = "server:ah_udt4"
+down = "activity_client"
+mech = "udt 4, tag 0x80800A58, is the ONLY writer of ac+0xC98 (the established AH id)"
+green = "u64@(ac+0xC98) == ah.ah_id"
+red = "ah.pushed_udt4 AND u64@(ac+0xC98) == 0"
+state = "green"
+as_of = "2026-08-09"
+evaluable_offline = true
+source = "historicaldocs/design/establish-client-gate.md :185/:252/:293"
+note = """⛔ TWO SILENT MODES ON ONE EDGE - neither raises an error. (1) udt 0/1/11 are matched only
+against [ac+0xC98] and are SILENTLY DROPPED until udt 4 lands; a recipient_id mismatch is a silent
+drop too. (2) Pushing on BAP 100 instead of BAP 9 makes the client relay all four pushes back to
+d1-responder (message 100's +0x06 is a CONNECTION INDEX; 0 = OUT PRIMARY). Receipt: `EST-Y ... MEM-1`."""
+
+[[edge]]
+id = "E-11"
+up = "global_activity_state_blob"
+down = "scenario_record"
+mech = "rung 33: a SEQUENCE of blob-field == WORLD-scenario-record-field checks, aborting at the first mismatch"
+green = "u32@(blob+0x5C) == u32@(record+0x0C) AND u32@(blob+0x10) == u32@(record+0x48) AND forall i < blob+0x10: u8@(blob+0x14+i) == 0xFF"
+red = "blob populated AND log ~ 'transition_error: activity checksum mismatch' OR 'invalid host activity state'"
+state = "green"
+as_of = "2026-08-09"
+evaluable_offline = false
+guard = "blob address is [U] (U1). The record half IS readable - scenario_record resolves offline."
+source = "CLAUDE.md rung-33 block; historicaldocs/design/activity-checksum.md §10"
+note = """⛔ THESE ARE PROPERTIES OF THE WORLD, NOT THE ACTIVITY: D1_AH_ACTIVITY_INDEX cannot change
+them, D1_AH_ACTIVITY can, and the client compares against the record of the world it ACTUALLY loaded.
+orbit = 0x33F044D3 / 16 bubbles; pvp_moonbase = 0x5966E491 / 1 bubble. ⚠ 0x00 FAILS where 0xFF passes."""
+
+[[edge]]
+id = "E-12"
+up = "unlock_plane"
+down = "world_controller_state_manager"
+mech = "0x54F410(activity_index) -> expression VM 0x28DEA0: op1 FLAG 0x28CAC0(plane, u16 idx), op10 VALUE 0x28CC40(plane+0x2000, u16 idx)"
+green = "forall idx in required(u16@(blob+0x680)): u8@(plane+idx) == 0x02"
+red = "plane populated for required(N) AND u16@(blob+0x680) != N"
+state = "green"
+as_of = "2026-08-09"
+evaluable_offline = false
+source = "historicaldocs/design/rung33-unlock-gate.md §1-§2"
+note = """⭐⭐ THE MEASURED TRAP, and why this cannot be drawn as a simple two-node link: on 2026-08-09 all
+four shipped flags landed in the plane (E-04 green) and rung 33 STILL emitted
+activity_failed_to_load_missing_dlc - because the client gates on activity index 0, whose expression
+reads {3389,308,419,440} and never touches flag 98. The index it evaluates is blob+0x680, a WIRE-KEPT
+field. This edge's health depends on unlock_plane AND global_activity_state_blob+0x680 AGREEING.
+Ship-set: {98,308,419,440,834,2667,3389,5015,5987,6018}."""
+
+[[edge]]
+id = "E-13"
+up = "world_controller_state_manager"
+down = "machine_record"
+mech = "the rung-30 establish stamps the session machine record with activity-lifetime values"
+green = "ladder.current_state >= 30 AND [machine_record+0x10] != 0 AND u64@(machine_record+0x20) == ah_id"
+red = "ladder.current_state >= 30 AND [machine_record+0x10] == 0"
+state = "green"
+as_of = "2026-08-10"
+evaluable_offline = true
+guard = "⛔ ONLY VALID IN AN ACTIVITY. In orbit both fields read zero at EITHER deref level - they are activity-lifetime values. Evaluating this predicate in orbit yields a FALSE RED."
+source = "historicaldocs/design/player-creation-chain.md §2"
+note = "+0x10 = the activity client (0x22D5A6E00), +0x20 = the AH id 0xD1A0000000000001 from the client's own EST-Y receipt."
+
+[[edge]]
+id = "E-14"
+up = "server:managed_session"
+down = "session_player_set"
+mech = "networking:managed_session player add for xuid + peer-subscription validation"
+green = "u32@(P+0x10) != 0 AND ascii@(P+0x18) is a display name"
+red = "session.peer_valid AND u32@(P+0x10) == 0"
+state = "green"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §6.5 (the client's own membership dump); verified offline this session"
+note = """⭐ EVERY SESSION-LAYER FACT IS GREEN. P+0x10 = 0x00FA6551, P+0x18 slot 0 = `orb@D1Guardian@`,
+across 2 runs and 2 boots. The membership machinery this project spent two days on is WORKING -
+which is what makes E-15 a break rather than a shortfall."""
+
+[[edge]]
+id = "E-15"
+up = "session_player_set"
+down = "sim_player_set"
+mech = "machine-record dirty flag rec+0xFC -> FUN_00BB35B0 -> FUN_00BA3A40(Q) -> sweep FUN_00BA3B00(Q) -> occupancy mask Q+0x10"
+green = "u32@(P+0x10) != 0 AND u32@(Q+0x10) != 0"
+red = "u32@(P+0x10) != 0 AND u32@(Q+0x10) == 0"
+state = "red"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §1-§2; verified offline this session"
+note = """⭐⭐ THE SPINE, AND THE ONLY MEASURED RED ON THE PLAYER PATH. In one sentence: the session knows
+our Guardian, the simulation does not, and nothing copies one into the other. P+0x10 = 0x00FA6551 /
+Q+0x10 = 0x00000000; P+0x18 slot 0 = `orb@D1Guardian@` / Q+0x18 slot 0 = zero.
+⛔ ADDRESS TRAP: P and Q are MUTUAL back-pointers (*(u64*)P == Q AND *(u64*)Q == P), so a single-deref
+and a triple-deref reading BOTH look coherent and give OPPOSITE answers. EXACTLY ONE DEREF.
+Discriminator: P+0x12A78+0x10 == the activity client and +0x20 == the AH id; at the other deref level
+both read zero.
+Sweep sub-gates, which belong on the surface as FIELDS and not as edges of their own: gate 6
+mask = u32@(Q+0x10); gate 7 skip byte u8@(Q+i*0xE8+0x20) == 0; gate 8 FUN_00BB4050 => P+0x90+i*0x200
+!= -1 (measured -1,-1,-1); then FUN_00BB3FD0(P,i) = THE ADD.
+⭐ Producer liveness has a SELF-CLEARING positive control: poking rec+0xFC 0->1 is consumed back to 0,
+six times, and rec[0xFC]=0 is reachable only inside the taken branch."""
+
+[[edge]]
+id = "E-16"
+up = "pah_region_records"
+down = "[U]:team_assignment"
+mech = "activities:team_picker reads a Multiplayer Team field we have NEVER published"
+green = "team_picker.multiplayer_team != -1"
+red = "session.peer_valid AND team_picker.multiplayer_team == -1"
+state = "red"
+as_of = "2026-08-10"
+evaluable_offline = false
+source = "historicaldocs/design/player-creation-chain.md §6.5"
+note = """`Multiplayer Team=-1` on activity 407 = Elimination, A TEAM MODE, and `grep -i team` over the AH
+crate returns only the string `fireteam` in launch-args parsing - there is no team knob. Same shape as
+all five walls since rung 30: a field of the replicated blob we publish as 0/-1.
+⚠ THAT A TEAM OF -1 IS WHAT STOPS THE SIMULATION BINDING A PLAYER IS [I] - inference from the flow,
+not a measured gate. It is the highest-value edge to promote, because it is the only candidate cause
+for E-15's red that is a WIRE field rather than a poke. ⇒ [[open]] U6."""
+
+[[edge]]
+id = "E-17"
+up = "sim_player_set"
+down = "players_array"
+mech = "sim-queue element 0x0D player_update -> FUN_00BB1BC0 -> FUN_00BA6860 apply-added -> FUN_0090D1E0 -> FUN_0090D4F0 add-player"
+green = "u32@(Q+0x10) != 0 AND exists i: u64@(players+i*0x2AF0) != 0 AND u64@([v:0x27257F0]+0xC0) != 0xFFFFFFFFFFFFFFFF"
+red = "u32@(Q+0x10) != 0 AND all players zero"
+state = "grey"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §1; historicaldocs/design/biped-census.md §5.1"
+note = """⭐ GREY, NOT RED: Q+0x10 == 0, so the predicate's upstream arm is false and this edge has NEVER
+been exercised. Rendering it red would accuse it of E-15's failure.
+⚠ FUN_00BB1BC0 has NO vtable entry - it is materialised by `lea` at 0xBB1BA5, the eboot-callgraph.tsv
+blind spot. `d1-eboot xref` finds it; the callgraph would not.
+⭐ NEW THIS SESSION: [v:0x27257F0]+0xC0 reads ff x8 in ORBIT as well as in-world, so the break is not
+activity-specific - whatever should write it never runs at ANY rung."""
+
+[[edge]]
+id = "E-18"
+up = "player_roster_block"
+down = "players_array"
+mech = "FUN_00904AC0 walks gg+0xD0 and calls FUN_0090D1E0 for each slot whose byte 0 is non-zero"
+green = "u8@(gg+0xD0+i*0xE8) != 0 AND u64@(players+i*0x2AF0) != 0"
+red = "NEVER - see state"
+state = "retired"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §3 (supersedes historicaldocs/status/aug10-session.md §3 and historicaldocs/design/biped-census.md §5.1)"
+note = """⛔⛔ DEAD BY CONSTRUCTION - DO NOT RENDER RED. c_omaha_game_first_game_system::vfunc[1] does
+`memset(gamesys+8, 0, 0x2B58)` then tail-jumps FUN_009048A0, which does
+`*DAT_02724950 = 1; memcpy(DAT_02724950+8, gamesys, 0x2B40)`. FUN_009048A0 has EXACTLY ONE reference
+in the whole image, so gg is published once, zeroed ⇒ gg+0xD0 is ALWAYS empty at game start and
+FUN_00904AC0 legitimately adds nobody. Measured offline at rung 34: gg = 0x37F8000C0, gg[0] = 0,
+gg[0x2B48] = 1 ⇒ the pump ALREADY RAN by rung 34, not rung 36.
+⭐ BOTH E-17 AND E-18 CONVERGE ON FUN_0090D1E0 - that is the real junction node into players_array.
+Two documents still call this 'the break'; drawing it red re-opens a dead end."""
+
+[[edge]]
+id = "E-19"
+up = "game_globals"
+down = "sim_producer"
+mech = "FUN_0074AB30 game tick -> FUN_00B9D000 producer entry gates"
+green = "u8@(gg+0x2B48) == 1 AND u8@(gg+0x00) == 0 AND u32@(P+0x5B180) == 0 AND i32@(P+0x08) != 1"
+red = "ladder.current_state >= 33 AND u8@(gg+0x2B48) == 0"
+state = "green"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §1 and §3; historicaldocs/design/biped-census.md §5.1"
+note = """⭐⭐ THE GRAPH'S POSITIVE CONTROL. It is the back-edge that proves the graph CAN render green on
+the simulation side, and it localises the break strictly downstream of the producer's four entry
+gates. A view with no green edge in the failing region cannot distinguish 'broken' from 'not
+measured'. ⚠ P+0x5B180 == 0 was settled by DISASM, not decompile: `[[v:0x27E7F18]]+0x5B180` reads
+0xFFFFFFFF while `[v:0x27E7F18]+0x5B180` reads 0 - two plausible, opposite answers (see E-15's trap)."""
+
+[[edge]]
+id = "E-20"
+up = "players_array"
+down = "sobject_element"
+mech = "players[i]+0x0C bit 0 = SPAWN REQUESTED -> FUN_00411830 -> FUN_00414730 -> FUN_0032D180 -> sobject type 9 (biped)"
+green = "(u32@(players+i*0x2AF0+0x0C) & 1) != 0 AND count(sobject.type == 9) > 0 AND u32@(players+i*0x2AF0+0x644) != -1"
+red = "(u32@(players+i*0x2AF0+0x0C) & 1) != 0 AND count(sobject.type == 9) == 0"
+state = "grey"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md banner (decompiled at 0x411E0F); historicaldocs/design/biped-census.md §4.1"
+note = """⭐ GREY: with zero player records the loop body never executes, so the lifetime-state gate CANNOT
+have refused - it was never asked.
+⛔ LANDMINE for whoever fills the pool: players[i]+0x1660 is compared `!= -1` and the measured default
+is 0 on all 20 slots - 0 PASSES. Populating the roster without asserting +0x1660 swaps 'no biped' for
+'a biped built from definition hash 0'.
+⭐ THE NEGATIVE IS SOUND UNDER BOTH LIVENESS RULES: type 9 == 0 whether you gate on the sobject
+occupancy BIT VECTOR (the correct rule: 567 / 577 / 53) or on the high-byte rule (577 / 577 / 63).
+The bit vector is authoritative - the high-byte rule is a SUPERSET and reports one phantom type-11."""
+
+[[edge]]
+id = "E-21"
+up = "[U]:activity_lifetime_state"
+down = "sobject_element"
+mech = "FUN_00414730 reads game-system-state block index 0x10; the byte at resolve(tag)+off+0x1AC must be in {3,6}"
+green = "u8@(lifetime_state+0x1AC) in {3, 6} AND u8@(record+9) != 0"
+red = "ladder.current_state == 36 AND u8@(lifetime_state+0x1AC) == 0xFF"
+state = "red"
+as_of = "2026-08-10"
+evaluable_offline = true
+source = "historicaldocs/design/player-creation-chain.md §6, replayed offline on rung36-biped-chain.snap (`d1-replay replay --func 0x10c500` -> RAX 0x0, al 0x00, 94 steps)"
+note = """⭐ THE SECOND WALL, independent of the player chain, and MEASURED IN-WORLD. 0xFF = NONE. This
+closes arrival-handoff.md §7's PC-1, which had measured 0xFF at ORBIT only.
+Consequence: task 9 can never complete on this map, and the rung-34 done-mask force was MANDATORY,
+not merely convenient.
+⚠⚠ TWO WALLS, BOTH OPEN, IN ORDER: (1) no player record (E-15), then (2) this. Fixing either alone
+yields nothing visible - the view MUST be able to show two simultaneous reds on one path.
+⭐ ONE RECORD, TWO READERS: the spawn reads [+9], rung-34 task 9 reads [+8]."""
+
+
+# ============================================================================================
+# OPEN ITEMS ADDED BY THE ARCHITECT PASS (edge endpoints with no address)
+# ============================================================================================
+
+[[open]]
+id = "U8"
+surface = "sim_player_set"
+question = "WHO writes the simulation occupancy mask Q+0x10?"
+instrument = "d1-live watch --abs --addr '<Q+0x10>' --len 4 across an activity launch - Q resolves live from [v:0x27E7F18], one deref."
+why_it_matters = """It has NEVER been observed non-zero, and a poked bit PERSISTED (the client never
+cleared it), so nothing on this path writes it. Any hit is the answer with no candidate list. This is
+the downstream arm of E-15, the only measured red on the player path."""
+
+[[open]]
+id = "U9"
+surface = "[U]:availability_cache"
+question = "What is the absolute address of the availability cache ([ctx+0x38]+8, via 0x25FF40)?"
+instrument = "d1-eboot field-xref on the ctx class for +0x38, then resolve ctx live; or d1-live watch on the accessor 0x25FF40 with --rw exec and read rax's provenance."
+why_it_matters = "E-05's downstream arm is unaddressable today, so the edge must render UNKNOWN rather than red. Only the accessor SHAPE is known, not an address."
+
+[[open]]
+id = "U10"
+surface = "[U]:roster_contact_container"
+question = "What is the absolute address of cui::c_roster_contact_id_container?"
+instrument = "d1-eboot rtti for the class, then its singleton/owner; or d1-live watch --rw write on the single writer expression 0xA3F0C4 and read r14."
+why_it_matters = "E-06's downstream arm. The HUD-blank chain is fully understood statically and completely unaddressable at runtime, which is the exact combination that makes a fix unverifiable."

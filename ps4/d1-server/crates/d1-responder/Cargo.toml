@@ -1,0 +1,47 @@
+[package]
+name = "d1-responder"
+description = "Answering surface for the sealed lab: logs every request, answers the endpoints the client actually calls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "d1-responder"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+d1-bap = { path = "../d1-bap" }
+d1-loadout = { path = "../d1-loadout" }
+axum.workspace = true
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+# Direct, so `main()` can name the crypto provider instead of letting rustls guess. Both `ring` and
+# `aws-lc-rs` are reachable in this workspace and rustls 0.23 panics rather than choose - see the
+# long comment at the top of `main()`. Without this the TLS listener dies silently and the client
+# reports "Destiny servers are not available".
+# ⭐⭐ `tls12` IS LOAD-BEARING AND MUST BE DECLARED HERE. (Added 2026-08-08 after a verify agent
+# caught it.) rustls 0.23 gates its ENTIRE TLS 1.2 implementation behind this feature, and the 2016
+# PS4 client offers TLS 1.2 in its ClientHello. Without it the handshake is rejected with a
+# protocol-version alert, axum-server's per-connection error is never surfaced (the
+# `warn!("tls setup failed")` path only fires on cert loading), and the client reports
+# "Destiny servers are not available" - which reads as a server-content regression.
+#
+# ⚠ It was previously present only BY ACCIDENT of feature unification: `d1-forge` pulls `ureq`,
+# which enables `rustls/tls12` for the whole workspace. So `cargo build --release` produced a
+# working responder and `cargo build --release -p d1-responder` produced a silently broken one.
+# Measured, with a positive control: the rustls panic-location string `src/tls12/mod.rs` occurs
+# 1× in the workspace-built binary and 0× in the `-p`-built one, while the control string
+# `TLS13_AES_128_GCM_SHA256` occurs in both.
+#
+# This is the SECOND time this project has paid for whole-workspace vs `-p` divergence
+# (`d1-trace/Cargo.toml` keeps its GUI crate outside the workspace for exactly this reason, and
+# says so). Declare what you need; never inherit it from an unrelated crate.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+base64 = "0.22"
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

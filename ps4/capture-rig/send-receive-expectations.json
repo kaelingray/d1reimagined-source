@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "inner": {
+    "0x000c": {
+      "policy": "unknown",
+      "evidence": {
+        "grade": "C",
+        "claim": "carries family class and root; invented 0x000d echo did not advance replication state",
+        "source": "historicaldocs/design/character-and-orbit.md sections 26.57-26.58"
+      }
+    },
+    "0x0015": {
+      "policy": "unknown",
+      "evidence": {
+        "grade": "O",
+        "claim": "client has survived this secret-bearing message unanswered",
+        "source": "current character-signin captures"
+      }
+    },
+    "0x0020": {
+      "policy": "unknown",
+      "evidence": {
+        "grade": "C",
+        "claim": "guessed adjacent reply regressed and is a recorded negative",
+        "source": "historicaldocs/design/character-and-orbit.md"
+      }
+    },
+    "0x0079": {
+      "policy": "required_reply",
+      "expected_reply_type": "0x007a",
+      "evidence": {
+        "grade": "C",
+        "claim": "client in-flight request/reply contract",
+        "source": "historicaldocs/design/bap-protocol.md sections 3.1-3.2"
+      }
+    },
+    "0x007b": {
+      "policy": "server_push",
+      "evidence": {
+        "grade": "C",
+        "claim": "client registered push-handler path",
+        "source": "historicaldocs/design/bap-protocol.md sections 3.1-3.2"
+      }
+    },
+    "0x00fa": {
+      "policy": "required_reply",
+      "expected_reply_type": "0x00fb",
+      "evidence": {
+        "grade": "C",
+        "claim": "project live keepalive contract",
+        "source": "confirmed boot captures"
+      }
+    }
+  },
+  "investment": {
+    "206": {
+      "policy": "required_reply",
+      "evidence": {
+        "grade": "C",
+        "claim": "accepted response path",
+        "source": "confirmed boot captures"
+      }
+    },
+    "501": {
+      "policy": "unknown",
+      "evidence": {
+        "grade": "I",
+        "claim": "current silence-versus-response discriminator; response contract unknown",
+        "source": "historicaldocs/design/character-and-orbit.md section 26.54"
+      }
+    },
+    "503": {
+      "policy": "required_reply",
+      "evidence": {
+        "grade": "C",
+        "claim": "accepted response path",
+        "source": "confirmed boot captures"
+      }
+    },
+    "701": {
+      "policy": "unknown",
+      "evidence": {
+        "grade": "C",
+        "claim": "empty reply was harmful; valid response contract remains unknown",
+        "source": "historicaldocs/design/character-and-orbit.md"
+      }
+    }
+  }
+}

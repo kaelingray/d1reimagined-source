@@ -2,4 +2,14 @@
 
 Keep changes focused and describe the observed problem, implementation, validation and remaining limitations. Use disposable local fixtures and report failed or skipped checks accurately. Do not claim native gameplay acceptance from isolated unit tests or static data exports.
 
+Start with [the contributor checkpoint](docs/STATUS.md). The active PS4 build and
+input requirements are in [ps4/README.md](ps4/README.md); retained PS3 checks are
+in the root README. Run each analysis tool's controls before citing its output.
+Keep exact executable and manifest pins intact, and keep one format implementation.
+Bring small pull requests with reproduction steps and actual checks. GitHub issues
+are enabled for build failures, protocol investigations and proposed experiments.
+
+PS4 contributions retain GPL-2.0-or-later and their attribution notices. Original
+retained PS3 files use the existing root license unless their notices say otherwise.
+
 Do not submit game files, extracted assets, firmware, credentials, keys, account records, personal paths or raw private traces. Share only original code and material you have permission to redistribute. Preserve licence notices in upstream-derived changes. Report security issues privately rather than including exploit targets or sensitive records in a public issue.

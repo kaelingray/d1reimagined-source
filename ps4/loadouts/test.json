@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "name": "test",
+  "notes": "",
+  "class": "titan",
+  "race": "human",
+  "gender": "female",
+  "level": 40,
+  "light": 400,
+  "equipped": [
+    {
+      "slot": "subclass",
+      "item": {
+        "hash": 2455559914,
+        "name": "Striker",
+        "tier": "common",
+        "bucket_hash": 3284755031,
+        "item_type_name": "Titan Subclass",
+        "icon": "/common/destiny_content/icons/18de4d9a91d824bc67ea6941d4d18cc0.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Character Creation"
+      }
+    },
+    {
+      "slot": "primary",
+      "item": {
+        "hash": 1132793057,
+        "name": "Eyasluna",
+        "tier": "legendary",
+        "bucket_hash": 1498876634,
+        "item_type_name": "Hand Cannon",
+        "icon": "/common/destiny_content/icons/ba90cc208f95a84c7df6f62ef4a43dc3.jpg",
+        "class_type": 3,
+        "damage": "kinetic",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Crucible, Crimson Doubles, The Taken King"
+      }
+    },
+    {
+      "slot": "special",
+      "item": {
+        "hash": 1703777169,
+        "name": "1000-Yard Stare",
+        "tier": "legendary",
+        "bucket_hash": 2465295065,
+        "item_type_name": "Sniper Rifle",
+        "icon": "/common/destiny_content/icons/c1c49acd0fd146d7b32184f23c64dfe5.jpg",
+        "class_type": 3,
+        "damage": "void",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: The Taken King, Vanguard Quartermaster, Nightfall; 1 undated source(s)"
+      }
+    },
+    {
+      "slot": "heavy",
+      "item": {
+        "hash": 3564229425,
+        "name": "Gjallarhorn",
+        "tier": "exotic",
+        "bucket_hash": 953998645,
+        "item_type_name": "Rocket Launcher",
+        "icon": "/common/destiny_content/icons/af80c15aed47fc28095a6e040979b27c.jpg",
+        "class_type": 3,
+        "damage": "solar",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Rise of Iron; 1 undated source(s)"
+      }
+    },
+    {
+      "slot": "ghost",
+      "item": {
+        "hash": 3380876004,
+        "name": "Competitive Shell",
+        "tier": "legendary",
+        "bucket_hash": 4023194814,
+        "item_type_name": "Ghost Shell",
+        "icon": "/common/destiny_content/icons/f7cd4950410110ae4445c45cbcc5907c.jpg",
+        "class_type": 3,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: The Taken King, Crucible Handler"
+      }
+    },
+    {
+      "slot": "head",
+      "item": {
+        "hash": 1959488411,
+        "name": "Oryx Mask",
+        "tier": "legendary",
+        "bucket_hash": 3448274439,
+        "item_type_name": "Mask",
+        "icon": "/common/destiny_content/icons/56fa341239e1876787428710bbc554e7.jpg",
+        "class_type": 3,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Eververse, Festival of the Lost"
+      }
+    },
+    {
+      "slot": "arms",
+      "item": {
+        "hash": 190411895,
+        "name": "Scarab's Vigil Gauntlets",
+        "tier": "legendary",
+        "bucket_hash": 3551918588,
+        "item_type_name": "Gauntlets",
+        "icon": "/common/destiny_content/icons/850325e53ebc1cc54401ab717ca457ff.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Trials of Osiris, Rise of Iron, Crucible"
+      }
+    },
+    {
+      "slot": "chest",
+      "item": {
+        "hash": 3921595523,
+        "name": "Twilight Garrison",
+        "tier": "exotic",
+        "bucket_hash": 14239492,
+        "item_type_name": "Chest Armor",
+        "icon": "/common/destiny_content/icons/1d707a10c8b1a64eb4183800dfb74c26.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_mixed",
+        "era_note": "after 01.29: Raid Reprise; at/before 01.29: Wrath of the Machine, The Taken King, Xûr, Agent of the Nine, Nightfall, King's Fall, Trials of Osiris"
+      }
+    },
+    {
+      "slot": "legs",
+      "item": {
+        "hash": 1998946585,
+        "name": "Scarab's Vigil Greaves",
+        "tier": "legendary",
+        "bucket_hash": 20886954,
+        "item_type_name": "Leg Armor",
+        "icon": "/common/destiny_content/icons/ec440317290ad3e6297368b2a3a9ef0b.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Trials of Osiris, Rise of Iron, Crucible"
+      }
+    },
+    {
+      "slot": "class_item",
+      "item": {
+        "hash": 3602716122,
+        "name": "Silimar's Iron Sash",
+        "tier": "legendary",
+        "bucket_hash": 1585787867,
+        "item_type_name": "Titan Mark",
+        "icon": "/common/destiny_content/icons/303447356aed6fa2a5d5c7bca5f8cd7d.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Shiro-4, Rise of Iron, Iron Banner, Crucible, Rise of Iron Record Book"
+      }
+    },
+    {
+      "slot": "artifact",
+      "item": {
+        "hash": 3654604873,
+        "name": "Wings of Apris-Fol",
+        "tier": "legendary",
+        "bucket_hash": 434908299,
+        "item_type_name": "Titan Artifact",
+        "icon": "/common/destiny_content/icons/a2ba4cddf29965f40b4afb5662635da3.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: The Taken King"
+      }
+    },
+    {
+      "slot": "vehicle",
+      "item": {
+        "hash": 3755231866,
+        "name": "Arecibo Answer",
+        "tier": "legendary",
+        "bucket_hash": 2025709351,
+        "item_type_name": "Vehicle",
+        "icon": "/common/destiny_content/icons/53177cb67a0236a1f9bec723e1184ef1.jpg",
+        "class_type": 3,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Dead Orbit Vendor, Rise of Iron"
+      }
+    },
+    {
+      "slot": "horn",
+      "item": {
+        "hash": 2105124467,
+        "name": "Duck Horn",
+        "tier": "legendary",
+        "bucket_hash": 3796357825,
+        "item_type_name": "Horn",
+        "icon": "/common/destiny_content/icons/24a60810f528e4260f580997708dff5f.jpg",
+        "class_type": 3,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Eververse, Sparrow Racing, The Taken King; 1 undated source(s)"
+      }
+    }
+  ]
+}

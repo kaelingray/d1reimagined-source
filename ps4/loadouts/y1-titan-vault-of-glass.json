@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "name": "Y1 Titan - Vault of Glass, Striker",
+  "notes": "Year-1 Vault of Glass Titan: the Kabr set, Fatebringer and Found Verdict, Gjallarhorn. Every hash here is the YEAR-1 copy, not a later re-issue: D1 shipped the same item under a different hash each year with an identical name, so the hash is the only thing that tells them apart. Era: each item's `era` field is the extractor's verdict from Bungie reward sources, and `sources_in_era` means 'NO EVIDENCE AGAINST', not 'confirmed present in 01.29' - the 2020 manifest has no date-added field. What is measured, not assumed, is that every gear item here carries qualityLevel > 0, the Year-1 marker (historicaldocs/design/loadout-framework.md §Era). Subclasses have qualityLevel 0 by construction and are exempt. Nothing in this file has been confirmed against the 01.29 client. [U] level 30 / light 30 are the Year-1 caps; 01.29 is a Rise of Iron build with a level-40 cap, and we have never observed what that client does with Year-1 gear.",
+  "class": "titan",
+  "race": "exo",
+  "gender": "male",
+  "level": 30,
+  "light": 30,
+  "equipped": [
+    {
+      "slot": "subclass",
+      "item": {
+        "hash": 2455559914,
+        "name": "Striker",
+        "tier": "common",
+        "bucket_hash": 3284755031,
+        "item_type_name": "Titan Subclass",
+        "icon": "/common/destiny_content/icons/18de4d9a91d824bc67ea6941d4d18cc0.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Character Creation"
+      }
+    },
+    {
+      "slot": "primary",
+      "item": {
+        "hash": 3892023023,
+        "name": "Fatebringer",
+        "tier": "legendary",
+        "bucket_hash": 1498876634,
+        "item_type_name": "Hand Cannon",
+        "icon": "/common/destiny_content/icons/af64540ecb830be33f647cafc1c35500.jpg",
+        "class_type": 3,
+        "damage": "arc",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "special",
+      "item": {
+        "hash": 892741686,
+        "name": "Found Verdict",
+        "tier": "legendary",
+        "bucket_hash": 2465295065,
+        "item_type_name": "Shotgun",
+        "icon": "/common/destiny_content/icons/07d4b2252d83cc158b2da82cd7fa42d4.jpg",
+        "class_type": 3,
+        "damage": "arc",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "heavy",
+      "item": {
+        "hash": 1274330687,
+        "name": "Gjallarhorn",
+        "tier": "exotic",
+        "bucket_hash": 953998645,
+        "item_type_name": "Rocket Launcher",
+        "icon": "/common/destiny_content/icons/eb8377390504838c0190d8d56e70d28e.jpg",
+        "class_type": 3,
+        "damage": "solar",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Nightfall, Prison of Elders, Crucible, Vault of Glass, Crota's End, Strike, Xûr, Agent of the Nine; 1 undated source(s)"
+      }
+    },
+    {
+      "slot": "head",
+      "item": {
+        "hash": 2147998057,
+        "name": "Battlecage of Kabr",
+        "tier": "legendary",
+        "bucket_hash": 3448274439,
+        "item_type_name": "Helmet",
+        "icon": "/common/destiny_content/icons/141aa715dee032404f3067a51357dba0.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "arms",
+      "item": {
+        "hash": 3851493600,
+        "name": "Kabr's Brazen Grips",
+        "tier": "legendary",
+        "bucket_hash": 3551918588,
+        "item_type_name": "Gauntlets",
+        "icon": "/common/destiny_content/icons/be3ca8ae5cd7786fd40d31c55e1e2fd2.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "chest",
+      "item": {
+        "hash": 3367833896,
+        "name": "Kabr's Wrath",
+        "tier": "legendary",
+        "bucket_hash": 14239492,
+        "item_type_name": "Chest Armor",
+        "icon": "/common/destiny_content/icons/852108355fca182e3f8b23dfc33451e5.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "legs",
+      "item": {
+        "hash": 2504856474,
+        "name": "Kabr's Forceful Greaves",
+        "tier": "legendary",
+        "bucket_hash": 20886954,
+        "item_type_name": "Leg Armor",
+        "icon": "/common/destiny_content/icons/e455d84c7ef5c7f235cf8aba68c9c40f.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "class_item",
+      "item": {
+        "hash": 774963973,
+        "name": "Light of the Great Prism",
+        "tier": "legendary",
+        "bucket_hash": 1585787867,
+        "item_type_name": "Titan Mark",
+        "icon": "/common/destiny_content/icons/091f2715b194d48764087c8e7fb20fbd.jpg",
+        "class_type": 0,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    }
+  ]
+}

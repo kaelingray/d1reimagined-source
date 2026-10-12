@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Destiny 1 (PS4) CUSA00219 patch 01.29 - unlock the built-in `networking:` diagnostic log.
+
+  Apply with:   shadps4 -p $HOME/dev/destiny1-preservation/patches/CUSA00219-guest-diagnostics.xml <game>
+
+  Rationale, addresses and byte-level derivation: design/guest-diagnostics.md
+
+  Address convention: shadPS4's XML path leaves patchInfo::isOffset unset, so
+  PatchMemory computes  g_eboot_address + (Address - 0x400000).
+  Therefore  Address = eboot vaddr + 0x400000.   (eboot vaddr = file offset - 0x4000)
+
+  AppVer MUST match param.sfo APP_VER ("01.29") or non-mask lines are silently skipped.
+
+  ============================================================================
+  ENABLE BOTH:  the "sink" patch below, PLUS exactly ONE threshold patch.
+  The sink patch alone emits only what the game's own thresholds already allow.
+  A threshold patch alone emits nothing at all - the sink is the binding gate.
+  ============================================================================
+-->
+<!--
+  ============================================================================
+  ⚠ THIS FILE CARRIES A CLIENT MODIFICATION THAT BYPASSES A SIGNATURE CHECK.
+  ============================================================================
+
+  It is `CUSA00219-guest-diagnostics.xml` **plus** one extra data byte that disables the CDN
+  content-manifest RSA envelope, so we can serve an unsigned manifest to our own client in the
+  sealed lab. It is a SEPARATE file on purpose: shadPS4 accepts only one `-p`, and keeping this
+  out of the diagnostics patch means a run that used it is identifiable from `RUN-INFO.txt`
+  (`diag patch:`) rather than the bypass being silently on forever.
+
+  PROVENANCE: anything reached through this patch is a client modification. Tag findings
+  `synthetic_ancestor` and never promote them to protocol contract. Full reasoning:
+  design/content-manifest-gate.md §5.4.
+
+  Generated from CUSA00219-guest-diagnostics.xml - if you change the diagnostics patches, this
+  file must be regenerated or it will drift.
+-->
+<Patch>
+
+  <!--
+    REQUIRED. Gives the diagnostic sink an actual output.
+
+    retail_log_emit(edi = site_id, rsi = formatted_text)  @ eboot vaddr 0xe4ad0
+    Stock behaviour: memcpy 0x140 bytes of the text into an in-memory ring buffer at
+    g_retail_log+0x19860 (1124 slots x 0x150) and set a ready flag. It never calls any
+    output function, which is why ~1,285 of the 1,287 `networking:` strings never appear.
+
+    Replacement (14 bytes) - tail-call printf("%s\n", text):
+        48 8D 3D F9 07 52 01    lea rdi, [rip+0x15207f9]   ; -> "%s\n" @ vaddr 0x16052d0
+        30 C0                   xor al, al                 ; 0 vector regs (varargs ABI)
+        E9 72 89 1B 01          jmp 0x129d450              ; printf PLT stub; rsi = text
+
+    rsi already holds the text, so no shuffling is needed. The tail jmp leaves
+    rsp%16 == 8, exactly what printf expects on entry. 0x129d450 is confirmed to reach
+    shadPS4's [stdout] Logger - it is the same stub that prints `networking:sessionid:`.
+
+    TRADE-OFF: this replaces the ring-buffer write, so the game's in-game network-status
+    overlay stops being fed. Harmless for log capture, but it is a real behaviour change.
+  -->
+  <Metadata Name="D1 diagnostics: route retail_log sink to stdout (REQUIRED)"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4AD0" Value="488D3DF907520130C0E972891B01"/>
+    </PatchList>
+  </Metadata>
+
+  <!--
+    Threshold patches. Enable EXACTLY ONE.
+
+    retail_log_check(edi = system, esi = level) -> bool   @ eboot vaddr 0xe4da0
+    Stock behaviour: return g_retail_log->thresholds[system] <= level, i.e. a HIGHER
+    threshold is QUIETER. 22 thresholds, initialised to 4, then overwritten from a
+    game-data config blob (0x1db440 -> *(void**)0x267b1b8 + 0x26ec, fields 0x30..0x84)
+    whose contents we cannot read - so the live thresholds are UNKNOWN.
+
+    Replacement (7 bytes) applies one uniform threshold T and ignores both the array and
+    the config blob, which removes that unknown:
+        83 FE <T>               cmp esi, T
+        0F 9D C0                setge al       ; al = (level >= T) == (T <= level)
+        C3                      ret
+
+    Site counts measured over all 1,614 resolvable gate call sites:
+        T=0 -> 1614 (100%)   T=1 -> 1534 (95%)   T=2 -> 1269 (79%)
+        T=3 ->  992  (61%)   T=4 ->  626 (39%)   T=5 ->    0  (0%)
+
+    START AT T=4 AND WALK DOWN. T=0 turns on 1,614 sites including `session` (754 sites)
+    and `simulation`, which sit in per-frame paths; that is potentially tens of thousands
+    of printf calls per second, and extra host load is known to cause init-race failures
+    in this title.
+  -->
+  <Metadata Name="D1 diagnostics: threshold T=4 (626 sites, 39%) - START HERE"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE040F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=3 (992 sites, 61%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE030F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=2 (1269 sites, 79%)"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE020F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=1 (1534 sites, 95%)"
+            isEnabled="true" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE010F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <Metadata Name="D1 diagnostics: threshold T=0 (all 1614 sites) - FIREHOSE, expect load"
+            isEnabled="false" AppVer="01.29" Author="guest-diag" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="4E4DA0" Value="83FE000F9DC0C3"/>
+    </PatchList>
+  </Metadata>
+
+  <!--
+    Disable the CDN content-manifest signature envelope. ONE BYTE.
+
+    `cdn_content_manifest` download handler @ eboot vaddr 0x2b0030 reads a bool at
+    vaddr 0x18c4974 (file offset 0x18c8974, shipped value 0x01 - verified by direct read).
+    Exactly one reference to that byte exists in the whole binary.
+
+    When 1 (stock), the downloaded body must be:
+        [0:4)   LE == 1
+        [4:8)   == 0
+        [8:0x108)  256-byte RSA-2048 signature over body[0x108:]
+    verified against a single live 270-byte DER key at vaddr 0x1591800. This is the same
+    envelope as sku_config.txt. WE CANNOT FORGE IT.
+
+    When 0, the handler skips the envelope entirely (jumps to 0x2b0132) and parses the whole
+    body as the manifest protobuf. Acceptance then needs only that manifest field 5 (`guid`)
+    is PRESENT and strncmp-equal (0x25 bytes) to Engine Configuration key 101 - which defaults
+    to "", so an empty guid on both sides matches.
+
+    Address convention (same as above): Address = eboot vaddr + 0x400000.
+                                        0x18c4974 + 0x400000 = 0x1CC4974
+  -->
+  <Metadata Name="D1 lab: accept UNSIGNED cdn content manifest (client modification)"
+            isEnabled="true" AppVer="01.29" Author="content-manifest-gate" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="1CC4974" Value="00"/>
+    </PatchList>
+  </Metadata>
+
+
+  <!--
+    ============================================================================
+    EXPERIMENT: null-span guard at the BAP message-policy action thunk 0x56FFB0.
+    ============================================================================
+    WARNING: CLIENT MODIFICATION. Anything reached through it is `synthetic_ancestor`.
+
+    Measured cause (design/character-and-orbit.md 26.11 to 26.13, run
+    20260807-085104-account-trace): the BAP response envelope for message 0x4C decodes with
+    its repeated field EMPTY, {pointer=0, count=0} at envelope +0x10/+0x18. 0x56FFB0 builds
+    handle B only when that count is > 0 (0x570033 `mov eax,[rbx+0x18]`, 0x570038 `jle`), but
+    then dispatches unconditionally, because the gate it consults is
+
+        0x1F70:  b0 01   mov al,1
+                 c3      ret
+
+    an unconditional `return true`. The handler 0x570A40 then dereferences the null handle at
+    0x570AAE (`mov edx,[rbx+8]` with rbx = 0) and the guest dies reading address 0x8.
+
+    This patch replaces that always-true gate with an actual test of handle B object pointer,
+    so the empty case skips the dispatch instead of crashing:
+
+        0x5700BD  31 FF            xor edi,edi      ==>  48 83 7D A8 00   cmp qword [rbp-0x58],0
+        0x5700BF  E8 AC 1E A9 FF   call 0x1F70      ==>  90 90 90 90      nop x4
+        0x5700C4  84 C0            test al,al
+        0x5700C6  74 1B            je 0x5700E3      (UNCHANGED, now taken when B is null)
+
+    [rbp-0x58] is handle B object pointer (written at 0x570066); [rbp-0x60] is its type word.
+    NOPs do not disturb ZF, so the surviving `je` sees the compare result.
+
+    WHAT IT DECIDES. It does not repair the protocol. It asks whether this dispatch is
+    load bearing. If the boot advances past investment_signin, the span is optional and the
+    real gate is further on. If it stops at a NAMED error instead, that name is the next gate.
+    Either outcome is worth more than another null dereference.
+  -->
+  <Metadata Name="D1 experiment: skip BAP policy dispatch when the span handle is null"
+            isEnabled="true" AppVer="01.29" Author="span-guard" PatchVer="1.0">
+    <PatchList>
+      <Line Type="bytes" Address="9700BD" Value="48837DA80090909090"/>
+    </PatchList>
+  </Metadata>
+
+</Patch>

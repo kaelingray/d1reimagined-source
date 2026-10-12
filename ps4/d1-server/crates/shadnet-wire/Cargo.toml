@@ -1,0 +1,11 @@
+[package]
+name = "shadnet-wire"
+description = "ShadNet packet framing: header layout, command/error enums, codec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+prost.workspace = true
+tokio.workspace = true

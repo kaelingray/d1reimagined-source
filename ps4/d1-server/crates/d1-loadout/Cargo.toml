@@ -1,0 +1,25 @@
+[package]
+name = "d1-loadout"
+description = "Loadout/spawn data model and Bungie world-manifest catalogue queries. Data only - no wire encoding."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "d1-loadout"
+path = "src/bin/d1-loadout.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+# `bundled` compiles SQLite from source: this box has no sqlite3 development package, and a
+# vendored engine also makes the extraction reproducible. SQLite is public domain; rusqlite is
+# MIT - both compatible with this project's GPL-2.0-or-later.
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+serde.workspace = true
+serde_json.workspace = true
+# Only DEFLATE is needed: the Bungie world-content `.content` file is a one-entry ZIP whose
+# single member is DEFLATE-compressed [C, measured]. Default features would drag in
+# zstd/bzip2/lzma/AES for nothing.
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }

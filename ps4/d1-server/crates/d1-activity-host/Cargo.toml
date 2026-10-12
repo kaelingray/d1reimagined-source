@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-activity-host"
+description = "The Activity Host role: AH id allocation, the endpoint registry message 17 hands out, the user_defined_type application protocol carried inside BAP messages 8/100, and the AH's own listener"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Licences checked (CLAUDE.md non-negotiable). Nothing AGPL-3.0 and nothing unlicensed, in any
+# form. The only protocol source is our own eboot.
+anyhow.workspace = true            # MIT OR Apache-2.0
+clap.workspace = true              # MIT OR Apache-2.0
+tokio.workspace = true             # MIT
+tracing.workspace = true           # MIT
+tracing-subscriber.workspace = true # MIT
+
+# ⛔ THE ONE-PROTOCOL-ONE-IMPLEMENTER BOUNDARY.
+# Every BAP envelope, inner header, cipher and message codec comes from here. This crate never
+# writes a header byte and never touches an envelope - see `design/SERVER-ROLES-PLAN.md` §6.
+d1-bap = { path = "../d1-bap" }
+
+# ⭐⭐ THE AH PAYLOAD CODEC. `codec::SchemaCodec` runs the CLIENT'S OWN `FUN_002A4090` /
+# `FUN_002A4140` through this crate rather than reimplementing a bit grammar - one protocol, one
+# implementer, and the implementer is Bungie.
+#
+# ⚠ LICENCE + RUNTIME COST, both real and both stated rather than discovered:
+#  * `d1-oracle` depends on `unicorn-engine` (GPL-2.0). The whole workspace is GPL-2.0-OR-LATER, so
+#    the combination is fine and the binary is distributable under GPL-2.0. `d1-oracle`'s own doc
+#    says the dependency is "confined to one crate boundary"; that confinement is now two crates
+#    wide, deliberately.
+#  * The pinned eboot must exist AT RUNTIME (`$D1_EBOOT`, else
+#    `dumps/patch-01.29-CUSA00219/eboot.bin`). Without it every encode is a NAMED GATE, never a
+#    silent empty push.
+d1-oracle = { path = "../d1-oracle" }
+
+[lib]
+name = "d1_activity_host"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-activity-host"
+path = "src/main.rs"

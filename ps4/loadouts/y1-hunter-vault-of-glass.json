@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "name": "Y1 Hunter - Vault of Glass, Bladedancer",
+  "notes": "Year-1 Vault of Glass Hunter: the Prime Zealot set, The Last Word, Praedyth's Revenge, Corrective Measure. The one exotic is the weapon, so the armour is all legendary - one exotic weapon plus one exotic armour piece is the limit, and the validator warns rather than errors because we have never seen the 01.29 client enforce it. Era: each item's `era` field is the extractor's verdict from Bungie reward sources, and `sources_in_era` means 'NO EVIDENCE AGAINST', not 'confirmed present in 01.29' - the 2020 manifest has no date-added field. What is measured, not assumed, is that every gear item here carries qualityLevel > 0, the Year-1 marker (historicaldocs/design/loadout-framework.md §Era). Subclasses have qualityLevel 0 by construction and are exempt. Nothing in this file has been confirmed against the 01.29 client. [U] level 30 / light 30 are the Year-1 caps; 01.29 is a Rise of Iron build with a level-40 cap, and we have never observed what that client does with Year-1 gear.",
+  "class": "hunter",
+  "race": "awoken",
+  "gender": "female",
+  "level": 30,
+  "light": 30,
+  "equipped": [
+    {
+      "slot": "subclass",
+      "item": {
+        "hash": 2962927168,
+        "name": "Bladedancer",
+        "tier": "common",
+        "bucket_hash": 3284755031,
+        "item_type_name": "Hunter Subclass",
+        "icon": "/common/destiny_content/icons/932890b123bee05de98f708c3c1b36d4.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Character Creation"
+      }
+    },
+    {
+      "slot": "primary",
+      "item": {
+        "hash": 3164616405,
+        "name": "The Last Word",
+        "tier": "exotic",
+        "bucket_hash": 1498876634,
+        "item_type_name": "Hand Cannon",
+        "icon": "/common/destiny_content/icons/fcda56480990decdc1b401826cac55e3.jpg",
+        "class_type": 3,
+        "damage": "kinetic",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Nightfall, Prison of Elders, Crucible, Vault of Glass, Crota's End, Strike, Xûr, Agent of the Nine; 1 undated source(s)"
+      }
+    },
+    {
+      "slot": "special",
+      "item": {
+        "hash": 3695068318,
+        "name": "Praedyth's Revenge",
+        "tier": "legendary",
+        "bucket_hash": 2465295065,
+        "item_type_name": "Sniper Rifle",
+        "icon": "/common/destiny_content/icons/d4d2041593d5fcbcf9a4fd92bc33c927.jpg",
+        "class_type": 3,
+        "damage": "void",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "heavy",
+      "item": {
+        "hash": 152628833,
+        "name": "Corrective Measure",
+        "tier": "legendary",
+        "bucket_hash": 953998645,
+        "item_type_name": "Machine Gun",
+        "icon": "/common/destiny_content/icons/34d5d4f4286c7b4e4ef66f39c10f0238.jpg",
+        "class_type": 3,
+        "damage": "void",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "head",
+      "item": {
+        "hash": 1096028869,
+        "name": "Prime Zealot Helm",
+        "tier": "legendary",
+        "bucket_hash": 3448274439,
+        "item_type_name": "Helmet",
+        "icon": "/common/destiny_content/icons/82ace06c21f05fa4aa372eb4475a256e.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "arms",
+      "item": {
+        "hash": 1835128980,
+        "name": "Prime Zealot Gloves",
+        "tier": "legendary",
+        "bucket_hash": 3551918588,
+        "item_type_name": "Gauntlets",
+        "icon": "/common/destiny_content/icons/91faac31037b9182175775fea2dbd349.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "chest",
+      "item": {
+        "hash": 3833808556,
+        "name": "Prime Zealot Cuirass",
+        "tier": "legendary",
+        "bucket_hash": 14239492,
+        "item_type_name": "Chest Armor",
+        "icon": "/common/destiny_content/icons/bfa897c30955f4f02f85df4fcf11c37a.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "legs",
+      "item": {
+        "hash": 1698410142,
+        "name": "Prime Zealot Greaves",
+        "tier": "legendary",
+        "bucket_hash": 20886954,
+        "item_type_name": "Leg Armor",
+        "icon": "/common/destiny_content/icons/e3d598c9544b66de9300e01612d006e2.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    },
+    {
+      "slot": "class_item",
+      "item": {
+        "hash": 2237496545,
+        "name": "Shattered Vault Cloak",
+        "tier": "legendary",
+        "bucket_hash": 1585787867,
+        "item_type_name": "Hunter Cloak",
+        "icon": "/common/destiny_content/icons/293960325377606d556573e1a0a65069.jpg",
+        "class_type": 1,
+        "damage": "none",
+        "era": "sources_in_era",
+        "era_note": "at/before 01.29: Vault of Glass"
+      }
+    }
+  ]
+}

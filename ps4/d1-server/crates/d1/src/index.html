@@ -1,0 +1,174 @@
+<title>d1 · run inspector</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1a1a1a; --bg:#fbfbfa; --dim:#6b6b6b;
+          --line:#e0dedb; --ok:#1a7f37; --bad:#c0392b; --warn:#9a6700; --acc:#4a3fb5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8e6e3; --bg:#15161a; --dim:#9b9b9b; --line:#2c2e35;
+            --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#a8a0ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:1.5rem; background:var(--bg); color:var(--fg);
+         font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  h1 { font-size:1.05rem; margin:0 0 1rem; font-weight:600; letter-spacing:.02em; }
+  h1 small { color:var(--dim); font-weight:400; margin-left:.6rem; }
+  .wrap { display:grid; grid-template-columns:minmax(240px,320px) 1fr; gap:1.5rem; align-items:start; }
+  @media (max-width:820px) { .wrap { grid-template-columns:1fr; } }
+  .card { border:1px solid var(--line); border-radius:8px; padding:.9rem 1rem; background:color-mix(in srgb,var(--bg) 92%,var(--fg)); }
+  ul.runs { list-style:none; margin:0; padding:0; }
+  ul.runs li { padding:.45rem .6rem; border-radius:6px; cursor:pointer; font-family:ui-monospace,monospace; font-size:12px; }
+  ul.runs li:hover { background:color-mix(in srgb,var(--bg) 80%,var(--acc)); }
+  ul.runs li.sel { background:color-mix(in srgb,var(--bg) 70%,var(--acc)); font-weight:600; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  td,th { text-align:left; padding:.28rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:500; white-space:nowrap; width:1%; }
+  code,.mono { font-family:ui-monospace,SFMono-Regular,monospace; font-size:12px; }
+  .pill { display:inline-block; padding:.05rem .45rem; border-radius:99px; font-size:11px; font-weight:600; }
+  .ok{background:color-mix(in srgb,var(--bg) 78%,var(--ok));color:var(--ok)}
+  .bad{background:color-mix(in srgb,var(--bg) 78%,var(--bad));color:var(--bad)}
+  .warn{background:color-mix(in srgb,var(--bg) 78%,var(--warn));color:var(--warn)}
+  details { margin:.5rem 0; } summary { cursor:pointer; color:var(--dim); font-size:12px; }
+  pre { margin:.4rem 0 0; padding:.6rem; background:color-mix(in srgb,var(--bg) 88%,var(--fg));
+        border-radius:6px; overflow-x:auto; font-size:11.5px; line-height:1.45; }
+  .sec { margin-top:1.1rem; } .sec h2 { font-size:.78rem; text-transform:uppercase;
+        letter-spacing:.06em; color:var(--dim); margin:0 0 .4rem; font-weight:600; }
+  .empty { color:var(--dim); font-style:italic; }
+  /* The gate ladder is the headline artefact: how far this run got. */
+  ol.ladder { list-style:none; margin:.2rem 0 0; padding:0; }
+  ol.ladder li { position:relative; padding:.16rem 0 .16rem 1.35rem;
+                 font-family:ui-monospace,monospace; font-size:12px; }
+  ol.ladder li::before { content:''; position:absolute; left:.34rem; top:.52rem;
+                 width:.5rem; height:.5rem; border-radius:99px; background:var(--ok); }
+  ol.ladder li.err::before { background:var(--bad); }
+  ol.ladder li.off::before { background:var(--dim); }
+  ol.ladder li.deep { font-weight:700; }
+  ol.ladder li:not(:last-child)::after { content:''; position:absolute; left:.56rem; top:1rem;
+                 bottom:-.16rem; width:1px; background:var(--line); }
+  ol.ladder li .why { color:var(--dim); font-weight:400; }
+  .depth { font-family:ui-monospace,monospace; font-size:12px; color:var(--dim); margin-top:.35rem; }
+  .halt { margin-top:.5rem; padding:.5rem .65rem; border-radius:6px; font-size:12px;
+          background:color-mix(in srgb,var(--bg) 80%,var(--bad)); color:var(--bad); font-weight:600; }
+</style>
+<h1>d1 · run inspector <small id="hint">loading…</small></h1>
+<div class="wrap">
+  <div class="card"><div class="sec" style="margin:0"><h2>runs</h2><ul class="runs" id="runs"></ul></div></div>
+  <div id="detail"></div>
+</div>
+<script>
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let runs = [], sel = null;
+
+function quietPill(q) {
+  if (q === 'Yes') return '<span class="pill ok">host quiet</span>';
+  if (q === 'Unknown') return '<span class="pill warn">quiet unknown</span>';
+  return '<span class="pill bad">NOT quiet</span>';
+}
+function list(title, arr) {
+  if (!arr || !arr.length) return '';
+  return `<details><summary>${esc(title)} (${arr.length})</summary><pre>${arr.map(esc).join('\n')}</pre></details>`;
+}
+// Mirrors d1_run::BOOTFLOW_SPINE. States off the spine are conditional branches: shown, but they
+// do not define depth (a run that detours through `eula` has not got further than `bap_signin`).
+const SPINE = ['bootflow:media_check','bootflow:bootload','bootflow:intro_screen_display',
+  'bootflow:start','bootflow:platform_signin','bootflow:platform_account_warnings',
+  'bootflow:enumerate_content_rights','bootflow:account_signin','bootflow:content_check',
+  'bootflow:package_registration','bootflow:bap_signin','bootflow:investment_signin',
+  'bootflow:profile_setup','bootflow:prepare_for_orbit'];
+
+function ladder(s) {
+  if (!s.boot_ladder || !s.boot_ladder.length) return '<div class="empty">no boot-flow transitions</div>';
+  // Collapse the loop: a failed run re-walks the early states, which is noise once you know it
+  // looped. Show each state once, at its furthest occurrence, and say how many times it was entered.
+  const seen = new Map();
+  for (const [st, why] of s.boot_ladder) {
+    const e = seen.get(st) || {st, why, n:0};
+    e.n++; if (why && why.startsWith('error.')) e.why = why;
+    seen.set(st, e);
+  }
+  const order = [...seen.values()].sort((a,b) => {
+    const ra = SPINE.indexOf(a.st), rb = SPINE.indexOf(b.st);
+    if (ra >= 0 && rb >= 0) return ra - rb;
+    if (ra >= 0) return -1;
+    if (rb >= 0) return 1;
+    return 0;
+  });
+  const rows = order.map(e => {
+    const err = e.why && e.why.startsWith('error.');
+    const off = SPINE.indexOf(e.st) < 0;
+    const deep = e.st === s.deepest_state;
+    const cls = [err ? 'err' : (off ? 'off' : ''), deep ? 'deep' : ''].filter(Boolean).join(' ');
+    const times = e.n > 1 ? ` <span class="why">×${e.n}</span>` : '';
+    return `<li class="${cls}">${esc(e.st)}${times} <span class="why">${esc(e.why||'')}</span></li>`;
+  }).join('');
+  const rank = SPINE.indexOf(s.deepest_state);
+  const depth = rank >= 0
+    ? `<div class="depth">depth ${rank+1}/${SPINE.length} - remaining: ${SPINE.slice(rank+1).map(x=>x.replace('bootflow:','')).join(' → ')||'none, this is the end of the spine'}</div>`
+    : '';
+  const halt = s.guest_halt ? `<div class="halt">GUEST HALT (the engine's own words): ${esc(s.guest_halt)}</div>` : '';
+  return `<ol class="ladder">${rows}</ol>${depth}${halt}`;
+}
+
+function render(s) {
+  const q = typeof s.quiet === 'string' ? s.quiet : 'No';
+  const gate = s.signed_out_polls === 0
+    ? '<span class="pill ok">identity gate OPEN</span>'
+    : `<span class="pill bad">${s.signed_out_polls} SIGNED_OUT</span>`;
+  const cont = s.provenance.containment_ok === true
+    ? '<span class="pill ok">containment passed</span>'
+    : s.provenance.containment_ok === false
+      ? '<span class="pill bad">CONTAINMENT FAILED</span>'
+      : '<span class="pill warn">no containment proof</span>';
+  const gatePill = s.deepest_state
+    ? `<span class="pill ${s.terminal_reason||s.guest_halt?'warn':'ok'}">gate: ${esc(s.deepest_state.replace('bootflow:',''))}</span>`
+    : '';
+  const faults = s.faults.length
+    ? `<span class="pill bad">${s.faults.length} fault(s)</span>`
+    : '<span class="pill ok">0 faults</span>';
+
+  const prov = Object.entries(s.provenance.info)
+    .map(([k,v]) => `<tr><th>${esc(k)}</th><td class="mono">${esc(v)}</td></tr>`).join('');
+  const shad = Object.entries(s.shadnet).map(([c,ok]) =>
+    `<tr><th>${esc(c)}</th><td>${ok?'<span class="pill ok">served</span>':'<span class="pill bad">UNIMPLEMENTED</span>'}</td></tr>`).join('');
+  const subs = Object.entries(s.guest_subsystems).map(([k,n]) =>
+    `<tr><th>${esc(k)}</th><td class="mono">${n}</td></tr>`).join('');
+
+  document.getElementById('detail').innerHTML = `
+    <div class="card">
+      <div class="mono" style="font-size:13px;font-weight:600">${esc(s.name)}</div>
+      <div style="margin:.6rem 0 0;display:flex;gap:.35rem;flex-wrap:wrap">
+        ${gatePill} ${gate} ${faults} ${cont} ${quietPill(q)}
+        <span class="pill" style="background:transparent;color:var(--dim)">${esc(s.game_identity||'?')}</span>
+      </div>
+      <div class="sec"><h2>boot-flow ladder</h2>${ladder(s)}</div>
+      <div class="sec"><h2>provenance</h2><table>${prov||'<tr><td class="empty">none</td></tr>'}</table></div>
+      ${shad ? `<div class="sec"><h2>shadnet gates</h2><table>${shad}</table></div>` : ''}
+      ${subs ? `<div class="sec"><h2>guest diagnostics by subsystem</h2><table>${subs}</table></div>` : ''}
+      <div class="sec"><h2>attempt ledger</h2>
+        ${list('hostnames attempted', s.hostnames) || '<div class="empty">no name resolutions</div>'}
+        ${list('http calls', s.http_calls)}
+        ${list('milestones', s.milestones)}
+        ${list('guest diagnostic lines', s.guest_lines)}
+        ${list('faults', s.faults)}
+      </div>
+    </div>`;
+}
+function paint() {
+  document.getElementById('runs').innerHTML = runs.map((r,i) =>
+    `<li data-i="${i}" class="${i===sel?'sel':''}">${esc(r.name)}</li>`).join('');
+  document.querySelectorAll('#runs li').forEach(li =>
+    li.onclick = () => { sel = +li.dataset.i; paint(); render(runs[sel]); });
+  if (sel !== null) render(runs[sel]);
+}
+async function poll() {
+  try {
+    const r = await fetch('/runs.json', {cache:'no-store'});
+    runs = await r.json();
+    document.getElementById('hint').textContent =
+      `${runs.length} run${runs.length===1?'':'s'} · refreshing`;
+    if (sel === null && runs.length) sel = runs.length - 1;
+    paint();
+  } catch (e) {
+    document.getElementById('hint').textContent = 'server unreachable - is the ssh -L tunnel up?';
+  }
+}
+poll(); setInterval(poll, 3000);
+</script>

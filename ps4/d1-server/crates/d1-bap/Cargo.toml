@@ -1,0 +1,23 @@
+[package]
+name = "d1-bap"
+description = "BAP (Bungie Application Protocol) wire codec - the single home for Demonware/BAP framing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The table generator (src/derive.rs): reads the pinned eboot through d1-eboot's image, reloc
+# and descriptor readers, so tables.rs and its derivation live in one crate (no format twice).
+d1-eboot = { path = "../d1-eboot" } # GPL-2.0-or-later, this workspace
+
+# RustCrypto, all MIT OR Apache-2.0 - compatible with this project's GPL-2.0-or-later.
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+aes-gcm = "0.10"
+hmac = "0.12"
+sha2 = "0.10"
+
+[[bin]]
+name = "d1-bap"
+path = "src/main.rs"

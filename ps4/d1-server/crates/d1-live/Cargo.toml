@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-live"
+description = "The live client as a Linux process: /proc/<pid>/mem, the three base controls, the one address language, and HARDWARE (debug-register) watchpoints that name the instruction which wrote a field"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# ── LICENCE AUDIT (CLAUDE.md non-negotiable) ─────────────────────────────────────────────────────
+# Every dependency here is already in the workspace and GPL-2.0-compatible.  Nothing AGPL-3.0 and
+# nothing unlicensed: not linked, not ported from, not read.
+#
+# ⭐ This crate deliberately does NOT depend on `unicorn-engine`.  It is the *native* half of the
+# live toolkit - ptrace and debug registers, no emulation - and keeping the strongest-copyleft,
+# slowest-to-build dependency on the far side of the `d1-replay` boundary means a watchpoint run
+# never waits for QEMU to compile.
+anyhow.workspace = true            # MIT OR Apache-2.0
+clap.workspace = true              # MIT OR Apache-2.0
+serde.workspace = true             # MIT OR Apache-2.0
+serde_json.workspace = true        # MIT OR Apache-2.0
+libc = "0.2"                       # MIT OR Apache-2.0 - ptrace(2)/waitpid(2), no shelling out
+iced-x86 = { version = "1", default-features = false, features = ["std", "decoder", "intel"] } # MIT
+d1-eboot = { path = "../d1-eboot" } # GPL-2.0-or-later, this workspace
+
+[lib]
+name = "d1_live"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-live"
+path = "src/main.rs"

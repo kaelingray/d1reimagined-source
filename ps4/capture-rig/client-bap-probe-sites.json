@@ -1,0 +1,346 @@
+{
+  "schema_version": 2,
+  "title_id": "CUSA00219",
+  "app_version": "01.29",
+  "eboot_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
+  "runtime_load_base": "0x800000000",
+  "record_budget": 60000,
+  "rearm_groups": [
+    {
+      "name": "pre_channel_receive",
+      "entry_probe": "rx_dispatch_entry",
+      "pump_probe": "receive_rearm_pump",
+      "rule": "entry arms the common-exit pump; pump re-arms every upstream probe; no probe re-arms itself"
+    },
+    {
+      "name": "secured_decrypt",
+      "entry_probe": "secured_decrypt_entry",
+      "pump_probe": "secured_decrypt_rearm_pump",
+      "rule": "entry arms the decrypt-function exit; exit re-arms entry and verdict probes"
+    },
+    {
+      "name": "secured_receive",
+      "entry_probe": "secured_rx_dispatch_entry",
+      "pump_probe": "secured_receive_rearm_pump",
+      "rule": "entry arms the secured finalize-function exit; exit re-arms recipient and consumer probes"
+    },
+    {
+      "name": "queuez_push",
+      "entry_probe": "queuez_push_entry",
+      "pump_probe": "queuez_push_rearm_pump",
+      "rule": "push entry arms its common return; return re-arms family-update result and object-dispatch probes"
+    },
+    {
+      "name": "queuez_object_apply",
+      "entry_probe": "queuez_object_apply_entry",
+      "pump_probe": "queuez_object_apply_rearm_pump",
+      "rule": "object-apply entry arms its common return; return re-arms slot, decode, key and lifecycle probes"
+    }
+  ],
+  "probes": [
+    {
+      "id": 31,
+      "name": "rx_dispatch_entry",
+      "vaddr": "0xb2e0dc",
+      "original_bytes": "498d9d181c0000",
+      "event_stage": "client_header_candidate",
+      "observe": "r13 connection; received type at r13+0x1788; received sequence at r13+0x178a"
+    },
+    {
+      "id": 32,
+      "name": "expected_type_result",
+      "vaddr": "0xb2e119",
+      "original_bytes": "410fb78d88170000",
+      "event_stage": "client_expected_reply_observed",
+      "observe": "eax expected reply type returned by message-object vtable+0x18; r12 queue head; r15 queue index"
+    },
+    {
+      "id": 33,
+      "name": "sequence_candidate",
+      "vaddr": "0xb2e125",
+      "original_bytes": "418b44240e",
+      "event_stage": "client_reply_type_matched",
+      "observe": "r12+0x0e stored request sequence; r13+0x178a received sequence; reached only after type match"
+    },
+    {
+      "id": 34,
+      "name": "push_type_result",
+      "vaddr": "0xb2e164",
+      "original_bytes": "84c0",
+      "event_stage": "client_push_type_result",
+      "observe": "al result of push-handler vtable+0 type acceptance"
+    },
+    {
+      "id": 35,
+      "name": "push_matched",
+      "vaddr": "0xb2e16c",
+      "original_bytes": "41c7852818000002000000",
+      "event_stage": "client_push_matched",
+      "observe": "received type/sequence; path sets recipient kind 2"
+    },
+    {
+      "id": 36,
+      "name": "push_consumer_result",
+      "vaddr": "0xb2e192",
+      "original_bytes": "84c0",
+      "event_stage": "client_bap_consumer_result",
+      "observe": "al result of push-handler vtable+8"
+    },
+    {
+      "id": 37,
+      "name": "no_recipient",
+      "vaddr": "0xb2e2d8",
+      "original_bytes": "8a055a5ece01",
+      "event_stage": "client_header_matched",
+      "observe": "status failed; neither in-flight head nor push handler accepted the received type"
+    },
+    {
+      "id": 38,
+      "name": "request_matched",
+      "vaddr": "0xb2e382",
+      "original_bytes": "41c7852818000001000000",
+      "event_stage": "client_header_matched",
+      "observe": "status ok; r12 matched in-flight entry; r14 message object; path sets recipient kind 1"
+    },
+    {
+      "id": 39,
+      "name": "request_consumer_result",
+      "vaddr": "0xb2e3b0",
+      "original_bytes": "84c0",
+      "event_stage": "client_bap_consumer_result",
+      "observe": "al result of matched message-object vtable+0x20"
+    },
+    {
+      "id": 40,
+      "name": "receive_success",
+      "vaddr": "0xb2e3b4",
+      "original_bytes": "41c785c816000005000000",
+      "event_stage": "client_bap_receive_result",
+      "observe": "status ok; recipient kind at r13+0x1828 distinguishes request 1 from push 2"
+    },
+    {
+      "id": 41,
+      "name": "receive_rearm_pump",
+      "vaddr": "0xb2e47b",
+      "original_bytes": "8b858cfeffff",
+      "event_stage": "probe_rearm",
+      "observe": "common function-exit path; re-arm upstream probes and emit only control counters"
+    },
+    {
+      "id": 42,
+      "name": "secured_decrypt_entry",
+      "vaddr": "0xb2e660",
+      "original_bytes": "554889e541574156",
+      "event_stage": "client_secured_decrypt_entry",
+      "observe": "mode-1-only state-6 function; rdi is the BAP connection"
+    },
+    {
+      "id": 43,
+      "name": "secured_decrypt_result",
+      "vaddr": "0xb2e71c",
+      "original_bytes": "84c00f8484010000",
+      "event_stage": "client_secured_decrypt_result",
+      "observe": "al is the return from 0xB32C90 GCM verify/decrypt; r13 points at the decrypted frame buffer on success"
+    },
+    {
+      "id": 44,
+      "name": "secured_decrypt_success",
+      "vaddr": "0xb2e724",
+      "original_bytes": "66418b4504668983",
+      "event_stage": "client_secured_header_candidate",
+      "observe": "success-only branch; r13 begins with the six-byte decrypted BAP inner header"
+    },
+    {
+      "id": 45,
+      "name": "secured_decrypt_rearm_pump",
+      "vaddr": "0xb2e801",
+      "original_bytes": "4881c4580100005b",
+      "event_stage": "probe_rearm",
+      "observe": "common normal exit of the mode-1 decrypt/inner-header function"
+    },
+    {
+      "id": 46,
+      "name": "secured_rx_dispatch_entry",
+      "vaddr": "0xb2e940",
+      "original_bytes": "554889e541574156",
+      "event_stage": "client_secured_recipient_selection",
+      "observe": "mode-1 finalize/recipient-selection function; rdi is the BAP connection"
+    },
+    {
+      "id": 47,
+      "name": "secured_expected_type_result",
+      "vaddr": "0xb2e9c9",
+      "original_bytes": "410fb78e88170000",
+      "event_stage": "client_secured_expected_reply_observed",
+      "observe": "eax is expected reply type returned by in-flight object vtable+0x18; r12 is queue head"
+    },
+    {
+      "id": 48,
+      "name": "secured_sequence_candidate",
+      "vaddr": "0xb2e9d5",
+      "original_bytes": "418b44240e413b86",
+      "event_stage": "client_secured_reply_type_matched",
+      "observe": "reached only after type match; r12+0x0e holds request sequence and r14+0x178a the received sequence"
+    },
+    {
+      "id": 49,
+      "name": "secured_push_type_result",
+      "vaddr": "0xb2ea10",
+      "original_bytes": "84c0742641c78628",
+      "event_stage": "client_secured_push_type_result",
+      "observe": "al is the push handler vtable+0 type-acceptance result"
+    },
+    {
+      "id": 50,
+      "name": "secured_push_matched",
+      "vaddr": "0xb2ea14",
+      "original_bytes": "41c7862818000002",
+      "event_stage": "client_secured_push_matched",
+      "observe": "push path accepted the received type and sets recipient kind 2"
+    },
+    {
+      "id": 51,
+      "name": "secured_push_consumer_result",
+      "vaddr": "0xb2ea35",
+      "original_bytes": "e977010000410fb7",
+      "event_stage": "client_secured_push_consumer_result",
+      "observe": "al is the return from secured push decode/consume helper 0xB2F550"
+    },
+    {
+      "id": 52,
+      "name": "secured_no_recipient",
+      "vaddr": "0xb2ea3a",
+      "original_bytes": "410fb7be88170000",
+      "event_stage": "client_secured_no_recipient",
+      "observe": "neither in-flight head nor push handler accepted the received type"
+    },
+    {
+      "id": 53,
+      "name": "secured_request_matched",
+      "vaddr": "0xb2eb86",
+      "original_bytes": "41c7862818000001",
+      "event_stage": "client_secured_request_matched",
+      "observe": "in-flight type and sequence matched; path sets recipient kind 1"
+    },
+    {
+      "id": 54,
+      "name": "secured_consumer_result",
+      "vaddr": "0xb2ebb1",
+      "original_bytes": "84c07458498bb640",
+      "event_stage": "client_secured_consumer_result",
+      "observe": "common al verdict after push helper 0xB2F550 or request helper 0xB2F270"
+    },
+    {
+      "id": 55,
+      "name": "secured_receive_success",
+      "vaddr": "0xb2ebb5",
+      "original_bytes": "498bb64018000048",
+      "event_stage": "client_secured_receive_result",
+      "observe": "success-only cleanup branch after the common consumer verdict"
+    },
+    {
+      "id": 56,
+      "name": "secured_receive_rearm_pump",
+      "vaddr": "0xb2ed20",
+      "original_bytes": "4488e04881c4b801",
+      "event_stage": "probe_rearm",
+      "observe": "common normal exit of secured finalize/recipient selection"
+    },
+    {
+      "id": 57,
+      "name": "queuez_push_entry",
+      "vaddr": "0x565140",
+      "original_bytes": "554889e541574156",
+      "event_stage": "client_queuez_push_entry",
+      "observe": "entry of the QueueZ update notification consumer containing the call to queuez_family_update_begin"
+    },
+    {
+      "id": 58,
+      "name": "queuez_family_update_result",
+      "vaddr": "0x5653d3",
+      "original_bytes": "84c074258b8da1d4",
+      "event_stage": "client_family_update_result",
+      "observe": "al is queuez_family_update_begin result; r15d is family and frame locals retain flags, root and object count"
+    },
+    {
+      "id": 59,
+      "name": "queuez_family_objects_dispatch",
+      "vaddr": "0x5653e5",
+      "original_bytes": "488d9588d4ffff4c",
+      "event_stage": "client_family_objects_dispatch",
+      "observe": "reached only when family update was accepted and decoded object_count is greater than zero"
+    },
+    {
+      "id": 60,
+      "name": "queuez_push_rearm_pump",
+      "vaddr": "0x565580",
+      "original_bytes": "88d84881c4682b00",
+      "event_stage": "probe_rearm",
+      "observe": "common normal return of the QueueZ update notification consumer"
+    },
+    {
+      "id": 61,
+      "name": "queuez_object_apply_entry",
+      "vaddr": "0x56b5f0",
+      "original_bytes": "554889e541574156",
+      "event_stage": "client_object_apply_entry",
+      "observe": "one decoded QueueZ object begins application; esi is family, rdx root key pointer and rcx the object record"
+    },
+    {
+      "id": 62,
+      "name": "queuez_object_slot_result",
+      "vaddr": "0x56b7d2",
+      "original_bytes": "4989c54d85ed0f84",
+      "event_stage": "client_object_slot_result",
+      "observe": "rax is the existing or newly allocated registry element returned by 0x56BAB0; zero means no usable slot"
+    },
+    {
+      "id": 63,
+      "name": "queuez_rsat_decode_returned",
+      "vaddr": "0x56b838",
+      "original_bytes": "4c89f7e8106eb0ff",
+      "event_stage": "client_object_decoded",
+      "observe": "0x2C9000 has returned after decoding directly into r13; the caller ignores al and finalizes the stream next"
+    },
+    {
+      "id": 64,
+      "name": "queuez_object_key_check",
+      "vaddr": "0x56b844",
+      "original_bytes": "483b85508affff75",
+      "event_stage": "client_object_key_check",
+      "observe": "rax is decoded object key and rbp-0x75b0 is expected wire SOID; equality is required before lifecycle dispatch"
+    },
+    {
+      "id": 65,
+      "name": "queuez_object_key_mismatch",
+      "vaddr": "0x56b8b0",
+      "original_bytes": "bf08000000be0400",
+      "event_stage": "client_object_registry_result",
+      "observe": "negative-only branch: decoded object key did not equal the wire SOID"
+    },
+    {
+      "id": 66,
+      "name": "queuez_object_updated",
+      "vaddr": "0x56b881",
+      "original_bytes": "488dbd908cffff4c",
+      "event_stage": "client_object_registry_result",
+      "observe": "existing object changed and is about to enter general lifecycle update dispatch 0x56D3F0"
+    },
+    {
+      "id": 67,
+      "name": "queuez_object_added",
+      "vaddr": "0x56b968",
+      "original_bytes": "4c89ef4489e68b95",
+      "event_stage": "client_object_registry_result",
+      "observe": "newly populated object passed key validation and is about to enter general lifecycle added dispatch 0x56D290"
+    },
+    {
+      "id": 68,
+      "name": "queuez_object_apply_rearm_pump",
+      "vaddr": "0x56b753",
+      "original_bytes": "4881c4a87500005b",
+      "event_stage": "probe_rearm",
+      "observe": "common normal return of one QueueZ object-apply invocation"
+    }
+  ]
+}

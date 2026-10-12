@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-oracle"
+description = "The native oracle: run the Destiny 1 client's OWN RSAT codecs under Unicorn, offline, so a wire payload is verified by execution rather than by inference"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# ── LICENCE AUDIT (CLAUDE.md non-negotiable) ─────────────────────────────────────────────────────
+# `unicorn-engine` 2.1.5 and `unicorn-engine-sys` 2.1.5 are **GPL-2.0** (crates.io metadata and the
+# vendored `COPYING`).  It bundles QEMU (GPL-2.0) and `glib_compat` (LGPL-2.1, `COPYING.LGPL2`).
+# All three are GPL-2-compatible with this workspace's GPL-2.0-**or-later**; the combined binary is
+# distributable under GPL-2.0.  This is why the dependency lives in THIS crate and not in
+# `d1-eboot`: the strongest-copyleft dependency in the tree is confined to one crate boundary.
+# Nothing here derives from AGPL-3.0 or unlicensed prior art.
+# Build-time only, all MIT OR Apache-2.0: bindgen, cc, cmake, pkg-config, heck.
+#
+# `default-features = false` + `arch_x86`: the client is x86-64, and `arch_all` compiles nine more
+# QEMU targets we would never execute.
+unicorn-engine = { version = "2.1.5", default-features = false, features = ["arch_x86"] }
+
+anyhow.workspace = true            # MIT OR Apache-2.0
+clap.workspace = true              # MIT OR Apache-2.0
+serde.workspace = true             # MIT OR Apache-2.0
+serde_json.workspace = true        # MIT OR Apache-2.0
+d1-eboot = { path = "../d1-eboot" } # GPL-2.0-or-later, this workspace
+# The container format has exactly one description in this tree and it lives here. `src/oodle.rs`
+# needs the generation chain, the block records and the entry location arithmetic; re-deriving them
+# would be a SECOND description of the format, which this project forbids. No new external crate
+# comes with it - `d1-pkg`'s own deps (sha1, sha2, MIT OR Apache-2.0) are already in the lock.
+# ⭐ The dependency deliberately points THIS way. Putting the Oodle decode in `d1-pkg` would spread
+# the GPL-2.0 `unicorn-engine` to a second crate; `d1-oracle -> d1-pkg` keeps it confined to one.
+d1-pkg = { path = "../d1-pkg" }     # GPL-2.0-or-later, this workspace
+
+[lib]
+name = "d1_oracle"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-oracle"
+path = "src/main.rs"

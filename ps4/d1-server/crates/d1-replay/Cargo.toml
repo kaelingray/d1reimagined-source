@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "d1-replay"
+description = "The live-state replay oracle: snapshot a running client's memory, rehydrate it into Unicorn, and execute chosen functions on real captured state with register/step/watchpoint observation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# ── LICENCE AUDIT (CLAUDE.md non-negotiable) ─────────────────────────────────────────────────────
+# Re-audited for THIS crate on 2026-08-07; the whole transitive set was enumerated with
+# `cargo tree -e normal` and each crate's `license` field read from its vendored `Cargo.toml`:
+#
+#   unicorn-engine 2.1.5, unicorn-engine-sys 2.1.5 ......... GPL-2.0   (bundles QEMU GPL-2.0,
+#                                                                       glib_compat LGPL-2.1)
+#   iced-x86, generic-array, strsim, zmij .................. MIT
+#   anyhow clap clap_* serde serde_* sha2 digest anstyle*
+#   anstream cfg-if colorchoice cpufeatures crypto-common
+#   heck is_terminal_polyfill itoa lazy_static proc-macro2
+#   quote syn typenum block-buffer ......................... MIT OR Apache-2.0
+#   memchr ................................................ Unlicense OR MIT
+#   utf8parse ............................................. Apache-2.0 OR MIT
+#   unicode-ident ......................................... (MIT OR Apache-2.0) AND Unicode-3.0
+#
+# Every one is GPL-2.0-compatible, so the combined binary is distributable under this workspace's
+# GPL-2.0-or-later.  **Nothing AGPL-3.0 and nothing unlicensed** - not linked, not ported from,
+# not read.  This crate's dependency set is a SUBSET of `d1-oracle`'s plus `iced-x86`, which
+# `d1-eboot` already carries, so it adds **no new licence surface to the workspace at all**.
+unicorn-engine = { version = "2.1.5", default-features = false, features = ["arch_x86"] }
+iced-x86 = { version = "1", default-features = false, features = ["std", "decoder", "intel"] } # MIT
+
+anyhow.workspace = true            # MIT OR Apache-2.0
+clap.workspace = true              # MIT OR Apache-2.0
+serde.workspace = true             # MIT OR Apache-2.0
+serde_json.workspace = true        # MIT OR Apache-2.0
+sha2 = "0.10"                      # MIT OR Apache-2.0  (build-identity gate)
+d1-eboot = { path = "../d1-eboot" } # GPL-2.0-or-later, this workspace
+d1-live = { path = "../d1-live" }   # GPL-2.0-or-later, this workspace - proc/mem, base controls, addr language
+
+[lib]
+name = "d1_replay"
+path = "src/lib.rs"
+
+[[bin]]
+name = "d1-replay"
+path = "src/main.rs"

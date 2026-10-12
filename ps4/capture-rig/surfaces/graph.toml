@@ -1,0 +1,371 @@
+# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# ==================================================================================================
+# graph.toml - THE LAYOUT AND THE WITNESSES for `d1-scope graph`.
+# ==================================================================================================
+#
+# ⭐⭐ WHY THIS FILE EXISTS AT ALL, AND WHY IT IS NOT IN registry.toml.
+#
+# `registry.toml` is GENERATED ("RECON C manual harvest + offline d1-replay verification; edges +
+# U8-U10 by the ARCHITECT pass from RECON D"). A tool that writes into its own input eats its own
+# output (`status/LESSONS.md` #4), and a hand-added key in a generated file is deleted by the next
+# generation with no warning at all. So the graph's own data lives beside it, and d1-scope links
+# `toml` with `default-features = false` - the SERIALISER is not in the binary. Neither file can be
+# rewritten by the tool that reads them.
+#
+# ⛔⛔ THE ONE DECISION THIS FILE MAKES, AND IT IS THE WHOLE GRAPH: **the WITNESS.**
+#
+# A node's colour asks *"is this thing populated?"*, and that question has no generic answer.
+# "Any field non-zero" would call `sim_player_set` POPULATED because its back-pointer is non-zero -
+# and the back-pointer is non-zero in orbit, at rung 34 and at rung 36 alike, i.e. in every state
+# including the broken one. A rule that is true in the broken state is not a rule, it is a
+# decoration. So each node NAMES the single field that decides it, and says why that field.
+#
+# ⚠ The witness must be a field the registry actually declares on that surface, by name. Control
+# #16 fails if it is not - the two files cannot drift apart silently, and a witness pointing at a
+# field somebody renamed would otherwise render as a permanent, plausible UNKNOWN.
+#
+# ⭐ A node MAY decline a witness. `witness` absent ⇒ `NO-WITNESS`, and every edge that touches it
+# is UNKNOWN with that reason printed. **That is the correct output for four of these nodes** and it
+# is deliberately not hidden: "we cannot decide this from the state plane" and "this is fine" are
+# different facts, and only one of them is evidence. Four honest UNKNOWNs beat four invented greens.
+#
+# ⛔ AND THE COLOUR IS NOT THE REGISTRY'S `state`. `registry.toml`'s `state` is DECLARED, as of a
+# date, by a human pass. This graph DERIVES a colour from the state plane, this tick, and shows both.
+# Where they disagree the view says so out loud - two instruments disagreeing is a finding, and the
+# derived one is not automatically the right one: it is the one whose reasoning you can read.
+
+[meta]
+version = "1.0.0"
+generated = "2026-08-10"
+generator = "hand-written for d1-scope BUILD 4 (the graph view); witnesses chosen from registry.toml's own field notes"
+registry = "capture-rig/surfaces/registry.toml"
+source = "historicaldocs/design/d1-scope.md §5; historicaldocs/design/player-creation-chain.md; historicaldocs/design/biped-census.md"
+
+# ⭐ THE NINE COLUMNS, LEFT TO RIGHT, FIXED. Not force-directed: a layout that moves when the data
+#   moves is a layout you cannot compare between two runs, and comparing two runs is the job.
+#   ⚠ Two of them are EMPTY at 21 edges - `session` and `world` hold no edge endpoint in RECON D's
+#   flow graph. They are drawn anyway, empty and labelled, because "this group has no edge" is a
+#   statement about the recon's coverage and an omitted column would silently make it disappear.
+columns = ["our servers", "queuez", "wire-kept", "derived", "ladder", "session", "simulation", "game", "world"]
+
+# The witness comparison vocabulary. CLOSED on purpose - an evaluator that guesses is worse than one
+# that abstains, and every rule here has to be readable in one glance by whoever is being accused.
+witness_rules = ["!= 0", "== 0", "!= -1", "== 1"]
+
+
+# ==================================================================================================
+# COLUMN 0 - OUR SERVERS.
+# ⛔ `kind = "server"` means NOT-MEASURABLE BY THIS PLANE, and it is not a synonym for "fine".
+# d1-scope reads the CLIENT's memory. It cannot read `d1-responder` or `d1-activity-host`, so the
+# upstream arm of these eight edges is ASSERTED, never measured - the graph draws that half of the
+# arrow dashed and every such edge carries the caveat in its `why`. A green edge out of this column
+# says "the client's end is populated", which is a real reading; it does NOT say "our server is
+# correct", and the difference is the entire reason the reach tags exist.
+# ==================================================================================================
+
+[[node]]
+id = "server:signon"
+kind = "server"
+column = "our servers"
+label = "signon"
+why = "d1-responder · HTTPS /SignOn protobuf - account SOID, both BAP keys, the BAP address, the manifest URL, the silo"
+
+[[node]]
+id = "server:manifest"
+kind = "server"
+column = "our servers"
+label = "manifest"
+why = "d1-responder · GET manifest.bin - 1033 package registrations. ⚠ With D1_MANIFEST_FILE unset this serves 2 bytes, the client ACCEPTS it, and the symptom appears one rung later."
+
+[[node]]
+id = "server:queuez_push"
+kind = "server"
+column = "our servers"
+label = "queuez push"
+why = "d1-responder · BAP 123 queuez_to_client_update_notification, answered per-subscription right after the 0x000D ACK"
+
+[[node]]
+id = "server:investment_503_205"
+kind = "server"
+column = "our servers"
+label = "503 / 205 union-8"
+why = "d1-responder · the investment bodies that grant unlock flags. ⛔ Read at responder STARTUP - a flag change costs a full boot, not a poke."
+
+[[node]]
+id = "server:managed_session"
+kind = "server"
+column = "our servers"
+label = "managed session"
+why = "d1-responder · the managed-session membership that fills the SESSION player set"
+
+[[node]]
+id = "server:ah_udt1"
+kind = "server"
+column = "our servers"
+label = "AH udt 1"
+why = "d1-activity-host · global_activity_state (0x80800E76) - the MODE and the MAP, and neither is derived from the other"
+
+[[node]]
+id = "server:ah_udt4"
+kind = "server"
+column = "our servers"
+label = "AH udt 4"
+why = "d1-activity-host · join_result (0x80800A58). ⛔ Until it lands, ac+0xC98 is zero and the router drops udt 0/1/11 SILENTLY."
+
+[[node]]
+id = "server:ah_udt11"
+kind = "server"
+column = "our servers"
+label = "AH udt 11"
+why = "d1-activity-host · replicate_membership (0x808009ED). ⚠ RequestStateRefresh rebuilds this from the client's own ECHO - last writer wins."
+
+
+# ==================================================================================================
+# COLUMN 1 - QUEUEZ.
+# ==================================================================================================
+
+[[node]]
+id = "object_registry"
+column = "queuez"
+label = "object_registry"
+# ⛔ NO WITNESS, DELIBERATELY, AND THIS IS A FINDING RATHER THAN A GAP.
+why = """the registry's population is PER-FAMILY and this surface declares no per-family scalar.
+`element_base` (+0x40A0) reads a null pointer in all three snapshots and `entry_table` (+0x4F800) is
+a `struct[]` (family stride 0x60, type stride 0x10) that the state plane does not decode - so the
+only honest single-field answer is NO WITNESS. ⇒ E-03, E-05, E-06 and E-07 render UNKNOWN here.
+⭐ The instrument that closes it is a per-family reader over the entry table, reporting
+family[f].state and family[f].object_count; until that exists, an edge out of this node is not
+evidence in either direction, and colouring it green because the registry declares green would be
+inventing a measurement."""
+
+
+# ==================================================================================================
+# COLUMN 2 - WIRE-KEPT: what the server put in the client and the client kept.
+# ==================================================================================================
+
+[[node]]
+id = "unlock_plane"
+column = "wire-kept"
+label = "unlock_plane"
+why = """⛔ NO WITNESS. The surface is the plane BASE (`[v:0x26A34E8]+0x0C`) and its single declared
+field `flag` is therefore index 0 - an unlock id that is not in the ten-flag body
+{98,308,419,440,834,2667,3389,5015,5987,6018} at all. Reading it and calling the plane "empty" would
+accuse the delivery on the strength of a flag nobody ships. ⇒ the instrument is a per-index read
+over the required set for the CURRENT activity index, which is what E-12's predicate already says
+and what this plane cannot express as one field."""
+
+[[node]]
+id = "global_activity_state_blob"
+column = "wire-kept"
+label = "global_activity_state_blob"
+witness = "checksum"
+witness_rule = "!= 0"
+why = """blob+0x5C is the checksum that must equal scenario_record+0x0C; zero is exactly what every
+run in project history published before D1_AH_ACTIVITY_CHECKSUM existed.
+⚠ The witness is declared even though the surface's own `addr` is `[U]` (open item U1), so the node
+reads UNREADABLE rather than EMPTY today. That is on purpose: when U1 closes, this node starts
+answering with no edit here - and a witness that only appears once the address is known is a witness
+nobody would remember to add."""
+
+[[node]]
+id = "activity_client"
+column = "wire-kept"
+label = "activity_client"
+witness = "membership_update_id"
+witness_rule = "!= 0"
+why = """ac+0xE70 is the `MEM-%d` the client renders in its own status line - the receipt that a
+membership was applied, written by the client, not by us. ⭐ It is the right witness precisely
+because it is the client's counter: a server-side receipt proves you BUILT the message, never that
+the client KEPT it."""
+
+[[node]]
+id = "pah_region_records"
+column = "wire-kept"
+label = "pah_region_records"
+witness = "advertised_activity_host"
+witness_rule = "!= 0"
+why = """+0xD0 sits inside the PAH-tabulated region array (`ac+0x3CB8`), the array E-09's red
+predicate is about: `all(ac+0x3CB8 == 0)`. ⛔ ALL ZERO is the rung-34 task-8 bug in one read, and it
+is what this field measures.
+⚠ NOT `region_id` (+0x00): -1 TERMINATES the scan and 0 is a VALID region id, so a `!= 0` rule there
+would call a perfectly good record empty."""
+
+
+# ==================================================================================================
+# COLUMN 3 - DERIVED: what the client computed from the wire.
+# ==================================================================================================
+
+[[node]]
+id = "scenario_record"
+column = "derived"
+label = "scenario_record"
+witness = "checksum_private"
+witness_rule = "!= 0"
+why = """record+0x0C - the PRIVATE checksum, the arm `ac+0x18 == 0` selects and the only one ever
+taken so far. It is a property of the WORLD, not of the activity.
+⚠ In `rung36-biped-chain` this reads NOT-READ because `--preset content` never captured the record.
+That renders UNREADABLE, never EMPTY: "not captured" and "was zero" are different facts."""
+
+[[node]]
+id = "[U]:availability_cache"
+kind = "unknown"
+column = "derived"
+label = "availability_cache"
+why = "nobody knows where this lives - see registry.toml's matching [[open]] entry. ⛔ Renders [U], never an address and never zero."
+
+[[node]]
+id = "[U]:roster_contact_container"
+kind = "unknown"
+column = "derived"
+label = "roster_contact_container"
+why = "c_roster_contact_id_container - reads {0, 0, 0xFF} live, per historicaldocs/design/orbit-hud-blank.md, but its address is [U]. ⇒ the HUD blank is diagnosed and not yet locatable."
+
+[[node]]
+id = "[U]:activity_lifetime_state"
+kind = "unknown"
+column = "derived"
+label = "activity_lifetime_state"
+why = """lifetime_state+0x1AC must be in {3, 6}; it reads 0xFF = NONE at rung 36. ⛔ The ADDRESS is
+[U]. ⚠ Placed in `derived` rather than `world` so its edge runs left-to-right; the column is a
+LAYOUT slot, not a claim about which subsystem owns it."""
+
+
+# ==================================================================================================
+# COLUMN 4 - LADDER.
+# ==================================================================================================
+
+[[node]]
+id = "world_controller_state_manager"
+column = "ladder"
+label = "world_controller_state_manager"
+witness = "current_state"
+witness_rule = "!= 0"
+why = """sm+0x1B0 - the rung the client IS in. 27 = setup:orbit, 36 = activity:in_world.
+⚠ In `rung36-biped-chain` this is UNMAPPED (`--preset content` does not capture the state manager),
+so the node reads UNREADABLE and every edge into it is UNKNOWN. That is the preset's coverage
+speaking, and it is exactly what the view must NOT paint as a break."""
+
+
+# ==================================================================================================
+# COLUMN 5 - SESSION.  ⚠ EMPTY: no edge in RECON D's flow graph has an endpoint in this group.
+# ==================================================================================================
+
+
+# ==================================================================================================
+# COLUMN 6 - SIMULATION.  ⛔ THE BREAK IS IN HERE.
+# ==================================================================================================
+
+[[node]]
+id = "session_player_set"
+column = "simulation"
+label = "P · session_player_set"
+witness = "occupancy_mask"
+witness_rule = "!= 0"
+why = """P+0x10 - the SESSION's occupancy bitmask over 20 slots. Reads 0x00FA6551 live, and
+P+0x1C reads "orb@D1Guardian@": the session knows about the player, BY NAME.
+⛔ Use `[v:0x27E7F18]`, ONE deref. P and Q are a mutual back-pointer pair, so a single-deref and a
+triple-deref of the same expression both look coherent and give OPPOSITE answers; settled by
+`d1-eboot disasm 0xba3a40` (`mov r15,rdi` / `mov rdi,[r15]`)."""
+
+[[node]]
+id = "sim_player_set"
+column = "simulation"
+label = "Q · sim_player_set"
+witness = "sweep_mask"
+witness_rule = "!= 0"
+why = """⛔⛔ Q+0x10 - GATE 6 of the sweep, and THE BREAK. `if ((mask>>i & 1) && …)`: zero means the
+loop body never runs for any slot, so the simulation never learns about the player the session
+already knows by name. PRISTINE in two independent snapshots (`orbit-all`, and
+`rung34-task8-cleared-registry` at rung 34 on a real PvP map).
+⚠⚠ POKED to 1 in `rung36-biped-chain` (poke 3) - and the client never cleared it. Against that
+snapshot this node reads POKED, the edge reads UNKNOWN, and the view names the pristine snapshots.
+A value we wrote is not evidence about the client, and a graph that painted it green would be
+satisfying our own poke."""
+
+[[node]]
+id = "machine_record"
+column = "simulation"
+label = "machine_record"
+witness = "activity_client"
+witness_rule = "!= 0"
+why = """machine_record+0x10 - the registry calls it "the identity control": the pointer that ties
+the machine record to the activity client the AH established.
+⭐ In orbit this whole surface is NOT-LIVE by its own liveness predicate, so the node reads
+UNREADABLE and E-13 cannot go red - which is precisely what E-13's guard warns about. The liveness
+predicate and the guard agree, from two directions."""
+
+[[node]]
+id = "sim_producer"
+kind = "code"
+column = "simulation"
+label = "sim_producer  FUN_00BA3A40"
+why = """⛔ CODE, not state - `rw = "exec"`, `liveness = "n/a - code"`, zero fields. There is nothing
+to read, so this node is NOT-MEASURABLE and an edge INTO it is decided by its upstream alone. The
+view labels such an edge "the PRECONDITIONS hold", never "the callee ran": proving a function
+executed is the event plane's job (`--rw exec`, a hardware breakpoint), not the state plane's."""
+
+[[node]]
+id = "[U]:team_assignment"
+kind = "unknown"
+column = "simulation"
+label = "team_assignment"
+why = "team_picker.multiplayer_team must not be -1. ⛔ The address is [U]."
+
+
+# ==================================================================================================
+# COLUMN 7 - GAME.
+# ==================================================================================================
+
+[[node]]
+id = "game_globals"
+column = "game"
+label = "game_globals"
+witness = "world_is_up"
+witness_rule = "== 1"
+why = """gg+0x2B48 - set by c_omaha_world_controller_shim::vfunc[4]. ⭐ ALREADY TRUE IN ORBIT, which
+is itself the finding: the world came up and the game is running (gg+0x01 == 1). This is not a
+failed load. It is a successful load of a world with nobody in it.
+⚠ UNMAPPED in `rung36-biped-chain` - `--preset content` misses game globals entirely."""
+
+[[node]]
+id = "player_roster_block"
+column = "game"
+label = "player_roster_block"
+witness = "slot.enable"
+witness_rule = "!= 0"
+why = """gg+0xD0+i*0xE8 - non-zero ⇒ FUN_0090D1E0 runs for that slot.
+⛔ Its only edge (E-18) is RETIRED BY CONSTRUCTION: gg is published ONCE, ZEROED
+(`memset(gamesys+8, 0, 0x2b58)` then a tail-jump into the single-referenced FUN_009048A0), so the
+roster is ALWAYS empty at game start and FUN_00904AC0 legitimately adds nobody. The witness is
+declared anyway so the node still reports a reading - but the edge must never be drawn red again,
+and two still-current documents call it "the break"."""
+
+[[node]]
+id = "players_array"
+column = "game"
+label = "players_array"
+witness = "biped_handle"
+witness_rule = "!= 0"
+why = """players[i]+0x644. ⭐ 0 means NEVER INITIALISED AT ALL - add-player writes -1 there
+(0x90D78D / 0x90D799), so a slot reading 0 is one step further back than either documented case.
+⛔ NOT `spawn_gate` (+0x1660): its default is 0 and `if (*p != -1)` PASSES on 0, so the landmine
+field would report the array as populated in exactly the state it is empty."""
+
+[[node]]
+id = "sobject_element"
+column = "game"
+label = "sobject_element"
+why = """⛔ NO WITNESS, and the reason is the finding. The statement that matters is a CENSUS over
+the 1500-entry pool - `count(type == 9) == 0`, zero bipeds, under both predicates - and this surface
+is ELEMENT 0. One element cannot decide it, and `typeword != 0` on element 0 would report POPULATED
+in the exact state whose whole content is "there is no biped".
+⭐ The instrument that closes it is the census that already exists offline (types
+{1,2,3,4,8,11,14,24} present, 9 absent, self-handle check 577/577) - it needs a pool-walking
+resolver in the state plane, not a field."""
+
+
+# ==================================================================================================
+# COLUMN 8 - WORLD.  ⚠ EMPTY: no edge in RECON D's flow graph has an endpoint in this group.
+# ==================================================================================================

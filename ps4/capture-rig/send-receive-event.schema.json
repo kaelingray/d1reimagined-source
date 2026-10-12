@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://destiny1-preservation.invalid/schemas/send-receive-event-v1.json",
+  "title": "Destiny 1 send/receive conversation event",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "source",
+    "source_sequence",
+    "connection_id",
+    "direction",
+    "stage",
+    "status",
+    "correlation_id",
+    "inner_type",
+    "inner_sequence",
+    "investment_id",
+    "family",
+    "body_length",
+    "frame_length",
+    "monotonic_ns",
+    "socket_key",
+    "wire_key",
+    "details"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "source_sequence": {"type": "integer", "minimum": 0},
+    "connection_id": {"type": ["string", "null"]},
+    "direction": {"enum": ["c2s", "s2c", "local"]},
+    "stage": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "minLength": 1},
+    "correlation_id": {"type": ["string", "null"]},
+    "inner_type": {"type": ["integer", "null"], "minimum": 0},
+    "inner_sequence": {"type": ["integer", "null"], "minimum": 0},
+    "investment_id": {"type": ["integer", "null"], "minimum": 0},
+    "family": {"type": ["integer", "null"], "minimum": 0},
+    "body_length": {"type": ["integer", "null"], "minimum": 0},
+    "frame_length": {"type": ["integer", "null"], "minimum": 0},
+    "monotonic_ns": {"type": ["integer", "null"], "minimum": 0},
+    "socket_key": {"type": ["string", "null"]},
+    "wire_key": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+:[0-9a-f]{12}:[0-9a-f]{32}$"
+    },
+    "details": {"type": "object"}
+  },
+  "additionalProperties": false
+}

@@ -17,3 +17,27 @@ aqtinstall.log
 # Source footage, machine configuration and NAS queue never belong in Git.
 /content-outbox/
 /tools/content_capture/config.local.json
+
+# Public PS4 source ships generators, never owned-input outputs.
+/ps4/dumps/
+/ps4/cfw-staging/
+/ps4/external/
+/ps4/historicaldocs/
+/ps4/runs/
+/ps4/captures/
+/ps4/catalogue/
+/ps4/manifest/
+**/target/
+*.pkg
+*.PUP
+*.elf
+*.self
+*.pem
+*.key
+.env
+.env.*
+/ps4/capture-rig/**/*.bin
+/ps4/capture-rig/**/*.tsv
+/ps4/ghidra/lists/
+/ps4/ghidra/structs/
+/ps4/d1-server/crates/d1-eboot/tests/fixtures/

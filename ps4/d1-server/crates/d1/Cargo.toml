@@ -1,0 +1,28 @@
+[package]
+name = "d1"
+description = "Project CLI: inspect, summarise and diff experiment runs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "d1"
+path = "src/main.rs"
+
+[dependencies]
+d1-run = { path = "../d1-run" }
+# The native probe-record decoder (the one Rust description of the 232-byte tracer record) lives
+# in d1-trace, which depends on d1-run - so the CLI, above both, is where the two are wired
+# together (see gate.rs "Format ownership"). default-features = false keeps eframe/egui out of
+# this workspace's build graph; only the decoder library is used.
+d1-trace = { path = "../../../d1-trace", default-features = false }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+axum.workspace = true
+tokio.workspace = true
+# Licence checked (CLAUDE.md non-negotiable): MIT, same dependency d1-eboot already carries.
+# Needed by `d1 crash` for the lea-scan half of prologue-anchored symbolization.
+iced-x86 = { version = "1", default-features = false, features = ["std", "decoder"] }

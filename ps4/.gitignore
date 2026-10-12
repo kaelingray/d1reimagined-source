@@ -1,0 +1,138 @@
+# This working tree is ~478 GB. Almost all of that is copyrighted game/firmware material and
+# machine-regenerable output, and NONE of it belongs in git - see "Never commit" below.
+# What we track is the ~10 MB that is actually ours: code, docs, research text, manifests.
+
+# ── Copyrighted assets. Never commit, never push. ─────────────────────────────
+# Decrypted game dumps (owned-copy dumps: legal for us to hold, not to redistribute)
+/dumps/
+# Preserved patch estate (EU + US chains, ~331 GB)
+/psn-acquisition/pkgs-eu/
+/psn-acquisition/pkgs-us/
+# Jailbreak payloads, restore images, merged PKGs
+/cfw-staging/
+# (the destiny1/ dossier, its firmware corpus and archived talks now live under
+# historicaldocs/ and external/, both ignored below)
+# Belt-and-suspenders by extension, wherever they appear
+*.pkg
+*.PKG
+*.PUP
+*.dec
+*.7z
+*.zip
+*.iso
+*.img
+*.mp4
+*.mkv
+*.mov
+*.pptx
+*.avi
+
+# ── Agent/harness working state. Never publish. ───────────────────────────────
+# Claude Code's per-project state. `.claude/worktrees/` alone was 1.04 GB of checked-out
+# worktree - untracked but NOT ignored, so any `git add -A` would have swept it in.
+# Also holds agent skills, local settings and whatever future harness state lands here.
+.claude/
+.codex/
+.aider*
+# Scratch/handoff files agents leave behind
+*.orig
+*.rej
+*.bak-2*
+
+# ── Regenerable / machine output ──────────────────────────────────────────────
+# Per-experiment run artifacts (emulator logs run to tens of MB each and grow without bound).
+# Provenance lives in each run's RUN-INFO.txt on the box; promote anything worth keeping into docs.
+/runs/
+/captures/
+/logs/
+d1-server/target/
+# The standalone crates (d1-observe, d1-trace) are deliberately OUTSIDE the d1-server workspace and
+# carry their own target/ - an anchored `d1-server/target/` rule missed them, which is why
+# `git add d1-observe d1-trace` proposed 12,257 files. Unanchored: any target/ at any depth.
+target/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Secrets. Nothing here is tracked, and nothing should ever be added. ───────
+*token*
+*.pem
+*.key
+.env
+.netrc
+
+# ── Editor / OS noise ─────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# ── Keep these despite the broad rules above ──────────────────────────────────
+!.gitignore
+
+# Bungie manifest archive (large, and not ours to redistribute)
+manifest/
+
+# Derived from the manifest above, so it inherits both reasons: a few MB of Bungie's item data,
+# regenerable in seconds with `d1-loadout build`. The loadouts in `loadouts/` are ours and ARE
+# tracked - they are the curated part.
+catalogue/
+
+# ── EBOOT- AND CONTENT-DERIVED ARTIFACTS: REGENERATE, DO NOT REDISTRIBUTE ──────
+# These are mechanically extracted from the game's own eboot and content packages,
+# so they are derivative works of copyrighted material - the same category as the
+# decompiled corpus, which design/ghidra.md already refuses to ship ("keep how to
+# install and drive Ghidra and how to reproduce our best-state decomp FROM YOUR OWN
+# DISC; ship no Ghidra, no decompiled corpus, no project").
+# The GENERATORS ship. The OUTPUT does not. Each regenerates in one command against
+# a disc you own, with its own controls, and refuses to write if they fail.
+#   capture-rig/eboot-atlas.py          -> eboot-{atlas,types,namehash,callgraph}.tsv
+#   capture-rig/diagnostic-catalogue.py -> diagnostic-catalogue.tsv
+#   capture-rig/live-namespace.py       -> namespace-map.{json,tsv}
+capture-rig/eboot-atlas.tsv
+capture-rig/eboot-callgraph.tsv
+capture-rig/eboot-types.tsv
+capture-rig/eboot-namehash.tsv
+capture-rig/diagnostic-catalogue.tsv
+capture-rig/namespace-map.json
+capture-rig/namespace-map.tsv
+capture-rig/namespace-tag-identity.json
+capture-rig/schemas/
+capture-rig/manifests/
+
+# Third-party reference checkouts (large, not ours, not redistributable)
+external/
+
+# Historical/superseded docs: local reference only, never published
+/historicaldocs/
+
+# ---------------------------------------------------------------------------
+# capture-rig derived data - untracked 2026-08-11.
+# Policy: this repo ships the GENERATORS, not the extracted data. A user brings
+# their own dump and regenerates everything below. On-disk copies were kept
+# with `git rm --cached`; nothing was destroyed.
+# ⚠ A trailing "# comment" on a pattern line does NOT work: `#` only starts a
+# comment at the start of a line, so the path becomes a pattern with spaces and
+# matches nothing. Comments go above their pattern, and every one is verified
+# with `git check-ignore -q`.
+# ---------------------------------------------------------------------------
+
+# regenerate: d1-eboot thiscalls
+/capture-rig/eboot-thiscalls.tsv
+# regenerate: d1-eboot imports --tsv
+/capture-rig/eboot-imports.tsv
+# regenerate: d1-bap message-table --tsv (values also carried as Rust consts)
+/capture-rig/bap-message-table.tsv
+# regenerate: d1-oracle item-index write  (byte-identical to the Python's output
+# apart from the generator byline; proven by `d1-oracle item-index diff`)
+/capture-rig/item-content-index.tsv
+# regenerate: d1-oracle art-arrangement write
+/capture-rig/item-art-arrangement.tsv
+# regenerate: d1-oracle activity-modes write  (the d1-ghost destination selector data)
+/capture-rig/activity-modes.tsv
+# LICENSING, not convenience: 1,114 symbol names extracted from copyrighted
+# packages must not ship. ⛔ NO generator exists in any language yet, so this is
+# the one entry that fails the ship-the-generator test. Writing a d1-pkg
+# symbol-inventory writer is required work, not optional.
+/capture-rig/world-namespace.tsv

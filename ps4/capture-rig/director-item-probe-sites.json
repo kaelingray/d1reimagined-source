@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "title_id": "CUSA00219",
+  "app_version": "01.29",
+  "eboot_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
+  "runtime_load_base": "0x800000000",
+  "record_budget": 60000,
+  "rearm_groups": [
+    {
+      "name": "availability",
+      "entry_probe": "AvailEntry",
+      "pump_probe": "AvailRearmPump",
+      "rule": "entry arms the common exit; exit re-arms all five fall-through failure sites"
+    },
+    {
+      "name": "item_gate",
+      "entry_probe": "ItemLoopHead",
+      "pump_probe": "ItemLoopPump",
+      "rule": "loop head runs every iteration including empty slots"
+    },
+    {
+      "name": "world_change",
+      "entry_probe": "WorldChangeEntry",
+      "pump_probe": "WorldLaunchDirectReturn",
+      "rule": "CALLEE entry is primary; either caller return re-arms the group"
+    }
+  ],
+  "probes": [
+    {
+      "id": 69,
+      "name": "AvailEntry",
+      "vaddr": "0x260200",
+      "original_bytes": "554889e541574156"
+    },
+    {
+      "id": 70,
+      "name": "AvailFailA",
+      "vaddr": "0x260310",
+      "original_bytes": "c68424bf00000000"
+    },
+    {
+      "id": 71,
+      "name": "AvailFailB",
+      "vaddr": "0x2603ec",
+      "original_bytes": "c68424bf00000000"
+    },
+    {
+      "id": 72,
+      "name": "AvailFailC",
+      "vaddr": "0x26042e",
+      "original_bytes": "c68424bf00000000"
+    },
+    {
+      "id": 73,
+      "name": "AvailFailD",
+      "vaddr": "0x2605f6",
+      "original_bytes": "c68424bf00000000"
+    },
+    {
+      "id": 74,
+      "name": "AvailFailE",
+      "vaddr": "0x2607a0",
+      "original_bytes": "c68424bf00000000"
+    },
+    {
+      "id": 75,
+      "name": "AvailVerdictRead",
+      "vaddr": "0x2608a3",
+      "original_bytes": "8a8424bf000000e9"
+    },
+    {
+      "id": 76,
+      "name": "AvailRearmPump",
+      "vaddr": "0x260438",
+      "original_bytes": "41c6450001418845"
+    },
+    {
+      "id": 77,
+      "name": "ItemLoopHead",
+      "vaddr": "0x1087710",
+      "original_bytes": "48635dc848c1e305"
+    },
+    {
+      "id": 78,
+      "name": "ItemSlotResolve",
+      "vaddr": "0x108774b",
+      "original_bytes": "c645b700410fb77c"
+    },
+    {
+      "id": 79,
+      "name": "ItemGateCall",
+      "vaddr": "0x1087768",
+      "original_bytes": "e8c3df4cff807db7"
+    },
+    {
+      "id": 80,
+      "name": "ItemGateResult",
+      "vaddr": "0x108776d",
+      "original_bytes": "807db700750541c6"
+    },
+    {
+      "id": 81,
+      "name": "ItemLoopPump",
+      "vaddr": "0x1087778",
+      "original_bytes": "ff45c8488b45b848"
+    },
+    {
+      "id": 82,
+      "name": "ItemTagResolved",
+      "vaddr": "0x555775",
+      "original_bytes": "4189c541b7014183"
+    },
+    {
+      "id": 83,
+      "name": "ItemLoadStatePrimary",
+      "vaddr": "0x5557ce",
+      "original_bytes": "488b4db0488b5598"
+    },
+    {
+      "id": 84,
+      "name": "ItemLoadStateSecondary",
+      "vaddr": "0x55584a",
+      "original_bytes": "4c89f1460924a983"
+    },
+    {
+      "id": 85,
+      "name": "ItemGateVerdict",
+      "vaddr": "0x5558b0",
+      "original_bytes": "4180e701488b45a0"
+    },
+    {
+      "id": 86,
+      "name": "WorldLaunchCommand",
+      "vaddr": "0x75440d",
+      "original_bytes": "e82ef1ffff488b05"
+    },
+    {
+      "id": 87,
+      "name": "WorldLaunchReturn",
+      "vaddr": "0x754412",
+      "original_bytes": "488b055f282b0148"
+    },
+    {
+      "id": 88,
+      "name": "WorldChangeEntry",
+      "vaddr": "0x753540",
+      "original_bytes": "554889e541574156"
+    },
+    {
+      "id": 89,
+      "name": "WorldLaunchDirectCall",
+      "vaddr": "0x754484",
+      "original_bytes": "e8b7f0ffff488d5d"
+    },
+    {
+      "id": 90,
+      "name": "WorldLaunchDirectReturn",
+      "vaddr": "0x754489",
+      "original_bytes": "488d5de04889dfe8"
+    }
+  ]
+}
