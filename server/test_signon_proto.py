@@ -1,0 +1,57 @@
+import struct
+import tempfile
+import unittest
+from pathlib import Path
+
+import signon_proto as sp
+
+
+class TitleConfigAndManifest(unittest.TestCase):
+    def test_success_reply_carries_title_config(self):
+        config = sp.title_config(b"http://content.local.test/manifest", b"guid-1")
+        reply = sp.success_response(b"token", b"a" * 16, b"b" * 16, b"c" * 16, 1,
+                                    sp.ipv4_symmetric("127.1.1.127"), 12850, config=config)
+        fields = sp.decode(reply)
+        self.assertEqual([(n, w) for n, w, _ in fields], [(1, 0), (2, 2), (4, 2)])
+        block = sp.decode(fields[2][2])
+        self.assertEqual(block[:2], [(1, 0, 1), (2, 0, 1)])
+        content = sp.decode(sp.decode(block[2][2])[0][2])
+        self.assertEqual(content, [(2, 2, b"http://content.local.test/manifest"), (3, 2, b"guid-1")])
+
+    def test_public_ip_field_for_the_title_updates(self):
+        args = (b"token", b"a" * 16, b"b" * 16, b"c" * 16, 1, sp.ipv4_symmetric("127.1.1.127"), 12850)
+        self.assertNotIn(14, [n for n, _, _ in sp.decode(sp.success_response(*args))])
+        fields = sp.decode(sp.success_response(*args, public_ip="127.0.0.1"))
+        self.assertEqual(fields[-1], (14, 0, 0x7F000001))
+
+    def test_0124_binary_title_config_override_records(self):
+        url = b"http://content.local.test/manifest"
+        guid = b"00000000-0000-0000-0000-000000000001"
+        config = sp.title_config_0124(url, guid)
+        expected = (struct.pack("<II", 0x123456, 0x65) + sp.varint(len(guid)) + guid
+                    + struct.pack("<I", 0x66) + sp.varint(len(url)) + url
+                    + struct.pack("<I", 0))
+        self.assertEqual(config, expected)
+        with self.assertRaises(ValueError):
+            sp.title_config_0124(b"x" * 128, guid)
+
+    def test_manifest_lists_disc_packages(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name, pid, value in (("ps3_bootstrap_01a3_0.pkg", 0x1A3, 7),
+                                     ("ps3_intro_0204_en_0.pkg", 0x204, 8),
+                                     ("ps3_intro_0204_de_0.pkg", 0x204, 9),
+                                     ("ps3_client_bootstrap_unpatchable_0.pkg", 0x179, 10)):
+                root.joinpath(name).write_bytes(struct.pack(">4HQ", 0x18, 4, pid, 1, value) + b"body")
+            packages = sp.disc_packages(root)
+            self.assertEqual(packages, [(0x1A3, b"ps3_bootstrap_01a3_0", 7), (0x204, b"ps3_intro_0204_en_0", 8)])
+        fields = sp.decode(sp.content_manifest(b"guid-1", packages))
+        self.assertEqual(fields[-1], (5, 2, b"guid-1"))
+        self.assertEqual(sp.decode(fields[0][2]),
+                         [(1, 0, 0), (2, 2, b"ps3_bootstrap_01a3_0"), (3, 0, 0x1A3), (4, 0, 7)])
+        with self.assertRaises(ValueError):
+            sp.content_manifest(b"guid-1", [(5, b"too-low-id", 0)])
+
+
+if __name__ == "__main__":
+    unittest.main()

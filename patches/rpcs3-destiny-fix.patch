@@ -1,0 +1,316 @@
+diff --git a/rpcs3/Emu/Cell/SPUThread.cpp b/rpcs3/Emu/Cell/SPUThread.cpp
+index fb9483d88..db504b3e7 100644
+--- a/rpcs3/Emu/Cell/SPUThread.cpp
++++ b/rpcs3/Emu/Cell/SPUThread.cpp
+@@ -1,5 +1,6 @@
+ #include "stdafx.h"
+ #include "Utilities/JIT.h"
++#include "Emu/RSX/Common/local_mem_writes.h"
+ #include "Utilities/date_time.h"
+ #include "Emu/Memory/vm.h"
+ #include "Emu/Memory/vm_ptr.h"
+@@ -2046,6 +2047,13 @@ void spu_thread::do_dma_transfer(spu_thread* _this, const spu_mfc_cmd& args, u8*
+ 	u32 eal = args.eal;
+ 	u32 lsa = args.lsa & 0x3ffff;
+ 
++	// Tell the RSX surface cache about video memory written behind its back (after the write completes)
++	struct local_mem_write_notifier
++	{
++		u32 addr, size;
++		~local_mem_write_notifier() { rsx::notify_local_mem_write(addr, size); }
++	} local_mem_notify{is_get ? 0u : eal, is_get ? 0u : args.size};
++
+ 	// Keep src point to const
+ 	u8* dst = nullptr;
+ 	const u8* src = nullptr;
+@@ -3329,6 +3337,7 @@ bool spu_thread::do_list_transfer(spu_mfc_cmd& args)
+ 			}
+ 			}
+ 
++			rsx::notify_local_mem_write(addr, size);
+ 			arg_lsa += utils::align<u32>(size, 16);
+ 		}
+ 		else if (size)
+diff --git a/rpcs3/Emu/RSX/Common/local_mem_writes.h b/rpcs3/Emu/RSX/Common/local_mem_writes.h
+new file mode 100644
+index 000000000..50448c292
+--- /dev/null
++++ b/rpcs3/Emu/RSX/Common/local_mem_writes.h
+@@ -0,0 +1,47 @@
++#pragma once
++
++#include "util/types.hpp"
++#include <atomic>
++
++namespace rsx
++{
++	// Write generations per 4KB page of RSX local memory (0xC0000000-0xCFFFFFFF), bumped by writers the
++	// surface cache cannot otherwise observe (SPU DMA puts into video memory). Render targets snapshot the
++	// sum over their pages whenever their memory tag is synced and treat any change as a memory write.
++	inline std::atomic<u32> g_local_mem_write_gen[0x10000]{};
++
++	inline void notify_local_mem_write(u32 addr, u32 size)
++	{
++		if (!size || (addr >> 28) != 0xC)
++		{
++			return;
++		}
++
++		const u32 first = (addr & 0x0fffffff) >> 12;
++		const u32 last = std::min<u64>(u64{addr & 0x0fffffff} + size - 1, 0x0fffffff) >> 12;
++
++		for (u32 page = first; page <= last; ++page)
++		{
++			g_local_mem_write_gen[page].fetch_add(1, std::memory_order_release);
++		}
++	}
++
++	inline u64 local_mem_write_gen(u32 addr, u32 size)
++	{
++		if (!size || (addr >> 28) != 0xC)
++		{
++			return 0;
++		}
++
++		const u32 first = (addr & 0x0fffffff) >> 12;
++		const u32 last = std::min<u64>(u64{addr & 0x0fffffff} + size - 1, 0x0fffffff) >> 12;
++
++		u64 sum = 0;
++		for (u32 page = first; page <= last; ++page)
++		{
++			sum += g_local_mem_write_gen[page].load(std::memory_order_acquire);
++		}
++
++		return sum;
++	}
++}
+diff --git a/rpcs3/Emu/RSX/Common/surface_utils.h b/rpcs3/Emu/RSX/Common/surface_utils.h
+index 429d94919..7be8fa7ec 100644
+--- a/rpcs3/Emu/RSX/Common/surface_utils.h
++++ b/rpcs3/Emu/RSX/Common/surface_utils.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "local_mem_writes.h"
+ #include "util/types.hpp"
+ #include "Utilities/geometry.h"
+ #include "TextureUtils.h"
+@@ -136,6 +137,7 @@ namespace rsx
+ 		u64 memory_hash = 0;
+ #else
+ 		std::array<std::pair<u32, u64>, 3> memory_tag_samples;
++		u64 local_write_gen = 0;
+ #endif
+ 
+ 		std::vector<deferred_clipped_region<image_storage_type>> old_contents;
+@@ -471,6 +473,8 @@ namespace rsx
+ 			{
+ 				e.second = *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first);
+ 			}
++
++			local_write_gen = (memory_range.valid() ? rsx::local_mem_write_gen(memory_range.start, memory_range.length()) : 0);
+ 		}
+ 
+ 		void shuffle_tag()
+@@ -480,6 +484,12 @@ namespace rsx
+ 
+ 		bool test() const
+ 		{
++			if (local_write_gen != (memory_range.valid() ? rsx::local_mem_write_gen(memory_range.start, memory_range.length()) : 0))
++			{
++				// Written through a path the samples below can miss (e.g. SPU DMA)
++				return false;
++			}
++
+ 			for (const auto& e : memory_tag_samples)
+ 			{
+ 				if (e.second != *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first))
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+index ffe7bc95c..bad0fe7eb 100644
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -911,6 +911,9 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+ 
+ 		render_overlays(direct_fbo, areau(aspect_ratio));
+ 
++		// Give back descriptor pools of programs that have not been used for a while
++		vk::glsl::release_idle_descriptor_tables();
++
+ 		if (g_cfg.video.debug_overlay)
+ 		{
+ 			const auto num_dirty_textures = m_texture_cache.get_unreleased_textures_count();
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+index 8687a6875..85f696f77 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+@@ -418,8 +418,67 @@ namespace vk
+ 			return *this;
+ 		}
+ 
++		namespace
++		{
++			std::mutex g_table_registry_mutex;
++			std::vector<descriptor_table_t*> g_table_registry;
++			atomic_t<u64> g_table_frame = 0;
++		}
++
++		void release_idle_descriptor_tables()
++		{
++			// Idle limit in frames: far beyond GPU latency and pending descriptor pool resets
++			constexpr u64 idle_frames = 256;
++			const u64 frame = ++g_table_frame;
++
++			if (frame % 64)
++			{
++				return;
++			}
++
++			std::lock_guard lock(g_table_registry_mutex);
++			usz kept = 0;
++
++			for (auto* table : g_table_registry)
++			{
++				if (frame - table->m_last_commit_frame > idle_frames)
++				{
++					table->release_resources();
++					table->m_registered = false;
++					continue;
++				}
++
++				g_table_registry[kept++] = table;
++			}
++
++			g_table_registry.resize(kept);
++		}
++
++		void descriptor_table_t::release_resources()
++		{
++			// Drop the current set (and its storage) and the pool; the next commit() allocates a new
++			// set from a new pool and rewrites every descriptor from the template.
++			m_descriptor_set.~descriptor_set();
++			new (&m_descriptor_set) vk::descriptor_set();
++
++			if (m_descriptor_pool)
++			{
++				m_descriptor_pool->destroy();
++				m_descriptor_pool.reset();
++			}
++
++			m_descriptor_template_cache_id = umax;
++		}
++
+ 		void descriptor_table_t::destroy()
+ 		{
++			if (m_registered)
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				std::erase(g_table_registry, this);
++				m_registered = false;
++			}
++
+ 			if (!m_device)
+ 			{
+ 				return;
+@@ -591,6 +650,15 @@ namespace vk
+ 
+ 		VkDescriptorSet descriptor_table_t::commit()
+ 		{
++			m_last_commit_frame = g_table_frame;
++
++			if (!m_registered) [[unlikely]]
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				g_table_registry.push_back(this);
++				m_registered = true;
++			}
++
+ 			if (!m_descriptor_set)
+ 			{
+ 				m_any_descriptors_dirty = true;
+@@ -698,7 +766,9 @@ namespace vk
+ 		void descriptor_table_t::create_descriptor_pool()
+ 		{
+ 			m_descriptor_pool = std::make_unique<descriptor_pool>();
+-			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 16u, 4096u);
++			// Start small: every program's descriptor table owns a pool, and games with many programs
++			// (Destiny: ~255k) touch new ones continuously; autoscaling grows busy tables.
++			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 2u, 4096u);
+ 		}
+ 
+ 		void descriptor_table_t::validate() const
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+index 4328522f1..c21a66a7f 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+@@ -160,8 +160,14 @@ namespace vk
+ 			std::vector<bool> m_descriptors_dirty;
+ 			bool m_any_descriptors_dirty = false;
+ 
++			// Idle tracking: tables not committed for a while give back their descriptor pool and
++			// set storage (see release_idle_descriptor_tables).
++			u64 m_last_commit_frame = 0;
++			bool m_registered = false;
++
+ 			void init(VkDevice dev);
+ 			void destroy();
++			void release_resources();
+ 
+ 			void validate() const;
+ 
+@@ -182,6 +188,11 @@ namespace vk
+ 			}
+ 		};
+ 
++		// Called once per presented frame. Programs are cached for the whole session and every
++		// descriptor table owns a descriptor pool plus set storage once used; games with very many
++		// programs (Destiny: ~255k) otherwise grow by gigabytes as they cycle through them.
++		void release_idle_descriptor_tables();
++
+ 		enum binding_set_index : u32
+ 		{
+ 			// For separate shader objects
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index 74539e14e..c2a48f0e4 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -138,7 +138,7 @@ namespace vk
+ 
+ 	void descriptor_pool::create(const vk::render_device& dev, const rsx::simple_array<VkDescriptorPoolSize>& pool_sizes, u32 min_sets, u32 max_sets)
+ 	{
+-		m_autoscaling_config.min_pool_size = std::max(min_sets, 16u);
++		m_autoscaling_config.min_pool_size = std::max(min_sets, 2u);
+ 		m_autoscaling_config.max_pool_size = std::max(min_sets, max_sets);
+ 
+ 		ensure(m_autoscaling_config.max_pool_size >= 16u);
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+index e169caaa4..28da869ce 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+@@ -97,7 +97,13 @@ namespace vk
+ 	{
+ 		static constexpr size_t max_cache_size = 16384;
+ 		static constexpr size_t max_overflow_size = 64;
+-		static constexpr size_t m_pool_size = max_cache_size + max_overflow_size;
++		// Image/buffer info storage is referenced by pointer from pending writes, so it must not
++		// reallocate before a flush: reserve max_storage_size + overflow up front and flush at bind
++		// once max_storage_size is reached. Every descriptor set reserves this on first use, so it
++		// is kept small (16384 entries meant ~0.9 MB per set; games touching many programs, e.g.
++		// Destiny, grew by gigabytes per minute).
++		static constexpr size_t max_storage_size = 256;
++		static constexpr size_t m_pool_size = max_storage_size + max_overflow_size;
+ 
+ 		void init(VkDescriptorSet new_set);
+ 
+@@ -191,9 +197,9 @@ namespace vk
+ 		FORCE_INLINE bool storage_cache_pressure() const
+ 		{
+ 			return
+-				m_image_info_pool.size() >= max_cache_size ||
+-				m_buffer_info_pool.size() >= max_cache_size ||
+-				m_buffer_view_pool.size() >= max_cache_size;
++				m_image_info_pool.size() >= max_storage_size ||
++				m_buffer_info_pool.size() >= max_storage_size ||
++				m_buffer_view_pool.size() >= max_storage_size;
+ 		}
+ 
+ 		// Temporary storage accessors

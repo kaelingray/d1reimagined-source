@@ -1,0 +1,41 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+index 917b884..eec42d9 100644
+--- a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
++++ b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+@@ -807,11 +807,26 @@ namespace vk
+ 		state_flags &= ~(rsx::surface_state_flags::erase_bkgnd | rsx::surface_state_flags::force_data_load);
+ 	}
+ 
++	// Destiny (BLES01857): with Read Color Buffers on, a colour target in video memory is loaded
++	// from guest memory only when SPU DMA has written to its range (rsx::local_mem_write_gen).
++	// Loading never-written video memory put stale data into the 01.24 setup menus as magenta
++	// blocks; the SPU-written HDR/lighting targets that character and mission lighting need are
++	// still read. Targets in main memory keep the plain setting.
++	static bool read_color_memory(u32 base_addr, const rsx::address_range32& range)
++	{
++		if (!g_cfg.video.read_color_buffers)
++		{
++			return false;
++		}
++
++		return (base_addr >> 28) != 0xC || rsx::local_mem_write_gen(range.start, range.length()) != 0;
++	}
++
+ 	void render_target::initialize_memory(vk::command_buffer& cmd, rsx::surface_access access)
+ 	{
+ 		const bool read_buffers_config = is_depth_surface() ?
+ 			!!g_cfg.video.read_depth_buffer :
+-			!!g_cfg.video.read_color_buffers;
++			read_color_memory(base_addr, get_memory_range());
+ 
+ 		const bool should_read_buffers = (state_flags & rsx::surface_state_flags::force_data_load) || read_buffers_config;
+ 
+@@ -951,7 +966,7 @@ namespace vk
+ 		}
+ 
+ 		const bool is_depth = is_depth_surface();
+-		const bool read_buffers_config = is_depth ? !!g_cfg.video.read_depth_buffer : !!g_cfg.video.read_color_buffers;
++		const bool read_buffers_config = is_depth ? !!g_cfg.video.read_depth_buffer : read_color_memory(base_addr, get_memory_range());
+ 		const bool should_read_buffers = (state_flags & rsx::surface_state_flags::force_data_load) || read_buffers_config;
+ 
+ 		if (should_read_buffers)

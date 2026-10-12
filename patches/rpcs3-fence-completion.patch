@@ -1,0 +1,86 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+index f817fe3..8d839f9 100644
+--- a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
++++ b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+@@ -69,7 +69,9 @@ namespace vk
+ 		{
+ 			if (is_pending && !poke())
+ 			{
+-				wait(FRAME_PRESENT_TIMEOUT);
++				const auto result = wait(FRAME_PRESENT_TIMEOUT);
++				// Reuse requires completed work, even if the bounded wait expires.
++				CHECK_RESULT(result == VK_TIMEOUT ? wait() : result);
+ 			}
+ 
+ 			++reset_id;
+@@ -117,6 +119,11 @@ namespace vk
+ 			}
+ 
+ 			const auto ret = vk::wait_for_fence(m_submit_fence, timeout);
++			if (ret != VK_SUCCESS)
++			{
++				rsx_log.warning("Command buffer fence wait returned %d; preserving pending event %llu", static_cast<int>(ret), eid_tag);
++				return ret;
++			}
+ 
+ 			lock.upgrade();
+ 
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+index d98e469..c15b5fb 100644
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -247,10 +247,17 @@ void VKGSRender::frame_context_cleanup(vk::frame_context_t *ctx)
+ 	ensure(ctx->swap_command_buffer);
+ 
+ 	// Perform hard swap here
+-	if (ctx->swap_command_buffer->wait(FRAME_PRESENT_TIMEOUT) != VK_SUCCESS)
++	auto wait_result = ctx->swap_command_buffer->wait(FRAME_PRESENT_TIMEOUT);
++	if (wait_result == VK_TIMEOUT)
++	{
++		// The frame's resources and heap snapshot still belong to pending work.
++		wait_result = ctx->swap_command_buffer->wait();
++	}
++	if (wait_result != VK_SUCCESS)
+ 	{
+ 		// Lost surface/device, release swapchain
+ 		swapchain_unavailable = true;
++		CHECK_RESULT(wait_result);
+ 	}
+ 
+ 	// Resource cleanup.
+diff --git a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+index 9d331a8..239f6fa 100644
+--- a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
++++ b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+@@ -1477,8 +1477,8 @@ namespace vk
+ 			}
+ 
+ 			// Primary access command queue, must restart it after
+-			vk::fence submit_fence(*m_device);
+-			vk::queue_submit_t submit_info{ m_submit_queue, &submit_fence };
++			auto submit_fence = std::make_unique<vk::fence>(*m_device);
++			vk::queue_submit_t submit_info{ m_submit_queue, submit_fence.get() };
+ 
+ 			if (async_sema)
+ 			{
+@@ -1490,7 +1490,19 @@ namespace vk
+ 			}
+ 
+ 			cmd.submit(submit_info, VK_TRUE);
+-			vk::wait_for_fence(&submit_fence, GENERAL_WAIT_TIMEOUT);
++			try
++			{
++				const auto wait_result = vk::wait_for_fence(submit_fence.get(), GENERAL_WAIT_TIMEOUT);
++				// Restart only after the DMA submission has completed.
++				CHECK_RESULT(wait_result == VK_TIMEOUT ? vk::wait_for_fence(submit_fence.get()) : wait_result);
++			}
++			catch (...)
++			{
++				// Failed waiting does not prove completion. Retain the submitted
++				// fence until a later completed scope or device teardown.
++				vk::get_gc()->dispose(submit_fence);
++				throw;
++			}
+ 
+ 			cmd.reset();
+ 			cmd.begin();

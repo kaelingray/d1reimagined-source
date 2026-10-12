@@ -1,0 +1,110 @@
+# Post keys to the running Destiny RPCS3 game window (keyboard pad handler), e.g. Cross = X,
+# Circle = C, Start = Return, D-pad = arrows, left stick = WASD; F12 (-Vk 0x7B) takes an
+# in-emulator screenshot; F11 starts/stops RPCS3's native gameplay recorder.
+# Keys are posted, so the window does not need focus.
+#   Send-RpcsKey.ps1                      one X press
+#   Send-RpcsKey.ps1 -Keys X,X,Down -GapMs 1500
+#   Send-RpcsKey.ps1 -Keys D -HoldMs 400  hold (e.g. move the menu cursor with the stick)
+param(
+    [string[]]$Keys = @(),
+    [int]$Vk = 0,
+    [int]$Count = 1,
+    [int]$HoldMs = 150,
+    [int]$GapMs = 600,
+    [int]$ProcessId = 0,         # 0 = all matching RPCS3 windows (legacy behavior)
+    [object]$ProcessIdentity,   # optional exact manifest identity, checked before posting
+    [switch]$IfWindowReady,     # bool result; no input when compilation has no game window yet
+    [switch]$InputDiagnostics  # private stderr JSON; never changes the success stream
+)
+. "$PSScriptRoot\Final124RunHelpers.ps1"
+Add-Type @"
+using System; using System.Runtime.InteropServices; using System.Text;
+public static class RpcsKeys {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+}
+"@
+$named = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28; Return = 0x0D; Enter = 0x0D; Space = 0x20;
+            Escape = 0x1B; F11 = 0x7A; F12 = 0x7B }
+$vks = @()
+if ($Vk) { $vks += , $Vk }
+foreach ($k in $Keys) {
+    if ($named.ContainsKey($k)) { $vks += $named[$k] }
+    elseif ($k.Length -eq 1) { $vks += [int][char]$k.ToUpper() }
+    else { throw "unknown key $k" }
+}
+if (-not $vks) { $vks = @(0x58) }
+
+function Assert-RpcsKeyOwnership {
+    if ($ProcessIdentity) {
+        if ($ProcessId -ne $ProcessIdentity.id) { throw 'RPCS3 input PID does not match the supplied ownership identity.' }
+        if (-not (Get-D1OwnedProcess $ProcessIdentity)) { throw 'The exact owned RPCS3 process could not be verified before input.' }
+    }
+}
+Assert-RpcsKeyOwnership
+$ids = if ($ProcessId) {
+    $process = Get-Process -Id $ProcessId -ErrorAction Stop
+    if ($process.ProcessName -ne 'rpcs3') { throw "Process $ProcessId is not RPCS3" }
+    @($ProcessId)
+} else { @((Get-Process rpcs3 -ErrorAction SilentlyContinue).Id) }
+$script:game = @()
+[RpcsKeys]::EnumWindows({ param($h, $l) $p = 0; [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$p)
+    if ($ids -contains $p -and [RpcsKeys]::IsWindowVisible($h)) {
+        $sb = New-Object Text.StringBuilder 256; [void][RpcsKeys]::GetWindowText($h, $sb, 256)
+        if ($sb.ToString() -match 'FPS|Destiny|BLES') { $script:game += $h } }
+    $true }, [IntPtr]::Zero) | Out-Null
+Assert-RpcsKeyOwnership
+if ($InputDiagnostics) {
+    try {
+        $windows=@($script:game | ForEach-Object {
+            $title=New-Object Text.StringBuilder 256
+            [void][RpcsKeys]::GetWindowText($_,$title,256)
+            @{ handle=$_.ToInt64(); title=$title.ToString() }
+        })
+        [Console]::Error.WriteLine(([ordered]@{ component='rpcs-input'; at=[DateTimeOffset]::UtcNow.ToString('o'); process_id=$ProcessId; windows=$windows; keys=$vks } | ConvertTo-Json -Depth 4 -Compress))
+    } catch { }
+}
+if (-not $script:game) {
+    if ($IfWindowReady) { return $false }
+    throw "Destiny game window not found"
+}
+
+foreach ($h in $script:game) {
+    # a minimized game window presents no frames (F12 then saves nothing): restore it without
+    # taking focus, so the user can keep using the desktop
+    if ([RpcsKeys]::IsIconic($h)) { [void][RpcsKeys]::ShowWindow($h, 4); Start-Sleep -Milliseconds 500 }
+    for ($i = 0; $i -lt $Count; $i++) {
+        foreach ($v in $vks) {
+            Assert-RpcsKeyOwnership
+            $windowProcessId = 0
+            [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$windowProcessId)
+            if ($ids -notcontains $windowProcessId) { throw 'RPCS3 game window ownership changed before input.' }
+            $scan = [RpcsKeys]::MapVirtualKey([uint32]$v, 0)
+            $ext = if ($v -ge 0x21 -and $v -le 0x28) { 1 -shl 24 } else { 0 }
+            $down = 1 -bor ($scan -shl 16) -bor $ext
+            $up = $down -bor (1 -shl 30) -bor (1 -shl 31)
+            $downPosted=[RpcsKeys]::PostMessage($h, 0x100, [IntPtr]$v, [IntPtr][int64]$down)
+            Start-Sleep -Milliseconds $HoldMs
+            Assert-RpcsKeyOwnership
+            $windowProcessId = 0
+            [void][RpcsKeys]::GetWindowThreadProcessId($h, [ref]$windowProcessId)
+            if ($ids -notcontains $windowProcessId) { throw 'RPCS3 game window ownership changed before key release.' }
+            $upPosted=[RpcsKeys]::PostMessage($h, 0x101, [IntPtr]$v, [IntPtr][int64]([uint32]$up))
+            if ($InputDiagnostics) {
+                try {
+                    [Console]::Error.WriteLine(([ordered]@{ component='rpcs-input'; at=[DateTimeOffset]::UtcNow.ToString('o'); process_id=$ProcessId; window=$h.ToInt64(); key=$v; down_posted=$downPosted; up_posted=$upPosted } | ConvertTo-Json -Compress))
+                } catch { }
+            }
+            Start-Sleep -Milliseconds $GapMs
+        }
+    }
+}
+if ($IfWindowReady) { return $true }
+"posted {0} x{1}" -f (($vks | ForEach-Object { '0x{0:X2}' -f $_ }) -join ','), $Count

@@ -1,0 +1,35 @@
+diff --git a/rpcs3/Emu/RSX/RSXThread.cpp b/rpcs3/Emu/RSX/RSXThread.cpp
+index 22a3448..06f1a66 100644
+--- a/rpcs3/Emu/RSX/RSXThread.cpp
++++ b/rpcs3/Emu/RSX/RSXThread.cpp
+@@ -2173,12 +2173,30 @@ namespace rsx
+ 		const auto prev_textures_reference_mask = current_fp_metadata.referenced_textures_mask;
+ 
+ 		auto data_ptr = vm::base(rsx::get_address(program_offset, program_location));
++		const bool trace_binding = d1diag::fp_logging();
++		std::array<u8, 16> first_bound_slot{};
++		if (trace_binding)
++		{
++			std::memcpy(first_bound_slot.data(), data_ptr, first_bound_slot.size());
++		}
+ 		current_fp_metadata = program_hash_util::fragment_program_utils::analyse_fragment_program(data_ptr);
+ 
+ 		current_fragment_program.data = (static_cast<u8*>(data_ptr) + current_fp_metadata.program_start_offset);
+ 		current_fragment_program.offset = program_offset + current_fp_metadata.program_start_offset;
+ 		current_fragment_program.ucode_length = current_fp_metadata.program_ucode_length;
+ 		current_fragment_program.total_length = current_fp_metadata.program_ucode_length + current_fp_metadata.program_start_offset;
++		if (trace_binding)
++		{
++			std::string before, prefix, code;
++			for (const u8 byte : first_bound_slot) fmt::append(before, "%02x", byte);
++			const auto* raw = static_cast<const u8*>(data_ptr);
++			for (u32 i = 0; i < std::min<u32>(current_fragment_program.total_length, 64); i++) fmt::append(prefix, "%02x", raw[i]);
++			const auto* parsed = static_cast<const u8*>(current_fragment_program.get_data());
++			for (u32 i = 0; i < std::min<u32>(current_fragment_program.ucode_length, 32); i++) fmt::append(code, "%02x", parsed[i]);
++			d1_log.warning("D1FPBIND offset=0x%x location=%u address=0x%x start=0x%x length=0x%x constants=0x%x before=%s prefix=%s code=%s",
++				program_offset, program_location, rsx::get_address(program_offset, program_location), current_fp_metadata.program_start_offset,
++				current_fragment_program.ucode_length, current_fp_metadata.program_constants_buffer_length, before, prefix, code);
++		}
+ 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
+ 		current_fragment_program.valid = true;
+ 		s_d1_fp_write_gen = program_location == CELL_GCM_LOCATION_LOCAL ?

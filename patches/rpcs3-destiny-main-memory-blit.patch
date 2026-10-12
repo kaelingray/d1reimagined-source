@@ -1,0 +1,1346 @@
+diff --git a/rpcs3/Emu/Cell/PPUThread.cpp b/rpcs3/Emu/Cell/PPUThread.cpp
+index 595e34a51..069418743 100644
+--- a/rpcs3/Emu/Cell/PPUThread.cpp
++++ b/rpcs3/Emu/Cell/PPUThread.cpp
+@@ -16,6 +16,7 @@
+ #include "Emu/system_utils.hpp"
+ #include "Emu/System.h"
+ #include "PPUThread.h"
++#include "Emu/RSX/d1diag.h"
+ #include "PPUInterpreter.h"
+ #include "PPUAnalyser.h"
+ #include "PPUModule.h"
+@@ -3386,6 +3387,114 @@ static void ppu_trace(u64 addr)
+ 	ppu_log.notice("Trace: 0x%llx", addr);
+ }
+ 
++// Destiny diagnostics: the hook table lives at a fixed address (d1diag::ppu_mask_addr).
++static const bool s_d1_mask_ready = []()
++{
++	void* const want = reinterpret_cast<void*>(d1diag::ppu_mask_addr);
++	void* const got = utils::memory_reserve(0x800000, want);
++
++	if (got != want)
++	{
++		fmt::throw_exception("D1P: cannot reserve the hook table at 0x%x (got %p)", d1diag::ppu_mask_addr, got);
++	}
++
++	utils::memory_commit(got, 0x800000);
++	return true;
++}();
++
++// Destiny diagnostics: armed function entry reached (see d1diag::ppu_poll). Logs the argument
++// registers, LR, the saved return addresses up the stack and the configured memory dumps.
++// Dumps based on r1 use the live stack pointer passed in; ppu.gpr[1] is stale at a translated entry.
++static void ppu_d1hit(ppu_thread& ppu, u64 addr, u64 r1)
++{
++	if (d1diag::g_ppu_mask[addr >> 2] == 2)
++	{
++		// Coverage mode: log the first call of each function, then disarm it
++		d1diag::g_ppu_mask[addr >> 2] = 0;
++		ppu_log.warning("D1C %llu pc=0x%x lr=0x%llx", get_system_time(), addr, ppu.lr);
++		return;
++	}
++
++	std::lock_guard lock(d1diag::g_ppu_mutex);
++
++	for (auto& w : d1diag::g_ppu_watches)
++	{
++		if (w.addr != addr)
++		{
++			continue;
++		}
++
++		if (w.unique)
++		{
++			// Key: FNV-1a over the dumped bytes (and LR); repeats are skipped without using the budget
++			u64 key = 0xcbf29ce484222325ull ^ ppu.lr;
++			for (const auto& [reg, off, len] : w.dumps)
++			{
++				const u32 ptr = static_cast<u32>(reg == 1 ? r1 : ppu.gpr[reg]) + off;
++				if (len && vm::check_addr(ptr, vm::page_readable, len))
++				{
++					for (u32 i = 0; i < len; i++) key = (key ^ vm::read8(ptr + i)) * 0x100000001b3ull;
++				}
++			}
++
++			if (std::find(w.seen.begin(), w.seen.end(), key) != w.seen.end())
++			{
++				return;
++			}
++
++			w.seen.push_back(key);
++		}
++
++		if (!w.left || --w.left == 0)
++		{
++			d1diag::g_ppu_mask[addr >> 2] = 0;
++		}
++
++		std::string text = fmt::format("D1P %llu pc=0x%x lr=0x%llx r1=0x%llx", get_system_time(), addr, ppu.lr, r1);
++
++		for (u32 i = 3; i <= 10; i++)
++		{
++			fmt::append(text, " r%u=0x%llx", i, ppu.gpr[i]);
++		}
++
++		text += " chain";
++
++		for (u32 sp = static_cast<u32>(r1), depth = 0; depth < 8 && sp && vm::check_addr(sp, vm::page_readable, 8); depth++)
++		{
++			const u32 back = static_cast<u32>(vm::read64(sp));
++
++			if (!back || back <= sp || !vm::check_addr(back + 16, vm::page_readable, 8))
++			{
++				break;
++			}
++
++			fmt::append(text, " 0x%x", static_cast<u32>(vm::read64(back + 16)));
++			sp = back;
++		}
++
++		for (const auto& [reg, off, len] : w.dumps)
++		{
++			const u32 ptr = static_cast<u32>(reg == 1 ? r1 : ppu.gpr[reg]) + off;
++
++			if (len && vm::check_addr(ptr, vm::page_readable, len))
++			{
++				if (off) fmt::append(text, " m%u+%x=", reg, off);
++				else fmt::append(text, " m%u=", reg);
++
++				for (u32 i = 0; i < len; i++)
++				{
++					fmt::append(text, "%02x", vm::read8(ptr + i));
++				}
++			}
++		}
++
++		ppu_log.warning("%s thread=%s", text, ppu.get_name());
++		return;
++	}
++
++	d1diag::g_ppu_mask[addr >> 2] = 0;
++}
++
+ template <typename T>
+ static T ppu_load_acquire_reservation(ppu_thread& ppu, u32 addr)
+ {
+@@ -4918,6 +5027,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+ 			{ "__error", reinterpret_cast<u64>(&ppu_error) },
+ 			{ "__check", reinterpret_cast<u64>(&ppu_check) },
+ 			{ "__trace", reinterpret_cast<u64>(&ppu_trace) },
++			{ "__d1hit", reinterpret_cast<u64>(&ppu_d1hit) },
+ 			{ "__syscall", reinterpret_cast<u64>(ppu_execute_syscall) },
+ 			{ "__get_tb", reinterpret_cast<u64>(get_timebased_time) },
+ 			{ "__lwarx", reinterpret_cast<u64>(ppu_lwarx) },
+@@ -5550,7 +5660,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
+ 				settings += ppu_settings::daz_and_ftz;
+ 
+ 			// Write version, hash, CPU, settings
+-			fmt::append(obj_name, "v8-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
++			fmt::append(obj_name, "v8-kusa-d1p3-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu.to_string()));
+ 		}
+ 
+ 		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
+diff --git a/rpcs3/Emu/Cell/PPUTranslator.cpp b/rpcs3/Emu/Cell/PPUTranslator.cpp
+index 864eb63d6..cd472d85a 100644
+--- a/rpcs3/Emu/Cell/PPUTranslator.cpp
++++ b/rpcs3/Emu/Cell/PPUTranslator.cpp
+@@ -3,6 +3,7 @@
+ #include "Emu/system_config.h"
+ #include "Emu/Cell/Common.h"
+ #include "Emu/Cell/lv2/sys_sync.h"
++#include "Emu/RSX/d1diag.h"
+ #include "PPUTranslator.h"
+ #include "PPUThread.h"
+ #include "SPUThread.h"
+@@ -266,6 +267,23 @@ Function* PPUTranslator::Translate(const ppu_function& info)
+ 
+ 	m_ir->SetInsertPoint(body);
+ 
++	// Destiny diagnostics: log only after the status check admits execution of the guest block.
++	// Logging before __check counts scheduler retries and can exhaust a watch budget without
++	// executing a single guest instruction. Keep this before the first guest instruction below.
++	// The byte table d1diag::g_ppu_mask arms entries below 0x2000000 (see d1diag.h).
++	if (!m_reloc && info.addr < 0x2000000)
++	{
++		const auto slot = m_ir->CreateIntToPtr(m_ir->getInt64(d1diag::ppu_mask_addr + (info.addr >> 2)), m_ir->getPtrTy());
++		const auto armed = m_ir->CreateLoad(m_ir->getInt8Ty(), slot, true);
++		const auto hook = BasicBlock::Create(m_context, "__d1hook", m_function);
++		const auto cont = BasicBlock::Create(m_context, "__d1cont", m_function);
++		m_ir->CreateCondBr(m_ir->CreateIsNull(armed), cont, hook, m_md_likely);
++		m_ir->SetInsertPoint(hook);
++		Call(GetType<void>(), "__d1hit", m_thread, m_ir->getInt64(info.addr), m_gpr[1]);
++		m_ir->CreateBr(cont);
++		m_ir->SetInsertPoint(cont);
++	}
++
+ 	// Process blocks
+ 	const auto block = std::make_pair(info.addr, info.size);
+ 	{
+diff --git a/rpcs3/Emu/Cell/SPUThread.cpp b/rpcs3/Emu/Cell/SPUThread.cpp
+index fb9483d88..a23cd93f3 100644
+--- a/rpcs3/Emu/Cell/SPUThread.cpp
++++ b/rpcs3/Emu/Cell/SPUThread.cpp
+@@ -1,4 +1,6 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
++#include "Emu/RSX/Common/local_mem_writes.h"
+ #include "Utilities/JIT.h"
+ #include "Utilities/date_time.h"
+ #include "Emu/Memory/vm.h"
+@@ -2046,6 +2048,18 @@ void spu_thread::do_dma_transfer(spu_thread* _this, const spu_mfc_cmd& args, u8*
+ 	u32 eal = args.eal;
+ 	u32 lsa = args.lsa & 0x3ffff;
+ 
++	// Tell the RSX surface cache about video memory written behind its back (after the write completes)
++	struct local_mem_write_notifier
++	{
++		u32 addr, size;
++		~local_mem_write_notifier() { rsx::notify_local_mem_write(addr, size); }
++	} local_mem_notify{is_get ? 0u : eal, is_get ? 0u : args.size};
++
++	if ((d1diag::hit(eal, args.size) || (!is_get && d1diag::is_acquire_addr(eal, args.size))) && d1diag::tracing())
++	{
++		spu_log.warning("D1T %llu spu%s %s eal=0x%x size=0x%x", get_system_time(), _this ? std::to_string(_this->index).c_str() : "?", is_get ? "get" : "put", eal, args.size);
++	}
++
+ 	// Keep src point to const
+ 	u8* dst = nullptr;
+ 	const u8* src = nullptr;
+@@ -3329,6 +3343,7 @@ bool spu_thread::do_list_transfer(spu_mfc_cmd& args)
+ 			}
+ 			}
+ 
++			rsx::notify_local_mem_write(addr, size);
+ 			arg_lsa += utils::align<u32>(size, 16);
+ 		}
+ 		else if (size)
+diff --git a/rpcs3/Emu/RSX/Common/local_mem_writes.h b/rpcs3/Emu/RSX/Common/local_mem_writes.h
+new file mode 100644
+index 000000000..50448c292
+--- /dev/null
++++ b/rpcs3/Emu/RSX/Common/local_mem_writes.h
+@@ -0,0 +1,47 @@
++#pragma once
++
++#include "util/types.hpp"
++#include <atomic>
++
++namespace rsx
++{
++	// Write generations per 4KB page of RSX local memory (0xC0000000-0xCFFFFFFF), bumped by writers the
++	// surface cache cannot otherwise observe (SPU DMA puts into video memory). Render targets snapshot the
++	// sum over their pages whenever their memory tag is synced and treat any change as a memory write.
++	inline std::atomic<u32> g_local_mem_write_gen[0x10000]{};
++
++	inline void notify_local_mem_write(u32 addr, u32 size)
++	{
++		if (!size || (addr >> 28) != 0xC)
++		{
++			return;
++		}
++
++		const u32 first = (addr & 0x0fffffff) >> 12;
++		const u32 last = std::min<u64>(u64{addr & 0x0fffffff} + size - 1, 0x0fffffff) >> 12;
++
++		for (u32 page = first; page <= last; ++page)
++		{
++			g_local_mem_write_gen[page].fetch_add(1, std::memory_order_release);
++		}
++	}
++
++	inline u64 local_mem_write_gen(u32 addr, u32 size)
++	{
++		if (!size || (addr >> 28) != 0xC)
++		{
++			return 0;
++		}
++
++		const u32 first = (addr & 0x0fffffff) >> 12;
++		const u32 last = std::min<u64>(u64{addr & 0x0fffffff} + size - 1, 0x0fffffff) >> 12;
++
++		u64 sum = 0;
++		for (u32 page = first; page <= last; ++page)
++		{
++			sum += g_local_mem_write_gen[page].load(std::memory_order_acquire);
++		}
++
++		return sum;
++	}
++}
+diff --git a/rpcs3/Emu/RSX/Common/surface_store.h b/rpcs3/Emu/RSX/Common/surface_store.h
+index 967267261..086f8d95e 100644
+--- a/rpcs3/Emu/RSX/Common/surface_store.h
++++ b/rpcs3/Emu/RSX/Common/surface_store.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "Emu/RSX/d1diag.h"
+ 
+ #include "surface_utils.h"
+ #include "simple_array.hpp"
+@@ -1082,6 +1083,8 @@ namespace rsx
+ 			rsx::surface_access access,
+ 			Args&&... extra_params)
+ 		{
++			if (d1diag::hdr(surface->base_addr) && d1diag::tracing())
++				rsx_log.warning("D1T %llu transfer_target 0x%x %ux%u write=%d", get_system_time(), surface->base_addr, surface->get_surface_width(), surface->get_surface_height(), static_cast<int>(access.is_write()));
+ 			// We need to reintersect the surface against the surface hierarchy tree to avoid data loss
+ 			if (!surface->is_depth_surface()) [[ likely ]]
+ 			{
+diff --git a/rpcs3/Emu/RSX/Common/surface_utils.h b/rpcs3/Emu/RSX/Common/surface_utils.h
+index 429d94919..7be8fa7ec 100644
+--- a/rpcs3/Emu/RSX/Common/surface_utils.h
++++ b/rpcs3/Emu/RSX/Common/surface_utils.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "local_mem_writes.h"
+ #include "util/types.hpp"
+ #include "Utilities/geometry.h"
+ #include "TextureUtils.h"
+@@ -136,6 +137,7 @@ namespace rsx
+ 		u64 memory_hash = 0;
+ #else
+ 		std::array<std::pair<u32, u64>, 3> memory_tag_samples;
++		u64 local_write_gen = 0;
+ #endif
+ 
+ 		std::vector<deferred_clipped_region<image_storage_type>> old_contents;
+@@ -471,6 +473,8 @@ namespace rsx
+ 			{
+ 				e.second = *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first);
+ 			}
++
++			local_write_gen = (memory_range.valid() ? rsx::local_mem_write_gen(memory_range.start, memory_range.length()) : 0);
+ 		}
+ 
+ 		void shuffle_tag()
+@@ -480,6 +484,12 @@ namespace rsx
+ 
+ 		bool test() const
+ 		{
++			if (local_write_gen != (memory_range.valid() ? rsx::local_mem_write_gen(memory_range.start, memory_range.length()) : 0))
++			{
++				// Written through a path the samples below can miss (e.g. SPU DMA)
++				return false;
++			}
++
+ 			for (const auto& e : memory_tag_samples)
+ 			{
+ 				if (e.second != *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first))
+diff --git a/rpcs3/Emu/RSX/Common/texture_cache.h b/rpcs3/Emu/RSX/Common/texture_cache.h
+index 0de533fb0..2c55f6d51 100644
+--- a/rpcs3/Emu/RSX/Common/texture_cache.h
++++ b/rpcs3/Emu/RSX/Common/texture_cache.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "Emu/RSX/d1diag.h"
+ 
+ #include "Emu/RSX/Common/simple_array.hpp"
+ #include "Emu/RSX/Core/RSXContext.h"
+@@ -3178,6 +3179,17 @@ namespace rsx
+ 				options, lookup_range, extended_dimension, m_rtts,
+ 				std::forward<Args>(extras)...);
+ 
++			if ((d1diag::hit(attributes.address, attributes.pitch * required_surface_height) || attributes.address >= 0xC0000000u) && d1diag::tracing())
++			{
++				rsx_log.warning("D1T %llu tex addr=0x%x %ux%u fmt=0x%x valid=%d", get_system_time(), attributes.address, attributes.width, attributes.height, attributes.gcm_format, result.validate());
++			}
++			if (d1diag::hit(attributes.address, attributes.pitch * required_surface_height) && d1diag::sampled16())
++			{
++				rsx_log.warning("D1DIAG tex addr=0x%x %ux%u pitch=%u fmt=0x%x dim=%d valid=%d ctx=%d handle=%d",
++					attributes.address, attributes.width, attributes.height, attributes.pitch, attributes.gcm_format,
++					static_cast<int>(extended_dimension), result.validate(), static_cast<int>(result.upload_context), result.image_handle != nullptr);
++			}
++
+ 			if (result.validate())
+ 			{
+ 				if (!result.image_handle) [[unlikely]]
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp b/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
+index 2a5079496..7353165ab 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv0039.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv0039.h"
+ 
+ #include "Emu/RSX/RSXThread.h"
+@@ -101,6 +102,14 @@ namespace rsx
+ 			const auto read_length = in_pitch * (line_count - 1) + in_width_in_bytes;
+ 			const auto write_length = out_pitch * (line_count - 1) + out_width_in_bytes;
+ 
++			if ((d1diag::hit(write_address, write_length) || d1diag::hit(read_address, read_length) || d1diag::hdr(write_address) || d1diag::hdr(read_address)) && d1diag::tracing())
++			{
++				rsx_log.warning("D1T %llu memcpy 0x%x -> 0x%x len=%u lines=%u", get_system_time(), read_address, write_address, line_length, line_count);
++			}
++			if ((d1diag::hit(write_address, write_length) || d1diag::hit(read_address, read_length)) && d1diag::sampled())
++			{
++				rsx_log.warning("D1DIAG memcpy 0x%x (pitch %d) -> 0x%x (pitch %d) len=%u lines=%u", read_address, in_pitch, write_address, out_pitch, line_length, line_count);
++			}
+ 			RSX(ctx)->invalidate_fragment_program(dst_dma, dst_offset, write_length);
+ 
+ 			if (const auto result = RSX(ctx)->read_barrier(read_address, read_length, !is_block_transfer);
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
+index 6e2e7162b..a2a0e3548 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv3089.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv3089.h"
+ 
+ #include "Emu/RSX/RSXThread.h"
+@@ -585,11 +586,31 @@ namespace rsx
+ 			// Lock here. RSX cannot execute any locking operations from this point, including ZCULL read barriers
+ 			const u32 read_length = src.pitch * src.height;
+ 			const u32 write_length = dst.pitch * dst.clip_height;
++			if ((d1diag::hit(dst.rsx_address, write_length) || d1diag::hit(src.rsx_address, read_length) || d1diag::hdr(dst.rsx_address) || d1diag::hdr(src.rsx_address)) && d1diag::tracing())
++			{
++				rsx_log.warning("D1T %llu blit src=0x%x %ux%u pitch=%u fmt=%d dma=0x%x -> dst=0x%x %ux%u clip=%u,%u %ux%u pitch=%u fmt=%d dma=0x%x", get_system_time(), src.rsx_address, src.width, src.height, src.pitch, static_cast<int>(src.format), src.dma, dst.rsx_address, dst.width, dst.height, dst.clip_x, dst.clip_y, dst.clip_width, dst.clip_height, dst.pitch, static_cast<int>(dst.format), dst.dma);
++			}
++			if ((d1diag::hit(dst.rsx_address, write_length) || d1diag::hit(src.rsx_address, read_length)) && d1diag::sampled())
++			{
++				rsx_log.warning("D1DIAG blit src=0x%x dma=0x%x %ux%u pitch=%u -> dst=0x%x dma=0x%x %ux%u clip=%u,%u %ux%u pitch=%u",
++					src.rsx_address, src.dma, src.width, src.height, src.pitch,
++					dst.rsx_address, dst.dma, dst.width, dst.height, dst.clip_x, dst.clip_y, dst.clip_width, dst.clip_height, dst.pitch);
++			}
+ 			auto res = ::rsx::reservation_lock<true>(
+ 				dst.rsx_address, write_length,
+ 				src.rsx_address, read_length);
+ 
+-			if (!g_cfg.video.force_cpu_blit_processing &&
++			// Copies from video memory into main memory are made so the CPU/SPUs can read the result
++			// (e.g. Destiny's G-buffer copies consumed by SPU lighting jobs). The GPU path keeps the
++			// result in the texture cache and only writes it back lazily on access, which loses data
++			// when several blits target the same address between SPU reads. Do these on the CPU so the
++			// data is in guest memory immediately.
++			// Destiny test switch: d1/d1noblitfix.on at boot disables this (checked once).
++			static const bool d1_blit_fix = !fs::is_file(d1diag::ctl_dir() + "d1noblitfix.on");
++			const bool copy_to_main_memory = d1_blit_fix &&
++				dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_HOST_BUFFER && src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER;
++
++			if (!g_cfg.video.force_cpu_blit_processing && !copy_to_main_memory &&
+ 				(dst.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER || src.dma == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER) &&
+ 				RSX(ctx)->scaled_image_from_memory(src, dst, in_inter == blit_engine::transfer_interpolator::foh))
+ 			{
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp b/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
+index fd8ec80c7..2068f44a4 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv406e.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv406e.h"
+ #include "nv47_sync.hpp"
+ 
+@@ -30,10 +31,19 @@ namespace rsx
+ 			RSX(ctx)->m_graphics_state |= rsx::pipeline_state::fragment_program_needs_rehash;
+ 
+ 			const auto& sema = vm::_ref<RsxSemaphore>(addr);
+-			const auto& atomic_sema = vm::_ref<atomic_t<RsxSemaphore>>(addr);
++			const auto& atomic_sema = vm::_ref<atomic_t<RsxSemaphore>>(addr);
++			d1diag::note_acquire(addr);
++			const u64 d1_start = get_system_time();
++			const u32 d1_initial = sema;
++			const auto d1_log = [&]()
++			{
++				if (d1diag::tracing())
++					rsx_log.warning("D1T %llu acquire addr=0x%x want=0x%x had=0x%x waited=%lluus", d1_start, addr, arg, d1_initial, get_system_time() - d1_start);
++			};
+ 
+ 			if (sema == arg)
+ 			{
++				d1_log();
+ 				// Flip semaphore doesnt need wake-up delay
+ 				if (addr != RSX(ctx)->label_addr + 0x10)
+ 				{
+@@ -81,19 +91,20 @@ namespace rsx
+ 					}
+ 				}
+ 
+-				if (RSX(ctx)->external_interrupt_lock ||
+-					(RSX(ctx)->state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) == cpu_flag::dbg_global_pause)
+-				{
+-					RSX(ctx)->cpu_wait({});
+-					continue;
+-				}
+-
+-				RSX(ctx)->on_semaphore_acquire_wait();
+-
+-				// Wait until the value changes or until 100us pass.
+-				utils::spin_on_cacheline_once(atomic_sema, sema, 100);
++				if (RSX(ctx)->external_interrupt_lock ||
++					(RSX(ctx)->state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) == cpu_flag::dbg_global_pause)
++				{
++					RSX(ctx)->cpu_wait({});
++					continue;
++				}
++
++				RSX(ctx)->on_semaphore_acquire_wait();
++
++				// Wait until the value changes or until 100us pass.
++				utils::spin_on_cacheline_once(atomic_sema, sema, 100);
+ 			}
+ 
++			d1_log();
+ 			RSX(ctx)->fifo_wake_delay();
+ 			RSX(ctx)->performance_counters.idle_time += (get_system_time() - start);
+ 		}
+@@ -134,6 +145,8 @@ namespace rsx
+ 				arg = 1;
+ 			}
+ 
++			if (d1diag::tracing())
++				rsx_log.warning("D1T %llu release406e addr=0x%x val=0x%x", get_system_time(), addr, arg);
+ 			util::write_gcm_label<false, true>(ctx, reg, addr, arg);
+ 		}
+ 	}
+diff --git a/rpcs3/Emu/RSX/NV47/HW/nv4097.cpp b/rpcs3/Emu/RSX/NV47/HW/nv4097.cpp
+index 313daf12c..31dc577ba 100644
+--- a/rpcs3/Emu/RSX/NV47/HW/nv4097.cpp
++++ b/rpcs3/Emu/RSX/NV47/HW/nv4097.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "nv4097.h"
+ #include "nv47_sync.hpp"
+ 
+@@ -755,6 +756,8 @@ namespace rsx
+ 				rsx_log.error("NV4097 semaphore unexpected address. Please report to the developers. (offset=0x%x, addr=0x%x)", offset, addr);
+ 			}
+ 
++			if (d1diag::tracing())
++				rsx_log.warning("D1T %llu texread_release addr=0x%x val=0x%x", get_system_time(), addr, arg);
+ 			if (g_cfg.video.strict_rendering_mode) [[ unlikely ]]
+ 			{
+ 				util::write_gcm_label<true, true>(ctx, reg, addr, arg);
+@@ -786,6 +789,8 @@ namespace rsx
+ 			}
+ 
+ 			const u32 val = (arg & 0xff00ff00) | ((arg & 0xff) << 16) | ((arg >> 16) & 0xff);
++			if (d1diag::tracing())
++				rsx_log.warning("D1T %llu backend_release addr=0x%x val=0x%x", get_system_time(), addr, val);
+ 			util::write_gcm_label<true, true>(ctx, reg, addr, val);
+ 		}
+ 
+diff --git a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+index f98afcd0d..9f219e5b2 100644
+--- a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
++++ b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+@@ -1529,7 +1529,14 @@ std::string FragmentProgramDecompiler::Decompile()
+ 		}
+ 	}
+ 
+-	ensure(m_code_level == 1);
++	if (m_code_level != 1)
++	{
++		// Unbalanced flow control means the ucode is not a real program (e.g. Destiny binds program
++		// memory whose contents are not valid yet). The hardware would run it without harm, so treat
++		// it like other broken ucode (discarding stub, see BuildCode) instead of aborting emulation.
++		rsx_log.error("Fragment program with unbalanced flow control (scope level %d), replaced by a discarding shader", m_code_level);
++		m_is_valid_ucode = false;
++	}
+ 
+ 	// flush m_code_level
+ 	m_code_level = 1;
+diff --git a/rpcs3/Emu/RSX/Program/ProgramStateCache.h b/rpcs3/Emu/RSX/Program/ProgramStateCache.h
+index e1bdc8852..fe983ca95 100644
+--- a/rpcs3/Emu/RSX/Program/ProgramStateCache.h
++++ b/rpcs3/Emu/RSX/Program/ProgramStateCache.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "Emu/RSX/d1diag.h"
+ #include "RSXFragmentProgram.h"
+ #include "RSXVertexProgram.h"
+ 
+@@ -291,6 +292,17 @@ protected:
+ 		if (recompile)
+ 		{
+ 			it->first.clone_data();
++			if (d1diag::fp_logging())
++			{
++				// Destiny diagnostics: why fragment programs keep missing the cache
++				std::string hex;
++				const auto* bytes = static_cast<const u8*>(rsx_fp.get_data());
++				for (u32 i = 0; i < std::min<u32>(rsx_fp.ucode_length, 512); i++) fmt::append(hex, "%02x", bytes[i]);
++				d1_log.warning("D1FP id=%llu len=%u ctrl=0x%x tex_dims=0x%x shadow=0x%x redir=0x%x tcmask=0x%x mrt=%u hash=0x%llx ucode=%s",
++					static_cast<u64>(m_next_id.load()), rsx_fp.ucode_length, rsx_fp.ctrl, rsx_fp.texture_state.texture_dimensions,
++					rsx_fp.texture_state.shadow_textures, rsx_fp.texture_state.redirected_textures, rsx_fp.texcoord_control_mask,
++					rsx_fp.mrt_buffers_count, static_cast<u64>(program_hash_util::fragment_program_storage_hash{}(rsx_fp)), hex);
++			}
+ 			backend_traits::recompile_fragment_program(rsx_fp, *new_shader, m_next_id++);
+ 		}
+ 
+diff --git a/rpcs3/Emu/RSX/RSXFIFO.cpp b/rpcs3/Emu/RSX/RSXFIFO.cpp
+index 8dfc43539..a12cd2c50 100644
+--- a/rpcs3/Emu/RSX/RSXFIFO.cpp
++++ b/rpcs3/Emu/RSX/RSXFIFO.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ 
+ #include "Emu/System.h"
+ #include "RSXFIFO.h"
+@@ -699,6 +700,8 @@ namespace rsx
+ 					//Jump to self. Often preceded by NOP
+ 					if (performance_counters.state == FIFO::state::running)
+ 					{
++						if (d1diag::tracing())
++							rsx_log.warning("D1T %llu fifo spin at 0x%x", get_system_time(), offs);
+ 						performance_counters.FIFO_idle_timestamp = get_system_time();
+ 						sync_point_request.release(true);
+ 					}
+@@ -708,6 +711,8 @@ namespace rsx
+ 				else
+ 				{
+ 					last_known_code_start = offs;
++					if (d1diag::tracing())
++						rsx_log.warning("D1T %llu fifo jump io=0x%x addr=0x%x", get_system_time(), offs, iomap_table.get_addr(offs));
+ 				}
+ 
+ 				//rsx_log.warning("rsx jump(0x%x) #addr=0x%x, cmd=0x%x, get=0x%x, put=0x%x", offs, m_ioAddress + get, cmd, get, put);
+@@ -725,6 +730,8 @@ namespace rsx
+ 				}
+ 
+ 				const u32 offs = cmd & RSX_METHOD_CALL_OFFSET_MASK;
++				if (d1diag::tracing())
++					rsx_log.warning("D1T %llu fifo call io=0x%x addr=0x%x", get_system_time(), offs, iomap_table.get_addr(offs));
+ 				fifo_ret_addr = fifo_ctrl->get_pos() + 4;
+ 				fifo_ctrl->set_get(offs);
+ 				last_known_code_start = offs;
+diff --git a/rpcs3/Emu/RSX/RSXThread.cpp b/rpcs3/Emu/RSX/RSXThread.cpp
+index cfa735fe8..22a344858 100644
+--- a/rpcs3/Emu/RSX/RSXThread.cpp
++++ b/rpcs3/Emu/RSX/RSXThread.cpp
+@@ -1,5 +1,7 @@
+ #include "stdafx.h"
+ #include "RSXThread.h"
++#include "Emu/RSX/d1diag.h"
++#include "Emu/RSX/Common/local_mem_writes.h"
+ 
+ #include "Capture/rsx_capture.h"
+ #include "Common/surface_store.h"
+@@ -2150,6 +2152,11 @@ namespace rsx
+ 		return expected_ctrl;
+ 	}
+ 
++	// D1: SPU writes to RSX local memory since the bound fragment program was last read (see
++	// analyse_current_rsx_pipeline). A static rather than a member keeps the patch out of RSXThread.h.
++	static u64 s_d1_fp_write_gen = 0;
++	static u64 s_d1_fp_reloads = 0;
++
+ 	void thread::prefetch_fragment_program()
+ 	{
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
+@@ -2174,6 +2181,8 @@ namespace rsx
+ 		current_fragment_program.total_length = current_fp_metadata.program_ucode_length + current_fp_metadata.program_start_offset;
+ 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
+ 		current_fragment_program.valid = true;
++		s_d1_fp_write_gen = program_location == CELL_GCM_LOCATION_LOCAL ?
++			rsx::local_mem_write_gen(rsx::get_address(program_offset, program_location), current_fragment_program.total_length) : 0;
+ 
+ 		if (!m_graphics_state.test(rsx::pipeline_state::fragment_program_state_dirty))
+ 		{
+@@ -2242,6 +2251,25 @@ namespace rsx
+ 
+ 	void thread::analyse_current_rsx_pipeline()
+ 	{
++		// The RSX reads fragment program ucode from memory at draw time. RPCS3 reads it once when the
++		// program address is set (or an RSX transfer overwrites it), so a program that an SPU DMA
++		// rewrites in place in local memory would keep its stale length and layout (Destiny: garbage
++		// ucode, unbalanced flow control). Re-read it when its pages were written since.
++		if (current_fragment_program.total_length && !m_graphics_state.test(rsx::pipeline_state::fragment_program_ucode_dirty))
++		{
++			const auto [program_offset, program_location] = method_registers.shader_program_address();
++			if (program_location == CELL_GCM_LOCATION_LOCAL &&
++				rsx::local_mem_write_gen(rsx::get_address(program_offset, program_location), current_fragment_program.total_length) != s_d1_fp_write_gen)
++			{
++				m_graphics_state |= rsx::pipeline_state::fragment_program_ucode_dirty;
++				if (s_d1_fp_reloads++ < 20 || s_d1_fp_reloads % 1000 == 0)
++				{
++					d1_log.warning("D1FPRELOAD #%llu program at 0x%x rewritten by SPU DMA since it was read (len 0x%x)",
++						s_d1_fp_reloads, rsx::get_address(program_offset, program_location), current_fragment_program.total_length);
++				}
++			}
++		}
++
+ 		m_program_cache_hint.invalidate(m_graphics_state.load());
+ 
+ 		if (u32 export_ctrl = get_fragment_program_export_config();
+@@ -2693,6 +2721,10 @@ namespace rsx
+ 
+ 	void thread::flip(const display_flip_info_t& info)
+ 	{
++		if (d1diag::tracing())
++			rsx_log.warning("D1T %llu flip", get_system_time());
++		d1diag::dump_on_flip();
++		d1diag::ppu_poll();
+ 		m_eng_interrupt_mask.clear(rsx::display_interrupt);
+ 
+ 		if (async_flip_requested & flip_request::any)
+diff --git a/rpcs3/Emu/RSX/VK/VKDraw.cpp b/rpcs3/Emu/RSX/VK/VKDraw.cpp
+index 77927e27b..6fab1c2ec 100644
+--- a/rpcs3/Emu/RSX/VK/VKDraw.cpp
++++ b/rpcs3/Emu/RSX/VK/VKDraw.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "../Common/BufferUtils.h"
+ #include "../Program/GLSLCommon.h"
+ #include "../rsx_methods.h"
+@@ -1269,6 +1270,15 @@ void VKGSRender::end()
+ 		return;
+ 	}
+ 
++	if (d1diag::hdr(m_surface_info[0].address) && d1diag::tracing())
++	{
++		const auto& r = rsx::method_registers;
++		rsx_log.warning("D1T %llu draw rtt0=0x%x fmt=%d scissor=%u,%u %ux%u blend=%d sf=%d df=%d depth=%d stencil=%d cw=%d fifo=0x%x",
++			get_system_time(), m_surface_info[0].address, static_cast<int>(m_surface_info[0].color_format),
++			r.scissor_origin_x(), r.scissor_origin_y(), r.scissor_width(), r.scissor_height(),
++			r.blend_enabled(), static_cast<int>(r.blend_func_sfactor_rgb()), static_cast<int>(r.blend_func_dfactor_rgb()),
++			r.depth_test_enabled(), r.stencil_test_enabled(), r.color_write_enabled(0), fifo_ctrl->get_pos());
++	}
+ 	m_profiler.start();
+ 
+ 	// Check for frame resource status here because it is possible for an async flip to happen between begin/end
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRender.cpp b/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+index 9e27132fa..dfd81086c 100644
+--- a/rpcs3/Emu/RSX/VK/VKGSRender.cpp
++++ b/rpcs3/Emu/RSX/VK/VKGSRender.cpp
+@@ -1,5 +1,6 @@
+ #include "Emu/RSX/VK/vkutils/descriptors.h"
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "../Overlays/overlay_compile_notification.h"
+ #include "../Overlays/Shaders/shader_loading_dialog_native.h"
+ 
+@@ -896,6 +897,11 @@ VKGSRender::~VKGSRender()
+ 
+ bool VKGSRender::on_access_violation(u32 address, bool is_writing)
+ {
++	if (d1diag::hit(address, 1) && d1diag::sampled())
++	{
++		rsx_log.warning("D1DIAG access violation addr=0x%x write=%d thread=%s", address, is_writing, thread_ctrl::get_name());
++	}
++
+ 	rsx::mm_flush(address);
+ 
+ 	vk::texture_cache::thrashed_set result;
+@@ -1316,6 +1322,11 @@ void VKGSRender::clear_surface(u32 mask)
+ 	VkClearRect region = { { { scissor_x, scissor_y }, { scissor_w, scissor_h } }, 0, 1 };
+ 
+ 	const bool full_frame = (scissor_w == fb_width && scissor_h == fb_height);
++	if (d1diag::hdr(m_surface_info[0].address) && d1diag::tracing())
++	{
++		rsx_log.warning("D1T %llu clear rtt0=0x%x mask=0x%x region=%u,%u %ux%u fb=%ux%u color=0x%x", get_system_time(), m_surface_info[0].address, mask,
++			scissor_x, scissor_y, scissor_w, scissor_h, fb_width, fb_height, (rsx::method_registers.clear_color_a() << 24) | (rsx::method_registers.clear_color_r() << 16) | (rsx::method_registers.clear_color_g() << 8) | rsx::method_registers.clear_color_b());
++	}
+ 	bool update_color = false, update_z = false;
+ 	auto surface_depth_format = rsx::method_registers.surface_depth_fmt();
+ 
+@@ -2508,6 +2519,28 @@ void VKGSRender::prepare_rtts(rsx::framebuffer_creation_context context)
+ 		return;
+ 	}
+ 
++	if (d1diag::dumping())
++	{
++		// Write the targets being switched away from back to guest memory and save them.
++		auto dump = [&](u32 addr, u32 pitch, u32 width, u32 height, int format, char kind)
++		{
++			const u32 length = pitch * height;
++			for (u32 page = addr & ~0xfffu; page < addr + length; page += 0x1000)
++			{
++				on_access_violation(page, false);
++			}
++			d1diag::dump_bytes(vm::get_super_ptr<u8>(addr), length, addr, pitch, width, height, format, kind);
++		};
++		for (u8 i = 0; i < rsx::limits::color_buffers_count; ++i)
++		{
++			if (m_surface_info[i].pitch)
++				dump(m_surface_info[i].address, m_surface_info[i].pitch, m_surface_info[i].width, m_surface_info[i].height, static_cast<int>(m_surface_info[i].color_format), 'c');
++		}
++		if (m_depth_surface_info.pitch)
++			dump(m_depth_surface_info.address, m_depth_surface_info.pitch, m_depth_surface_info.width, m_depth_surface_info.height, static_cast<int>(m_depth_surface_info.depth_format), 'z');
++		d1diag::dump_done();
++	}
++
+ 	m_rtts.prepare_render_target(*m_current_command_buffer,
+ 		m_framebuffer_layout.color_format, m_framebuffer_layout.depth_format,
+ 		m_framebuffer_layout.width, m_framebuffer_layout.height,
+@@ -2572,6 +2605,17 @@ void VKGSRender::prepare_rtts(rsx::framebuffer_creation_context context)
+ 
+ 			m_texture_cache.notify_surface_changed(m_surface_info[index].get_memory_range(m_framebuffer_layout.aa_factors));
+ 			m_draw_buffers.push_back(index);
++			if (d1diag::tracing())
++			{
++				rsx_log.warning("D1T %llu rtt[%u] addr=0x%x pitch=%u %ux%u fmt=%d", get_system_time(), index, m_surface_info[index].address,
++					m_surface_info[index].pitch, m_framebuffer_layout.width, m_framebuffer_layout.height, static_cast<int>(m_framebuffer_layout.color_format));
++			}
++			if (d1diag::hit(m_surface_info[index].address, m_surface_info[index].pitch * m_framebuffer_layout.height) && d1diag::budget())
++			{
++				rsx_log.warning("D1DIAG rtt[%u] addr=0x%x pitch=%u layout %ux%u targets=%u surface %ux%u",
++					index, m_surface_info[index].address, m_surface_info[index].pitch, m_framebuffer_layout.width, m_framebuffer_layout.height,
++					static_cast<u32>(draw_buffers.size()), surface->get_surface_width(), surface->get_surface_height());
++			}
+ 		}
+ 	}
+ 
+@@ -2581,6 +2625,11 @@ void VKGSRender::prepare_rtts(rsx::framebuffer_creation_context context)
+ 		m_fbo_images.push_back(ds);
+ 
+ 		m_depth_surface_info.address = m_framebuffer_layout.zeta_address;
++		if (d1diag::tracing())
++		{
++			rsx_log.warning("D1T %llu zeta addr=0x%x pitch=%u %ux%u", get_system_time(), m_framebuffer_layout.zeta_address,
++				m_framebuffer_layout.actual_zeta_pitch, m_framebuffer_layout.width, m_framebuffer_layout.height);
++		}
+ 		m_depth_surface_info.pitch = m_framebuffer_layout.actual_zeta_pitch;
+ 		ensure(ds->rsx_pitch == m_framebuffer_layout.actual_zeta_pitch);
+ 
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+index ffe7bc95c..de20af3ff 100644
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -1,5 +1,6 @@
+ #include "stdafx.h"
+ #include "VKGSRender.h"
++#include "Emu/RSX/d1diag.h"
+ #include "vkutils/buffer_object.h"
+ #include "vkutils/memory.h"
+ #include "Emu/RSX/Overlays/overlay_manager.h"
+@@ -658,6 +659,15 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+ 	rsx::simple_array<vk::viewable_image*> calibration_src;
+ 
+ 	const bool has_overlay = (m_overlay_manager && m_overlay_manager->has_visible());
++	// D1 diagnostics: d1/d1shot.on (next to rpcs3.exe) requests a screenshot like F12, which as a window shortcut
++	// only fires while the game window is active (unattended runs post keys to a background window)
++	static u32 d1_shot_poll = 0;
++	if (++d1_shot_poll % 10 == 0 && fs::is_file(d1diag::ctl_dir() + "d1shot.on"))
++	{
++		fs::remove_file(d1diag::ctl_dir() + "d1shot.on");
++		g_user_asked_for_screenshot = true;
++	}
++
+ 	const bool user_asked_for_screenshot = g_user_asked_for_screenshot.exchange(false);
+ 	const bool user_is_recording = (g_recording_mode != recording_mode::stopped && m_frame->can_consume_frame());
+ 	const bool need_media_capture = user_asked_for_screenshot || user_is_recording;
+@@ -911,6 +921,27 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
+ 
+ 		render_overlays(direct_fbo, areau(aspect_ratio));
+ 
++		vk::glsl::release_idle_descriptor_tables();
++
++		// Destiny diagnostics: memory pools every ~2 s, to find what grows during long sessions.
++		{
++			static u64 d1_last = 0;
++			if (const u64 now = get_system_time(); now - d1_last > 2'000'000)
++			{
++				d1_last = now;
++				const auto& map = m_device->get_memory_mapping();
++				d1_log.warning("D1MEM surface=%lluM texture=%lluM scratch=%lluM system=%lluM swapchain=%lluM device_local=%lluM host_visible=%lluM "
++					"tex_unreleased=%u tex_mem=%lluM tex_tmp=%lluM rtt_active=%lluM rtt_invalidated=%u programs=+%llu/-%llu dsets=%llu released=%llu",
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SURFACE_CACHE) >> 20, vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_TEXTURE_CACHE) >> 20,
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SCRATCH) >> 20, vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SYSTEM) >> 20,
++					vk::vmm_get_application_pool_usage(VMM_ALLOCATION_POOL_SWAPCHAIN) >> 20,
++					vk::vmm_get_application_memory_usage(map.device_local) >> 20, vk::vmm_get_application_memory_usage(map.host_visible_coherent) >> 20,
++					m_texture_cache.get_unreleased_textures_count(), m_texture_cache.get_texture_memory_in_use() >> 20, m_texture_cache.get_temporary_memory_in_use() >> 20,
++					m_rtts.m_active_memory_used >> 20, static_cast<u32>(m_rtts.invalidated_resources.size()),
++					d1diag::g_programs_created.load(), d1diag::g_programs_destroyed.load(), d1diag::g_descriptor_set_first_inits.load(), d1diag::g_tables_released.load());
++			}
++		}
++
+ 		if (g_cfg.video.debug_overlay)
+ 		{
+ 			const auto num_dirty_textures = m_texture_cache.get_unreleased_textures_count();
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+index 8687a6875..5134bb961 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+@@ -1,4 +1,5 @@
+ #include "stdafx.h"
++#include "Emu/RSX/d1diag.h"
+ #include "VKProgramPipeline.h"
+ #include "VKResourceManager.h"
+ #include "vkutils/descriptors.h"
+@@ -155,6 +156,7 @@ namespace vk
+ 		void program::init()
+ 		{
+ 			m_linked = false;
++			d1diag::g_programs_created++;
+ 		}
+ 
+ 		program::program(VkDevice dev, const VkGraphicsPipelineCreateInfo& create_info, const std::vector<program_input> &vertex_inputs, const std::vector<program_input>& fragment_inputs)
+@@ -176,6 +178,7 @@ namespace vk
+ 
+ 		program::~program()
+ 		{
++			d1diag::g_programs_destroyed++;
+ 			vkDestroyPipeline(m_device, m_pipeline, nullptr);
+ 
+ 			if (m_pipeline_layout)
+@@ -418,8 +421,68 @@ namespace vk
+ 			return *this;
+ 		}
+ 
++		namespace
++		{
++			std::mutex g_table_registry_mutex;
++			std::vector<descriptor_table_t*> g_table_registry;
++			atomic_t<u64> g_table_frame = 0;
++		}
++
++		void release_idle_descriptor_tables()
++		{
++			// Idle limit in frames: far beyond GPU latency and pending descriptor pool resets
++			constexpr u64 idle_frames = 256;
++			const u64 frame = ++g_table_frame;
++
++			if (frame % 64)
++			{
++				return;
++			}
++
++			std::lock_guard lock(g_table_registry_mutex);
++			usz kept = 0;
++
++			for (auto* table : g_table_registry)
++			{
++				if (frame - table->m_last_commit_frame > idle_frames)
++				{
++					table->release_resources();
++					table->m_registered = false;
++					d1diag::g_tables_released++;
++					continue;
++				}
++
++				g_table_registry[kept++] = table;
++			}
++
++			g_table_registry.resize(kept);
++		}
++
++		void descriptor_table_t::release_resources()
++		{
++			// Drop the current set (and its storage) and the pool; the next commit() allocates a new
++			// set from a new pool and rewrites every descriptor from the template.
++			m_descriptor_set.~descriptor_set();
++			new (&m_descriptor_set) vk::descriptor_set();
++
++			if (m_descriptor_pool)
++			{
++				m_descriptor_pool->destroy();
++				m_descriptor_pool.reset();
++			}
++
++			m_descriptor_template_cache_id = umax;
++		}
++
+ 		void descriptor_table_t::destroy()
+ 		{
++			if (m_registered)
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				std::erase(g_table_registry, this);
++				m_registered = false;
++			}
++
+ 			if (!m_device)
+ 			{
+ 				return;
+@@ -591,6 +654,15 @@ namespace vk
+ 
+ 		VkDescriptorSet descriptor_table_t::commit()
+ 		{
++			m_last_commit_frame = g_table_frame;
++
++			if (!m_registered) [[unlikely]]
++			{
++				std::lock_guard lock(g_table_registry_mutex);
++				g_table_registry.push_back(this);
++				m_registered = true;
++			}
++
+ 			if (!m_descriptor_set)
+ 			{
+ 				m_any_descriptors_dirty = true;
+@@ -698,7 +770,9 @@ namespace vk
+ 		void descriptor_table_t::create_descriptor_pool()
+ 		{
+ 			m_descriptor_pool = std::make_unique<descriptor_pool>();
+-			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 16u, 4096u);
++			// Start small: every program's descriptor table owns a pool, and games with many programs
++			// (Destiny: ~255k) touch new ones continuously; autoscaling grows busy tables.
++			m_descriptor_pool->create(*vk::g_render_device, m_descriptor_pool_sizes, 2u, 4096u);
+ 		}
+ 
+ 		void descriptor_table_t::validate() const
+diff --git a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+index 4328522f1..c21a66a7f 100644
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+@@ -160,8 +160,14 @@ namespace vk
+ 			std::vector<bool> m_descriptors_dirty;
+ 			bool m_any_descriptors_dirty = false;
+ 
++			// Idle tracking: tables not committed for a while give back their descriptor pool and
++			// set storage (see release_idle_descriptor_tables).
++			u64 m_last_commit_frame = 0;
++			bool m_registered = false;
++
+ 			void init(VkDevice dev);
+ 			void destroy();
++			void release_resources();
+ 
+ 			void validate() const;
+ 
+@@ -182,6 +188,11 @@ namespace vk
+ 			}
+ 		};
+ 
++		// Called once per presented frame. Programs are cached for the whole session and every
++		// descriptor table owns a descriptor pool plus set storage once used; games with very many
++		// programs (Destiny: ~255k) otherwise grow by gigabytes as they cycle through them.
++		void release_idle_descriptor_tables();
++
+ 		enum binding_set_index : u32
+ 		{
+ 			// For separate shader objects
+diff --git a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+index 4762f5e3b..917b88491 100644
+--- a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
++++ b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+@@ -1,3 +1,4 @@
++#include "Emu/RSX/d1diag.h"
+ #include "vkutils/data_heap.h"
+ #include "VKFramebuffer.h"
+ #include "VKRenderTargets.h"
+@@ -995,6 +996,8 @@ namespace vk
+ 		{
+ 			if (state_flags & rsx::surface_state_flags::erase_bkgnd)
+ 			{
++				if (d1diag::hdr(base_addr) && d1diag::tracing())
++					rsx_log.warning("D1T %llu erase_bkgnd 0x%x %ux%u access=%u", get_system_time(), base_addr, width(), height(), static_cast<u32>(access.is_write()));
+ 				// NOTE: This step CAN introduce MSAA flags!
+ 				initialize_memory(cmd, access);
+ 
+@@ -1063,6 +1066,12 @@ namespace vk
+ 			section.init_transfer(this);
+ 			auto src_area = section.src_rect();
+ 			auto dst_area = section.dst_rect();
++			if (d1diag::hdr(base_addr) && d1diag::tracing())
++			{
++				rsx_log.warning("D1T %llu inherit dst=0x%x %ux%u bpp=%u <- src=0x%x %ux%u bpp=%u src_rect=%d,%d-%d,%d dst_rect=%d,%d-%d,%d access=%u tags dst=%llu src=%llu",
++					get_system_time(), base_addr, width(), height(), dst_bpp, src_texture->base_addr, src_texture->width(), src_texture->height(), src_bpp,
++					src_area.x1, src_area.y1, src_area.x2, src_area.y2, dst_area.x1, dst_area.y1, dst_area.x2, dst_area.y2, static_cast<u32>(access.is_write()), last_use_tag, src_texture->last_use_tag);
++			}
+ 
+ 			if (g_cfg.video.antialiasing_level != msaa_level::none)
+ 			{
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index 74539e14e..9f3a177e8 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -1,3 +1,4 @@
++#include "Emu/RSX/d1diag.h"
+ #include "Emu/IdManager.h"
+ #include "descriptors.h"
+ #include "garbage_collector.h"
+@@ -138,7 +139,7 @@ namespace vk
+ 
+ 	void descriptor_pool::create(const vk::render_device& dev, const rsx::simple_array<VkDescriptorPoolSize>& pool_sizes, u32 min_sets, u32 max_sets)
+ 	{
+-		m_autoscaling_config.min_pool_size = std::max(min_sets, 16u);
++		m_autoscaling_config.min_pool_size = std::max(min_sets, 2u);
+ 		m_autoscaling_config.max_pool_size = std::max(min_sets, max_sets);
+ 
+ 		ensure(m_autoscaling_config.max_pool_size >= 16u);
+@@ -360,6 +361,7 @@ namespace vk
+ 	{
+ 		if (!m_in_use) [[unlikely]]
+ 		{
++			d1diag::g_descriptor_set_first_inits++;
+ 			m_image_info_pool.reserve(m_pool_size);
+ 			m_buffer_view_pool.reserve(m_pool_size);
+ 			m_buffer_info_pool.reserve(m_pool_size);
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+index e169caaa4..28da869ce 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+@@ -97,7 +97,13 @@ namespace vk
+ 	{
+ 		static constexpr size_t max_cache_size = 16384;
+ 		static constexpr size_t max_overflow_size = 64;
+-		static constexpr size_t m_pool_size = max_cache_size + max_overflow_size;
++		// Image/buffer info storage is referenced by pointer from pending writes, so it must not
++		// reallocate before a flush: reserve max_storage_size + overflow up front and flush at bind
++		// once max_storage_size is reached. Every descriptor set reserves this on first use, so it
++		// is kept small (16384 entries meant ~0.9 MB per set; games touching many programs, e.g.
++		// Destiny, grew by gigabytes per minute).
++		static constexpr size_t max_storage_size = 256;
++		static constexpr size_t m_pool_size = max_storage_size + max_overflow_size;
+ 
+ 		void init(VkDescriptorSet new_set);
+ 
+@@ -191,9 +197,9 @@ namespace vk
+ 		FORCE_INLINE bool storage_cache_pressure() const
+ 		{
+ 			return
+-				m_image_info_pool.size() >= max_cache_size ||
+-				m_buffer_info_pool.size() >= max_cache_size ||
+-				m_buffer_view_pool.size() >= max_cache_size;
++				m_image_info_pool.size() >= max_storage_size ||
++				m_buffer_info_pool.size() >= max_storage_size ||
++				m_buffer_view_pool.size() >= max_storage_size;
+ 		}
+ 
+ 		// Temporary storage accessors
+diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
+new file mode 100644
+index 000000000..a22de88ba
+--- /dev/null
++++ b/rpcs3/Emu/RSX/d1diag.h
+@@ -0,0 +1,240 @@
++#pragma once
++// Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
++// the SPU lighting reads (0x44000000-0x46000000). Throttled.
++#include "util/types.hpp"
++#include <atomic>
++#include <mutex>
++#include <vector>
++#include <string>
++#include "Utilities/StrFmt.h"
++#include "Utilities/File.h"
++#include "Emu/Cell/timers.hpp"
++#include "util/logs.hpp"
++
++LOG_CHANNEL(d1_log, "D1");
++namespace d1diag
++{
++	// Marker files, the PPU watch list and dumps live in "d1/" next to rpcs3.exe, so the whole
++	// test setup can be moved or copied as one folder.
++	inline const std::string& ctl_dir()
++	{
++		static const std::string dir = fs::get_executable_dir() + "d1/";
++		return dir;
++	}
++
++	// Timeline tracing, active while the marker file d1/d1trace.on exists (checked every
++	// 200 ms), limited to 400000 lines per activation.
++	inline bool tracing()
++	{
++		static std::atomic<u64> last_check{0};
++		static std::atomic<bool> on{false};
++		static std::atomic<u32> lines{0};
++		const u64 now = get_system_time();
++		if (now - last_check.load() > 200'000)
++		{
++			last_check = now;
++			const bool was = on.load();
++			const bool is = fs::is_file(ctl_dir() + "d1trace.on");
++			if (is && !was) lines = 0;
++			on = is;
++		}
++		return on.load() && lines.fetch_add(1) < 400000;
++	}
++	inline std::atomic<u32> acquire_addrs[16]{};
++	inline void note_acquire(u32 addr)
++	{
++		for (auto& a : acquire_addrs)
++		{
++			u32 cur = a.load();
++			if (cur == addr) return;
++			if (cur == 0 && a.compare_exchange_strong(cur, addr)) return;
++		}
++	}
++	inline bool is_acquire_addr(u32 eal, u32 size)
++	{
++		for (auto& a : acquire_addrs)
++		{
++			const u32 v = a.load();
++			if (v && eal <= v && v < eal + size) return true;
++		}
++		return false;
++	}
++	// Light buffer 0xCEB60000 (1024x624 RGBA16F, pitch 8192) and the HUD targets aliasing it.
++	inline bool hdr(u32 addr) { return addr >= 0xceb60000u && addr < 0xcf040000u; }
++	// Object counters for the D1MEM log line (VKPresent.cpp).
++	inline std::atomic<u64> g_programs_created{0}, g_programs_destroyed{0}, g_descriptor_set_first_inits{0}, g_tables_released{0};
++
++	// New fragment program logging (ProgramStateCache.h), while d1/d1fp.on exists, 400 lines
++	// per activation.
++	inline bool fp_logging()
++	{
++		static std::atomic<u64> last_check{0};
++		static std::atomic<bool> on{false};
++		static std::atomic<u32> lines{0};
++		const u64 now = get_system_time();
++		if (now - last_check.load() > 500'000)
++		{
++			last_check = now;
++			const bool was = on.load();
++			const bool is = fs::is_file(ctl_dir() + "d1fp.on");
++			if (is && !was) lines = 0;
++			on = is;
++		}
++		return on.load() && lines.fetch_add(1) < 400;
++	}
++
++	inline bool hit(u32 addr, u32 len)
++	{
++		return addr < 0x46000000u && addr + len > 0x44000000u;
++	}
++	inline bool sampled()
++	{
++		static std::atomic<u32> n{0};
++		return (n.fetch_add(1) & 255) == 0;
++	}
++	inline bool sampled16()
++	{
++		static std::atomic<u32> n{0};
++		return (n.fetch_add(1) & 15) == 0;
++	}
++	inline bool budget()
++	{
++		static std::atomic<u32> n{0};
++		return n.fetch_add(1) < 40000;
++	}
++
++	// One-frame surface dump: creating d1/d1dump.on arms it at the next flip (the marker is
++	// consumed); every render/depth target is written to d1/dump/<id>/ when the RSX
++	// switches away from it, until the first target switch after the following flip. RSX thread only.
++	struct dump_state
++	{
++		bool active = false;
++		bool stop_next = false;
++		u32 seq = 0;
++		std::string dir;
++	};
++	inline dump_state g_dump;
++	inline void dump_on_flip()
++	{
++		if (g_dump.active)
++		{
++			g_dump.stop_next = true;
++			return;
++		}
++		if (fs::is_file(ctl_dir() + "d1dump.on"))
++		{
++			fs::remove_file(ctl_dir() + "d1dump.on");
++			g_dump.active = true;
++			g_dump.stop_next = false;
++			g_dump.seq = 0;
++			g_dump.dir = fmt::format("%sdump/%llu/", ctl_dir(), get_system_time());
++			fs::create_path(g_dump.dir);
++		}
++	}
++	inline bool dumping() { return g_dump.active; }
++	inline void dump_bytes(const void* data, u32 size, u32 addr, u32 pitch, u32 width, u32 height, int format, char kind)
++	{
++		fs::file(fmt::format("%s%04u_%c_%08x_p%u_%ux%u_f%d.bin", g_dump.dir, g_dump.seq++, kind, addr, pitch, width, height, format),
++			fs::rewrite).write(data, size);
++	}
++	inline void dump_done()
++	{
++		if (g_dump.stop_next) g_dump.active = false;
++	}
++
++	// PPU call tracing (LLVM decoder, where GDB breakpoints are ignored). Every compiled function
++	// below 0x2000000 checks g_ppu_mask[addr >> 2] on entry and calls ppu_d1hit when set. The
++	// watch list comes from d1/d1ppu.txt, one watch per line: "ADDR [MAXHITS] [u] [rN[+OFF]:LEN ...]"
++	// (hex address, default 50 hits, memory dumps at register + offset); re-read when it changes.
++	// Fixed host address (reserved and committed in PPUThread.cpp before any PPU code runs), so the
++	// compiled PPU code can embed it as a 64-bit constant and cached objects stay valid across runs.
++	constexpr u64 ppu_mask_addr = 0x6d0000000000;
++	inline u8* const g_ppu_mask = reinterpret_cast<u8*>(ppu_mask_addr);
++	struct ppu_watch
++	{
++		u32 addr;
++		u32 left;
++		std::vector<std::tuple<u32, u32, u32>> dumps; // register, offset, length
++		bool unique = false; // "u": log each distinct dump content once
++		std::vector<u64> seen;
++	};
++	inline std::mutex g_ppu_mutex;
++	inline std::vector<ppu_watch> g_ppu_watches;
++	inline void ppu_poll()
++	{
++		static u64 last_check = 0;
++		static std::string last_text;
++		const u64 now = get_system_time();
++		if (now - last_check < 1'000'000) return;
++		last_check = now;
++		std::string text;
++		if (fs::file f{ctl_dir() + "d1ppu.txt"}) text = f.to_string();
++		if (text == last_text) return;
++		last_text = text;
++		std::lock_guard lock(g_ppu_mutex);
++		for (const auto& w : g_ppu_watches) g_ppu_mask[w.addr >> 2] = 0;
++		g_ppu_watches.clear();
++		// A line "coverage" arms every function for one logged first call (D1C lines); it is
++		// armed once per appearance of the line. Every reload is marked in the log.
++		static bool coverage = false;
++		const bool want_coverage = text.find("coverage") != umax;
++		if (want_coverage && !coverage)
++		{
++			for (u32 i = 0; i < 0x800000; i++) if (!g_ppu_mask[i]) g_ppu_mask[i] = 2;
++		}
++		else if (!want_coverage && coverage)
++		{
++			for (u32 i = 0; i < 0x800000; i++) if (g_ppu_mask[i] == 2) g_ppu_mask[i] = 0;
++		}
++		coverage = want_coverage;
++		d1_log.warning("D1P watch list reloaded at %llu (coverage %d)", now, coverage);
++		usz pos = 0;
++		while (pos < text.size())
++		{
++			usz end = text.find('\n', pos);
++			if (end == umax) end = text.size();
++			const std::string line = text.substr(pos, end - pos);
++			pos = end + 1;
++			ppu_watch w{};
++			w.left = 50;
++			bool first = true;
++			try {
++			usz i = 0;
++			while (i < line.size())
++			{
++				while (i < line.size() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r')) i++;
++				usz j = i;
++				while (j < line.size() && line[j] != ' ' && line[j] != '\t' && line[j] != '\r') j++;
++				if (j == i) break;
++				const std::string tok = line.substr(i, j - i);
++				i = j;
++				if (tok[0] == '#') break;
++				if (first)
++				{
++					w.addr = static_cast<u32>(std::stoul(tok, nullptr, 16));
++					first = false;
++				}
++				else if (tok == "u")
++				{
++					w.unique = true;
++				}
++				else if (tok[0] == 'r' && tok.find(':') != umax)
++				{
++					const usz colon = tok.find(':'), plus = tok.find('+');
++					const u32 off = plus < colon ? static_cast<u32>(std::stoul(tok.substr(plus + 1, colon - plus - 1), nullptr, 0)) : 0;
++					w.dumps.emplace_back(static_cast<u32>(std::stoul(tok.substr(1))), off, static_cast<u32>(std::stoul(tok.substr(colon + 1), nullptr, 0)));
++				}
++				else
++				{
++					w.left = static_cast<u32>(std::stoul(tok, nullptr, 0));
++				}
++			}
++			} catch (...) { continue; }
++			if (!first && w.addr < 0x2000000 && !(w.addr & 3))
++			{
++				g_ppu_watches.push_back(w);
++				g_ppu_mask[w.addr >> 2] = 1;
++			}
++		}
++	}
++}

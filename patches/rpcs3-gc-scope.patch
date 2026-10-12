@@ -1,0 +1,25 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKResourceManager.h b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+index c9bbf4e..8730f08 100644
+--- a/rpcs3/Emu/RSX/VK/VKResourceManager.h
++++ b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+@@ -170,7 +170,9 @@ namespace vk
+ 			// These objects should outlive the lock, the idea is to release the main thread while the caller handles the callback spam.
+ 			std::list<eid_scope_t> discarded_scopes;
+ 			{
+-				reader_lock lock(m_eid_map_lock);
++				// Select and detach the completed prefix under one exclusive lock.
++				// A reader-lock upgrade may change the observed list or scope IDs.
++				std::lock_guard lock(m_eid_map_lock);
+ 
+ 				// First, scan to find the newest item that is going out of scope
+ 				auto newest_it = m_eid_map.begin();
+@@ -186,9 +188,6 @@ namespace vk
+ 				}
+ 
+ 				// Take all of the entries in one sweep
+-				lock.upgrade();
+-
+-				// Post-upgrade iterators should be safe
+ 				discarded_scopes.splice(
+ 					discarded_scopes.end(),
+ 					m_eid_map,

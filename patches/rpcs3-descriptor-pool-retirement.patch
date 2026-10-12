@@ -1,0 +1,84 @@
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.cpp
+@@ -430,7 +430,7 @@
+ 
+ 		void release_idle_descriptor_tables()
+ 		{
+-			// Idle limit in frames: far beyond GPU latency and pending descriptor pool resets
++			// Frame age is a retention policy, not proof that GPU use or reset callbacks finished.
+ 			constexpr u64 idle_frames = 256;
+ 			const u64 frame = ++g_table_frame;
+ 
+@@ -444,7 +444,11 @@
+ 
+ 			for (auto* table : g_table_registry)
+ 			{
+-				if (frame - table->m_last_commit_frame > idle_frames)
++				// Require a later completed submission: the zero watermark also means "none yet".
++				// Reset callbacks can lag GPU completion, or have their GC scope delayed by async work.
++				if (frame - table->m_last_commit_frame > idle_frames &&
++					vk::last_completed_event_id() > table->m_last_commit_eid &&
++					(!table->m_descriptor_pool || !table->m_descriptor_pool->has_pending_resets()))
+ 				{
+ 					table->release_resources();
+ 					table->m_registered = false;
+@@ -672,6 +676,7 @@
+ 			// Check if we need to actually open a new set
+ 			if (!m_any_descriptors_dirty)
+ 			{
++				m_last_commit_eid = vk::current_event_id();
+ 				return m_descriptor_set.value();
+ 			}
+ 
+@@ -690,6 +695,8 @@
+ 
+ 			m_descriptor_set.on_bind();
+ 			m_any_descriptors_dirty = false;
++			// Allocation may flush/re-enter submission on fragmentation. Stamp its resulting scope.
++			m_last_commit_eid = vk::current_event_id();
+ 
+ 			return m_descriptor_set.value();
+ 		}
+--- a/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
++++ b/rpcs3/Emu/RSX/VK/VKProgramPipeline.h
+@@ -163,6 +163,7 @@
+ 			// Idle tracking: tables not committed for a while give back their descriptor pool and
+ 			// set storage (see release_idle_descriptor_tables).
+ 			u64 m_last_commit_frame = 0;
++			u64 m_last_commit_eid = 0;
+ 			bool m_registered = false;
+ 
+ 			void init(VkDevice dev);
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -241,9 +241,11 @@
+ 		if (m_current_subpool_index != umax)
+ 		{
+ 			// Enqueue release using gc
++			m_pending_resets++;
+ 			auto release_func = [subpool_index=m_current_subpool_index, this]()
+ 			{
+ 				this->reset(subpool_index, 0);
++				m_pending_resets--;
+ 			};
+ 
+ 			auto cleanup_obj = std::make_unique<gc_callback_t>(release_func);
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.h
+@@ -47,6 +47,7 @@
+ 		operator VkDescriptorPool() { return m_current_pool_handle; }
+ 		FORCE_INLINE bool valid() const { return !m_device_subpools.empty(); }
+ 		FORCE_INLINE u32 max_sets() const { return m_current_subpool_index >= m_device_subpools.size() ? 0u : m_device_subpools[m_current_subpool_index].size; }
++		FORCE_INLINE bool has_pending_resets() const { return m_pending_resets.load() != 0; }
+ 
+ 	private:
+ 		FORCE_INLINE bool can_allocate(u32 required_count, u32 already_used_count = 0) const { return (required_count + already_used_count) <= max_sets(); };
+@@ -86,6 +87,8 @@
+ 		u32 m_current_subpool_offset = 0;
+ 
+ 		shared_mutex m_subpool_lock;
++		// Deferred reset callbacks retain this pool until reset() has returned.
++		atomic_t<u32> m_pending_resets = 0;
+ 
+ 		static constexpr size_t max_cache_size = 64;
+ 		VkDescriptorSetLayout m_cached_layout = VK_NULL_HANDLE;

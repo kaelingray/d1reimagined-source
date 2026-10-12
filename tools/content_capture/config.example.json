@@ -1,0 +1,21 @@
+{
+  "CONTENT_NAS_PATH": "",
+  "DEVELOPMENT_MACHINE_ID": "dev-pc-01",
+  "CONTENT_LOCAL_PATH": "../../local/content-capture",
+  "CONTENT_CAPTURE_ENABLED": true,
+  "CURRENT_SESSION": "first-mission-restoration",
+  "CURRENT_DEVBLOG": null,
+  "CURRENT_GAME_BUILD": "01.24",
+  "CURRENT_FEATURE": "mission-progression",
+  "FFMPEG_PATH": "ffmpeg",
+  "BUFFER_SECONDS": 180,
+  "PRE_EVENT_BUFFER": 60,
+  "POST_EVENT_BUFFER": 30,
+  "SEGMENT_SECONDS": 30,
+  "RUN_MANIFEST_DIRECTORY": "../../local/SIGNON_LOCAL/logs",
+  "KNOWN_CAPABILITIES": {"world-entry": "OBSERVED", "live-fragment-validation": "FAILED"},
+  "BUFFER_MAX_BYTES": 2147483648,
+  "SUBMITTED_RETENTION_DAYS": 30,
+  "RETRY_INITIAL_SECONDS": 30,
+  "RETRY_MAX_SECONDS": 3600
+}

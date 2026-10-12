@@ -1,0 +1,28 @@
+diff --git a/rpcs3/Emu/RSX/Capture/rsx_replay.cpp b/rpcs3/Emu/RSX/Capture/rsx_replay.cpp
+index bb558744a..a531018eb 100644
+--- a/rpcs3/Emu/RSX/Capture/rsx_replay.cpp
++++ b/rpcs3/Emu/RSX/Capture/rsx_replay.cpp
+@@ -238,7 +238,22 @@ namespace rsx
+ 			if (render->int_flip_index == last_flip)
+ 			{
+ 				// Capture did not include a display flip, flip manually
+-				render->request_emu_flip(1u);
++				// Prefer the registered display buffer written by the final colour
++				// target. Buffer 1 may be an untouched back buffer in this frame.
++				u32 display_buffer = 1u;
++				if (method_registers.surface_dma(0) == CELL_GCM_CONTEXT_DMA_MEMORY_FRAME_BUFFER)
++				{
++					for (u32 i = 0; i < render->display_buffers_count; ++i)
++					{
++						if (render->display_buffers[i].offset == method_registers.surface_offset(0) &&
++							render->display_buffers[i].pitch == method_registers.surface_pitch(0))
++						{
++							display_buffer = i;
++							break;
++						}
++					}
++				}
++				render->request_emu_flip(display_buffer);
+ 			}
+ 
+ 			// random pause to not destroy gpu

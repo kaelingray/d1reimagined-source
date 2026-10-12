@@ -1,0 +1,65 @@
+diff --git a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+--- a/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
++++ b/rpcs3/Emu/RSX/VK/VKTextureCache.cpp
+@@ -697,6 +697,10 @@
+ 		u16 width, u16 height, u16 depth, u16 layers, u8 mips,
+ 		VkImageType image_type, VkFlags image_flags, VkFlags usage_flags)
+ 	{
++		// Uploads require TRANSFER_DST and views require SAMPLED. Preserve any
++		// additional caller use (e.g. presentation/capture needs TRANSFER_SRC)
++		// consistently for both pool lookup and newly allocated images.
++		usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+ 		auto image = find_cached_image(format, width, height, depth, mips, image_type, image_flags, usage_flags, VK_SHARING_MODE_EXCLUSIVE);
+ 
+ 		if (!image)
+@@ -705,7 +709,7 @@
+ 				image_type,
+ 				format,
+ 				width, height, depth, mips, layers, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+-				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, image_flags | VK_IMAGE_CREATE_ALLOW_NULL_RPCS3,
++				VK_IMAGE_TILING_OPTIMAL, usage_flags, image_flags | VK_IMAGE_CREATE_ALLOW_NULL_RPCS3,
+ 				VMM_ALLOCATION_POOL_TEXTURE_CACHE, format_class);
+ 
+ 			if (!image->value)
+diff --git a/rpcs3/Emu/RSX/VK/VKPresent.cpp b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -677,6 +677,38 @@
+ 	const bool user_asked_for_screenshot = g_user_asked_for_screenshot.exchange(false);
+ 	const bool user_is_recording = (g_recording_mode != recording_mode::stopped && m_frame->can_consume_frame());
+ 	const bool need_media_capture = user_asked_for_screenshot || user_is_recording;
++
++	// Opt-in bounded source/format evidence; no pixel dumps or behavior changes.
++	// One line per two seconds, at most 200 per d1/d1media.on activation.
++	{
++		static u64 last_check = 0, last_line = 0;
++		static bool enabled = false;
++		static u32 lines = 0;
++		const u64 now = get_system_time();
++		if (now - last_check > 500'000)
++		{
++			last_check = now;
++			const bool requested = fs::is_file(d1diag::ctl_dir() + "d1media.on");
++			if (requested && !enabled) { lines = 0; last_line = 0; }
++			enabled = requested;
++		}
++		if (enabled && lines < 200 && now - last_line > 2'000'000)
++		{
++			last_line = now;
++			++lines;
++			const auto kind = [](const present_source& source)
++			{
++				return source.owned ? (source.reusable ? "conversion" : "linear") : (source.image ? "borrowed" : "none");
++			};
++			d1_log.warning("D1MEDIA source0=%s source1=%s format=%u usage=0x%x layout=%u capture=%u shot=%u recording=%u overlays=%u overlay_format=%u swap_format=%u buffer=%ux%u image=%ux%u event=%llu completed=%llu",
++				kind(present_sources[0]), kind(present_sources[1]), image_to_flip ? static_cast<u32>(image_to_flip->format()) : 0,
++				image_to_flip ? image_to_flip->info.usage : 0, image_to_flip ? static_cast<u32>(image_to_flip->current_layout) : 0,
++				need_media_capture, user_asked_for_screenshot, user_is_recording, g_cfg.video.record_with_overlays && has_overlay,
++				m_overlay_recording_img ? static_cast<u32>(m_overlay_recording_img->format()) : 0, static_cast<u32>(m_swapchain->get_surface_format()),
++				buffer_width, buffer_height, image_to_flip ? image_to_flip->width() : 0, image_to_flip ? image_to_flip->height() : 0,
++				vk::current_event_id(), vk::last_completed_event_id());
++		}
++	}
+ 
+ 	const auto render_overlays = [&](vk::framebuffer_holder* fbo, const areau& area)
+ 	{

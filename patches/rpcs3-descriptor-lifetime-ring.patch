@@ -1,0 +1,267 @@
+diff --git a/rpcs3/Emu/RSX/Common/descriptor_lifetime_ring.h b/rpcs3/Emu/RSX/Common/descriptor_lifetime_ring.h
+new file mode 100644
+index 0000000..e91ef5d
+--- /dev/null
++++ b/rpcs3/Emu/RSX/Common/descriptor_lifetime_ring.h
+@@ -0,0 +1,71 @@
++#pragma once
++
++#include <array>
++#include <atomic>
++#include <cstdint>
++#include <mutex>
++#include <optional>
++#include <vector>
++
++namespace d1diag
++{
++	enum class descriptor_event_kind : std::uint64_t
++	{
++		tag = 1, submit, completed_poke, completed_wait, retire, dispose, collect, reset
++	};
++
++	struct descriptor_event
++	{
++		std::uint64_t serial = 0;
++		std::uint64_t time_us = 0;
++		descriptor_event_kind kind{};
++		std::array<std::uint64_t, 6> fields{};
++	};
++
++	// Writers serialize only a fixed-size copy. Freeze takes a consistent suffix
++	// exactly once; later writers cannot overwrite records being inspected.
++	template<std::size_t Capacity>
++	class descriptor_lifetime_ring
++	{
++		static_assert(Capacity > 0);
++		std::array<descriptor_event, Capacity> m_records{};
++		std::mutex m_mutex;
++		std::atomic<bool> m_frozen{false};
++		std::uint64_t m_serial = 0;
++
++	public:
++		struct snapshot
++		{
++			std::uint64_t last_serial = 0;
++			std::uint64_t overwritten = 0;
++			std::vector<descriptor_event> records;
++		};
++
++		bool push(std::uint64_t time_us, descriptor_event_kind kind,
++			std::array<std::uint64_t, 6> fields)
++		{
++			if (m_frozen.load(std::memory_order_acquire)) return false;
++			std::lock_guard lock(m_mutex);
++			if (m_frozen.load(std::memory_order_relaxed)) return false;
++			const auto serial = ++m_serial;
++			m_records[(serial - 1) % Capacity] = {serial, time_us, kind, fields};
++			return true;
++		}
++
++		std::optional<snapshot> freeze()
++		{
++			std::lock_guard lock(m_mutex);
++			if (m_frozen.exchange(true, std::memory_order_acq_rel)) return std::nullopt;
++			snapshot result;
++			result.last_serial = m_serial;
++			const auto count = m_serial < Capacity ? m_serial : Capacity;
++			result.overwritten = m_serial - count;
++			result.records.reserve(static_cast<std::size_t>(count));
++			for (auto serial = m_serial - count + 1; serial <= m_serial; ++serial)
++			{
++				result.records.push_back(m_records[(serial - 1) % Capacity]);
++			}
++			return result;
++		}
++	};
++}
+diff --git a/rpcs3/Emu/RSX/VK/VKCommandStream.cpp b/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
+index 18e2fbe..385aaf6 100644
+--- a/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
++++ b/rpcs3/Emu/RSX/VK/VKCommandStream.cpp
+@@ -54,10 +54,14 @@ namespace vk
+ 			};
+ 
+ 			result = vkQueueSubmit(submit_info.queue, 1, &info, submit_info.pfence->handle);
++			const auto submit_order = d1diag::next_descriptor_submit_order();
++			d1diag::descriptor_record(d1diag::descriptor_event_kind::submit,
++				{submit_order, std::bit_cast<u64>(submit_info.queue), std::bit_cast<u64>(submit_info.commands),
++				 std::bit_cast<u64>(submit_info.pfence->handle), static_cast<u64>(static_cast<s64>(result))});
+ 			if (d1diag::descriptor_logging())
+ 			{
+ 				d1_log.notice("D1DESC submit order=%llu queue=%016llx cmd=%016llx fence=%016llx result=%d",
+-					d1diag::next_descriptor_submit_order(), std::bit_cast<u64>(submit_info.queue),
++					submit_order, std::bit_cast<u64>(submit_info.queue),
+ 					std::bit_cast<u64>(submit_info.commands), std::bit_cast<u64>(submit_info.pfence->handle), static_cast<int>(result));
+ 			}
+ 		}
+diff --git a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+index 49e9f98..9299b2d 100644
+--- a/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
++++ b/rpcs3/Emu/RSX/VK/VKGSRenderTypes.hpp
+@@ -63,6 +63,8 @@ namespace vk
+ 		inline void tag()
+ 		{
+ 			eid_tag = vk::get_event_id();
++			d1diag::descriptor_record(d1diag::descriptor_event_kind::tag,
++				{eid_tag, std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle)});
+ 			if (d1diag::descriptor_logging())
+ 			{
+ 				d1_log.notice("D1DESC tag eid=%llu cmd=%016llx fence=%016llx", eid_tag,
+@@ -103,6 +105,8 @@ namespace vk
+ 
+ 				if (is_pending)
+ 				{
++					d1diag::descriptor_record(d1diag::descriptor_event_kind::completed_poke,
++						{eid_tag, std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle)});
+ 					if (d1diag::descriptor_logging())
+ 					{
+ 						d1_log.notice("D1DESC completed path=poke eid=%llu cmd=%016llx fence=%016llx", eid_tag,
+@@ -139,6 +143,8 @@ namespace vk
+ 
+ 			if (is_pending)
+ 			{
++				d1diag::descriptor_record(d1diag::descriptor_event_kind::completed_wait,
++					{eid_tag, std::bit_cast<u64>(static_cast<VkCommandBuffer>(*this)), std::bit_cast<u64>(m_submit_fence->handle)});
+ 				if (d1diag::descriptor_logging())
+ 				{
+ 					d1_log.notice("D1DESC completed path=wait eid=%llu cmd=%016llx fence=%016llx", eid_tag,
+diff --git a/rpcs3/Emu/RSX/VK/VKResourceManager.h b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+index 31af8bc..a838d6f 100644
+--- a/rpcs3/Emu/RSX/VK/VKResourceManager.h
++++ b/rpcs3/Emu/RSX/VK/VKResourceManager.h
+@@ -142,6 +142,8 @@ namespace vk
+ 		{
+ 			std::lock_guard lock(m_eid_map_lock);
+ 			auto& scope = get_current_eid_scope();
++			d1diag::descriptor_record(d1diag::descriptor_event_kind::dispose,
++				{std::bit_cast<u64>(disposable.debug_handle()), scope.eid, current_event_id(), last_completed_event_id()});
+ 			if (d1diag::descriptor_logging())
+ 			{
+ 				d1_log.notice("D1DESC dispose object=%016llx scope=%llu current=%llu completed=%llu",
+@@ -194,6 +196,8 @@ namespace vk
+ 					return;
+ 				}
+ 
++				d1diag::descriptor_record(d1diag::descriptor_event_kind::collect,
++					{eid, m_eid_map.front().eid, std::prev(newest_it)->eid});
+ 				if (d1diag::descriptor_logging())
+ 				{
+ 					d1_log.notice("D1DESC collect cutoff=%llu first=%llu last=%llu", eid,
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+index f31d240..8c43814 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/descriptors.cpp
+@@ -173,6 +173,8 @@ namespace vk
+ 	void descriptor_pool::reset(u32 subpool_id, VkDescriptorPoolResetFlags flags)
+ 	{
+ 		std::lock_guard lock(m_subpool_lock);
++		d1diag::descriptor_record(d1diag::descriptor_event_kind::reset,
++			{std::bit_cast<u64>(m_device_subpools[subpool_id].handle), subpool_id, current_event_id(), last_completed_event_id()});
+ 
+ 		if (d1diag::descriptor_logging())
+ 		{
+@@ -260,6 +262,9 @@ namespace vk
+ 			};
+ 
+ 			auto cleanup_obj = std::make_unique<gc_callback_t>(release_func);
++			d1diag::descriptor_record(d1diag::descriptor_event_kind::retire,
++				{std::bit_cast<u64>(cleanup_obj.get()), std::bit_cast<u64>(m_current_pool_handle),
++				 m_current_subpool_index, current_event_id(), last_completed_event_id()});
+ 			if (d1diag::descriptor_logging())
+ 			{
+ 				d1_log.notice("D1DESC retire object=%016llx pool=%016llx index=%u current=%llu completed=%llu",
+diff --git a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+index 0a179bc..c9f1807 100644
+--- a/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
++++ b/rpcs3/Emu/RSX/VK/vkutils/shared.cpp
+@@ -1,6 +1,7 @@
+ #include "device.h"
+ #include "shared.h"
+ #include "util/logs.hpp"
++#include "Emu/RSX/d1diag.h"
+ 
+ #ifndef _WIN32
+ #include <signal.h>
+@@ -247,6 +248,9 @@ namespace vk
+ 			if (strstr(pMsg, "IMAGE_VIEW_TYPE_1D"))
+ 				return false;
+ 
++			// Freeze only after a real callback; no continuous trace output changes
++			// the lead-up to an intermittent descriptor lifetime violation.
++			if (strstr(pMsg, "vkResetDescriptorPool")) d1diag::dump_descriptor_ring();
+ 			rsx_log.error("ERROR: [%s] Code %d : %s", pLayerPrefix, msgCode, pMsg);
+ 		}
+ 		else if (msgFlags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+diff --git a/rpcs3/Emu/RSX/d1diag.h b/rpcs3/Emu/RSX/d1diag.h
+index 497b3d8..d60e50f 100644
+--- a/rpcs3/Emu/RSX/d1diag.h
++++ b/rpcs3/Emu/RSX/d1diag.h
+@@ -2,6 +2,7 @@
+ // Destiny (BLES01857) diagnostics: log RSX activity touching the main-memory G-buffer copies
+ // the SPU lighting reads (0x44000000-0x46000000). Throttled.
+ #include "util/types.hpp"
++#include "Common/descriptor_lifetime_ring.h"
+ #include <atomic>
+ #include <bit>
+ #include <mutex>
+@@ -55,6 +56,59 @@ namespace d1diag
+ 		return order.fetch_add(1) + 1;
+ 	}
+ 
++	inline bool descriptor_ring_enabled()
++	{
++		static std::atomic<u64> last_check{0};
++		static std::atomic<bool> enabled{false};
++		static std::mutex poll_mutex;
++		const u64 now = get_system_time();
++		if (now - last_check.load() > 500'000)
++		{
++			std::lock_guard lock(poll_mutex);
++			if (now > last_check.load() && now - last_check.load() > 500'000)
++			{
++				enabled = fs::is_file(ctl_dir() + "d1descriptorring");
++				last_check = now;
++			}
++		}
++		return enabled.load();
++	}
++
++	inline auto& descriptor_ring()
++	{
++		static descriptor_lifetime_ring<65'536> ring;
++		return ring;
++	}
++
++	inline void descriptor_record(descriptor_event_kind kind, std::array<u64, 6> fields)
++	{
++		if (descriptor_ring_enabled()) descriptor_ring().push(get_system_time(), kind,
++			{fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]});
++	}
++
++	inline void dump_descriptor_ring()
++	{
++		if (!descriptor_ring_enabled()) return;
++		try
++		{
++			const auto snapshot = descriptor_ring().freeze();
++			if (!snapshot) return;
++			d1_log.notice("D1RING begin retained=%llu last=%llu overwritten=%llu reason=validation-descriptor-reset",
++				static_cast<u64>(snapshot->records.size()), snapshot->last_serial, snapshot->overwritten);
++			for (const auto& record : snapshot->records)
++			{
++				d1_log.notice("D1RING serial=%llu time_us=%llu kind=%llu a=%016llx b=%016llx c=%016llx d=%016llx e=%016llx f=%016llx",
++					record.serial, record.time_us, static_cast<u64>(record.kind),
++					record.fields[0], record.fields[1], record.fields[2], record.fields[3], record.fields[4], record.fields[5]);
++			}
++			d1_log.notice("D1RING end last=%llu", snapshot->last_serial);
++		}
++		catch (...)
++		{
++			d1_log.error("D1RING dump failed; original validation error remains authoritative");
++		}
++	}
++
+ 	// Timeline tracing, active while the marker file d1/d1trace.on exists (checked every
+ 	// 200 ms), limited to 400000 lines per activation.
+ 	inline bool tracing()

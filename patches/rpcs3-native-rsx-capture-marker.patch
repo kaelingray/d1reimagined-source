@@ -1,0 +1,37 @@
+--- a/rpcs3/Emu/RSX/VK/VKPresent.cpp
++++ b/rpcs3/Emu/RSX/VK/VKPresent.cpp
+@@ -14,6 +14,7 @@
+ #include "util/video_provider.h"
+ 
+ extern atomic_t<bool> g_user_asked_for_screenshot;
++extern atomic_t<bool> g_user_asked_for_frame_capture;
+ extern atomic_t<recording_mode> g_recording_mode;
+ 
+ namespace
+@@ -675,10 +676,22 @@
+ 	// D1 diagnostics: d1/d1shot.on (next to rpcs3.exe) requests a screenshot like F12, which as a window shortcut
+ 	// only fires while the game window is active (unattended runs post keys to a background window)
+ 	static u32 d1_shot_poll = 0;
+-	if (++d1_shot_poll % 10 == 0 && fs::is_file(d1diag::ctl_dir() + "d1shot.on"))
+-	{
+-		fs::remove_file(d1diag::ctl_dir() + "d1shot.on");
+-		g_user_asked_for_screenshot = true;
++	if (++d1_shot_poll % 10 == 0)
++	{
++		if (fs::is_file(d1diag::ctl_dir() + "d1shot.on"))
++		{
++			fs::remove_file(d1diag::ctl_dir() + "d1shot.on");
++			g_user_asked_for_screenshot = true;
++		}
++
++		// Use the existing RSX capture path, which pauses after saving one frame.
++		// Consume the request first so a retained marker cannot capture repeatedly.
++		const auto capture_marker = d1diag::ctl_dir() + "d1rsxcapture.on";
++		if (fs::is_file(capture_marker) && fs::remove_file(capture_marker))
++		{
++			g_user_asked_for_frame_capture = true;
++			d1_log.notice("D1CAPTURE requested one RSX frame through the native capture path");
++		}
+ 	}
+ 
+ 	const bool user_asked_for_screenshot = g_user_asked_for_screenshot.exchange(false);

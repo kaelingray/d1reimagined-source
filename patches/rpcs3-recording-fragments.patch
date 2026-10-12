@@ -1,0 +1,28 @@
+--- a/rpcs3/util/media_utils.cpp
++++ b/rpcs3/util/media_utils.cpp
+@@ -1341,5 +1341,24 @@
+ 			}
+ 
+-			if (int err = avformat_write_header(av.format_context, nullptr); err < 0)
++			// Keep completed MOV/MP4 fragments readable if the emulator exits before
++			// av_write_trailer. Other muxers retain their existing options.
++			AVDictionary* mux_options = nullptr;
++			int header_error = 0;
++			const std::string_view mux_name = av.format_context->oformat->name;
++			if (mux_name == "mov" || mux_name == "mp4")
++			{
++				header_error = av_dict_set(&mux_options, "movflags", "frag_keyframe+empty_moov+default_base_moof", 0);
++				if (header_error >= 0)
++				{
++					header_error = av_dict_set(&mux_options, "frag_duration", "1000000", 0);
++				}
++			}
++			if (header_error >= 0)
++			{
++				header_error = avformat_write_header(av.format_context, &mux_options);
++			}
++			av_dict_free(&mux_options);
++
++			if (int err = header_error; err < 0)
+ 			{
+ 				media_log.error("video_encoder: avformat_write_header failed. Error: %d='%s'", err, av_error_to_string(err));

@@ -1,0 +1,19 @@
+# Keep personally dumped game and account data out of source control.
+captures/
+original_dump/
+working_dump/
+logs/
+*.iso
+*.data/
+__pycache__/
+*.pyc
+/Destiny (Europe) (EnFrDeEsItPt) PS3/
+/Destiny (Europe) (EnFrDeEsItPt) PS3 TTK/
+# Private runtime and data (game dump, RPCS3 build and config, saves, stand-in data, logs,
+# captures). Never commit anything from here.
+/local/
+# Stray installer logs from the Qt/QtCreator tooling.
+aqtinstall.log
+# Source footage, machine configuration and NAS queue never belong in Git.
+/content-outbox/
+/tools/content_capture/config.local.json
