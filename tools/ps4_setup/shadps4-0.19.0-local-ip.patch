@@ -88,3 +88,20 @@ index f0bd459..cb6ca57 100644
          break;
      }
      case ORBIS_NET_CTL_INFO_NETMASK: {
+diff --git a/src/shader_recompiler/frontend/translate/vector_alu.cpp b/src/shader_recompiler/frontend/translate/vector_alu.cpp
+index 434bf0a..db6b529 100644
+--- a/src/shader_recompiler/frontend/translate/vector_alu.cpp
++++ b/src/shader_recompiler/frontend/translate/vector_alu.cpp
+@@ -1334,6 +1334,12 @@ void Translator::V_CMP_CLASS_F32(const GcnInst& inst) {
+             value = ir.FPIsInf(src0);
+         } else if ((class_mask & IR::FloatClassFunc::Negative) == IR::FloatClassFunc::Negative) {
+             value = ir.FPLessThanEqual(src0, ir.Imm32(-0.f));
++        } else if (class_mask == IR::FloatClassFunc::QuietNan ||
++                   class_mask == IR::FloatClassFunc::SignalingNan) {
++            // D1-PRESERVATION FORK-LOCAL CHANGE: Destiny build 56578 tests QuietNan (0x2) alone.
++            // SPIR-V cannot tell quiet from signaling NaNs, and GPU arithmetic only produces quiet
++            // ones, so a single-kind NaN test is approximated as IsNan.
++            value = ir.FPIsNan(src0);
+         } else {
+             UNREACHABLE_MSG("Unsupported float class mask: {:#x}", static_cast<u32>(class_mask));
+         }

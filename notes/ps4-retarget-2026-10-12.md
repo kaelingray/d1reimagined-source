@@ -280,6 +280,63 @@ decision site. Next: locate the 56578 SignOn response parser and compare its
 field layout with `d1-responder`'s reply (f2.6/f2.7 BAP, f14 client IP, the
 STUN/transport method), using RTTI, strings and the 01.29 design notes.
 
+**From marionberry to investment sign-in (13 October, later).**
+
+1. *SignOn schema is unchanged.* `dump-codec-descriptor.py` reads the codec
+   records and resolves their pointers from `DT_SCE_RELA`. 56578's response
+   descriptor `0x1910CC0` (parser `process_response` `0x2AA420`, same codec
+   `0xA2020`) has exactly the 01.29 fields, including f2.6/f2.7 BAP and f14.
+2. *Guest diagnostics re-derived (output only).* `retail_log_emit` is `0xE4AA0`
+   (same 1,124 x `0x150` ring at `+0x19860`, `0x140` copy), the check is
+   `0xE4D70` (1,636 sites), `printf` is `0x12AAB90` and `"%s
+"` is `0x16136A0`.
+   `make-job-helper-guard.py --diagnostics` adds the sink and T=1, verified by
+   disassembly of a patched scratch copy, in `CUSA00219-56578-lab-diag.xml`.
+   The game's own log then shows STUN falling back to `10.77.0.2`,
+   `platform_signin`, `account_signin` (SignOn success; the server reports
+   content build `56578.17.04.12.1251.evil`), `content_check` passed (manifest
+   accepted), and then `bootflow:package_registration`: *Prerequisite
+   'ENUM(15)' failed for reason 'error.transport_method_invalid'*, preceded by
+   *STUN address discovery failed and not configured to use external address
+   from signon.*
+3. *The setting.* `0x2E0560` reads engine-config bools `+0x598` (on STUN
+   failure use the SignOn f14 address) and `+0x599` (prefer SignOn over STUN),
+   via `0x34E3A0` = block `+0x534` (block pointer `0x2693DF8`). The 56578
+   config-delta setter switch is `0x1033F80` (decoder `0x1DB190`, magic
+   `0x123456`; key 894 still maps to `+0x9EE`). `+0x598` and `+0x599` are
+   **new sparse keys `0xF1048` and `0x4409EC`**, absent in 01.29, where an
+   unknown key aborts the SignOn parse. `d1-responder` now appends key
+   `0xF1048 = 1` to the SignOn f4.3 delta **only when the request's build is
+   `56578.*`** (`d1-responder-56578-signon-fallback.patch`). The test covers
+   both directions; 13/13 tests and all responder controls pass.
+4. *Result* (run `20261013-094238-later-56578-signon-extaddr`):
+   `package_registration` → **`bootflow:bap_signin`** → **`investment_signin`**.
+   The BAP channel opened (start 0x1E/0x1F, secure hello 0x19/0x1A), then the
+   client sent queuez register 0x79. The emulator then aborted in shadPS4's
+   shader recompiler: `V_CMP_CLASS_F32: Unsupported float class mask: 0x2`
+   (QuietNan alone). The D1 shadPS4 build now maps a single-kind NaN class
+   test to `IsNan` (SPIR-V cannot distinguish them; GPU arithmetic yields only
+   quiet NaNs). Rebuilt binary `03909598…` swapped in at the blocked path
+   (`SWAP-RECEIPT.txt`); `shadps4-0.19.0-local-ip.patch` now covers all three
+   files.
+5. *Current stop* (run `20261013-094527-later-56578-signon-extaddr-b`, no
+   emulator fault): investment sign-in exchanges 503 (account) and 206
+   family 3 (roster `0xA2AC2C74` + character `0x3431F1BA`, both still valid in
+   56578), plus queuez pushes for families 4 and 3. The client then fails with
+   **`error.investment_server_object_instance_type_from_checksum_not_found`**.
+   From the 56578 descriptor table
+   (`retarget-static/descriptor-checksums-later.json`, 4,566 descriptors):
+
+   | object (tag) | 01.29 checksum / size | 56578 checksum / size |
+   | --- | --- | --- |
+   | account `0x80801803` | `0x64AE75BF` / `0x7338` | `0x6B30D2B4` / `0x75C8` |
+   | profile `0x80801743` | `0x8127F15A` / `0x7078` | `0x003BC6E5` / `0x7378` |
+   | roster, character, family-4/4 wrapper | unchanged | unchanged |
+
+   Both objects grew (+0x290 / +0x300 bytes), so the server must serialise them
+   with the 56578 schemas. Changing only the checksum is not enough. This is the
+   investment-schema re-derivation (plan step 5).
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at
