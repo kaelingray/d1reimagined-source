@@ -703,7 +703,27 @@ point: those 97 entries would themselves pass the post-pass condition (`+0x60` �
 0), yet the bridge `0x2D2F20` counted 0. So the walker's outer loop over containers
 (`0x2D114A`/`0x2D134B`: `cmp [rbp-0xAED8], [rbp-0xAEC8]`, pointer stepped by 0x10 per container) is
 gated by more than the container contents. That needs either a counter mid-walker (requires the
-tool to relocate a non-prologue site) or a static trace of `[rbp-0xAEC8]`. 01.29's next steps
+tool to relocate a non-prologue site) or a static trace of `[rbp-0xAEC8]`.
+
+*⭐ Root cause of the dropped served phase, measured (run `…-replicas`).* The walker calls its
+terminator `0x2D1600` (`call` at `0x2D10BA`, then `je 0x2D15BC` exits on false) **before** any
+post-pass. `0x2D1600` walks the world's replica pool `[world+0x28]` and **returns false if any
+pending replica (`+0x15 != 0`) has owner `+0x60` equal to the local partition id or greater than
+`0x7F`**. The local id is bits 3..8 of `[[0x2693B60+8]+0x2114]` (`0x345620` → `0x12D700`).
+`d1-winguest.py replicas`, read in world:
+* local partition id **0** (the client);
+* the replica pool (750 slots, the named-globals replicas, tags `0x..F420xx`): almost every slot is
+  **pending with owner `0xFFFFFFFF` (unowned)**, so the terminator rejects every frame;
+* slot 3 (`0x33F42003`, group 0 base 0 + sub 3, exactly our name-ref) is the only one **not**
+  pending. The walker applied our entry there; the frame as a whole is refused.
+
+So the served phase fails because **nobody owns the world's replicated globals**. In a real session
+the activity host is their authority (owner = its non-local peer index, 0..0x7F), so its updates
+pass. Our Activity Host never establishes that ownership, and its membership names member 0 (the
+client) as peer-session host. The served fix is in the AH's session/authority protocol (entity-slot
+and authority-mask messages: udt 0 `entity_slots_allocated`, 30/31
+`query_entity_slot_authority_mask…`, membership host identity), not in the sensor frame. Next:
+find the client writer of replica `+0x60`. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run

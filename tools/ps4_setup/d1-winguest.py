@@ -187,6 +187,43 @@ def main():
             else:
                 print('    dry run (add --confirm)')
         return 0
+    if cmd == 'replicas':
+        # 0x2D1600 (walker terminator) walks the replica pool [world+0x28] and REJECTS the frame when a
+        # pending replica (+0x15 != 0) has owner +0x60 == the local partition id or > 0x7F. Local id:
+        # 0x345620 -> bits 3..8 of dword [[0x2693B60+8]+0x2114] (0x12D700), -1 if unset.
+        pool, stride = p.u(base + WORLD_POOL, 'Q'), p.u(base + WORLD_STRIDE, 'I')
+        w = pool + int(sys.argv[sys.argv.index('--world') + 1] if '--world' in sys.argv else 0) * stride
+        raw = p.u(p.u(base + 0x2693B60 + 8, 'Q') + 0x2114, 'I')
+        local = -1 if raw == 0xFFFFFFFF else (raw >> 3) & 0x3F
+        P = p.u(w + 0x28, 'Q')
+        cnt = p.u(P + 0x14, 'i')
+        bm = p.u(p.u(p.u(P, 'Q') + 8, 'Q') + 0x10, 'Q')
+        print(f'local partition id {local} (raw {raw:#x}); replica pool {P:#x} slots {cnt} bitmap {bm:#x}')
+        data, base_off, esz, mask, flags = p.u(P + 8, 'Q'), p.u(P + 0x1C, 'I'), p.u(P + 0x20, 'I'), p.u(P + 0x24, 'I'), p.u(P + 0x34, 'I')
+        reg = p.u(p.u(base + REGISTRY, 'Q'), 'Q')
+        shown = 0
+        for slot in range(min(cnt, 8192)):
+            if not (p.u(bm + 4 * (slot // 32), 'I') >> (slot % 32)) & 1:
+                continue
+            hi = p.u(data + base_off + esz * slot, 'I') & mask
+            if flags & 0x40000000:
+                tag = 0x80000000 | ((hi & 7) << 27) | ((flags << 13) & 0x7FFE000) | (slot & 0x1FFF)
+            else:
+                tag = ((hi << 23) & 0x7F800000) | ((flags << 13) & 0x7FE000) | (slot & 0x1FFF)
+            esi = struct.unpack('<i', struct.pack('<I', tag))[0] >> 13
+            sl = (((esi & 0xFFFFFFFF) >> 0x12) | 0x3FF) & esi & 0xFFFFFFFF
+            rec = reg + sl * 0x40
+            d, es, mk = p.u(rec + 0x10, 'Q'), p.u(rec + 0x30, 'i'), p.u(rec + 0x34, 'i') & 0xFFFFFFFFFFFFFFFF
+            e = d + (tag & 0x1FFF) * es
+            try:
+                obj = e - (mk & p.u(e + 8, 'Q')); pend = p.read(obj + 0x15, 1)[0]; own = p.u(obj + 0x60, 'I')
+            except OSError:
+                continue
+            reject = pend and (own == local or own > 0x7F)
+            if pend or shown < 12:
+                print(f'  slot {slot:5d} tag {tag:#010x} obj {obj:#x} pending {pend} owner {own:#x}{"  <== REJECTS" if reject else ""}')
+                shown += 1
+        return 0
     if cmd == 'worldset':
         # The udt-5 post-pass sweep's container is world+0x38 (walker 0x2D134B..0x2D13DC); entries are
         # u16 slots at +0xC, groups at +0x5E8/+0x5EC, tags composed as 0x10304F0 does.
