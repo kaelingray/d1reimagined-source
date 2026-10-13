@@ -424,6 +424,78 @@ them). Patch: `d1-56578-oodle-bap-anchors.patch`. Windows: d1-build 3, d1-eboot
 all suites, d1-bap 161 tests, responder controls pass. Linux (public tree):
 d1-build, d1-eboot, d1-bap, d1-responder and d1-harness suites pass.
 
+**Codec, Activity-Host and profile re-derivation (13 October, still static).**
+
+The 01.29 ELF is not on disk, so each 56578 address was found from the 56578 image plus the
+01.29 notes' structural descriptions. None was found by offsetting a number.
+
+*Bitstream primitives* are at the same addresses as 01.29 (ctor `0x72240`, begin-write/-read
+`0x723B0`/`0x72400`, flush `0x72560`, end `0x72650`, spill `0x733A0`, read-bit `0x73430`), and each
+body matches its documented behaviour. Write-one-bit is the gatekeeper vtable slot 5 (RTTI) at
+`0xAF1650`, byte-identical to the 01.29 listing.
+
+*Object codec* `0x2C9A80`/`0x2C9A90`, replicated `0x2C9AE0`: the module moved `+0xA90`. The three
+documented bitset memset sites moved by exactly that. The allowance window is
+`0x2C6A90..0x2C9E20`, deliberately not a blind `+0xA90`, because `0x2C9E20` memsets an unrelated
+stack buffer.
+
+*Message codec* `0x261E90`/`0x262260`, manager `0x25CBD0`, id→index `0x2800E0`. *Registry global*
+`0x1A238A0`: the decoder has three rip-references to it (01.29 had three), and the walk is the
+oracle's construction contract instruction for instruction.
+
+*Activity Host:* decode/encode wrappers `0x2A4AC0`/`0x2A4B70` (capacity still `0x1DF00`),
+`activity_client_send_message` `0x299D10`. A register tracker read all 30 call-site rows: udt,
+descriptor global and size at the 28 send sites, 12 decode sites and 2 replicated sites. Every
+global moved `+0x18090` and every udt keeps its role. Every stated size is unchanged except
+**udt 37 `send_client_heartbeat`, `0xB1E0` → `0xB750`**. The RX dispatch table is at `0x1910480`
+with the same 17 types, and its relocated handlers confirm the udt 0/1/4/11 rows independently.
+
+*Results on 56578 (Windows, the owned image):*
+* `d1-oracle control`: object and message PASS.
+* `vectors`: all OK, including account and profile.
+* `activity-host controls`: **34/34**. This includes the client's own decoder reproducing the
+  captured live join_request's logged fields, a byte-identical re-encode, and a 7,297-byte
+  replicate_membership through the replicated wrapper.
+* sensor 11/11, roster 18/18, character 20/20, inventory 9/9, profile 12/12.
+* `d1-activity-host controls`: **112/112**.
+* item-index 4/5. The 5th needs `catalogue/d1-catalogue.json`, which is not on this machine.
+
+`capture-rig/item-content-index.tsv` was generated from the 56578 packages with the client's own
+decoder. It has 7,544 rows, the entry SHA-256 is `71bfdc0a…`, and the file is git-ignored and local.
+
+*The profile changed in 56578.* The struct is `0x7378` = 29,560 B, up from 28,792. Body field
+[10] `0x80801701` grew `0x100`. Field [11], the dense completion flags, went from `0x80804C21`
+(2,048 elements) to **`0x8080165B` (2,560 elements)**. That is 960 B on the wire instead of 768,
+and `0x80804C21` no longer exists in 56578. Everything from field [12] onward moved `+0x300`:
+the stat block is now at `+0x6FD0`, the overrides at `+0x6FE0`, and the all-content override at
+`+0x714C`. Fields [0]–[9] are unchanged. The negatives caught it: the old `+0x6CE0` positive
+passed by accident because it now lands in the dense u32 array, and the paired negative failed.
+The server's own sends are unaffected:
+* The minimal profile (SOID plus 17 absent fields) still decodes through 56578's codec.
+* The instance checksums are right: account and profile were already build-aware, and roster
+  `0xA2AC2C74`, character `0x3431F1BA` and unlocks `0xC4060975` are unchanged in 56578.
+* Grant tooling that writes completion flags must use 56578's 2,560-element array.
+
+*Harness hardening:* stubbed memcpy/memset/alloc now refuse lengths over 256 MB as a guest fault.
+On 56578, one Activity-Host negative control drives the encoder into a bitset memset of length
+`-0xA4`, returning to `0x2C8F89`, a measured codec site. Before this change the whole process
+aborted (`capacity overflow`). Now it is the refusal that control requires.
+
+*Linux, public tree:* the d1-oracle and d1-activity-host failure sets are identical to the public
+HEAD's: 13 and 9, every one needing game images. The two new 56578 tests pass by skipping. One
+regression was caught and fixed first: `ProfileSpec::to_object_for` lets the image-free unit tests
+pin 01.29 offsets.
+
+Public commit `dba749c` (local, not pushed); patch `d1-56578-codec-ah-profile.patch`.
+
+*Environment note:* `d1-env.ps1` sets `LIBCLANG_PATH=F:\d1\tools\LLVM\bin`, which no longer holds
+`libclang.dll`, so unicorn's bindgen fails. Building d1-oracle needs
+`LIBCLANG_PATH=F:\d1\tools\llvm-23.1.3\bin`.
+
+*Still open:* the dynamic-flags fault RIP for 56578 (unobserved; the refusal text names the grow
+`0x2C7630` only), field [10]'s internal change (no 01.29 sub-layout on record), and the 56578
+`IMP_NOP` equivalent.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at
