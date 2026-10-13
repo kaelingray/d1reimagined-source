@@ -984,6 +984,46 @@ no equipped loadout is served (inventory). Touchpad (Space) did not put the Ghos
 
 Next: serve an equipped loadout (`design/geared-guardian-fixtures.md`, `d1-oracle inventory`).
 
+*Gear for 56578 (13 October, runs `geared2`/`geared3`, patch `d1-56578-item-tables.patch`).*
+The 01.29 fixtures cannot be reused: 3,164 of 7,544 item content indices moved and 3,681 world
+tags changed.
+
+Item index (`d1-oracle item-index write`, now per build via `item_index::source()`):
+- 56578 reads `ps4_investment_globals_012f_6` entry 8126 (tag `0x80A5FFBE`, class `0x80801933`),
+  8,609 items. Generations `012f_2`–`012f_6` all carry the entry; `0130`–`0133` do not.
+- Written to `capture-rig/builds/later-56578/item-content-index.tsv` (generated, not in a repo).
+
+`inventory rebuild` bug, fixed:
+- It recovered each staged item's hash by looking up the element's OLD content index in the NEW
+  table, so 01.29 Gjallarhorn (ci 6299) came back as 56578 ci 6299, a different item (`0x7EAF157D`).
+- `--from-index <old table>` maps through the old build's table instead.
+- Use it once, from the 01.29 staging. Re-running it on converted output double-maps.
+
+Art table (`art-arrangement write`, per-build path):
+- Every staged item's equip ordinal matches the 01.29 table.
+- Gjallarhorn moved 6299 → 6323 and keeps arrangement 1229; Oryx Mask moved 6488 → 6514 and keeps
+  curve 70. These are the new 56578 pins.
+
+Fixtures built:
+- `profile build` → `profile-geared-385.bin`: 20 equipped, with `+0x2B80` unchanged on 56578
+  (fields 0–9 do not move).
+- `character build-peer --with-family2` → `rosters-f0-geared` (20/20 equipment, 14 with a content
+  index).
+- The inventory element checksum is still `0xEF38431D` on 56578 (184 B), so the items are accepted.
+
+Result in world (served route, launch poke only):
+- Rung 34 still clears by itself with the geared family-0/1.
+- The biped spawns.
+- The first-person arm now draws ARMOR (a white wrap over the glove; the base glove before).
+- Still the Ghost-raise pose and no weapon on R2: profile plus inventory alone changed nothing
+  visible; the roster changed the arm.
+
+Next: what holds the player in the Ghost pose instead of the weapon-ready state.
+
+BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
+connected and gave up after 3 s with no ServerInfo header. A plain relaunch passed. So the probe
+failure is intermittent and separate from the orphaned-server cause; its root cause is open.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.
