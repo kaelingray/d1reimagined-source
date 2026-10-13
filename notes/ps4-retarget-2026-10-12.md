@@ -576,6 +576,40 @@ done-mask force, a join counter, two code hooks and a spawn poke. The biped exis
 controlled. Reproducing that on 56578 means re-deriving those addresses and having a live poke
 transport for this emulator, which is a separate piece of work.
 
+*Build 56578 reaches `activity:in_world` on `pvp_moonbase` (13 October, run
+`20261013-…-later-56578-launch-poke-b`).* The route mirrors 01.29's, rung for rung, re-derived:
+
+1. **Leave orbit: synthetic launch poke** through `tools/ps4_setup/d1-winguest.py` (Windows
+   ReadProcessMemory/WriteProcessMemory on the shadPS4 process; guest pointers are host addresses,
+   and eboot-relative ones take the logged load base). The session accessor `0x775770` is
+   instruction-identical to 01.29 `0x773FC0`; its manager global is `0x26CA4E0`. Writes: desired
+   activity `params+0x9B8+0xEA` = 407, goal `params+0xE4` = 0x24, orbit handler (vtable
+   `0x19474B0`, the single hit in the image's data range) `+0x38` debounce = 0. Every value read
+   first was the predicted orbit state.
+2. **Rungs 28–33 on served data:** session creation, matchmaking, `activity_host_setup` (our
+   Activity Host answered the join), prologue, outro, then `activity_world_transition`:
+   **"successfully changed world to: pvp_moonbase" / "World-transition finished".** The rung-33
+   DLC/permission gates passed on the re-indexed 56578 unlock flags (`704c8d3`), with no poke.
+3. **Emulator fix:** loading `pvp_moonbase` hit shadPS4's texture-cache `UNREACHABLE` ("unresolvable
+   image overlap with equal memory address": same format, tile mode and resources, different image
+   type, 16× the size). Fork-local change: treat a TYPE change at an equal address like the
+   existing tile-mode reuse (free the stale image when safe, use the merged id). Binary sha
+   `8cfc65fa…`, receipt in `SWAP-RECEIPT.txt`, patch regenerated.
+4. **Rung 34** (`0x7969A0`: request 0x23 when done `+0x1A8` == requested `+0x198`): masks
+   requested `0x7FF`, done `0x17F`. **Task 7 suppress, synthetic:** byte 0 of the
+   activity-selection record (pointer at `0x26BC068`; `0x766750` = record[0]==1 || `0x78C710()`) = 1.
+   Task 7 completed and **task 9 started**, as on 01.29. Tasks 9/10 (world content) stalled.
+   **Done mask forced to `0x7FF`, synthetic, as 01.29.**
+5. **Rungs 35 → 36 by themselves:** `activity:physics_join` → **`activity:in_world`**. 01.29's
+   join-counter poke was not needed. In world, the client's own diagnostics show both connections
+   established: primary BAP (109 sent / 112 received) and the Activity Host at 10.77.0.2:4110
+   (169 / 64).
+
+Synthetic in this run: the lab-orbit client patches, the launch poke, the task-7 byte and the
+forced done mask. Everything else is served. The screen locked at 15:09 local (Windows lock
+screen), so there is no in-world frame. I did not try to get past the lock. 01.29's next steps
+(two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
+
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
 * taps confirm while the log reports `profile_setup`, controlled by `-WizardTaps`/`-WizardIntervalSeconds`;
 * brings the window to the foreground and sends real key input, with `-NoForeground` to opt out.

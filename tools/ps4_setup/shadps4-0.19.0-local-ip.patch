@@ -312,3 +312,24 @@ index 434bf0a..db6b529 100644
          } else {
              UNREACHABLE_MSG("Unsupported float class mask: {:#x}", static_cast<u32>(class_mask));
          }
+diff --git a/src/video_core/texture_cache/texture_cache.cpp b/src/video_core/texture_cache/texture_cache.cpp
+index 2d18c10..0a55bba 100644
+--- a/src/video_core/texture_cache/texture_cache.cpp
++++ b/src/video_core/texture_cache/texture_cache.cpp
+@@ -323,6 +323,16 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
+             return {merged_image_id, -1, -1};
+         }
+ 
++        // D1-PRESERVATION FORK-LOCAL CHANGE: the same address reused for an image of a different
++        // TYPE with a larger footprint (Destiny 56578 loading pvp_moonbase: same format, tile mode
++        // and resources, 16x the size). Treat it like the tile-mode reuse above instead of aborting.
++        if (image_info.type != cache_image.info.type) {
++            if (safe_to_delete) {
++                FreeImage(cache_image_id);
++            }
++            return {merged_image_id, -1, -1};
++        }
++
+         // Enhanced debug logging for unreachable case
+         // Calculate expected size based on format and dimensions
+         u64 expected_size =
