@@ -376,6 +376,54 @@ stopped after its logs were saved.
 `profile_setup` is the operator menu step on 01.29 (move down, confirm,
 dismiss the brightness prompt). It needs the user's controller (`-OperatorInput`).
 
+**Static re-derivation while the PC was locked (13 October).**
+
+*Oodle (content decoding).* `DecodeSome` is the only function referencing the
+assertion name `"OodleLZDecoder_DecodeSome"` (`0x16C3BB1`): **`0x126CA00`**
+(01.29 `0x12672E0`). The scratch query `0x126C840` and create `0x126C8C0` sit
+at the same offsets before it, and the frame `memset` returns to `0x12761A5`
+(the library moved `+0x5720`). The harness's other hooks are confirmed by NID
+(computed `SHA-1(name + suffix)`): memcpy `0x12AA7C0` (`Q3VBxCXhUHs`), memmove
+`0x12AAAB0` (`+P6FRGH4LfA`), memset `0x12AA980` (`8zTFvBIAIN8`),
+`__stack_chk_fail` `0x12AA7F0` (`Ou3iL1abvng`). The 01.29 harness had
+memcpy/memmove labels swapped, harmlessly, since both are copy stubs. The stack
+guard slot is `0x1A1F100`, and Oodle's plugin-routed aligned alloc/free are
+`0x1278720`/`0x12787B0`. The 01.29 `IMP_NOP` (`0xF8ED00`) has no 56578
+equivalent identified yet, and the decode did not need one. `d1-oracle` picks
+these per image hash and refuses unknown images. **The client's own decoder
+extracted tag `0x80A5E37A` for 56578:** `ps4_investment_globals_012f_6.pkg`
+entry 890, 6,528 bytes, self-length header match, SHA-256
+`84ab907ea3e794eb12023303dc3a3b84866cdc85cb7a2bb89675f95b073aee27`
+(private, `retarget-static/`).
+
+*BAP tables.* `POLICY_PTRS` is the only run of 33 relocated slots pointing at the
+33 objects whose vptr is a `c_investment_bap_message_policy_*` vtable (RTTI):
+`0x193BD50`. The registry `0x193A1B0`, names `0x193BB40`, codecs `0x193B540`
+and push table `0x193DB30` follow at the same `+0x180A0` shift and match their
+structure. With the 56578 definitions file, **`d1-bap controls`: 18/18 PASS**,
+including drift checks (derived == server constants) for the 58 message
+classes, 33 policies, 13-entry push set and 8 header lengths, and messages
+206/503 keep their schema tags. The server's BAP tables are therefore verified
+for 56578, not merely tolerated.
+
+*Schema survey.* Of the 19 schema tags whose 01.29 checksum is documented in
+`design/`, 16 are unchanged in 56578. The changed three are account and profile
+(handled) and `0x80801941` (`0xB8C0245A` → `0x2859B3E2`, the world-server root
+embedded in 503/205). Its 56578 layout is unchanged where it matters: 944 bytes,
+8 fields, unlock flags at field [3] as a 6-bit count plus 50 × {u16, u2}, so the
+503 encoding is unaffected.
+
+*Fix found on the way.* `Image::open_default` still opened the 01.29 path; that
+edit had failed in the first registry change. It now follows the registry, and
+`Image::open_reference` / `Harness::open_reference` / `Content::open_reference`
+serve tests and controls that assert 01.29 facts. Those skip unless
+`D1_BUILD=01.29` and the 01.29 estate are present; `d1-oracle`'s Oodle control
+command always uses the reference. `d1-oracle` unit tests that need the absent
+01.29 executable fail as they did before this change (public CI does not run
+them). Patch: `d1-56578-oodle-bap-anchors.patch`. Windows: d1-build 3, d1-eboot
+all suites, d1-bap 161 tests, responder controls pass. Linux (public tree):
+d1-build, d1-eboot, d1-bap, d1-responder and d1-harness suites pass.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at

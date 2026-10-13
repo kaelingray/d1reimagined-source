@@ -1,0 +1,642 @@
+diff --git a/ps4/d1-server/crates/d1-bap/src/derive.rs b/ps4/d1-server/crates/d1-bap/src/derive.rs
+index 0bf3ea8..eb10a4d 100644
+--- a/ps4/d1-server/crates/d1-bap/src/derive.rs
++++ b/ps4/d1-server/crates/d1-bap/src/derive.rs
+@@ -79,6 +79,45 @@ pub const PUSH_SLOTS: usize = 15;
+ pub const HEADER_CODECS: u64 = 0x192_34A0;
+ pub const HEADER_CODEC_COUNT: usize = 8;
+ 
++/// The table anchors for one image. The constants above are the 01.29 reference set.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct Anchors {
++    pub registry: u64,
++    pub policy_names: u64,
++    pub policy_ptrs: u64,
++    pub push_table: u64,
++    pub header_codecs: u64,
++}
++
++pub const ANCHORS_0129: Anchors = Anchors {
++    registry: REGISTRY,
++    policy_names: POLICY_NAMES,
++    policy_ptrs: POLICY_PTRS,
++    push_table: PUSH_TABLE,
++    header_codecs: HEADER_CODECS,
++};
++
++/// Build 56578 (01.33). `policy_ptrs` is the only run of 33 consecutive relocated slots whose
++/// targets are the 33 objects whose vptr is a `c_investment_bap_message_policy_*` vtable (RTTI);
++/// the other four sit at the same `+0x180A0` shift and each matches its structure (58/58 relocated
++/// registry slots, 33 policy-name strings, 8 codec singletons, 15 push slots with 13 non-null).
++pub const ANCHORS_56578: Anchors = Anchors {
++    registry: 0x193_A1B0,
++    policy_names: 0x193_BB40,
++    policy_ptrs: 0x193_BD50,
++    push_table: 0x193_DB30,
++    header_codecs: 0x193_B540,
++};
++
++/// The anchors for an image, by its SHA-256. `None` = not measured.
++pub fn anchors_for(sha256: &str) -> Option<Anchors> {
++    match sha256 {
++        PINNED_EBOOT_SHA256 => Some(ANCHORS_0129),
++        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(ANCHORS_56578),
++        _ => None,
++    }
++}
++
+ /// The pinned investment message definition table, beside the pinned eboot.
+ /// Like [`d1_eboot::image::PINNED_EBOOT`] this resolves relative to the source tree; both files
+ /// are local-only artifacts (owned media) and everything that needs them skips or refuses when
+@@ -130,6 +169,9 @@ impl Thunk {
+ pub struct Reader {
+     image: Image,
+     slots: HashMap<u64, u64>,
++    /// The table anchors for this image (`ANCHORS_0129` when the image has none measured, so the
++    /// identity control below fails instead of the reader silently using them).
++    pub anchors: Anchors,
+ }
+ 
+ impl Reader {
+@@ -145,7 +187,8 @@ impl Reader {
+ 
+     pub fn from_image(image: Image) -> Result<Self, String> {
+         let slots = reloc::by_slot(&image).map_err(|e| e.to_string())?;
+-        Ok(Reader { image, slots })
++        let anchors = anchors_for(&image.sha256()).unwrap_or(ANCHORS_0129);
++        Ok(Reader { image, slots, anchors })
+     }
+ 
+     pub fn image(&self) -> &Image {
+@@ -250,7 +293,7 @@ pub struct TransportMessage {
+ pub fn transport_registry(r: &Reader) -> Result<Vec<TransportMessage>, String> {
+     let mut out = Vec::with_capacity(REGISTRY_COUNT);
+     for entry in 0..REGISTRY_COUNT {
+-        let slot = REGISTRY + entry as u64 * 8;
++        let slot = r.anchors.registry + entry as u64 * 8;
+         let vtable =
+             r.ptr(slot).ok_or_else(|| format!("registry slot {entry} at {slot:#x} unresolved"))?;
+         let (_, class) = {
+@@ -333,8 +376,8 @@ pub struct PolicyFamily {
+ pub fn policy_families(r: &Reader) -> Vec<PolicyFamily> {
+     (0..POLICY_COUNT)
+         .map(|index| {
+-            let name_string = r.ptr(POLICY_NAMES + index as u64 * 8).and_then(|p| r.cstr(p));
+-            let singleton = r.ptr(POLICY_PTRS + index as u64 * 8);
++            let name_string = r.ptr(r.anchors.policy_names + index as u64 * 8).and_then(|p| r.cstr(p));
++            let singleton = r.ptr(r.anchors.policy_ptrs + index as u64 * 8);
+             let (vtable, rtti_class) = match singleton {
+                 Some(obj) => r.rtti(obj),
+                 None => (None, None),
+@@ -351,7 +394,8 @@ pub fn policy_families(r: &Reader) -> Vec<PolicyFamily> {
+ /// The two words after the policy table (`[33]`, `[34]`) - the "table really ends" control reads
+ /// them and demands `(None, None)`.
+ pub fn policy_table_end(r: &Reader) -> (Option<u64>, Option<u64>) {
+-    (r.ptr(POLICY_PTRS + POLICY_COUNT as u64 * 8), r.ptr(POLICY_PTRS + (POLICY_COUNT as u64 + 1) * 8))
++    let t = r.anchors.policy_ptrs;
++    (r.ptr(t + POLICY_COUNT as u64 * 8), r.ptr(t + (POLICY_COUNT as u64 + 1) * 8))
+ }
+ 
+ // ── (3) the push accept-set ───────────────────────────────────────────────────────────────────
+@@ -359,7 +403,7 @@ pub fn policy_table_end(r: &Reader) -> (Option<u64>, Option<u64>) {
+ /// The ids of the non-null singletons at [`PUSH_TABLE`], in slot order.
+ pub fn push_accept_ids(r: &Reader) -> Vec<u16> {
+     (0..PUSH_SLOTS)
+-        .filter_map(|i| r.ptr(PUSH_TABLE + i as u64 * 8))
++        .filter_map(|i| r.ptr(r.anchors.push_table + i as u64 * 8))
+         .filter_map(|obj| r.ptr(obj))
+         .filter_map(|vt| r.thunk_at(r.ptr(vt)?).value())
+         .map(|v| v as u16)
+@@ -373,7 +417,7 @@ pub fn header_lengths(r: &Reader) -> Result<[usize; 8], String> {
+     let mut out = [0usize; 8];
+     for (class, slot) in out.iter_mut().enumerate() {
+         let obj = r
+-            .ptr(HEADER_CODECS + class as u64 * 8)
++            .ptr(r.anchors.header_codecs + class as u64 * 8)
+             .ok_or_else(|| format!("header codec {class} unresolved"))?;
+         let vt = r.ptr(obj).ok_or_else(|| format!("header codec {class} has no vptr"))?;
+         *slot = r
+@@ -647,11 +691,11 @@ pub fn run_controls(r: &Reader, defs: Option<&[DefRow]>) -> Vec<Control> {
+ pub fn run_eboot_controls(r: &Reader) -> Vec<Control> {
+     let mut out = Vec::new();
+ 
+-    // The addresses in this module are for the pinned 01.29 build and no other.
++    // The table addresses are per image: 01.29 (reference) and 56578 are measured, nothing else.
+     let sha = r.image().sha256();
+     out.push(ctl(
+-        sha == PINNED_EBOOT_SHA256,
+-        "image is the pinned 01.29 build (fixed table addresses apply)",
++        anchors_for(&sha).is_some(),
++        "image has measured table anchors (01.29 reference or 56578)",
+         format!("sha256 {}...", &sha[..12]),
+     ));
+ 
+@@ -690,8 +734,8 @@ pub fn run_eboot_controls(r: &Reader) -> Vec<Control> {
+         Ok(rows) => {
+             out.push(ctl(
+                 rows.len() == REGISTRY_COUNT,
+-                "the registry at 0x1922110 holds 58 message classes",
+-                format!("{}", rows.len()),
++                "the transport message registry holds 58 message classes",
++                format!("{} at {:#x}", rows.len(), r.anchors.registry),
+             ));
+             let unnamed = rows.iter().filter(|m| m.class_name.is_empty()).count();
+             out.push(ctl(
+diff --git a/ps4/d1-server/crates/d1-build/src/lib.rs b/ps4/d1-server/crates/d1-build/src/lib.rs
+index 5c93ed9..5b288b6 100644
+--- a/ps4/d1-server/crates/d1-build/src/lib.rs
++++ b/ps4/d1-server/crates/d1-build/src/lib.rs
+@@ -171,6 +171,12 @@ pub fn reference() -> &'static Build {
+     &builds().unwrap_or_else(|e| panic!("{e}")).reference
+ }
+ 
++/// Whether the selected build is the reference. Tests whose expectations are 01.29 facts reached
++/// through default-opening library functions gate on this (run them with `D1_BUILD=01.29`).
++pub fn reference_selected() -> bool {
++    builds().map(|b| b.selected.id == b.reference.id).unwrap_or(false)
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/ps4/d1-server/crates/d1-eboot/src/image.rs b/ps4/d1-server/crates/d1-eboot/src/image.rs
+index 9ba5c13..3af0c97 100644
+--- a/ps4/d1-server/crates/d1-eboot/src/image.rs
++++ b/ps4/d1-server/crates/d1-eboot/src/image.rs
+@@ -168,10 +168,15 @@ pub struct Image {
+ }
+ 
+ impl Image {
+-    /// Open the pinned eboot, or whatever `D1_EBOOT` names.
++    /// Open the selected build's eboot, or whatever `D1_EBOOT` names.
+     pub fn open_default() -> Result<Self> {
+-        let path = std::env::var("D1_EBOOT").unwrap_or_else(|_| PINNED_EBOOT.to_string());
+-        Self::open(path)
++        Self::open(default_eboot())
++    }
++
++    /// Open the 01.29 address reference. Tests and controls that assert its measured facts use
++    /// this, so they skip when it is absent instead of judging another build by its numbers.
++    pub fn open_reference() -> Result<Self> {
++        Self::open(PINNED_EBOOT)
+     }
+ 
+     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+diff --git a/ps4/d1-server/crates/d1-eboot/src/nametab.rs b/ps4/d1-server/crates/d1-eboot/src/nametab.rs
+index e93709a..5e88518 100644
+--- a/ps4/d1-server/crates/d1-eboot/src/nametab.rs
++++ b/ps4/d1-server/crates/d1-eboot/src/nametab.rs
+@@ -195,7 +195,7 @@ mod tests {
+     /// bootflow table at `0x274DA80` by hand; this asserts the harvester agrees, name for name.
+     #[test]
+     fn reproduces_the_hand_decoded_bootflow_table() {
+-        let Ok(image) = Image::open_default() else { return };
++        let Ok(image) = Image::open_reference() else { return };
+         let mut corpus = Corpus::build(&image, 3).unwrap();
+         corpus.add_names(crate::rtti::harvest(&image).unwrap().types.into_iter().map(|t| t.name));
+         let tables = harvest(&image, &corpus, REGISTRAR).unwrap();
+diff --git a/ps4/d1-server/crates/d1-live/src/registry.rs b/ps4/d1-server/crates/d1-live/src/registry.rs
+index 906bed9..676ac46 100644
+--- a/ps4/d1-server/crates/d1-live/src/registry.rs
++++ b/ps4/d1-server/crates/d1-live/src/registry.rs
+@@ -561,7 +561,7 @@ mod tests {
+ 
+     #[test]
+     fn region_of_separates_file_from_bss() {
+-        let img = match Image::open_default() {
++        let img = match Image::open_reference() {
+             Ok(i) => i,
+             Err(_) => return, // the pinned dump is not present in every checkout
+         };
+diff --git a/ps4/d1-server/crates/d1-oracle/src/activity_host.rs b/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
+index 443c865..bc1f098 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
+@@ -1725,7 +1725,7 @@ mod tests {
+     /// ids, so this needs no index-to-udt mapping at all - which is the mistake it guards against.
+     #[test]
+     fn the_rx_dispatch_table_is_not_dense_over_the_sorted_id_list() {
+-        let image = Image::open_default().unwrap();
++        let image = Image::open_reference().unwrap();
+         let row = |i: u64| (image.u32(0x18F_84A0 + i * 16).unwrap(), image.u64(0x18F_84A0 + i * 16 + 8).unwrap());
+         // The fnptr words are relocation slots and read 0 statically; only the types are inline.
+         assert_eq!(row(4).0, 11, "index 4 is udt 11 replicate_membership");
+diff --git a/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs b/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
+index 63ede74..986c575 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
+@@ -703,8 +703,8 @@ mod tests {
+     /// and `gjallarhorn-arrangement` goes red immediately.
+     #[test]
+     fn the_walks_reproduce_every_pinned_anchor() {
+-        if !crate::oodle::default_pkgdir().is_dir() {
+-            eprintln!("SKIP: no package estate");
++        if !d1_build::reference_selected() || !crate::oodle::default_pkgdir().is_dir() {
++            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
+             return;
+         }
+         if IndexTable::load_default().is_err() {
+diff --git a/ps4/d1-server/crates/d1-oracle/src/character.rs b/ps4/d1-server/crates/d1-oracle/src/character.rs
+index 3ba6f83..576bbc5 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/character.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/character.rs
+@@ -1593,7 +1593,7 @@ mod tests {
+ 
+     #[test]
+     fn layout_is_derived_from_the_eboot_not_transcribed() {
+-        let image = Image::open_default().expect("pinned eboot");
++        let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+         assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
+     }
+diff --git a/ps4/d1-server/crates/d1-oracle/src/harness.rs b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+index 06a7864..cd4f1f9 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/harness.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+@@ -58,6 +58,57 @@ pub const IMP_MEMSET: u64 = 0x0129_D240;
+ pub const IMP_MEMCPY: u64 = 0x0129_D370;
+ pub const IMP_STACK_CHK_FAIL: u64 = 0x0129_D0B0;
+ 
++/// The harness's image-specific addresses, chosen by the loaded image's SHA-256. The `IMP_*`
++/// constants above are the 01.29 reference set.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct BuildAddrs {
++    pub canary_slot: u64,
++    /// A function the 01.29 decode path reaches that is stubbed to return 0. Not yet identified
++    /// for 56578; `None` leaves the game's own code to run.
++    pub imp_nop: Option<u64>,
++    pub alloc_aligned: u64,
++    pub free: u64,
++    pub memcpy: u64,
++    pub memmove: u64,
++    pub memset: u64,
++    pub stack_chk_fail: u64,
++}
++
++pub const ADDRS_0129: BuildAddrs = BuildAddrs {
++    canary_slot: CANARY_SLOT,
++    imp_nop: Some(IMP_NOP),
++    alloc_aligned: IMP_ALLOC_ALIGNED,
++    free: IMP_FREE,
++    memcpy: IMP_MEMCPY,
++    memmove: IMP_MEMMOVE,
++    memset: IMP_MEMSET,
++    stack_chk_fail: IMP_STACK_CHK_FAIL,
++};
++
++/// Build 56578 (01.33). PLT stubs confirmed by NID (memcpy `Q3VBxCXhUHs`, memmove `+P6FRGH4LfA`,
++/// memset `8zTFvBIAIN8`, `__stack_chk_fail` `Ou3iL1abvng`); the stack guard slot is the one every
++/// 56578 prologue reads; the allocator pair are Oodle's plugin-routed aligned alloc / free
++/// (`[0x2954538]` / `[0x2954540]`), at the same offset from `DecodeSome` as in 01.29.
++pub const ADDRS_56578: BuildAddrs = BuildAddrs {
++    canary_slot: 0x01A1_F100,
++    imp_nop: None,
++    alloc_aligned: 0x0127_8720,
++    free: 0x0127_87B0,
++    memcpy: 0x012A_A7C0,
++    memmove: 0x012A_AAB0,
++    memset: 0x012A_A980,
++    stack_chk_fail: 0x012A_A7F0,
++};
++
++/// The address set for an image, by its SHA-256. `None` = no measured set: refuse to run.
++pub fn addrs_for(sha256: &str) -> Option<BuildAddrs> {
++    match sha256 {
++        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(ADDRS_0129),
++        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(ADDRS_56578),
++        _ => None,
++    }
++}
++
+ const ARG_REGS: [RegisterX86; 6] = [
+     RegisterX86::RDI,
+     RegisterX86::RSI,
+@@ -181,6 +232,12 @@ impl Harness {
+     /// `0x1A0D100 + 0xBDD0` (ATLAS §4.3 - a superseded constant surviving in a sibling tool is a
+     /// failure this project has already paid for).
+     pub fn new(image: &Image) -> Result<Self> {
++        let addrs = addrs_for(&image.sha256()).ok_or_else(|| {
++            OracleError::Eboot(format!(
++                "no harness address set for image sha256 {} - stubs would land on the wrong code",
++                image.sha256()
++            ))
++        })?;
+         let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).map_err(uce)?;
+         uc.mem_map(0, GUEST_LIMIT, Prot::ALL).map_err(uce)?;
+         uc.mem_map(STACK, STACK_SIZE, Prot::ALL).map_err(uce)?;
+@@ -214,18 +271,20 @@ impl Harness {
+ 
+         uc.mem_write(STOP, &[0xCC]).map_err(uce)?;
+         uc.mem_write(CANARY_PTR, &CANARY.to_le_bytes()).map_err(uce)?;
+-        uc.mem_write(CANARY_SLOT, &CANARY_PTR.to_le_bytes()).map_err(uce)?;
++        uc.mem_write(addrs.canary_slot, &CANARY_PTR.to_le_bytes()).map_err(uce)?;
+ 
+         let mut stubs = HashMap::new();
+         stubs.insert(0u64, Stub::NullDispatch);
+         stubs.insert(STOP, Stub::Stop);
+-        stubs.insert(IMP_NOP, Stub::Return(0));
+-        stubs.insert(IMP_ALLOC_ALIGNED, Stub::AllocAligned);
+-        stubs.insert(IMP_FREE, Stub::Free);
+-        stubs.insert(IMP_MEMMOVE, Stub::MemCopy);
+-        stubs.insert(IMP_MEMCPY, Stub::MemCopy);
+-        stubs.insert(IMP_MEMSET, Stub::MemSet);
+-        stubs.insert(IMP_STACK_CHK_FAIL, Stub::StackChkFail);
++        if let Some(nop) = addrs.imp_nop {
++            stubs.insert(nop, Stub::Return(0));
++        }
++        stubs.insert(addrs.alloc_aligned, Stub::AllocAligned);
++        stubs.insert(addrs.free, Stub::Free);
++        stubs.insert(addrs.memmove, Stub::MemCopy);
++        stubs.insert(addrs.memcpy, Stub::MemCopy);
++        stubs.insert(addrs.memset, Stub::MemSet);
++        stubs.insert(addrs.stack_chk_fail, Stub::StackChkFail);
+ 
+         let st = Rc::new(RefCell::new(State {
+             heap_next: HEAP,
+@@ -308,6 +367,13 @@ impl Harness {
+         Ok((image, h))
+     }
+ 
++    /// [`Harness::open_default`] on the 01.29 address reference (tests and controls).
++    pub fn open_reference() -> Result<(Image, Self)> {
++        let image = Image::open_reference().map_err(|e| OracleError::Eboot(e.to_string()))?;
++        let h = Self::new(&image)?;
++        Ok((image, h))
++    }
++
+     /// The underlying engine, for callers that need their own hooks, registers or single-stepping.
+     ///
+     /// ⚠ Adding a **second** global `UC_HOOK_CODE` is safe here (this harness owns exactly one and
+diff --git a/ps4/d1-server/crates/d1-oracle/src/oodle.rs b/ps4/d1-server/crates/d1-oracle/src/oodle.rs
+index 4465b99..2a8440d 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/oodle.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/oodle.rs
+@@ -67,6 +67,42 @@ pub const DECODE_SOME: u64 = 0x0126_72E0;
+ /// Measured 2026-08-11 by running the decode with the guard on and reading the refusal.
+ pub const DECODE_SOME_MEMSET_RETURN: u64 = 0x0127_0A85;
+ 
++/// The decoder's entry points for one image. The constants above are the 01.29 reference set.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct OodleAddrs {
++    pub q_scratch: u64,
++    pub init: u64,
++    pub decode_some: u64,
++    pub memset_return: u64,
++}
++
++pub const OODLE_0129: OodleAddrs = OodleAddrs {
++    q_scratch: Q_SCRATCH,
++    init: INIT,
++    decode_some: DECODE_SOME,
++    memset_return: DECODE_SOME_MEMSET_RETURN,
++};
++
++/// Build 56578 (01.33). `DecodeSome` is the only function referencing the assertion name string
++/// `"OodleLZDecoder_DecodeSome"` (`0x16C3BB1`); the scratch query and create sit at the same
++/// offsets before it as in 01.29 (`-0x1C0`, `-0x140`), and the frame-local `memset` returns to
++/// `0x12761A5` (`call 0x12AA980` = memset by NID). The Oodle object moved by `+0x5720`.
++pub const OODLE_56578: OodleAddrs = OodleAddrs {
++    q_scratch: 0x0126_C840,
++    init: 0x0126_C8C0,
++    decode_some: 0x0126_CA00,
++    memset_return: 0x0127_61A5,
++};
++
++/// The entry points for an image, by its SHA-256. `None` = not measured: refuse to decode.
++pub fn addrs_for(sha256: &str) -> Option<OodleAddrs> {
++    match sha256 {
++        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(OODLE_0129),
++        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(OODLE_56578),
++        _ => None,
++    }
++}
++
+ /// A block decompresses to **at most** this much. Same constant as [`d1_pkg::BLOCK_PLAIN_SIZE`],
+ /// restated as a `u64` because it is a guest-side argument here.
+ pub const PLAIN_CAP: u64 = d1_pkg::BLOCK_PLAIN_SIZE as u64;
+@@ -105,13 +141,14 @@ pub struct Decoded {
+ /// reuse is sound by decoding, decoding something else, and decoding the first thing again.
+ pub struct Oodle {
+     h: Harness,
++    a: OodleAddrs,
+     input: u64,
+     output: u64,
+     mark: u64,
+ }
+ 
+ impl Oodle {
+-    /// Open the pinned eboot and prepare the decoder.
++    /// Open the selected build's eboot and prepare the decoder.
+     pub fn open_default() -> Result<Self> {
+         Oodle::open_with_memset_allow(true)
+     }
+@@ -121,15 +158,26 @@ impl Oodle {
+     /// load-bearing rather than decorative. A decode built this way is expected to fail; nothing
+     /// it produces may be used.
+     pub fn open_with_memset_allow(allow: bool) -> Result<Self> {
+-        let (_image, mut h) = Harness::open_default()?;
++        Oodle::from_harness(Harness::open_default()?, allow)
++    }
++
++    /// [`Oodle::open_with_memset_allow`] on the 01.29 address reference (tests and controls).
++    pub fn open_reference_with_memset_allow(allow: bool) -> Result<Self> {
++        Oodle::from_harness(Harness::open_reference()?, allow)
++    }
++
++    fn from_harness((image, mut h): (d1_eboot::image::Image, Harness), allow: bool) -> Result<Self> {
++        let a = addrs_for(&image.sha256()).ok_or_else(|| {
++            OracleError::Shape(format!("no Oodle entry points measured for image sha256 {}", image.sha256()))
++        })?;
+         if allow {
+             // ⭐ See DECODE_SOME_MEMSET_RETURN. Registered once, for exactly one site.
+-            h.allow_stack_memset_from([DECODE_SOME_MEMSET_RETURN]);
++            h.allow_stack_memset_from([a.memset_return]);
+         }
+         let input = h.alloc_aligned(IO_SPAN, 16)?;
+         let output = h.alloc_aligned(IO_SPAN, 16)?;
+         let mark = h.heap_mark();
+-        Ok(Oodle { h, input, output, mark })
++        Ok(Oodle { h, a, input, output, mark })
+     }
+ 
+     /// Decompress one stored block. Terminates on **input** exhaustion (see the module note).
+@@ -155,16 +203,16 @@ impl Oodle {
+         self.h.heap_rewind(self.mark)?;
+         self.h.write(self.input, stored)?;
+ 
+-        let need = self.h.call(Q_SCRATCH, &[0])?;
++        let need = self.h.call(self.a.q_scratch, &[0])?;
+         let scratch = self.h.alloc_aligned(need, 16)?;
+-        let decoder = self.h.call(INIT, &[0, plain_cap, scratch])?;
++        let decoder = self.h.call(self.a.init, &[0, plain_cap, scratch])?;
+         let result = self.h.alloc_aligned(0x20, 16)?;
+ 
+         let (mut dec, mut comp, mut chunks) = (0u64, 0u64, 0usize);
+         while dec < plain_cap && (comp as usize) < stored.len() {
+             self.h.write(result, &[0u8; 0x20])?;
+             let ok = self.h.call(
+-                DECODE_SOME,
++                self.a.decode_some,
+                 &[
+                     decoder,
+                     self.output,
+@@ -226,12 +274,21 @@ pub struct Content {
+ }
+ 
+ impl Content {
+-    /// Open [`default_pkgdir`] and the pinned eboot.
++    /// Open [`default_pkgdir`] and the selected build's eboot.
+     pub fn open_default() -> Result<Self> {
+         Content::open(&default_pkgdir())
+     }
+ 
++    /// The 01.29 reference estate and image, for tests and controls that assert its facts.
++    pub fn open_reference() -> Result<Self> {
++        Content::open_with(Path::new(PINNED_PKGDIR), Oodle::open_reference_with_memset_allow(true)?)
++    }
++
+     pub fn open(dir: &Path) -> Result<Self> {
++        Content::open_with(dir, Oodle::open_default()?)
++    }
++
++    fn open_with(dir: &Path, oodle: Oodle) -> Result<Self> {
+         let estate = Estate::load(dir).map_err(|e| {
+             OracleError::Shape(format!(
+                 "{}: {e} (set $D1_PKGDIR, or check the owned-media dump is present)",
+@@ -240,7 +297,7 @@ impl Content {
+         })?;
+         Ok(Content {
+             estate,
+-            oodle: Oodle::open_default()?,
++            oodle,
+             dir: dir.to_path_buf(),
+             cache: BTreeMap::new(),
+             order: Vec::new(),
+@@ -418,15 +475,17 @@ fn no(name: &'static str, detail: impl Into<String>) -> Control {
+ ///
+ /// One of them is **inverted**: a single flipped stored byte must change the output (or fault). A
+ /// decoder that ignored its input would pass every positive check here and fail that one.
++/// Controls of the 01.29 reference decode (a pinned block and its digest): they always run on
++/// the reference estate and image, never on the selected build.
+ pub fn controls() -> Vec<Control> {
+-    let dir = default_pkgdir();
++    let dir = PathBuf::from(PINNED_PKGDIR);
+     if !dir.is_dir() {
+         return vec![no(
+             "estate",
+             format!("{} is not a directory - the owned-media dump is absent, so nothing here ran", dir.display()),
+         )];
+     }
+-    let mut c = match Content::open(&dir) {
++    let mut c = match Content::open_reference() {
+         Ok(c) => c,
+         Err(e) => return vec![no("estate", e.to_string())],
+     };
+@@ -568,8 +627,8 @@ mod tests {
+     /// trip on `memset would clobber the STACK`.
+     #[test]
+     fn the_clients_own_decoder_reproduces_the_python_paths_pinned_block() {
+-        if !default_pkgdir().is_dir() {
+-            eprintln!("SKIP: no package estate");
++        if !d1_build::reference_selected() || !Path::new(PINNED_PKGDIR).is_dir() {
++            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
+             return;
+         }
+         for c in controls() {
+@@ -584,16 +643,16 @@ mod tests {
+     /// only record in the tree that the address matters; delete the constant and it goes red.
+     #[test]
+     fn without_the_memset_allow_site_the_decode_is_refused() {
+-        if !default_pkgdir().is_dir() {
+-            eprintln!("SKIP: no package estate");
++        if !d1_build::reference_selected() || !Path::new(PINNED_PKGDIR).is_dir() {
++            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
+             return;
+         }
+-        let c = Content::open_default().expect("estate");
++        let c = Content::open_reference().expect("estate");
+         let (stored, compressed) = c.stored_block(PIN_PACKAGE, PIN_BLOCK).expect("block");
+         assert!(compressed, "the pinned block must be compressed for this to test anything");
+         drop(c);
+ 
+-        let mut bare = Oodle::open_with_memset_allow(false).expect("harness");
++        let mut bare = Oodle::open_reference_with_memset_allow(false).expect("harness");
+         match bare.decompress(&stored) {
+             Err(e) => {
+                 let m = e.to_string();
+diff --git a/ps4/d1-server/crates/d1-oracle/src/profile.rs b/ps4/d1-server/crates/d1-oracle/src/profile.rs
+index d23c88b..50bbd5c 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/profile.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/profile.rs
+@@ -1057,7 +1057,7 @@ mod tests {
+ 
+     #[test]
+     fn layout_is_derived_from_the_eboot_not_transcribed() {
+-        let image = Image::open_default().expect("pinned eboot");
++        let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+         assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
+     }
+diff --git a/ps4/d1-server/crates/d1-oracle/src/roster.rs b/ps4/d1-server/crates/d1-oracle/src/roster.rs
+index d6dfecb..2cc9942 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/roster.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/roster.rs
+@@ -1322,7 +1322,7 @@ mod tests {
+ 
+     #[test]
+     fn layout_is_derived_from_the_eboot_not_transcribed() {
+-        let image = Image::open_default().expect("pinned eboot");
++        let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+         assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
+     }
+@@ -1331,7 +1331,7 @@ mod tests {
+     /// third answer is believed.
+     #[test]
+     fn instance_checksums_reproduce_the_shipped_constants() {
+-        let image = Image::open_default().expect("pinned eboot");
++        let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+         assert_eq!(instance_type(&image, &idx, CONTACT_TAG).unwrap(), CONTACT_INSTANCE_TYPE);
+         assert_eq!(instance_type(&image, &idx, CARD_TAG).unwrap(), CARD_INSTANCE_TYPE);
+@@ -1356,7 +1356,7 @@ mod tests {
+     /// Family 0/0 is family 2/0's twin - the claim a future family-0 build would rest on.
+     #[test]
+     fn family_0_type_0_has_the_same_tree_as_family_2_type_0() {
+-        let image = Image::open_default().expect("pinned eboot");
++        let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+         assert_eq!(desc(&idx, PEER_CONTACT_TAG).unwrap().struct_size as usize, PEER_CONTACT_SIZE);
+         assert_eq!(
+diff --git a/ps4/d1-server/crates/d1-oracle/tests/oodle_probe.rs b/ps4/d1-server/crates/d1-oracle/tests/oodle_probe.rs
+index 28f0edd..2fd60b8 100644
+--- a/ps4/d1-server/crates/d1-oracle/tests/oodle_probe.rs
++++ b/ps4/d1-server/crates/d1-oracle/tests/oodle_probe.rs
+@@ -46,11 +46,11 @@ fn sha1_hex(b: &[u8]) -> Option<String> {
+ 
+ #[test]
+ fn the_rust_decode_matches_the_sha1_the_python_tool_printed() {
+-    if !default_pkgdir().is_dir() {
+-        eprintln!("SKIP: no package estate");
++    if !d1_build::reference_selected() || !std::path::Path::new(d1_oracle::oodle::PINNED_PKGDIR).is_dir() {
++        eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
+         return;
+     }
+-    let mut c = Content::open_default().expect("estate + eboot");
++    let mut c = Content::open_reference().expect("estate + eboot");
+     let (stored, compressed) = c.stored_block(PIN_PACKAGE, PIN_BLOCK).expect("stored block");
+     assert!(compressed, "block {PIN_BLOCK} must be Oodle-compressed for this to test anything");
+     let d = c.oodle().decompress_whole(&stored).expect("decode");
+diff --git a/ps4/d1-server/crates/d1-oracle/tests/vectors.rs b/ps4/d1-server/crates/d1-oracle/tests/vectors.rs
+index 547fc7d..cb9fa46 100644
+--- a/ps4/d1-server/crates/d1-oracle/tests/vectors.rs
++++ b/ps4/d1-server/crates/d1-oracle/tests/vectors.rs
+@@ -256,7 +256,7 @@ fn tag_slot_is_not_just_the_low_13_bits() {
+     use d1_eboot::descriptors;
+     use d1_oracle::registry::tag_slot;
+     need_eboot!();
+-    let img = d1_eboot::image::Image::open_default().unwrap();
++    let img = d1_eboot::image::Image::open_reference().unwrap();
+     let idx = descriptors::index(&img).unwrap();
+     let tags: Vec<u32> = idx.tags().collect();
+     let full: std::collections::HashSet<(u32, u32)> = tags.iter().map(|&t| tag_slot(t)).collect();
