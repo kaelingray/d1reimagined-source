@@ -204,6 +204,21 @@ permission policy as a security-check bypass, so it awaits the user's decision.
 The 1,392-entry manifest also exceeds the 01.29-measured descriptor cap, which
 may be the next gate after that.
 
+**Lab manifest run (user-approved, run `20261013-080220-later-56578-lab-manifest`).**
+All three lines of `CUSA00219-56578-lab-manifest.xml` were logged as applied. No
+fault occurred in 8 minutes. OAuth, `/SignOn` (`www8.signon.gravityshavings.net`)
+and the 71,003-byte manifest were served twice as before, but the game's error
+moved from `turtle` to **`marionberry`** ("Could not connect to the Destiny
+servers"). So the unsigned 1,392-entry manifest was accepted past the
+envelope, at least as far as this gate; the descriptor cap did not stop it here.
+`marionberry` is `error.transport_method_invalid`. The PS4 project traced it on
+01.29 to a loopback-only transport: the client rejects `127.0.0.1` STUN/BAP
+addresses and wants a routable-looking local interface. It solved this on Linux
+with an isolated dummy interface at `10.77.0.2`. Here every redirect and listener
+is `127.0.0.1`, and shadPS4 logs `sceNetCtlGetInfo: local ip: failed to retrieve`
+four times. This is the open Windows guest-transport gate. Everything past the
+lab byte is `synthetic_ancestor`.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at
@@ -216,14 +231,19 @@ may be the next gate after that.
 ## Next
 
 1. ~~Apply the redirects~~ (done 13 October); OAuth and `/SignOn` now pass.
-2. Decide on the unsigned-manifest lab byte (above). Then the 1,392-entry
-   manifest meets the unmeasured descriptor cap; a newest-generation or capped
-   selection is the fallback.
-3. Re-derive the build-specific parts: Oodle entry points (blocking schema
+2. ~~Unsigned-manifest lab byte~~ (approved and run 13 October; the game moves
+   on to `marionberry`).
+3. **Windows guest transport:** give the guest a non-loopback, non-routable
+   local address (the 01.29 Linux design used `10.77.0.2` on an isolated
+   interface). On Windows that means a host-only adapter, which is a system
+   network change the user would make as administrator. Then point the redirects
+   and the loopback-only servers at that address, and fix shadPS4's empty
+   `sceNetCtlGetInfo` local IP if it persists.
+4. Re-derive the build-specific parts: Oodle entry points (blocking schema
    `0x80A5E37A`), the eboot atlas, BAP tables/registry, the manifest cap and the
    account/profile schemas. Use RTTI and strings, since the 01.29 bytes are not
    available for signature matching.
-4. Check for aknumbers' 1.33 release before deep address work. Its executable
+5. Check for aknumbers' 1.33 release before deep address work. Its executable
    hash decides whether his addresses apply directly.
 
 Window frames are window-rectangle captures and include a sliver of the desktop
