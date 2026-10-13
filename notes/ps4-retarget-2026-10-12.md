@@ -1124,8 +1124,32 @@ Other leads that came up empty:
 - The equipment iterators' vtables are referenced only inside the investment layer (`0x2693A0`,
   `0x269470`).
 
-Open: identify the 4 non-biped constructions (their definition type) and the spawn-time
-weapon-giving path. The open question is which
+*Every construction typed (run `ctor2`, Elimination 416).* `d1-watchwrite.py --exec` (new:
+execute breakpoints, logging RAX and the definition at `[rbp-0x150]`, with RF set on resume) sat
+on the constructor's type store `0x32DD69` (breakpoint at `0x32DD6E`). It ran from orbit through
+the launch, load and spawn: 585 constructions.
+
+| type | count | type | count |
+|---|---|---|---|
+| system | 357 | static_mesh | 23 |
+| prop_simple | 98 | prop_simulated | 19 |
+| emitter | 40 | prop_cinematic | 6 |
+| interactive | 39 | vehicle | 1 (the orbit ship, built at orbit) |
+| biped | 1 | | |
+
+The biped is created by the spawner at `0x413B96` (definition head `abc1d2ba…`). After it came only
+three interactives (from `0x6678E3`) and one system object. **No weapon (11), gear (19) or item
+sobject is ever attempted.** The weapons are not created and then lost: the client never asks
+for them.
+
+On the spawner's success path (`0x4145DF…0x414C7E`, ~60 callees), the only callee with an
+object-creation sequence is `0x7420F0`, which places an object at a transform (Ghost/corpse-like,
+`[U]`).
+
+Next:
+- find what the 01.29/retail flow does to arm a spawned player; candidates are a later event or
+  message (e.g. an Activity Host loadout/equipment message) rather than the spawner itself;
+- check the AH's message list for equipment or loadout types we never send. The open question is which
 spawn-time path creates a player's weapon sobjects (type 11), and what it needs.
 
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe

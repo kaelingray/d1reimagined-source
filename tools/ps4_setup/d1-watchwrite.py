@@ -36,8 +36,9 @@ k32.OpenThread.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
 DBG_CONTINUE, DBG_EXCEPTION_NOT_HANDLED = 0x00010002, 0x80010001
 EXCEPTION_DEBUG_EVENT, CREATE_THREAD, CREATE_PROCESS, EXIT_THREAD, EXIT_PROCESS, LOAD_DLL = 1, 2, 3, 4, 5, 6
 SINGLE_STEP, BREAKPOINT = 0x80000004, 0x80000003
-CONTEXT_DEBUG_CONTROL = 0x100011          # CONTEXT_AMD64 | CONTROL | DEBUG_REGISTERS
+CONTEXT_DEBUG_CONTROL = 0x100013          # CONTEXT_AMD64 | CONTROL | INTEGER | DEBUG_REGISTERS
 OFF_FLAGS, OFF_DR0, OFF_DR6, OFF_DR7, OFF_RSP, OFF_RIP = 0x30, 0x48, 0x68, 0x70, 0x98, 0xF8
+OFF_EFLAGS, OFF_RAX, OFF_RBP, OFF_RDI = 0x44, 0x78, 0xA0, 0xB0
 
 
 class Ctx:
@@ -60,11 +61,15 @@ class Ctx:
         return k32.SetThreadContext(h, ctypes.c_void_p(self.addr))
 
 
+EXEC = set()   # indices of DR slots that are execute breakpoints (RW=00, LEN=00)
+
+
 def dr7_for(n):
     v = 0
     for i in range(n):
         v |= 1 << (2 * i)                  # L_i
-        v |= (0b01 | (0b11 << 2)) << (16 + 4 * i)   # RW=write, LEN=4 bytes
+        if i not in EXEC:
+            v |= (0b01 | (0b11 << 2)) << (16 + 4 * i)   # RW=write, LEN=4 bytes
     return v
 
 
@@ -87,6 +92,7 @@ def main():
     ap.add_argument('--field', action='append', default=[])
     ap.add_argument('--out', default=os.path.join(HERE, 'd1-watchwrite.jsonl'))
     ap.add_argument('--max-hits', type=int, default=200)
+    ap.add_argument('--exec', action='append', default=[], help='eboot-relative address: execute breakpoint; logs rax/rbp/rdi and 16 bytes at [rbp-0x150]')
     a = ap.parse_args()
     p, base = wg['open_client']()
     addrs = [int(x, 16) for x in a.addr]
@@ -94,7 +100,9 @@ def main():
         T = base + 0x2689580
         entry = p.u(T + 8, 'Q') + a.player_array * p.u(T + 0x10, 'I')
         addrs += [entry + int(f, 16) for f in a.field]
-    if not 1 <= len(addrs) <= 4 or any(x & 3 for x in addrs):
+    for x in a.exec:
+        EXEC.add(len(addrs)); addrs.append(base + int(x, 16))
+    if not 1 <= len(addrs) <= 4 or any(x & 3 for i, x in enumerate(addrs) if i not in EXEC):
         sys.exit(f'need 1..4 dword-aligned addresses, got {[hex(x) for x in addrs]}')
     pid = int(__import__('subprocess').run(['tasklist', '/FI', 'IMAGENAME eq shadPS4.exe', '/FO', 'CSV', '/NH'],
               capture_output=True, text=True).stdout.split('","')[1])
@@ -102,8 +110,7 @@ def main():
     def log(**kw):
         kw['t'] = time.time(); out.write(json.dumps(kw) + '\n'); out.flush()
         print(json.dumps(kw), flush=True)
-    log(event='start', pid=pid, base=hex(base), addrs=[hex(x) for x in addrs],
-        values=[hex(p.u(x, 'I')) for x in addrs])
+    log(event='start', pid=pid, base=hex(base), addrs=[hex(x) for x in addrs])
     if not k32.DebugActiveProcess(pid):
         sys.exit(f'DebugActiveProcess failed ({ctypes.get_last_error()})')
     k32.DebugSetProcessKillOnExit(False)
@@ -143,8 +150,18 @@ def main():
                             stack = ()
                         img = [hex(q - base) for q in stack if base <= q < base + 0x18D8000][:12]
                         which = [hex(addrs[i]) for i in range(4) if dr6 >> i & 1]
-                        log(event='write', tid=tid, rip=hex(rip), rip_img=hex(rip - base) if base <= rip < base + 0x18D8000 else None,
-                            which=which, values=[hex(p.u(x, 'I')) for x in addrs], stack_img=img)
+                        if any(i in EXEC for i in range(4) if dr6 >> i & 1):
+                            rax, rbp, rdi = c.u64(OFF_RAX), c.u64(OFF_RBP), c.u64(OFF_RDI)
+                            try:
+                                dp = p.u(rbp - 0x150, 'Q'); defn = p.read(dp, 0x10).hex(); dtype = p.read(dp + 0x8E, 1)[0]
+                            except OSError:
+                                dp, defn, dtype = 0, '', None
+                            log(event='exec', tid=tid, rip_img=hex(rip - base), rax=hex(rax), al=rax & 0xFF,
+                                defn=hex(dp), defn_head=defn, defn_type=dtype, stack_img=img)
+                            ctypes.c_uint32.from_address(c.addr + OFF_EFLAGS).value |= 0x10000   # RF
+                        else:
+                            log(event='write', tid=tid, rip=hex(rip), rip_img=hex(rip - base) if base <= rip < base + 0x18D8000 else None,
+                                which=which, values=[hex(p.u(x, 'I')) for x in addrs], stack_img=img)
                         hits += 1
                         c.set64(OFF_DR6, 0); c.put(h)
                     else:
@@ -184,7 +201,7 @@ def main():
                 if hfile: k32.CloseHandle(hfile)
             k32.ContinueDebugEvent(epid, tid, cont)
         k32.DebugActiveProcessStop(pid)
-        log(event='detached', hits=hits, values=[hex(p.u(x, 'I')) for x in addrs])
+        log(event='detached', hits=hits)
     return 0
 
 
