@@ -810,6 +810,39 @@ pointer. Next options:
 - the AH entity-slot messages (udt 0 `entity_slots_allocated`, 30/31 authority mask), on the guess
   that `+0x50` names the player's simulation entity.
 
+*Leg A traced to the per-player client bundles (13 October, hardware write-watch).*
+`d1-watchwrite.py` attaches as a debugger and sets data-write breakpoints on every thread,
+passing every other exception back. It was armed at orbit on player-array entry 0 (`+0x48`,
+`+0x50`) across a world load and caught three writers:
+- the pool memset;
+- the entry constructor `0x301470`, which sets the tag at `+0x48` and `+0x50 = -1` at `0x30150F`;
+- the constructor's caller chain `0x3026BF ← 0x90EF35 ← 0xBA9E94 ← 0xF70404` (add-player).
+
+The emulator stayed up and the watch detached cleanly.
+
+The only non-reset writer of `+0x50` is the setter `0x301C60` (`mov [rdi+0x50],esi`). It is called
+only from the linker `0x1195F0(key)`, which add-player calls at `0x3026DF` with
+`key = entry+0x18` (live `0xD100000000000201`). The linker walks the world content's **type-12**
+objects (the iterator `0x100CB80` over the table at `content+0x520`, 0x38-byte rows; content from
+`[0x1AD5000]`, index `[0x25D6FF8]`). For each object:
+1. resolve `obj+0x208` (tag) plus `obj+0x210` (offset) to a record;
+2. link the object's tag into `entry+0x50` when the record's first 8 bytes equal the key.
+
+The gate then reads `obj+0x1F8`/`+0x200` → record `[+9]`, and task 9 reads `[+8]`.
+
+Live in world, pvp_moonbase has 12 type-12 objects. They are "client bundle instances" slots 7–18,
+the same pool as the lifetime record (slot 3). Each object's tag points back at itself:
+- the gate record is the object's own `+0x218`, reading `ff ff ff ff c5 9d 1c 81 …`;
+- the identity record is its own `+0x258`, reading **all zero**.
+
+So no bundle carries our player's key, and the link never forms. These 12 objects are sensor
+clients `0xC2DACAF7` subs **7–18**, i8 `0x0C` (= type 12): A type `0x808022A5`, B type `0x80802C30`.
+We currently send them fresh and value-less.
+
+Next: serve one bundle (sub 7) a real value, with identity = the player key and the gate byte set.
+That needs the A/B type setters (the post-pass dispatch `0x2CED30` per type) and the schema layout
+of `0x808022A5`/`0x80802C30`.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.

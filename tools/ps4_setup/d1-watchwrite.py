@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""d1-watchwrite - log every guest write to a few dwords of the live client, with hardware breakpoints.
+
+Attaches to shadPS4 as a debugger, puts data-write breakpoints (DR0..DR3, 4 bytes each) on every
+thread, and logs RIP plus return-address candidates from the stack for each hit. Every other
+exception is passed back unhandled, so the emulator's own handlers still see its first-chance
+faults. Detaches cleanly (breakpoints cleared, kill-on-exit off) after --seconds.
+
+    d1-watchwrite.py --seconds 300 --addr 0x37fa385d0 --addr 0x37fa385c8
+    d1-watchwrite.py --seconds 300 --player-array 0 --field 0x50 --field 0x48
+
+Read-only on guest memory: it only sets debug registers. Output: a JSON-lines log (--out).
+"""
+import argparse, ctypes, ctypes.wintypes as wt, json, struct, sys, time, os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+src = open(os.path.join(HERE, 'd1-winguest.py'), encoding='utf-8').read().split('def main():')[0]
+wg = {}
+exec(compile(src, 'd1-winguest.py', 'exec'), wg)
+
+k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+k32.DebugActiveProcess.argtypes = [wt.DWORD]
+k32.DebugActiveProcessStop.argtypes = [wt.DWORD]
+k32.DebugSetProcessKillOnExit.argtypes = [wt.BOOL]
+k32.WaitForDebugEvent.argtypes = [ctypes.c_void_p, wt.DWORD]
+k32.ContinueDebugEvent.argtypes = [wt.DWORD, wt.DWORD, wt.DWORD]
+k32.GetThreadContext.argtypes = [wt.HANDLE, ctypes.c_void_p]
+k32.SetThreadContext.argtypes = [wt.HANDLE, ctypes.c_void_p]
+k32.SuspendThread.argtypes = [wt.HANDLE]
+k32.ResumeThread.argtypes = [wt.HANDLE]
+k32.CloseHandle.argtypes = [wt.HANDLE]
+k32.OpenThread.restype = wt.HANDLE
+k32.OpenThread.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+
+DBG_CONTINUE, DBG_EXCEPTION_NOT_HANDLED = 0x00010002, 0x80010001
+EXCEPTION_DEBUG_EVENT, CREATE_THREAD, CREATE_PROCESS, EXIT_THREAD, EXIT_PROCESS, LOAD_DLL = 1, 2, 3, 4, 5, 6
+SINGLE_STEP, BREAKPOINT = 0x80000004, 0x80000003
+CONTEXT_DEBUG_CONTROL = 0x100011          # CONTEXT_AMD64 | CONTROL | DEBUG_REGISTERS
+OFF_FLAGS, OFF_DR0, OFF_DR6, OFF_DR7, OFF_RSP, OFF_RIP = 0x30, 0x48, 0x68, 0x70, 0x98, 0xF8
+
+
+class Ctx:
+    def __init__(self):
+        self.raw = ctypes.create_string_buffer(1232 + 16)
+        self.addr = (ctypes.addressof(self.raw) + 15) & ~15
+
+    def u64(self, off):
+        return ctypes.c_uint64.from_address(self.addr + off).value
+
+    def set64(self, off, v):
+        ctypes.c_uint64.from_address(self.addr + off).value = v
+
+    def get(self, h):
+        ctypes.c_uint32.from_address(self.addr + OFF_FLAGS).value = CONTEXT_DEBUG_CONTROL
+        return k32.GetThreadContext(h, ctypes.c_void_p(self.addr))
+
+    def put(self, h):
+        ctypes.c_uint32.from_address(self.addr + OFF_FLAGS).value = CONTEXT_DEBUG_CONTROL
+        return k32.SetThreadContext(h, ctypes.c_void_p(self.addr))
+
+
+def dr7_for(n):
+    v = 0
+    for i in range(n):
+        v |= 1 << (2 * i)                  # L_i
+        v |= (0b01 | (0b11 << 2)) << (16 + 4 * i)   # RW=write, LEN=4 bytes
+    return v
+
+
+def arm(h, addrs, on=True):
+    c = Ctx()
+    if not c.get(h):
+        return False
+    for i in range(4):
+        c.set64(OFF_DR0 + 8 * i, addrs[i] if on and i < len(addrs) else 0)
+    c.set64(OFF_DR7, dr7_for(len(addrs)) if on else 0)
+    c.set64(OFF_DR6, 0)
+    return bool(c.put(h))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--seconds', type=float, default=120)
+    ap.add_argument('--addr', action='append', default=[])
+    ap.add_argument('--player-array', type=int)
+    ap.add_argument('--field', action='append', default=[])
+    ap.add_argument('--out', default=os.path.join(HERE, 'd1-watchwrite.jsonl'))
+    ap.add_argument('--max-hits', type=int, default=200)
+    a = ap.parse_args()
+    p, base = wg['open_client']()
+    addrs = [int(x, 16) for x in a.addr]
+    if a.player_array is not None:
+        T = base + 0x2689580
+        entry = p.u(T + 8, 'Q') + a.player_array * p.u(T + 0x10, 'I')
+        addrs += [entry + int(f, 16) for f in a.field]
+    if not 1 <= len(addrs) <= 4 or any(x & 3 for x in addrs):
+        sys.exit(f'need 1..4 dword-aligned addresses, got {[hex(x) for x in addrs]}')
+    pid = int(__import__('subprocess').run(['tasklist', '/FI', 'IMAGENAME eq shadPS4.exe', '/FO', 'CSV', '/NH'],
+              capture_output=True, text=True).stdout.split('","')[1])
+    out = open(a.out, 'a')
+    def log(**kw):
+        kw['t'] = time.time(); out.write(json.dumps(kw) + '\n'); out.flush()
+        print(json.dumps(kw), flush=True)
+    log(event='start', pid=pid, base=hex(base), addrs=[hex(x) for x in addrs],
+        values=[hex(p.u(x, 'I')) for x in addrs])
+    if not k32.DebugActiveProcess(pid):
+        sys.exit(f'DebugActiveProcess failed ({ctypes.get_last_error()})')
+    k32.DebugSetProcessKillOnExit(False)
+    threads = {}
+    ev = ctypes.create_string_buffer(256)
+    end = time.time() + a.seconds
+    hits = 0
+    try:
+        while time.time() < end and hits < a.max_hits:
+            if not k32.WaitForDebugEvent(ev, 200):
+                continue
+            code, epid, tid = struct.unpack_from('<III', ev.raw, 0)
+            cont = DBG_CONTINUE
+            if code == CREATE_PROCESS:
+                hfile, hproc, hthr = struct.unpack_from('<QQQ', ev.raw, 16)
+                if hfile: k32.CloseHandle(hfile)
+                threads[tid] = hthr; arm(hthr, addrs)
+            elif code == CREATE_THREAD:
+                hthr, = struct.unpack_from('<Q', ev.raw, 16)
+                threads[tid] = hthr; arm(hthr, addrs)
+            elif code == EXIT_THREAD:
+                threads.pop(tid, None)
+            elif code == LOAD_DLL:
+                hfile, = struct.unpack_from('<Q', ev.raw, 16)
+                if hfile: k32.CloseHandle(hfile)
+            elif code == EXIT_PROCESS:
+                log(event='process exited'); return 1
+            elif code == EXCEPTION_DEBUG_EVENT:
+                exc, = struct.unpack_from('<I', ev.raw, 16)
+                if exc == SINGLE_STEP and tid in threads:
+                    c = Ctx(); h = threads[tid]
+                    if c.get(h) and c.u64(OFF_DR6) & 0xF:
+                        rip, rsp, dr6 = c.u64(OFF_RIP), c.u64(OFF_RSP), c.u64(OFF_DR6)
+                        try:
+                            stack = struct.unpack('<64Q', p.read(rsp, 512))
+                        except OSError:
+                            stack = ()
+                        img = [hex(q - base) for q in stack if base <= q < base + 0x18D8000][:12]
+                        which = [hex(addrs[i]) for i in range(4) if dr6 >> i & 1]
+                        log(event='write', tid=tid, rip=hex(rip), rip_img=hex(rip - base) if base <= rip < base + 0x18D8000 else None,
+                            which=which, values=[hex(p.u(x, 'I')) for x in addrs], stack_img=img)
+                        hits += 1
+                        c.set64(OFF_DR6, 0); c.put(h)
+                    else:
+                        cont = DBG_EXCEPTION_NOT_HANDLED
+                elif exc == BREAKPOINT and not threads.get('_attach_bp'):
+                    threads['_attach_bp'] = 1      # the attach break-in
+                else:
+                    cont = DBG_EXCEPTION_NOT_HANDLED
+            k32.ContinueDebugEvent(epid, tid, cont)
+    finally:
+        for tid, h in list(threads.items()):
+            if tid == '_attach_bp':
+                continue
+            k32.SuspendThread(h); arm(h, addrs, on=False); k32.ResumeThread(h)
+        k32.DebugActiveProcessStop(pid)
+        log(event='detached', hits=hits, values=[hex(p.u(x, 'I')) for x in addrs])
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
