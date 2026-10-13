@@ -337,6 +337,45 @@ STUN/transport method), using RTTI, strings and the 01.29 design notes.
    with the 56578 schemas. Changing only the checksum is not enough. This is the
    investment-schema re-derivation (plan step 5).
 
+**Investment sign-in passed (13 October, ~10:07 UTC).** The minimal account
+and profile encodings are unchanged in 56578: the inner account `0x808018C7`
+still has 25 top-level fields with the same leading four, and the inner profile
+`0x80801714` still has 18, ID first. So only the instance checksums need to
+follow the client build. `d1-bap` gains `ACCOUNT_INSTANCE_TYPE_56578`
+`0x6B30D2B4`, `PROFILE_INSTANCE_TYPE_56578` `0x003BC6E5`, `set_client_build()`
+and accessors. `d1-responder` records the build from the SignOn `build=` query,
+and the builders stamp checksums through the accessors (01.29 defaults
+unchanged; d1-bap 161 tests, responder 13 tests and all controls pass). The
+01.29 profile fixture is withheld from other builds, which get the sparse
+profile (ID + orbit destination). Patch: `d1-bap-56578-instance-types.patch`.
+
+Run `20261013-100634-later-56578-acct-profile-b`: OAuth → SignOn → content
+check → package registration → BAP sign-in → **investment sign-in → world
+`ambient_bootstrap` → `bootflow:profile_setup`**. The 503, 206 family-3
+(roster + character), subscription and echo exchanges were all answered, and
+family 4 (account `0x6B30D2B4` + profile `0x003BC6E5`) and family 3 were pushed.
+About two minutes later the game halted itself (`RELEASE_VHALT`, *hitch
+detected: mainloop … bootflow:profile_setup … job name: 'network_send' …
+stalled*) and uploaded its crash report to our `ticket_drop`.
+
+The game's own crash report gives its version as `evil tiger_final release
+orbis 56578.17.04.12.1251.evil`, `insecure_ip 10.77.0.2`, BAP
+`10.77.0.2:3075`, silo `28729`.
+
+**Caveat for those halts:** the window frames show the Windows lock screen.
+The session locked at about 10:05 UTC (the orchestrator's screenshot call
+failed then, and it is now soft-failing). A locked session stops the emulator
+presenting frames, which stalls the main loop that the game's watchdog
+measures. The pipeline cache, enabled in the emulator config (recorded in
+`SWAP-RECEIPT.txt`) to rule out shader-compile stalls, warmed with 223 entries
+and did not change the result. The halt must be re-tested with the session
+unlocked before it is treated as a protocol or emulator problem. One
+interrupted run (`…-100517-…`) left the emulator and servers running; they were
+stopped after its logs were saved.
+
+`profile_setup` is the operator menu step on 01.29 (move down, confirm,
+dismiss the brightness prompt). It needs the user's controller (`-OperatorInput`).
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at

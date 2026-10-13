@@ -125,7 +125,10 @@ if ($LabIp) {
     # The canonical responder knobs (same as wsl-servers-loopback.sh), transport pointed at the lab.
     $serverEnv = [ordered]@{
         D1_ACCOUNT_SOID = '0xD100000000000001'; D1_CHARACTER_SOID = '0xD100000000000101'; D1_503_SOID = '1'
-        D1_CHARACTER_LIFECYCLE = '1'; D1_PROFILE_FILE = (Join-Path $Repo 'capture-rig\profiles\profile-old-russia.bin')
+        # The profile fixture is a serialised 01.29 profile object; other builds get the sparse
+        # encoder's minimal profile (SOID + orbit destination) with their own instance checksum.
+        D1_CHARACTER_LIFECYCLE = '1'
+        D1_PROFILE_FILE = $(if ($Build -eq $registry.reference) { Join-Path $Repo 'capture-rig\profiles\profile-old-russia.bin' } else { '' })
         D1_PUSH_CHARACTER = '1'; D1_PUSH_FAMILY = '4,3'; D1_PUSH_AT = 'echo'; D1_ACTIVITY_HOST = '0'
         D1_IP = $LabIp; D1_BAP_IP = $LabIp; D1_CLIENT_IP = $LabIp; D1_MANIFEST_FILE = $Manifest
         D1_UPLOAD_DIR = (Join-Path $out 'uploads'); D1_CHARACTER_TRANSCRIPT_DIR = (Join-Path $out 'character-transcripts')
@@ -187,7 +190,10 @@ function Snap([IntPtr]$h, [string]$file) {
     if ($w -le 0 -or $hh -le 0) { return }
     $bmp = New-Object Drawing.Bitmap $w, $hh
     $g = [Drawing.Graphics]::FromImage($bmp)
+    # A locked or disconnected session makes CopyFromScreen throw; a missing frame must never
+    # abort the run (and orphan the emulator and servers).
     try { $g.CopyFromScreen($r.Left, $r.Top, 0, 0, $bmp.Size); $bmp.Save($file, [Drawing.Imaging.ImageFormat]::Png) }
+    catch { Add-Content -LiteralPath (Join-Path $out 'frames-skipped.log') "$([DateTime]::UtcNow.ToString('o')) $($_.Exception.Message)" }
     finally { $g.Dispose(); $bmp.Dispose() }
 }
 function Tap([IntPtr]$h, [string]$key) {
