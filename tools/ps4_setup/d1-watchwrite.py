@@ -62,13 +62,16 @@ class Ctx:
 
 
 EXEC = set()   # indices of DR slots that are execute breakpoints (RW=00, LEN=00)
+READ = set()   # indices of DR slots that break on read or write (RW=11), 8 bytes
 
 
 def dr7_for(n):
     v = 0
     for i in range(n):
         v |= 1 << (2 * i)                  # L_i
-        if i not in EXEC:
+        if i in READ:
+            v |= (0b11 | (0b10 << 2)) << (16 + 4 * i)   # RW=read/write, LEN=8 bytes
+        elif i not in EXEC:
             v |= (0b01 | (0b11 << 2)) << (16 + 4 * i)   # RW=write, LEN=4 bytes
     return v
 
@@ -92,6 +95,7 @@ def main():
     ap.add_argument('--field', action='append', default=[])
     ap.add_argument('--out', default=os.path.join(HERE, 'd1-watchwrite.jsonl'))
     ap.add_argument('--max-hits', type=int, default=200)
+    ap.add_argument('--read', action='append', default=[], help='absolute 8-aligned address: break on read or write (8 bytes)')
     ap.add_argument('--exec', action='append', default=[], help='eboot-relative address: execute breakpoint; logs rax/rbp/rdi and 16 bytes at [rbp-0x150]')
     a = ap.parse_args()
     p, base = wg['open_client']()
@@ -100,6 +104,8 @@ def main():
         T = base + 0x2689580
         entry = p.u(T + 8, 'Q') + a.player_array * p.u(T + 0x10, 'I')
         addrs += [entry + int(f, 16) for f in a.field]
+    for x in a.read:
+        READ.add(len(addrs)); addrs.append(int(x, 16))
     for x in a.exec:
         EXEC.add(len(addrs)); addrs.append(base + int(x, 16))
     if not 1 <= len(addrs) <= 4 or any(x & 3 for i, x in enumerate(addrs) if i not in EXEC):

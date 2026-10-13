@@ -1149,7 +1149,25 @@ object-creation sequence is `0x7420F0`, which places an object at a transform (G
 Next:
 - find what the 01.29/retail flow does to arm a spawned player; candidates are a later event or
   message (e.g. an Activity Host loadout/equipment message) rather than the spawner itself;
-- check the AH's message list for equipment or loadout types we never send. The open question is which
+- check the AH's message list for equipment or loadout types we never send.
+
+*The spawn never reads the profile's equipped items (runs `equipread`/`equipread2`).*
+- `d1-memfind.py` (new) located the profile's equipped-SOID list live at `0x37F90BCC0` (stable
+  across runs).
+- `d1-watchwrite.py --read` (new: RW=11 breakpoints) watched the subclass, primary and heavy slots
+  from orbit through the Elimination launch and spawn: **0 accesses**.
+- Positive control, same slots: opening the character menu at orbit gave 50 reads from `0x269708`
+  (the equipped accessor, 01.29 `0x269080`), stack `0x9F3366`.
+
+The AH protocol has no loadout/equipment udt. udt 21 (`client_authoritative_data_update`), which
+the client does send, carries the session id string (bytes XOR 0x80:
+`Tue_10132026_221513_000001@orb@D1Guar…`).
+
+So whatever arms a spawned player in this build does not come from the profile at spawn. Armor
+comes from the family-0/1 peer roster's appearance. Next suspects:
+- the peer-roster equipment path;
+- a sim-queue element that hands the loadout over (the 95 sim-queue payload schemas,
+  `architecture.md` §8). The open question is which
 spawn-time path creates a player's weapon sobjects (type 11), and what it needs.
 
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
