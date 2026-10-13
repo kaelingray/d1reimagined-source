@@ -16,6 +16,8 @@ $taskStates = @($taskPins | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath (Join-Path $Workspace $_.Path)).Hash.ToLowerInvariant()
     if ($hash -eq $_.Before) { 'before' }
     elseif ($hash -eq $_.After) { 'after' }
+    # build-registry.patch, applied on top of this preparation (12 October retarget).
+    elseif ($_.Path -eq 'capture-rig/run-boot.sh' -and $hash -eq '989e79b0c6c0d3fdab817c0374a9807c95da846dca63e25ff8d0a3f08973d6af') { 'after' }
     else { throw "Unrecognised canonical source: $($_.Path)" }
 })
 if (@($taskStates | Where-Object {$_ -eq 'after'}).Count -eq 2) {

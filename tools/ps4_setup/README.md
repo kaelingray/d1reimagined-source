@@ -25,7 +25,36 @@ builds, dump identity, generated artifacts and canonical boot settings.
 | `Prepare-D1PS4Launch.ps1` | Windows orchestration of those canonical modes. Record effective settings after the creator overrides; verify server child shutdown after a server-only run. Never start an emulator or controller. |
 | `d1-byte-scan.rs` | Generic bounded byte-range planning and scanning in the existing `d1-pkg` crate. Reconstruct the complete plan, require a pinned full known-executable control, and reject altered/missing ranges or existing outputs. Nine controls and three unit tests pass on Windows and Linux. |
 | `Export-D1RepackSlack.ps1` | Read-only adapter to the existing licensed PFS reader. Export only nonpayload logical image ranges and the known executable control into fresh private staging; require the corrected reader hash and contiguous uncompressed file model. No new package parser or executable acceptance path. |
+| `build-registry.patch` | Our GPL-2.0-or-later change to the PS4 tree: `capture-rig/builds.json`, the `d1-build` crate and `capture-rig/d1build.py`. `D1_BUILD` selects the executable build (default `later-56578`; `01.29` stays the address reference). Executable, manifest and patch gates read the registry; address-bearing tools refuse builds without re-derived addresses. Same change as the public `ps4/` tree. |
+| `Export-D1RepackFull.ps1` | Full private extraction of the owned repack's `/uroot` through the corrected LGPL reader: per-file `.partial` → length check → SHA-256 → rename → ledger, resumable with a matching plan, `SHA256SUMS` and `manifest.json` written only when complete. |
+| `Test-D1BuildContent.ps1` | Re-hash a completed extraction against its `SHA256SUMS`, then run the existing `d1-pkg verify --blocks`, `stats` and default-policy English `manifest` for a registered build. The 01.29 golden controls are reference pins and are not run here. |
+| `wsl-servers-loopback.sh` | Run the existing shadNet server and `d1-responder` in WSL bound to **127.0.0.1 only**, with the canonical responder settings and a fresh lab certificate; refuse busy ports or any non-loopback listener; stop only its own children when `<out>/stop` appears. |
+| `Start-D1ContainedBoot.ps1` | Contained Windows boot of the selected build: refuse unless all firewall profiles are on, the exact emulator has an enabled outbound block, redirects resolve to loopback, no emulator is running and the launch/manifest identities match the registry. Starts the loopback servers, launches shadPS4 with `-i` and no client patch, taps Cross at the title, and keeps logs, window frames and the guest's own crash report in private staging. |
+| `Export-D1RepackSceSys.ps1` | Copy the repack's unencrypted package-entry system files (`param.sfo`, icons, `changeinfo`, trophy) into the extraction's `sce_sys/`; encrypted entries are never read. Records `SHA256SUMS.sce_sys`. |
+| `make-job-helper-guard.py` | Generate the **synthetic** build-56578 null job-worker guard (`patches/CUSA00219-56578-job-helper-guard.xml`) after verifying the ELF hash, hook bytes and padding cave. Pass it with `Start-D1ContainedBoot.ps1 -ClientPatch`; runs that use it are `synthetic_ancestor`. |
 | `d1-synthetic-gate.rs` | Install in the standalone `d1-trace` crate. Reuse its record encoder/decoder to generate the public gate-control source fixture with synthetic registers; two positive/rejection controls and one unit test pass. No native input is read. |
+
+## Retarget to build 56578 (12 October)
+
+The exact-01.29 executable pin was dropped on 12 October; see the
+[retarget checkpoint](../../notes/ps4-retarget-2026-10-12.md). In the PS4 tree,
+`git apply` `build-registry.patch` (the private tree is verified to be exactly its
+result). Then `D1_BUILD` selects a build; the default is `later-56578`, and `01.29`
+remains the address reference. Rows above that mention the exact 01.29 gate now
+read their identities from `capture-rig/builds.json`.
+
+```powershell
+& F:\d1\tools\Export-D1RepackFull.ps1            # -> dumps\later-56578-CUSA00219 (resumable)
+& F:\d1\tools\Export-D1RepackSceSys.ps1          # param.sfo, icons, changeinfo -> sce_sys
+& F:\d1\tools\Test-D1BuildContent.ps1 -Output <new private dir>
+& F:\d1\tools\Test-D1PS4Readiness.ps1 -Report <new private json>
+& F:\d1\tools\Start-D1ContainedBoot.ps1 -Name <run-name>   # refuses on any containment gap
+```
+
+`Start-D1ContainedBoot.ps1` refuses to launch when hosts redirects are missing.
+`-AllowUnredirected` overrides that and records it in the receipt; the firewall
+block still applies. Re-run `contain-d1.cmd` as administrator after
+`d1-hosts.txt` changes.
 
 The default paths match this user's Windows installation. Installed copies are
 under `F:\d1\tools`; source copies here were hash-compared with them on 2026-10-11.

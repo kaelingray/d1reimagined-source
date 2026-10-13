@@ -3,6 +3,7 @@ param(
     [string]$Repo = 'F:\d1\d1preservation-main',
     [string]$EmulatorDirectory = 'F:\d1\tools\shadPS4\0.19.0',
     [string]$HostsList = 'F:\d1\tools\shadPS4\d1-hosts.txt',
+    [string]$Build = '',
     [string]$Report = 'F:\d1\d1preservation-main\cfw-staging\2026-10-11\readiness.json'
 )
 # Read-only preflight, apart from its report. This does not launch a game or alter containment.
@@ -17,14 +18,30 @@ function CheckHash([string]$name, [string]$path, [string]$hash, [long]$size = -1
     $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     Check $name ($actual -eq $hash -and ($size -lt 0 -or $file.Length -eq $size)) "bytes=$($file.Length); sha256=$actual"
 }
-$game = Join-Path $Repo 'dumps\patch-01.29-CUSA00219'
-CheckHash 'Decrypted CUSA00219 01.29 eboot' (Join-Path $game 'eboot.bin') '7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954' 29148264
-$packages = @(Get-ChildItem -LiteralPath (Join-Path $game 'packages') -File -Filter '*.pkg' -ErrorAction SilentlyContinue)
-Check 'Installed Bungie content packages' ($packages.Count -eq 1647) "files=$($packages.Count); expected 1647 pinned-estate files; install PKGs do not satisfy this check"
-CheckHash 'Full English content manifest' (Join-Path $Repo 'capture-rig\manifests\full_en.bin') '0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be' 52797
-$patch = Join-Path $Repo 'patches\CUSA00219-lab-manifest-T1.xml'
-try { $xml = [xml](Get-Content -LiteralPath $patch -Raw); Check 'Lab patch XML' $true $patch }
-catch { Check 'Lab patch XML' $false $_.Exception.Message }
+# The executable build comes from the registry (capture-rig/builds.json): -Build, $env:D1_BUILD, default.
+$registry = Get-Content -LiteralPath (Join-Path $Repo 'capture-rig\builds.json') -Raw | ConvertFrom-Json
+if (-not $Build) { $Build = if ($env:D1_BUILD) { $env:D1_BUILD } else { $registry.default } }
+$entry = $registry.builds.$Build
+if ($null -eq $entry) { throw "Unknown build: $Build" }
+Check "Selected build $Build" $true "$($entry.build_label); addresses_valid=$($entry.addresses_valid); reference=$($registry.reference)"
+CheckHash "Static-analysis ELF for $Build" (Join-Path $Repo $entry.eboot) $entry.eboot_sha256 $entry.eboot_bytes
+CheckHash "Launch executable for $Build" (Join-Path $Repo $entry.launch) $entry.launch_sha256 $entry.launch_bytes
+$packages = @(Get-ChildItem -LiteralPath (Join-Path $Repo $entry.packages) -File -Filter '*.pkg' -ErrorAction SilentlyContinue)
+$sums = Join-Path (Split-Path (Join-Path $Repo $entry.game_dir)) 'SHA256SUMS'
+$expectedPackages = if ($Build -eq $registry.reference) { 1647 }
+    elseif (Test-Path -LiteralPath $sums) { @(Get-Content -LiteralPath $sums | Where-Object { $_ -match '  packages/[^/]+\.pkg$' }).Count }
+    else { -1 }
+Check 'Installed Bungie content packages' ($packages.Count -gt 0 -and $packages.Count -eq $expectedPackages) "files=$($packages.Count); expected $expectedPackages (reference: pinned estate; others: completed extraction manifest)"
+if ($entry.manifest_sha256) { CheckHash "Full English content manifest for $Build" (Join-Path $Repo $entry.manifest) $entry.manifest_sha256 $entry.manifest_bytes }
+else { Check "Full English content manifest for $Build" $false 'No manifest pin recorded for this build yet' }
+if ($entry.diag_patch) {
+    $patch = Join-Path $Repo $entry.diag_patch
+    try { $xml = [xml](Get-Content -LiteralPath $patch -Raw); Check 'Lab patch XML' $true $patch }
+    catch { Check 'Lab patch XML' $false $_.Exception.Message }
+} else {
+    $autoPatches = @(Get-ChildItem -LiteralPath (Join-Path $EmulatorDirectory 'user\patches') -Recurse -File -ErrorAction SilentlyContinue)
+    Check 'No client patch for this build (addresses not re-derived)' ($autoPatches.Count -eq 0) "emulator patch folder files=$($autoPatches.Count); contained launches also pass -i"
+}
 $exe = Join-Path $EmulatorDirectory 'shadPS4.exe'
 Check 'Portable emulator' (Test-Path -LiteralPath $exe -PathType Leaf) $exe
 try {
@@ -48,10 +65,12 @@ try {
     $badHosts = @()
     foreach ($hostName in $expectedHosts) {
         $mapping = @($hostsText | Where-Object { ($_ -split '#',2)[0] -match ('^\s*127\.0\.0\.1\s+' + [regex]::Escape($hostName) + '\s*$') })
-        $addresses = @([System.Net.Dns]::GetHostAddresses($hostName))
+        # Resolve only mapped names: resolving an unmapped one would send its query upstream.
+        if ($mapping.Count -eq 0) { $badHosts += $hostName; continue }
+        $addresses = @(try { [System.Net.Dns]::GetHostAddresses($hostName) } catch { })
         if ($mapping.Count -eq 0 -or $addresses.Count -eq 0 -or @($addresses | Where-Object { -not [System.Net.IPAddress]::IsLoopback($_) }).Count -gt 0) { $badHosts += $hostName }
     }
-    Check 'Windows service redirects' ($expectedHosts.Count -eq 50 -and $badHosts.Count -eq 0) "unique hosts=$($expectedHosts.Count); failed=$($badHosts -join ','); reference has 51 rows including duplicate CDN"
+    Check 'Windows service redirects' ($expectedHosts.Count -ge 50 -and $badHosts.Count -eq 0) "unique hosts=$($expectedHosts.Count); failed=$($badHosts -join ','); 01.29 list: 50 unique names in 51 rows; build 56578 adds 4"
 } catch { Check 'Windows service redirects' $false $_.Exception.Message }
 $moduleDirectory = Join-Path $EmulatorDirectory 'user\sys_modules'
 $moduleFailures = @()
@@ -68,7 +87,7 @@ try {
     Check 'Firmware 11.00 module receipt' ($moduleCount -eq 37 -and $moduleFailures.Count -eq 0) "modules=$moduleCount; failed=$($moduleFailures -join ','); upstream reference used firmware 10.01"
 } catch { Check 'Firmware 11.00 module receipt' $false $_.Exception.Message }
 Check 'No existing emulator process' (@(Get-Process shadPS4,rpcs3 -ErrorAction SilentlyContinue).Count -eq 0) 'One emulator at a time'
-CheckHash 'Canonical preparation launcher installed' (Join-Path $Repo 'capture-rig\run-boot.sh') '22536378f698e53671848fa4307e9b0bbfccf21510c383f5545eb5c3b8d1cac6'
+CheckHash 'Canonical preparation launcher installed' (Join-Path $Repo 'capture-rig\run-boot.sh') '989e79b0c6c0d3fdab817c0374a9807c95da846dca63e25ff8d0a3f08973d6af'
 CheckHash 'Canonical server-check delegate installed' (Join-Path $Repo 'capture-rig\run-signon-experiment.sh') '6a3b2c89b098d9bd00f7dae2e0a0e7f5557a9bd483b7fc92af0e733c2c190d2d'
 # Static file/config checks cannot establish a successful Windows/WSL runtime port.
 Check 'Native Windows/WSL runtime validated' $false 'Canonical preparation and contained Linux servers validated separately. Windows guest transport, probe hooks and dump-dependent fixtures remain unaccepted.'

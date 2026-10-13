@@ -15,7 +15,19 @@ Private research inputs: [d1reimagined-data](https://github.com/p3n1cillin/d1rei
 The repositories were renamed on **2026-10-06**. Existing local checkout/runtime
 folders may still have their earlier names; use explicit paths for imported runtimes.
 
-## Current state - 2026-10-11
+## Current state - 2026-10-12
+
+On 12 October the user dropped the exact-01.29 pin. The [PS4 retarget
+checkpoint](notes/ps4-retarget-2026-10-12.md) moves the PS4 line to the owned
+executable `56578.17.04.12` (package metadata 01.33). It is fully extracted and
+selected through a build registry (`D1_BUILD`), with 01.29 kept as the address
+reference. Content validation passes for all 2,105 packages and 964,151 stored blocks.
+Unpatched contained Windows boots fault before the title screen in a job-wait
+race (`0xFAAF4`). With a recorded synthetic null-worker guard, the game runs
+stably: logo, title, **Connecting**, then its own "servers not available"
+dialog. It stops because the new build's PSN OAuth host
+(`auth.api.sonyentertainmentnetwork.com`) isn't redirected yet. The game's
+`friendList` requests do reach the local responder.
 
 The [12 October recovery checkpoint](notes/ps4-recovery-2026-10-12.md) adds a
 complete scan of logical repack nonpayload space and inspection of the original

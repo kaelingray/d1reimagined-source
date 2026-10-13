@@ -16,8 +16,12 @@ use std::{
 };
 
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../..");
-const EBOOT_SHA: &str = "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954";
-const EBOOT_BYTES: u64 = 29_148_264;
+// Executable identities come from the build registry (capture-rig/builds.json, $D1_BUILD).
+// The console bootstrap collects the 01.29 reference; launches gate on the selected build.
+fn reference_eboot() -> (u64, &'static str) {
+    let b = d1_build::reference();
+    (b.eboot_bytes, b.eboot_sha256.as_str())
+}
 const UNION: &str = "/mnt/sandbox/pfsmnt/CUSA00219-app0-patch0-union";
 
 fn default_curl() -> PathBuf {
@@ -163,7 +167,7 @@ fn finish(
     }
     if let Some((want_size, want_sha)) = expected {
         if size != want_size || sha != want_sha {
-            bail!("transferred executable does not match exact 01.29")
+            bail!("transferred executable does not match the expected build")
         }
     }
     OpenOptions::new()
@@ -191,7 +195,8 @@ fn contract(repo: &Path, game: &Path, patch: &Path, emulator: &Path, out: &Path)
                 .contains(&k.as_str())
         })
         .collect();
-    let manifest = repo.join("capture-rig/manifests/full_en.bin");
+    let build = d1_build::selected();
+    let manifest = build.manifest_path();
     let fixture_missing: Vec<_> = ["D1_PROFILE_FILE", "D1_CHARACTER_FILE", "D1_ROSTER_DIR"]
         .into_iter()
         .filter_map(|key| {
@@ -209,8 +214,13 @@ fn contract(repo: &Path, game: &Path, patch: &Path, emulator: &Path, out: &Path)
             "game": game, "patch": patch, "linux_reference_emulator": emulator,
             "canonical_launcher_sha256": digest(&repo.join("capture-rig/run-boot.sh"))?.1,
             "canonical_delegate_sha256": digest(&repo.join("capture-rig/run-signon-experiment.sh"))?.1,
-            "exact_executable_present": matches(game, EBOOT_BYTES, EBOOT_SHA),
-            "pinned_manifest_present": matches(&manifest, d1_pkg::manifest::GOLDEN_FULL_EN.0 as u64, d1_pkg::manifest::GOLDEN_FULL_EN.1),
+            "build": build.id, "build_label": build.build_label,
+            "build_addresses_valid": build.addresses_valid,
+            "exact_executable_present": matches(game, build.launch_bytes, &build.launch_sha256),
+            "pinned_manifest_present": match (build.manifest_bytes, build.manifest_sha256.as_deref()) {
+                (Some(n), Some(h)) => matches(&manifest, n, h),
+                _ => false,
+            },
             "missing_configured_fixtures": fixture_missing,
             "windows_transport_validated": false, "native_boot_accepted": false
         }),
@@ -325,7 +335,12 @@ fn verify_servers(out: &Path, outer: &str, shad: u32, responder: u32) -> Result<
         }
         Ok(cmd.arg("--url").arg(url).output()?)
     };
-    let golden = d1_pkg::manifest::GOLDEN_FULL_EN;
+    // The selected build's recorded manifest pin; an unrecorded pin cannot be served-checked.
+    let build = d1_build::selected();
+    let golden = match (build.manifest_bytes, build.manifest_sha256.as_deref()) {
+        (Some(n), Some(h)) => (n as usize, h),
+        _ => (usize::MAX, ""),
+    };
     for (label, url, ca) in [
         (
             "HTTP serves exact pinned manifest",
@@ -534,8 +549,8 @@ fn controls(curl: &Path) -> Result<Vec<(String, bool)>> {
             !safe_name("../dump") && !safe_name("name;cmd") && safe_name("owned-01_29"),
         ),
         (
-            "target executable identity remains pinned".into(),
-            EBOOT_BYTES == 29_148_264 && EBOOT_SHA.len() == 64,
+            "reference executable identity remains pinned in the registry".into(),
+            reference_eboot().0 == 29_148_264 && reference_eboot().1.len() == 64,
         ),
     ];
     let body = b"synthetic FTP payload - no game bytes".to_vec();
@@ -567,7 +582,7 @@ fn controls(curl: &Path) -> Result<Vec<(String, bool)>> {
         finish(
             &partial,
             &root.join("bad.bin"),
-            Some((EBOOT_BYTES, EBOOT_SHA)),
+            Some(reference_eboot()),
         )
         .is_err()
             && !root.join("bad.bin").exists(),
@@ -684,7 +699,7 @@ fn main() -> Result<ExitCode> {
                 (
                     format!("{UNION}/eboot.bin"),
                     "eboot.bin",
-                    Some((EBOOT_BYTES, EBOOT_SHA)),
+                    Some(reference_eboot()),
                 ),
                 (
                     "/system_data/priv/appmeta/CUSA00219/param.sfo".into(),

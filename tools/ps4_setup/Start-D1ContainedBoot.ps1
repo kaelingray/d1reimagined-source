@@ -1,0 +1,181 @@
+param(
+    [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_-]{1,64}$')][string]$Name,
+    [string]$Build = '',
+    [string]$Repo = 'F:\d1\d1preservation-main',
+    [string]$Emulator = 'F:\d1\tools\shadPS4\0.19.0\shadPS4.exe',
+    [string]$HostsList = 'F:\d1\tools\shadPS4\d1-hosts.txt',
+    [string]$Distro = 'Ubuntu-24.04',
+    [string]$ServerScript = 'F:\d1\tools\wsl-servers-loopback.sh',
+    [int]$Minutes = 8,
+    [int]$TitleDelaySeconds = 60,
+    [int]$TitleTaps = 3,
+    [int]$TapIntervalSeconds = 12,
+    [string]$TitleKey = 'NumPad2',
+    [string]$Manifest = '',
+    # Explicit, address-specific client patch (synthetic). Never applied by default.
+    [string]$ClientPatch = '',
+    [switch]$OperatorInput,
+    [switch]$AllowUnredirected
+)
+$ErrorActionPreference = 'Stop'
+# A contained Windows boot of the selected build: shadPS4 on Windows, the existing servers in WSL
+# bound to loopback. Containment is checked first and the run refuses on any failure: the exact
+# emulator has an enabled outbound block on every profile, all firewall profiles are on, and the
+# hosts redirects are applied. No client patch is passed and automatic patch loading is disabled
+# (-i): patches are address-specific. Evidence stays in private staging.
+
+function Linux([string]$p) { '/mnt/' + $p.Substring(0, 1).ToLowerInvariant() + ($p.Substring(2) -replace '\\', '/') }
+$registry = Get-Content -LiteralPath (Join-Path $Repo 'capture-rig\builds.json') -Raw | ConvertFrom-Json
+if ($registry.schema -ne 1) { throw 'Unsupported build registry schema' }
+if (-not $Build) { $Build = if ($env:D1_BUILD) { $env:D1_BUILD } else { $registry.default } }
+$entry = $registry.builds.$Build
+if ($null -eq $entry) { throw "Unknown build: $Build" }
+$launch = Join-Path $Repo $entry.launch
+if (-not $Manifest) { $Manifest = Join-Path $Repo $entry.manifest }
+$out = Join-Path $Repo "cfw-staging\contained-boot\$((Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss'))-$Name"
+if (Test-Path -LiteralPath $out) { throw "Refusing existing output: $out" }
+New-Item -ItemType Directory -Path $out | Out-Null
+$checks = [ordered]@{}
+function Check([string]$label, [bool]$ok, $detail) { $checks[$label] = [ordered]@{ pass = $ok; detail = $detail } }
+
+# -- containment ----------------------------------------------------------------------------------
+$profiles = Get-NetFirewallProfile
+Check 'all firewall profiles enabled' (@($profiles | Where-Object { -not $_.Enabled }).Count -eq 0) (@($profiles | ForEach-Object { "$($_.Name)=$($_.Enabled)" }) -join ' ')
+$exe = (Get-Item -LiteralPath $Emulator).FullName
+$blocks = @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Outbound -Action Block -Enabled True -ErrorAction SilentlyContinue |
+    Where-Object { $_.Profile -eq 'Any' -and (($_ | Get-NetFirewallApplicationFilter).Program -eq $exe) })
+Check 'enabled outbound block for the exact emulator, all profiles' ($blocks.Count -ge 1) (@($blocks.DisplayName) -join '; ')
+$hostsText = Get-Content -LiteralPath "$env:SystemRoot\System32\drivers\etc\hosts"
+$wanted = @(Get-Content -LiteralPath $HostsList | Where-Object { $_ -match '^\s*127\.0\.0\.1\s+(\S+)' } | ForEach-Object { ($_ -split '\s+')[1] })
+$missing = @($wanted | Where-Object { $n = $_; -not ($hostsText | Where-Object { $_ -match "^\s*127\.0\.0\.1\s+$([regex]::Escape($n))\s*$" }) })
+Check 'hosts redirects applied' ($missing.Count -eq 0 -or $AllowUnredirected) ([ordered]@{ wanted = $wanted.Count; missing = $missing; allowedBecauseFirewallBlocks = [bool]$AllowUnredirected })
+foreach ($hostName in $wanted | Where-Object { $missing -notcontains $_ }) {
+    $resolved = @(try { [Net.Dns]::GetHostAddresses($hostName) | ForEach-Object { $_.ToString() } } catch { 'UNRESOLVED' })
+    if (@($resolved | Where-Object { $_ -ne '127.0.0.1' -and $_ -ne '::1' }).Count) { Check "resolves to loopback: $hostName" $false $resolved }
+}
+# shadPS4 0.19's -i also drops an explicit -p patch, so with -ClientPatch the emulator's automatic
+# patch folder must be empty instead.
+$autoPatches = @(Get-ChildItem -LiteralPath (Join-Path (Split-Path $exe) 'user\patches') -Recurse -File -ErrorAction SilentlyContinue)
+Check 'emulator automatic patch folder empty' ($autoPatches.Count -eq 0) $autoPatches.Count
+$running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^shadps4$|^rpcs3$' })
+Check 'no emulator already running' ($running.Count -eq 0) (@($running.Id) -join ' ')
+
+# -- inputs ---------------------------------------------------------------------------------------
+$launchItem = Get-Item -LiteralPath $launch
+$launchSha = (Get-FileHash -LiteralPath $launch).Hash.ToLowerInvariant()
+Check "launch executable is build $Build" ($launchItem.Length -eq $entry.launch_bytes -and $launchSha -eq $entry.launch_sha256) "$($launchItem.Length) $launchSha"
+$sfo = Join-Path (Split-Path $launch) 'sce_sys\param.sfo'
+Check 'param.sfo beside the executable' (Test-Path -LiteralPath $sfo) $sfo
+$manifestItem = Get-Item -LiteralPath $Manifest -ErrorAction SilentlyContinue
+$manifestSha = if ($manifestItem) { (Get-FileHash -LiteralPath $Manifest).Hash.ToLowerInvariant() } else { $null }
+$manifestPinned = $entry.manifest_sha256 -and $manifestSha -eq $entry.manifest_sha256 -and $manifestItem.Length -eq $entry.manifest_bytes
+Check 'served manifest matches the recorded build pin' $manifestPinned ([ordered]@{ path = $Manifest; sha256 = $manifestSha })
+
+$receipt = [ordered]@{
+    name = $Name; build = $Build; build_label = $entry.build_label; addresses_valid = $entry.addresses_valid
+    startedUtc = [DateTime]::UtcNow.ToString('o'); emulator = $exe
+    emulatorSha256 = (Get-FileHash -LiteralPath $exe).Hash.ToLowerInvariant()
+    launch = $launch; autoPatchesDisabled = (-not $ClientPatch); autoPatchFolderEmpty = ($autoPatches.Count -eq 0)
+    clientPatch = if ($ClientPatch) { [ordered]@{ path = (Get-Item -LiteralPath $ClientPatch).FullName
+        sha256 = (Get-FileHash -LiteralPath $ClientPatch).Hash.ToLowerInvariant(); synthetic = $true } } else { $null }
+    input = if ($OperatorInput) { 'operator' } else { "virtual key $TitleKey x$TitleTaps after ${TitleDelaySeconds}s" }
+    checks = $checks
+}
+$failed = @($checks.Keys | Where-Object { -not $checks[$_].pass })
+if ($failed.Count) {
+    $receipt.refused = $failed
+    $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $out 'receipt.json') -Encoding utf8
+    throw "Refusing launch: $($failed -join '; ')"
+}
+
+# -- servers --------------------------------------------------------------------------------------
+$linuxOut = Linux $out
+$serverLog = Join-Path $out 'wsl-servers.console.log'
+$server = Start-Process -FilePath 'wsl.exe' -PassThru -WindowStyle Hidden `
+    -ArgumentList @('-d', $Distro, '-u', 'root', '--', 'bash', (Linux $ServerScript), $linuxOut, (Linux $Manifest)) `
+    -RedirectStandardOutput $serverLog -RedirectStandardError "$serverLog.err"
+$deadline = (Get-Date).AddSeconds(45)
+while (-not (Test-Path -LiteralPath (Join-Path $out 'servers.ready'))) {
+    if ($server.HasExited -or (Get-Date) -gt $deadline) {
+        New-Item -ItemType File -Path (Join-Path $out 'stop') -Force | Out-Null
+        throw "Servers did not become ready; see $serverLog"
+    }
+    Start-Sleep -Milliseconds 250
+}
+$tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port 443 -WarningAction SilentlyContinue
+$receipt.windowsReachesLoopback443 = $tcp.TcpTestSucceeded
+
+# -- emulator -------------------------------------------------------------------------------------
+Add-Type -Namespace D1 -Name Win -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+[DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+'@
+Add-Type -AssemblyName System.Drawing
+function Snap([IntPtr]$h, [string]$file) {
+    $r = New-Object D1.Win+RECT
+    if (-not [D1.Win]::GetWindowRect($h, [ref]$r)) { return }
+    $w = $r.Right - $r.Left; $hh = $r.Bottom - $r.Top
+    if ($w -le 0 -or $hh -le 0) { return }
+    $bmp = New-Object Drawing.Bitmap $w, $hh
+    $g = [Drawing.Graphics]::FromImage($bmp)
+    try { $g.CopyFromScreen($r.Left, $r.Top, 0, 0, $bmp.Size); $bmp.Save($file, [Drawing.Imaging.ImageFormat]::Png) }
+    finally { $g.Dispose(); $bmp.Dispose() }
+}
+function Tap([IntPtr]$h, [string]$key) {
+    $vk = [uint32][Windows.Forms.Keys]::$key
+    $scan = [D1.Win]::MapVirtualKey($vk, 0)
+    [void][D1.Win]::PostMessage($h, 0x100, [IntPtr]$vk, [IntPtr](1 -bor ($scan -shl 16)))
+    Start-Sleep -Milliseconds 120
+    [void][D1.Win]::PostMessage($h, 0x101, [IntPtr]$vk, [IntPtr]((1 -bor ($scan -shl 16)) -bor 0xC0000000))
+}
+Add-Type -AssemblyName System.Windows.Forms
+$userDir = Join-Path (Split-Path $exe) 'user'
+$started = Get-Date
+$emu = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru `
+    -ArgumentList ($(if ($ClientPatch) { @('-p', "`"$((Get-Item -LiteralPath $ClientPatch).FullName)`"") } else { @('-i') }) + @('-g', "`"$launch`""))
+$receipt.emulatorPid = $emu.Id
+$taps = 0; $nextSnap = $started.AddSeconds(15); $shot = 0
+$end = $started.AddMinutes($Minutes)
+while (-not $emu.HasExited -and (Get-Date) -lt $end) {
+    Start-Sleep -Milliseconds 500
+    $emu.Refresh()
+    $h = $emu.MainWindowHandle
+    if ($h -eq [IntPtr]::Zero) { continue }
+    if ((Get-Date) -ge $nextSnap) {
+        $shot++; Snap $h (Join-Path $out ('frame-{0:D3}.png' -f $shot)); $nextSnap = (Get-Date).AddSeconds(15)
+    }
+    if (-not $OperatorInput -and $taps -lt $TitleTaps -and
+        (Get-Date) -ge $started.AddSeconds($TitleDelaySeconds + $taps * $TapIntervalSeconds)) {
+        Tap $h $TitleKey; $taps++
+        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) tap $TitleKey"
+    }
+}
+$receipt.emulatorExitedByItself = $emu.HasExited
+if (-not $emu.HasExited) { Stop-Process -Id $emu.Id; $emu.WaitForExit(15000) | Out-Null }
+$receipt.emulatorExitCode = if ($emu.HasExited) { $emu.ExitCode } else { $null }
+$receipt.endedUtc = [DateTime]::UtcNow.ToString('o')
+
+# -- evidence -------------------------------------------------------------------------------------
+New-Item -ItemType File -Path (Join-Path $out 'stop') | Out-Null
+$server.WaitForExit(30000) | Out-Null
+$receipt.serversStopped = Test-Path -LiteralPath (Join-Path $out 'servers-stopped.txt')
+# shad_log.txt is the emulator's full log; shadps4.log holds only the launcher lines.
+Copy-Item -LiteralPath (Join-Path $userDir 'log\shad_log.txt') -Destination (Join-Path $out 'emulator.log') -ErrorAction SilentlyContinue
+Copy-Item -LiteralPath (Join-Path $userDir 'log\shadps4.log') -Destination (Join-Path $out 'launcher.log') -ErrorAction SilentlyContinue
+$receipt.emulatorFault = @(Select-String -LiteralPath (Join-Path $out 'emulator.log') -Pattern 'Unhandled Exception code' -ErrorAction SilentlyContinue | ForEach-Object { $_.Line })
+$guest = Join-Path $out 'guest-files'
+foreach ($sub in 'temp', 'data', 'home') {
+    $root = Join-Path $userDir $sub
+    if (-not (Test-Path -LiteralPath $root)) { continue }
+    Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.LastWriteTime -ge $started } | ForEach-Object {
+        $dest = Join-Path $guest ($sub + $_.FullName.Substring($root.Length))
+        New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $dest
+    }
+}
+$receipt.guestCrashReport = @(Get-ChildItem -LiteralPath $guest -Recurse -Filter 'crash_info.txt' -ErrorAction SilentlyContinue).FullName
+$receipt.nativeBootAccepted = $false
+$receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $out 'receipt.json') -Encoding utf8
+"Run evidence: $out"
