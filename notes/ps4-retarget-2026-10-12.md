@@ -965,6 +965,25 @@ An early-boot install had crashed mid-way (an external stub page out of range) i
 retry loop. That left the client failing sign-in with CHICKEN (`error.no_investment_connection`).
 The retry loop is now 3 attempts and each attempt is all-or-nothing.
 
+*Correction: the Director's "focus" is the desired-activity session parameter.* `0x955380` jumps to
+`0x78B450`, which returns the value (`+0xE4`) of the session's desired-activity parameter at
+params `+0x5A8` (class `c_network_session_parameter_desired_activity`, vtable `0x196D8C0`), or
+NULL when it has no value. Live at orbit `has_value = 0`. So the node builder runs only once a
+desired activity exists. The launch poke writes that same parameter class (params `+0x9B8`), so it
+stands in for exactly the choice the Director would make. Why Earth is not focusable is still
+open.
+
+*Control after spawn (13 October, served route plus launch poke only).* After the Ghost-raise
+intro the Guardian is under pad control:
+- right stick (shadPS4 IJKL) turns the view freely (Earth, the base, the horizon);
+- left stick (WASD) walks; the position changes, into a structure;
+- radar and health bar are drawn.
+
+The view keeps the empty first-person hand with the Ghost out, and R2 shows no weapon. Most likely
+no equipped loadout is served (inventory). Touchpad (Space) did not put the Ghost away.
+
+Next: serve an equipped loadout (`design/geared-guardian-fixtures.md`, `d1-oracle inventory`).
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.
