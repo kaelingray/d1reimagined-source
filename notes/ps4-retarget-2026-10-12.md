@@ -1044,6 +1044,34 @@ resident before they can be created.
 eboot `+0xBC09AE`, inside entity-definition vfunc 19 (`0xBC0990`), the same site as the forced
 route's crash. It is a teardown crash too, not only a forced-spawn artefact.
 
+*Activity 407 is NOT Elimination on 56578 (13 October, operator's hunch, confirmed from packages).*
+d1preservation's activity table (`activity-launch.md` §2.1, 407 = Elimination) is 01.29's: block
+1063 of `012f_3`, at `+0x9920`, stride 0x10. 56578 carries the table in `ps4_investment_globals_0131_6`
+blocks 182 and 187 (`+0x29F30` in block 182; `012f_6` has no copy; found by scanning every block
+for 01.29's element-1 hash `0xDF283AFB` and Elimination's `0x6D714C3A`).
+
+The private-match band moved:
+
+| mode | 01.29 → 56578 | mode | 01.29 → 56578 |
+|---|---|---|---|
+| Clash | 393 → 400 | Skirmish | 402 → 410 |
+| Control | 394 → 401 | Inferno Clash | 403 → 411 |
+| Supremacy | 395 → 402 | Inferno Control | 404 → 412 |
+| Mayhem Supremacy | 396 → 403 | Mayhem Clash | 405 → 413 |
+| Inferno Supremacy | 397 → 404 | Zone Control | 406 → 414 |
+| Rumble Supremacy | 398 → 405 | **Elimination** | 407 → **416** |
+| Rumble | 399 → 406 | Inferno Rumble | 408 → 417 |
+| **Salvage** | 400 → **407** | Inferno Skirmish | 409 → 418 |
+| Rift | 401 → 408 | Inferno Salvage | 410 → 419 |
+|  |  | Inferno Doubles | 411 → 420 |
+|  |  | Mayhem Rumble | 412 → 421 |
+|  |  | Sparrow Racing | 413 → 422 |
+
+So every 56578 run so far launched **Salvage** (hash `0x19BC2182`, which is the composition log's
+`game mode`). Serving phase 6 drew "MISSION END: Seconds remaining: 0", so phase 6 is the ending
+phase, not RUNNING. `activity_modes.rs` is 01.29-pinned like the item index; it needs the same
+per-build source.
+
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
 connected and gave up after 3 s with no ServerInfo header. A plain relaunch passed. So the probe
 failure is intermittent and separate from the orphaned-server cause; its root cause is open.
