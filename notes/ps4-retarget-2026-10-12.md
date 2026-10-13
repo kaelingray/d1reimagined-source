@@ -648,7 +648,38 @@ So every precondition this side of the walker holds, and the 01.29 defaults are 
 yet nothing is stored. That isolates the one step 01.29 left `[U]`: whether the post-pass
 (`FUN_002CE2A0` dispatch via `record+0xA8`) fires for a freshly delivered element. The next probe
 needs a runtime hit counter or breakpoint in the client (the decoder `0x2A1C40`, the walker
-`0x2D0CD0`, the setter `0x11DE30`), which is a new capability. 01.29's next steps
+`0x2D0CD0`, the setter `0x11DE30`), which is a new capability.
+
+*Hit counters: where the served phase is lost.* `tools/ps4_setup/d1-wincount.py` adds entry hit
+counters to the live client. It allocates a page within ±2 GB of the image, relocates each target's
+first whole instructions into a stub (only push/mov/xor with no rip-relative operand or branch),
+and has the stub do `lock inc` on a counter and jump back. The entry gets a 5-byte `jmp`, the
+original bytes are saved to JSON, and `remove` restores them exactly; all six were verified
+afterwards. `d1-relaunch.ps1` re-runs launch → rung 34 → in_world from orbit in the same session.
+The 56578 setter is **`0x11DE50`** (01.29 `0x11DE30`; `memcpy(…, 0x504)` at `0x11DF10`).
+Counts in world with the sensor repeating every 10 s:
+
+| function | hits | what it is |
+|---|---:|---|
+| `0x29DDF0` udt-5 RX handler | 9 | one per frame |
+| `0xBB1D00` sim-queue resolve world (`0x75D6B0(ah_id)`) | 9 | world found |
+| `0x2A1C40` frame decoder | 9 | gen / enabled checks pass |
+| `0x2D0CD0` named-globals walker | 8 | runs |
+| `0x2D1600` walker terminator (`has_entry = 0`) | = walker (51/51 over a run) | frame parses to its end |
+| `0x2D2F20` → `0x2D2F30` post-pass | **0** | never |
+| `0x2CED30` dispatch, `0x11DE50` setter | **0** | never |
+
+The post-pass runs inside a sweep (`0x2D1400` loop). It enumerates the world's resident object
+set, resolves each entry's registry object `rbx`, and calls the post-pass when `rbx+0x60` equals
+the current partition id (`0x345620`) or is ≥ 0x80. The lifetime record's `+0x60` is `0x8080039D`
+(≥ 0x80), and its dispatch guard fields are as 01.29 documented (`+0xA8 = 0x8080039D`, ordinal 2,
+`+0xB0 = 0x27FA2003`). So it **would** be swept if it were in the set. It never is. **This settles
+01.29's `[U]`: the post-pass fires only for content resident in the world, and a freshly delivered
+element outside that set is parsed and dropped.** The resident set is what tasks 9/10 (world
+content) load, which is exactly what the forced done mask skips. The served sensor therefore cannot
+land on this route until the world content is served or its residency is established another way.
+The remaining in-world options are serving the task-9/10 content, or 01.29's synthetic spawn (the
+lifetime-state getter hook, the per-player reject `je`, and the spawn word). 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
