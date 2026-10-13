@@ -11,6 +11,12 @@ param(
     [int]$TitleTaps = 3,
     [int]$TapIntervalSeconds = 12,
     [string]$TitleKey = 'NumPad2',
+    # bootflow:profile_setup is the local first-run wizard (screen bounds, brightness, subtitles).
+    # It advances only on confirm, and left alone the client halts with a hitch. While the emulator
+    # log says the client is in that state, tap $TitleKey every $WizardIntervalSeconds, at most
+    # $WizardTaps times. Ignored with -OperatorInput.
+    [int]$WizardTaps = 15,
+    [int]$WizardIntervalSeconds = 4,
     [string]$Manifest = '',
     # Explicit, address-specific client patch (synthetic). Never applied by default.
     [string]$ClientPatch = '',
@@ -92,7 +98,7 @@ $receipt = [ordered]@{
     launch = $launch; autoPatchesDisabled = (-not $ClientPatch); autoPatchFolderEmpty = ($autoPatches.Count -eq 0)
     clientPatch = if ($ClientPatch) { [ordered]@{ path = (Get-Item -LiteralPath $ClientPatch).FullName
         sha256 = (Get-FileHash -LiteralPath $ClientPatch).Hash.ToLowerInvariant(); synthetic = $true } } else { $null }
-    input = if ($OperatorInput) { 'operator' } else { "virtual key $TitleKey x$TitleTaps after ${TitleDelaySeconds}s" }
+    input = if ($OperatorInput) { 'operator' } else { "virtual key $TitleKey x$TitleTaps after ${TitleDelaySeconds}s; up to $WizardTaps wizard taps every ${WizardIntervalSeconds}s while in profile_setup" }
     checks = $checks
 }
 $failed = @($checks.Keys | Where-Object { -not $checks[$_].pass })
@@ -214,6 +220,8 @@ $emu = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThr
     -ArgumentList ($(if ($ClientPatch) { @('-p', "`"$((Get-Item -LiteralPath $ClientPatch).FullName)`"") } else { @('-i') }) + @('-g', "`"$launch`""))
 $receipt.emulatorPid = $emu.Id
 $taps = 0; $nextSnap = $started.AddSeconds(15); $shot = 0
+$shadLog = Join-Path $userDir 'log\shad_log.txt'
+$logPos = 0L; $inWizard = $false; $wizardTaps = 0; $nextWizardTap = Get-Date; $nextLogRead = Get-Date
 $end = $started.AddMinutes($Minutes)
 while (-not $emu.HasExited -and (Get-Date) -lt $end) {
     Start-Sleep -Milliseconds 500
@@ -228,7 +236,29 @@ while (-not $emu.HasExited -and (Get-Date) -lt $end) {
         Tap $h $TitleKey; $taps++
         Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) tap $TitleKey"
     }
+    if (-not $OperatorInput -and (Get-Date) -ge $nextLogRead -and (Test-Path -LiteralPath $shadLog)) {
+        $nextLogRead = (Get-Date).AddSeconds(1)
+        try {
+            $fs = [IO.File]::Open($shadLog, 'Open', 'Read', 'ReadWrite, Delete')
+            try {
+                if ($fs.Length -lt $logPos) { $logPos = 0L }
+                [void]$fs.Seek($logPos, 'Begin')
+                $text = (New-Object IO.StreamReader($fs)).ReadToEnd()
+                $logPos = $fs.Length
+            } finally { $fs.Dispose() }
+            if ($text -match "Entering state 'bootflow:profile_setup'") { $inWizard = $true }
+            if ($text -match "Leaving state 'bootflow:profile_setup'") {
+                $inWizard = $false
+                Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) left profile_setup after $wizardTaps wizard tap(s)"
+            }
+        } catch { }
+    }
+    if ($inWizard -and $wizardTaps -lt $WizardTaps -and (Get-Date) -ge $nextWizardTap) {
+        Tap $h $TitleKey; $wizardTaps++; $nextWizardTap = (Get-Date).AddSeconds($WizardIntervalSeconds)
+        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) wizard tap $TitleKey ($wizardTaps)"
+    }
 }
+$receipt.wizardTaps = $wizardTaps
 $receipt.emulatorExitedByItself = $emu.HasExited
 if (-not $emu.HasExited) { Stop-Process -Id $emu.Id; $emu.WaitForExit(15000) | Out-Null }
 $receipt.emulatorExitCode = if ($emu.HasExited) { $emu.ExitCode } else { $null }
