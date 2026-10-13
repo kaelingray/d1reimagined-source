@@ -1167,7 +1167,18 @@ So whatever arms a spawned player in this build does not come from the profile a
 comes from the family-0/1 peer roster's appearance. Next suspects:
 - the peer-roster equipment path;
 - a sim-queue element that hands the loadout over (the 95 sim-queue payload schemas,
-  `architecture.md` §8). The open question is which
+  `architecture.md` §8).
+
+*Peer-roster equipment reads (run `equipread2`, partial).*
+- The family-0/1 peer object was found live at `0x37F8E4040` (SOID `0xD100000000000501`).
+- Equipment block at `+0x218` (`0x30` block + `0x1E8`), 64-byte elements, content index at `+8`;
+  it holds helmet 6514, primary 5043, special 5263, heavy 6323 (the 56578 indices).
+- Read breakpoints on the primary, heavy and helmet content indices from orbit through launch:
+  498 hits, all from ONE site `0xA2F862` (fn `0xA2F6D0` ← `0xA3FA22`, UI code range) on the
+  heavy slot only, 466 of them at orbit. Primary and helmet were never read.
+
+The client then crashed at the known cleanup site (`+0xBC09AE`) around the launch, so the
+in-world half is not conclusive; rerun on a clean launch. The open question is which
 spawn-time path creates a player's weapon sobjects (type 11), and what it needs.
 
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
