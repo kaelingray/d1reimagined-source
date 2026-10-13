@@ -693,7 +693,17 @@ content tasks 9/10 load, which is the circularity both 01.29 and this build hit.
 (01.29 `FUN_00794D30`, 56578 `0x7965A0`) gates on two lookups: leg A, `0x1192A0(entity)` with
 `[+8] != 0`, keyed by the controller→player map; and leg B, this phase. Next measurement: read
 `world[0]+0x38` live (counts, groups and entry ids) in world, to see which records the world
-container does hold and whether any lifetime-class record ever appears. 01.29's next steps
+container does hold and whether any lifetime-class record ever appears.
+
+*Measured (run `…-worldset`, in world, sensor repeating):* `worldset` (`d1-winguest.py`) decodes
+`world[0]+0x38` as `0x10304F0` does. It holds **97 entries in 3 groups (starts 0/32/64)**, all from
+one pool: tags `0x..F420xx`, pool type `0xF42`, objects 0x70 apart, `+0x60` = −1 or 0. The lifetime
+record (`0x27FA2003`, pool type `0xFA2`) is **not** in it, which confirms the static reading. Open
+point: those 97 entries would themselves pass the post-pass condition (`+0x60` −1 is ≥ 0x80, or
+0), yet the bridge `0x2D2F20` counted 0. So the walker's outer loop over containers
+(`0x2D114A`/`0x2D134B`: `cmp [rbp-0xAED8], [rbp-0xAEC8]`, pointer stepped by 0x10 per container) is
+gated by more than the container contents. That needs either a counter mid-walker (requires the
+tool to relocate a non-prologue site) or a static trace of `[rbp-0xAEC8]`. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run

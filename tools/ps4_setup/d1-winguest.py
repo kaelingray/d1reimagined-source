@@ -187,6 +187,42 @@ def main():
             else:
                 print('    dry run (add --confirm)')
         return 0
+    if cmd == 'worldset':
+        # The udt-5 post-pass sweep's container is world+0x38 (walker 0x2D134B..0x2D13DC); entries are
+        # u16 slots at +0xC, groups at +0x5E8/+0x5EC, tags composed as 0x10304F0 does.
+        pool, stride = p.u(base + WORLD_POOL, 'Q'), p.u(base + WORLD_STRIDE, 'I')
+        w = pool + int(sys.argv[sys.argv.index('--world') + 1] if '--world' in sys.argv else 0) * stride
+        c = w + 0x38
+        P, n, ng = p.u(c, 'Q'), p.u(c + 8, 'i'), p.u(c + 0x5E8, 'i')
+        print(f'world {w:#x} container {c:#x}: pool desc {P:#x} entries {n} groups {ng}')
+        if not P or n <= 0:
+            return 0
+        starts = [p.u(c + 0x5EC + 4 * g, 'i') for g in range(min(ng, 64))]
+        print(f'  group starts {starts}')
+        data, base_off, esz, mask, flags = p.u(P + 8, 'Q'), p.u(P + 0x1C, 'I'), p.u(P + 0x20, 'I'), p.u(P + 0x24, 'I'), p.u(P + 0x34, 'I')
+        reg = p.u(p.u(base + REGISTRY, 'Q'), 'Q')
+        for i in range(min(n, 400)):
+            slot = p.u(c + 0xC + 2 * i, 'H')
+            if slot == 0xFFFF:
+                continue
+            hi = p.u(data + base_off + esz * slot, 'I') & mask
+            if flags & 0x40000000:
+                tag = 0x80000000 | ((hi & 7) << 27) | ((flags << 13) & 0x7FFE000) | (slot & 0x1FFF)
+            else:
+                tag = ((hi << 23) & 0x7F800000) | ((flags << 13) & 0x7FE000) | (slot & 0x1FFF)
+            esi = struct.unpack('<i', struct.pack('<I', tag))[0] >> 13
+            sl = (((esi & 0xFFFFFFFF) >> 0x12) | 0x3FF) & esi & 0xFFFFFFFF
+            rec = reg + sl * 0x40
+            d, es, mk = p.u(rec + 0x10, 'Q'), p.u(rec + 0x30, 'i'), p.u(rec + 0x34, 'i') & 0xFFFFFFFFFFFFFFFF
+            e = d + (tag & 0x1FFF) * es
+            try:
+                obj = e - (mk & p.u(e + 8, 'Q'))
+                cls = p.u(obj + 0x60, 'I')
+            except OSError:
+                obj, cls = 0, 0
+            mark = '  <== lifetime record' if tag == 0x27FA2003 else ''
+            print(f'  [{i:3d}] slot {slot:5d} tag {tag:#010x} obj {obj:#x} +0x60 {cls:#010x}{mark}')
+        return 0
     if cmd == 'unfade':
         blk = p.u(base + FADE_PTR, 'Q')
         cnt, mode, alpha = p.u(blk, 'I'), p.u(blk + 0x14, 'I'), p.u(blk + 0x18, 'f')
