@@ -81,7 +81,11 @@ def patch(p, addr, data):
 def prologue(p, addr):
     code, n, out = p.read(addr, 0x20), 0, []
     for ins in md.disasm(code, addr):
-        if ins.mnemonic not in ('push', 'mov', 'xor') or 'rip' in ins.op_str or '[' in ins.op_str:
+        # D1_COUNT_ANY=1 also allows mid-function block starts: any instruction that is position-
+        # independent (no rip operand) and not control flow, memory operands included.
+        anyok = os.environ.get('D1_COUNT_ANY') and 'rip' not in ins.op_str and not (
+            ins.mnemonic.startswith('j') or ins.mnemonic in ('call', 'ret', 'loop', 'int3'))
+        if not anyok and (ins.mnemonic not in ('push', 'mov', 'xor') or 'rip' in ins.op_str or '[' in ins.op_str):
             sys.exit(f'REFUSING {addr:#x}: {ins.mnemonic} {ins.op_str} is not a relocatable prologue instruction')
         out.append(ins); n += ins.size
         if n >= 5:

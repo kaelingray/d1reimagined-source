@@ -778,8 +778,37 @@ lifetime `+0x674/+0x678` reader `0x10CB60` was never reached. The biped handle s
 screen stayed at full fade. About 6 minutes after in_world the client left with
 `error.inactivity_timed_out` (no input in world) and returned to orbit.
 
-Not yet known: whether the gate now returns true and what stops construction. Next: rerun with
-periodic input to hold off the AFK timer, then trace past the gate.
+*Where the served spawn stops: the gate's leg A (two more loads from orbit, same result each time:
+in world, 0 pending, phase 3, spawn word 1).* Block-start counters on the gate `0x415700` for 10 s:
+- entry: 310 hits
+- spawner reject `0x41314D`: 310 hits
+- spawner accept `0x412DDC`: 0 hits
+- first interior block `0x415776`, and every later block: 0 hits
+
+So the gate refuses at its first test: `0x1192B0(tag)` returns null. The spawner loops over the
+**"player array"** (`0x2689580`, 20 × 0x1C0, `c_player_manager`; not the players pool) and passes
+each entry's tag. `0x1192B0` reads that entry's `+0x50` tag. It then resolves the object, takes the
+object's `+0x1F8` tag, and adds the object's `+0x200` offset. The gate needs `[result+9] != 0`.
+
+Live, entry 0 is populated:
+- `+0x08`: machine id `E0D55E272F90`
+- `+0x40`: 3
+- `+0x48`: own tag `0x1BFF2000`
+- `+0x4C`: players index `0xEC700000`
+
+But `+0x50..+0x5B` are all FF.
+
+01.29's blocker, the controller→player map (`[0x273EB80]+0xC0` on 56578), is already set
+(`0xEC700000`), and the players pool count is 1. So this is exactly 01.29's open "which other leg
+refused" (design/activity-lifetime-state.md §5): leg A. The same record's `[+8]` is task 9's test,
+which is why rung 34 still needs the done-mask force.
+
+No direct writer of `entry+0x50` was found among the 400+ functions that reference the table
+(dword/qword/vector stores at `+0x40..+0x5F` checked). The writer reaches the entry through a
+pointer. Next options:
+- a hardware write-watch on `entry+0x50`, attached as a debugger so first-chance exceptions pass through;
+- the AH entity-slot messages (udt 0 `entity_slots_allocated`, 30/31 authority mask), on the guess
+  that `+0x50` names the player's simulation entity.
 
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
