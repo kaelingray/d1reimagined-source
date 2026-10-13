@@ -26,6 +26,8 @@ pub const ID_TO_INDEX: u64 = 0x27_FDD0;
 
 pub struct SchemaHarness {
     pub image: Image,
+    /// This image's codec addresses ([`crate::codec`]). Every codec call goes through these.
+    pub c: &'static crate::codec::CodecAddrs,
     pub index: Index,
     pub h: Harness,
     pub tag: u32,
@@ -55,6 +57,13 @@ impl SchemaHarness {
         let index = descriptors::index(&image).map_err(|e| OracleError::Eboot(e.to_string()))?;
         let d = index.get(tag).ok_or(OracleError::UnknownTag(tag))?;
         let struct_size = d.struct_size as usize;
+        let c = crate::codec::codec_for(&image.sha256()).ok_or_else(|| {
+            OracleError::Eboot(format!(
+                "no codec address set for image sha256 {} - the codecs would be called at the \
+                 wrong addresses",
+                image.sha256()
+            ))
+        })?;
         let mut h = Harness::new(&image)?;
 
         let definition = h.alloc(0x80)?;
@@ -67,11 +76,11 @@ impl SchemaHarness {
         let manager = h.alloc(0x40)?;
         h.write_u64(manager, vt)?;
 
-        h.stub(GET_MANAGER, Stub::Return(manager));
+        h.stub(c.get_manager, Stub::Return(manager));
         h.stub(STUB_ACCESSOR, Stub::Return(definition));
-        h.stub(ID_TO_INDEX, Stub::Return(0));
+        h.stub(c.id_to_index, Stub::Return(0));
 
-        registry::build(&mut h, &image, &index, tag)?;
+        registry::build(&mut h, &image, &index, tag, c.registry_global)?;
 
         // ⭐ Everything allocated from here on is one call's scratch. Nothing after this line may
         // allocate scaffolding that outlives a call - `begin_call` releases it.
@@ -79,6 +88,7 @@ impl SchemaHarness {
 
         Ok(Self {
             image,
+            c,
             index,
             h,
             tag,

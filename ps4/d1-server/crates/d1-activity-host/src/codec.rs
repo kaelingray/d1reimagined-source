@@ -71,8 +71,9 @@ use std::sync::{Mutex, OnceLock};
 use crate::messages::AhMessage;
 use crate::AhError;
 
-/// The descriptor globals the client's own call sites name. Kept as constants so an error message
-/// can print the address to inspect, exactly as before.
+/// The descriptor globals the client's own call sites name **in 01.29** (the reference build).
+/// [`descriptor_global`] follows the selected build; 56578's rows are
+/// [`d1_oracle::activity_host::CALL_SITES_56578`].
 pub const DESCRIPTOR_GLOBAL_JOIN_REQUEST: u64 = 0x0190_22F0;
 /// See [`DESCRIPTOR_GLOBAL_JOIN_REQUEST`].
 pub const DESCRIPTOR_GLOBAL_JOIN_RESULT: u64 = 0x0190_22F8;
@@ -80,7 +81,8 @@ pub const DESCRIPTOR_GLOBAL_JOIN_RESULT: u64 = 0x0190_22F8;
 pub const DESCRIPTOR_GLOBAL_ENTITY_SLOTS: u64 = 0x0190_2310;
 /// See [`DESCRIPTOR_GLOBAL_JOIN_REQUEST`].
 pub const DESCRIPTOR_GLOBAL_GLOBAL_STATE: u64 = 0x0190_2380;
-/// The client-side decoder every AH receive handler funnels through.
+/// The client-side decoder every AH receive handler funnels through (01.29; the oracle calls the
+/// selected build's, see [`d1_oracle::codec`]).
 pub const SCHEMA_DECODE_FN: u64 = d1_oracle::activity_host::DECODE_FN;
 /// The client-side encoder `activity_client_send_message` funnels through.
 pub const SCHEMA_ENCODE_FN: u64 = d1_oracle::activity_host::ENCODE_FN;
@@ -92,7 +94,7 @@ pub const TAG_JOIN_RESULT: u32 = 0x8080_0A58;
 
 /// Which descriptor global a udt is decoded through, where we have read the call site.
 pub fn descriptor_global(user_defined_type: u32) -> u64 {
-    d1_oracle::activity_host::CALL_SITES
+    d1_oracle::activity_host::call_sites()
         .iter()
         .find(|(u, _, _)| *u == user_defined_type)
         .map(|(_, g, _)| *g)
@@ -495,10 +497,19 @@ mod tests {
     fn the_pinned_tags_equal_the_derived_ones() {
         assert_eq!(d1_oracle::activity_host::tag_for_udt(3).unwrap(), TAG_JOIN_REQUEST);
         assert_eq!(d1_oracle::activity_host::tag_for_udt(4).unwrap(), TAG_JOIN_RESULT);
-        assert_eq!(descriptor_global(3), DESCRIPTOR_GLOBAL_JOIN_REQUEST);
-        assert_eq!(descriptor_global(4), DESCRIPTOR_GLOBAL_JOIN_RESULT);
-        assert_eq!(descriptor_global(0), DESCRIPTOR_GLOBAL_ENTITY_SLOTS);
-        assert_eq!(descriptor_global(1), DESCRIPTOR_GLOBAL_GLOBAL_STATE);
+        // The DESCRIPTOR_GLOBAL_* pins are 01.29's; `descriptor_global` follows the selected build.
+        let row_0129 = |udt: u32| {
+            d1_oracle::activity_host::CALL_SITES.iter().find(|(u, _, _)| *u == udt).map(|r| r.1)
+        };
+        assert_eq!(row_0129(3), Some(DESCRIPTOR_GLOBAL_JOIN_REQUEST));
+        assert_eq!(row_0129(4), Some(DESCRIPTOR_GLOBAL_JOIN_RESULT));
+        assert_eq!(row_0129(0), Some(DESCRIPTOR_GLOBAL_ENTITY_SLOTS));
+        assert_eq!(row_0129(1), Some(DESCRIPTOR_GLOBAL_GLOBAL_STATE));
+        let selected = d1_oracle::activity_host::call_sites();
+        for udt in [3, 4, 0, 1] {
+            let want = selected.iter().find(|(u, _, _)| *u == udt).map(|r| r.1);
+            assert_eq!(Some(descriptor_global(udt)), want, "udt {udt}");
+        }
         // An id with no row reads 0, which is what makes the error message honest.
         assert_eq!(descriptor_global(42), 0);
     }

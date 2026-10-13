@@ -124,8 +124,7 @@ pub const BS_SIZE: u64 = 0x100;
 /// character vector leaves `+0x24 = 97`. (`+0x20` is 64-bit prefetch accounting, not a position.)
 pub const BS_BITPOS: u64 = 0x24;
 
-const MEMSET: u64 = harness::IMP_MEMSET;
-const CODEC_LO: u64 = 0x2C_6000;
+pub const CODEC_LO: u64 = 0x2C_6000;
 /// ⚠ **Widened from `0x2C9100` to `0x2C9400` on 2026-08-09**, when [`DECODE_OBJ_REPLICATED`] was
 /// wired up and faulted with `memset would clobber the STACK … return=0x2C9148`.
 ///
@@ -137,7 +136,7 @@ const CODEC_LO: u64 = 0x2C_6000;
 /// ⚠ This is a *guard* being relaxed, so state what still holds: the allowance is still only for
 /// **direct `call memset` sites found by a byte scan inside this window**, not for the window
 /// itself - an unpopulated pointer reaching `memset` from anywhere else still faults.
-const CODEC_HI: u64 = 0x2C_9400;
+pub const CODEC_HI: u64 = 0x2C_9400;
 
 /// One decoded server object, with everything a caller needs to assert **shape**.
 ///
@@ -218,11 +217,15 @@ impl ObjectOracle {
     /// Construct without running the control. **Only** the control itself may call this.
     pub(crate) fn new_unchecked(tag: u32) -> Result<Self> {
         let mut s = SchemaHarness::new(tag, 1, 0)?;
-        let sites = harness::direct_call_sites(&s.image, MEMSET, CODEC_LO, CODEC_HI)?;
+        let memset = harness::addrs_for(&s.image.sha256())
+            .ok_or_else(|| OracleError::Eboot("no harness address set for this image".into()))?
+            .memset;
+        let (lo, hi) = (s.c.codec_lo, s.c.codec_hi);
+        let sites = harness::direct_call_sites(&s.image, memset, lo, hi)?;
         if sites.is_empty() {
             return Err(OracleError::Eboot(format!(
-                "no direct `call {MEMSET:#x}` sites in {CODEC_LO:#x}..{CODEC_HI:#x} - the byte scan \
-                 is broken, and without a positive control an empty result is not evidence"
+                "no direct `call {memset:#x}` sites in {lo:#x}..{hi:#x} - the byte scan is broken, \
+                 and without a positive control an empty result is not evidence"
             )));
         }
         s.h.allow_stack_memset_from(sites);
@@ -274,7 +277,7 @@ impl ObjectOracle {
     fn bitstream(&mut self, buf: u64, len: u64) -> Result<u64> {
         let bs = self.s.h.alloc(BS_SIZE)?;
         self.s.h.write_u32(bs + 0x14, 1)?; // alignment 1, as 0x56B646
-        self.s.h.call(BS_CTOR, &[bs, buf, len])?;
+        self.s.h.call(self.s.c.bs_ctor, &[bs, buf, len])?;
         Ok(bs)
     }
 
@@ -289,12 +292,12 @@ impl ObjectOracle {
         let buf = self.s.h.alloc(payload.len().max(16) as u64)?;
         self.s.h.write(buf, payload)?;
         let bs = self.bitstream(buf, payload.len() as u64)?;
-        self.s.h.call(BS_BEGIN_READ, &[bs])?;
-        let rc = (self.s.h.call(DECODE_OBJ, &[u64::from(self.s.tag), bs, obj, obj, 1])? & 0xFF) as u8;
+        self.s.h.call(self.s.c.bs_begin_read, &[bs])?;
+        let rc = (self.s.h.call(self.s.c.decode_obj, &[u64::from(self.s.tag), bs, obj, obj, 1])? & 0xFF) as u8;
         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
-        self.s.h.call(BS_END, &[bs])?;
+        self.s.h.call(self.s.c.bs_end, &[bs])?;
         if rc != 1 {
-            return Err(OracleError::CodecReturned { func: DECODE_OBJ, rc });
+            return Err(OracleError::CodecReturned { func: self.s.c.decode_obj, rc });
         }
         let available = payload.len() * 8;
         if bits as usize > available {
@@ -309,17 +312,17 @@ impl ObjectOracle {
         let obj = self.s.make_object(object)?;
         let buf = self.s.h.alloc(capacity)?;
         let bs = self.bitstream(buf, capacity)?;
-        self.s.h.call(BS_BEGIN_WRITE, &[bs, 1])?;
-        let rc = (self.s.h.call(ENCODE_OBJ, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
+        self.s.h.call(self.s.c.bs_begin_write, &[bs, 1])?;
+        let rc = (self.s.h.call(self.s.c.encode_obj, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
         if rc != 1 {
-            return Err(OracleError::CodecReturned { func: ENCODE_OBJ, rc });
+            return Err(OracleError::CodecReturned { func: self.s.c.encode_obj, rc });
         }
         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
         // ⚠ 0x72560 takes an OUT param in rsi (`mov [rsi], ecx` at 0x7263E). Omitting it leaves a
         // stale rsi and the flush stores through it - which surfaces as WRITE_UNMAPPED from a
         // function that looks argument-less.
         let scratch = self.s.h.alloc(8)?;
-        self.s.h.call(BS_FLUSH, &[bs, scratch])?;
+        self.s.h.call(self.s.c.bs_flush, &[bs, scratch])?;
         let nbytes = ((bits as usize) + 7) / 8;
         Ok(Encoded { tag: self.s.tag, bits, payload: self.s.h.read(buf, nbytes)? })
     }
@@ -355,19 +358,19 @@ impl ObjectOracle {
         let obj = self.s.make_object(object)?;
         let buf = self.s.h.alloc(capacity)?;
         let bs = self.bitstream(buf, capacity)?;
-        self.s.h.call(BS_BEGIN_WRITE, &[bs, 1])?;
+        self.s.h.call(self.s.c.bs_begin_write, &[bs, 1])?;
         // The presence bit: "field 0 changed". A full-state replication says yes.
         // `WRITE_ONE_BIT` takes it from `src + 8`.
         let src = self.s.h.alloc(16)?;
         self.s.h.write(src, &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])?;
-        self.s.h.call(WRITE_ONE_BIT, &[src, 0, bs])?;
-        let rc = (self.s.h.call(ENCODE_OBJ, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
+        self.s.h.call(self.s.c.write_one_bit, &[src, 0, bs])?;
+        let rc = (self.s.h.call(self.s.c.encode_obj, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
         if rc != 1 {
-            return Err(OracleError::CodecReturned { func: ENCODE_OBJ, rc });
+            return Err(OracleError::CodecReturned { func: self.s.c.encode_obj, rc });
         }
         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
         let scratch = self.s.h.alloc(8)?;
-        self.s.h.call(BS_FLUSH, &[bs, scratch])?;
+        self.s.h.call(self.s.c.bs_flush, &[bs, scratch])?;
         let nbytes = (bits as usize).div_ceil(8);
         Ok(Encoded { tag: self.s.tag, bits, payload: self.s.h.read(buf, nbytes)? })
     }
@@ -404,16 +407,16 @@ impl ObjectOracle {
         let buf = self.s.h.alloc(payload.len().max(16) as u64)?;
         self.s.h.write(buf, payload)?;
         let bs = self.bitstream(buf, payload.len() as u64)?;
-        self.s.h.call(BS_BEGIN_READ, &[bs])?;
+        self.s.h.call(self.s.c.bs_begin_read, &[bs])?;
         let rc = (self
             .s
             .h
-            .call(DECODE_OBJ_REPLICATED, &[bs, obj, size_ptr, u64::from(self.s.tag), 1])?
+            .call(self.s.c.decode_obj_replicated, &[bs, obj, size_ptr, u64::from(self.s.tag), 1])?
             & 0xFF) as u8;
         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
-        self.s.h.call(BS_END, &[bs])?;
+        self.s.h.call(self.s.c.bs_end, &[bs])?;
         if rc != 1 {
-            return Err(OracleError::CodecReturned { func: DECODE_OBJ_REPLICATED, rc });
+            return Err(OracleError::CodecReturned { func: self.s.c.decode_obj_replicated, rc });
         }
         let available = payload.len() * 8;
         if bits as usize > available {

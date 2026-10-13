@@ -39,6 +39,9 @@ pub const STACK: u64 = 0x400_0000;
 pub const STACK_SIZE: u64 = 0x20_0000;
 pub const HEAP: u64 = 0x500_0000;
 pub const HEAP_SIZE: u64 = 0x100_0000;
+/// The largest length a stubbed `memcpy`/`memset`/`alloc_aligned` will act on. Every guest buffer
+/// is in the image, the stack or the heap, so a longer request means the call's arguments are wrong.
+pub const MAX_GUEST_LEN: u64 = 0x1000_0000;
 /// The return trampoline. `call()` pushes this and stops when RIP reaches it.
 pub const STOP: u64 = 0x7ff_f000;
 pub const CANARY_PTR: u64 = 0x7ff_e000;
@@ -541,6 +544,21 @@ fn dispatch(
     stub: Stub,
 ) -> std::result::Result<(), String> {
     let e = |e: unicorn_engine::uc_error| format!("{e:?}");
+    // ⚠ FAIL CLOSED on a length no guest buffer can have. A wrong call target or unpopulated
+    // scaffolding shows up here as a garbage length; allocating it host-side aborted the whole
+    // process ("capacity overflow") instead of reporting where the guest went wrong.
+    let bounded = |uc: &mut Unicorn<'_, ()>, what: &str, n: u64| -> std::result::Result<usize, String> {
+        if n <= MAX_GUEST_LEN {
+            return Ok(n as usize);
+        }
+        let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
+        let mut b = [0u8; 8];
+        uc.mem_read(rsp, &mut b).map_err(e)?;
+        Err(format!(
+            "{what} with length {n:#x} (return address {:#x}) - no guest buffer is that large; the              caller's arguments are not what this stub was told they are",
+            u64::from_le_bytes(b)
+        ))
+    };
     match stub {
         Stub::Stop => {
             uc.emu_stop().map_err(e)?;
@@ -567,13 +585,15 @@ fn dispatch(
                 s.guest_allocs += 1;
                 s.alloc(n, a).map_err(|x| x.to_string())?
             };
-            uc.mem_write(p, &vec![0u8; n.max(1) as usize]).map_err(e)?;
+            let len = bounded(uc, "alloc_aligned", n)?.max(1);
+            uc.mem_write(p, &vec![0u8; len]).map_err(e)?;
             do_ret(uc, p).map_err(e)?;
         }
         Stub::MemCopy => {
             let dst = uc.reg_read(RegisterX86::RDI).map_err(e)?;
             let src = uc.reg_read(RegisterX86::RSI).map_err(e)?;
-            let n = uc.reg_read(RegisterX86::RDX).map_err(e)? as usize;
+            let n = uc.reg_read(RegisterX86::RDX).map_err(e)?;
+            let n = bounded(uc, "memcpy/memmove", n)?;
             let buf = uc.mem_read_as_vec(src, n).map_err(e)?;
             uc.mem_write(dst, &buf).map_err(e)?;
             do_ret(uc, dst).map_err(e)?;
@@ -582,6 +602,7 @@ fn dispatch(
             let dst = uc.reg_read(RegisterX86::RDI).map_err(e)?;
             let val = (uc.reg_read(RegisterX86::RSI).map_err(e)? & 0xFF) as u8;
             let n = uc.reg_read(RegisterX86::RDX).map_err(e)?;
+            bounded(uc, "memset", n)?;
             if dst < STACK + STACK_SIZE && dst + n > STACK {
                 let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
                 let mut b = [0u8; 8];

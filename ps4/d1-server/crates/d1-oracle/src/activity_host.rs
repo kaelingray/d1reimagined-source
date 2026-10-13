@@ -209,9 +209,76 @@ pub const RAW_SEND: &[(u32, u64, &str)] = &[
     (15, 0x0029_8C40, "FUN_00298C40 - the keepalive, ONE uninitialised byte"),
 ];
 
-/// Is this udt sent with the raw arm of `FUN_00299310`? See [`RAW_SEND`].
+/// ⭐ Build 56578's [`CALL_SITES`], read on 2026-10-13 from the 56578 image alone.
+///
+/// Each row was read mechanically at a call site, not by offsetting the 01.29 globals:
+/// * the 28 callers of `activity_client_send_message` (`0x299D10`), where `edx` is the udt, the
+///   descriptor comes from `lea rax,[rip+G]; mov rax,[rax]; mov ecx,[rax]`, and `r9d` is the size;
+/// * the 12 callers of the AH decode wrapper (`0x2A4AC0`), where the descriptor is in `edi`;
+/// * udt 11 from the replicated decode `0x2C9AE0` at `0x29D1D5`, with the descriptor in `ecx`;
+/// * udt 21 from the replicated encode `0x2C9D20` at `0x29D6A4`, with the descriptor in `rdx`.
+///
+/// Every udt in the 01.29 table is present with the same role, and every global moved by the
+/// same `+0x18090`. Every size the client states is unchanged **except udt 37**
+/// `send_client_heartbeat`, which grew from `0xB1E0` to **`0xB750`**. udt 21's `0x220` is still
+/// stated by the snapshot `memcpy(ac+0x6748, ac+0x6968, 0x220)` at `0x299420`. The sizes remain
+/// the control, as in 01.29: [`derive`] reaches the schema record by an unrelated route, and
+/// [`controls`] compares the two.
+pub const CALL_SITES_56578: &[(u32, u64, Option<usize>)] = &[
+    (0, 0x0191_A3A0, Some(0x600)),
+    (1, 0x0191_A410, None),
+    (4, 0x0191_A388, Some(0x1A8)),
+    (11, 0x0191_A308, Some(0x5038)),
+    (3, 0x0191_A380, Some(0x100)),
+    (12, 0x0191_A370, Some(0x330)),
+    (13, 0x0191_A378, Some(0x010)),
+    (17, 0x0191_A428, Some(0x008)),
+    (18, 0x0191_A360, Some(0x2CC)),
+    (19, 0x0191_A398, Some(0x004)),
+    (20, 0x0191_A3A8, Some(0x600)),
+    (22, 0x0191_A2F8, Some(0x028)),
+    (25, 0x0191_A3B0, Some(0x608)),
+    (26, 0x0191_A3D0, Some(0x604)),
+    (28, 0x0191_A3E8, Some(0x004)),
+    (30, 0x0191_A3F8, Some(0x608)),
+    (31, 0x0191_A400, Some(0x604)),
+    (32, 0x0191_A430, Some(0x604)),
+    (33, 0x0191_A448, Some(0x210)),
+    (35, 0x0191_A438, Some(0x008)),
+    (36, 0x0191_A420, Some(0x004)),
+    (37, 0x0191_A440, Some(0xB750)),
+    (41, 0x0191_A408, Some(0x004)),
+    (44, 0x0191_A460, Some(0x284)),
+    (45, 0x0191_A468, Some(0x170)),
+    (46, 0x0191_A450, Some(0x00C)),
+    (47, 0x0191_A470, Some(0x024)),
+    (48, 0x0191_A478, Some(0x004)),
+    (14, 0x0191_A390, Some(0x014)),
+    (21, 0x0191_A300, Some(0x220)),
+];
+
+/// Build 56578's [`RAW_SEND`]. The same three udts pass descriptor `0xFFFFFFFF` to `0x299D10`, with
+/// the same sizes (udt 15 sends 1 byte, udt 8 sends `0x9D8`).
+pub const RAW_SEND_56578: &[(u32, u64, &str)] = &[
+    (6, 0x0029_9CB0, "c_activity_client::vfunc[4] - sensor_sense_update"),
+    (8, 0x0029_A0D0, "FUN_0029A0D0 - request_activity_host, 0x9D8 bytes"),
+    (15, 0x0029_9640, "FUN_00299640 - the keepalive, ONE uninitialised byte"),
+];
+
+/// The selected build's codec set. Panics with the reason when the image has none: every caller
+/// below is meaningless without one.
+fn addrs() -> &'static crate::codec::CodecAddrs {
+    crate::codec::selected().unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// The selected build's call-site rows ([`CALL_SITES`] on 01.29, [`CALL_SITES_56578`] on 56578).
+pub fn call_sites() -> &'static [(u32, u64, Option<usize>)] {
+    addrs().ah_call_sites
+}
+
+/// Is this udt sent with the raw arm of `activity_client_send_message`? See [`RAW_SEND`].
 pub fn is_raw_send(user_defined_type: u32) -> Option<(u64, &'static str)> {
-    RAW_SEND.iter().find(|(u, _, _)| *u == user_defined_type).map(|(_, a, w)| (*a, *w))
+    addrs().ah_raw_send.iter().find(|(u, _, _)| *u == user_defined_type).map(|(_, a, w)| (*a, *w))
 }
 
 /// ⭐ Descriptor field kind **0x22** - a *dynamic flags* bitset, and the one field kind this oracle
@@ -251,12 +318,18 @@ pub fn dynamic_flags_reason(tag: u32) -> Result<Option<String>> {
     if !dynamic_flags_tags()?.contains(&tag) {
         return Ok(None);
     }
+    let a = addrs();
+    let grow = a.dynamic_flags_grow_fn;
+    let fault = match a.dynamic_flags_fault_rip {
+        Some(rip) => format!("{rip:#x} faults READ_UNMAPPED"),
+        None => "the first index read faults READ_UNMAPPED".to_string(),
+    };
     Ok(Some(format!(
         "has a field of kind {FIELD_KIND_DYNAMIC_FLAGS:#04x} - a DYNAMIC FLAGS bitset. Its backing \
-         array is allocated by {DYNAMIC_FLAGS_GROW_FN:#x} out of the game's \"dynamic flags\" pool \
-         (FUN_000B0550 over DAT_01ABCB80/DAT_01ABCB90/DAT_02666D18), which only exists in a live \
-         process; in a statically mapped image the pool returns a pointer into nothing and \
-         {DYNAMIC_FLAGS_FAULT_RIP:#x} faults READ_UNMAPPED. ⇒ a HARNESS limitation with a named \
+         array is allocated by {grow:#x} out of the game's \"dynamic flags\" pool \
+         (01.29: FUN_000B0550 over DAT_01ABCB80/DAT_01ABCB90/DAT_02666D18), which only exists in a \
+         live process; in a statically mapped image the pool returns a pointer into nothing and \
+         {fault}. ⇒ a HARNESS limitation with a named \
          cause, not an unknown wire format - and inert, because every udt in this class is \
          client→AH with no client-side handler."
     )))
@@ -400,7 +473,15 @@ pub fn derive(
 
 /// Derive every row of [`CALL_SITES`].
 pub fn derive_all(image: &Image, index: &Index) -> Result<Vec<AhSchema>> {
-    CALL_SITES
+    let sites = crate::codec::codec_for(&image.sha256())
+        .ok_or_else(|| {
+            OracleError::Eboot(format!(
+                "no Activity-Host call-site table for image sha256 {}",
+                image.sha256()
+            ))
+        })?
+        .ah_call_sites;
+    sites
         .iter()
         .map(|(udt, g, size)| derive(image, index, *udt, *g, *size))
         .collect()
@@ -1263,8 +1344,8 @@ pub fn controls() -> Result<Vec<Control>> {
 
     c.push(check(
         "every CALL_SITES row derives a schema tag",
-        all.len() == CALL_SITES.len(),
-        format!("{} of {} rows", all.len(), CALL_SITES.len()),
+        all.len() == addrs().ah_call_sites.len(),
+        format!("{} of {} rows", all.len(), addrs().ah_call_sites.len()),
     ));
 
     let mismatched: Vec<String> = all
@@ -1491,7 +1572,7 @@ pub fn controls() -> Result<Vec<Control>> {
     // reading it as dense over the sorted AH→client list is what produced the retracted claim.
     let dispatch = (0..17)
         .map(|i| {
-            let e = 0x18F_84A0 + i * 16;
+            let e = addrs().ah_rx_dispatch + i * 16;
             Ok((image.u32(e)?, image.u64(e + 8)?))
         })
         .collect::<std::result::Result<Vec<_>, d1_eboot::image::ImageError>>()
@@ -1621,7 +1702,7 @@ pub fn controls() -> Result<Vec<Control>> {
         format!(
             "FUN_00298C40 passes descriptor 0xFFFFFFFF and sets the raw flag; udt 2 is the \
              discriminating negative - {} raw-send rows",
-            RAW_SEND.len()
+            addrs().ah_raw_send.len()
         ),
     ));
 
@@ -1669,8 +1750,9 @@ pub fn controls() -> Result<Vec<Control>> {
             && codec.struct_size(1).is_ok(),
         format!(
             "derived {df:?} from field kind {FIELD_KIND_DYNAMIC_FLAGS:#04x}; the fault is \
-             {DYNAMIC_FLAGS_FAULT_RIP:#x} one instruction after {DYNAMIC_FLAGS_GROW_FN:#x}; udt 1 \
-             is the positive control on the same call"
+             {:?} after {:#x}; udt 1 is the positive control on the same call",
+            addrs().dynamic_flags_fault_rip,
+            addrs().dynamic_flags_grow_fn
         ),
     ));
 
@@ -1734,6 +1816,36 @@ mod tests {
         let reloc = reloc::by_slot(&image).unwrap();
         assert_eq!(reloc.get(&(0x18F_84A0 + 4 * 16 + 8)), Some(&0x29_CF50));
         assert_eq!(reloc.get(&(0x18F_84A0 + 7 * 16 + 8)), Some(&0x29_CDE0));
+    }
+
+    /// Build 56578: the same 17 stored types in the same order, at `CODEC_56578.ah_rx_dispatch`, and
+    /// the handlers agree with [`CALL_SITES_56578`] by an independent route. udt 0/1/4 point at
+    /// the AH decode functions whose descriptor globals those rows hold, and udt 11's handler
+    /// opens with a call to the replicated-decode caller. Skips when the 56578 image is absent.
+    #[test]
+    fn the_56578_rx_dispatch_table_agrees_with_its_call_site_rows() {
+        let Some(b) = d1_build::builds().ok().and_then(|b| b.all.iter().find(|x| x.id == "later-56578"))
+        else {
+            return;
+        };
+        if !b.eboot_path().exists() {
+            return;
+        }
+        let image = Image::open(b.eboot_path()).unwrap();
+        let t = crate::codec::codec_for(&image.sha256()).unwrap().ah_rx_dispatch;
+        assert_eq!(t, 0x191_0480);
+        let types: Vec<u32> = (0..17).map(|i| image.u32(t + i * 16).unwrap()).collect();
+        assert_eq!(types, [0, 1, 2, 4, 11, 10, 5, 7, 18, 23, 24, 27, 29, 38, 39, 42, 43]);
+        let reloc = reloc::by_slot(&image).unwrap();
+        let handler = |i: u64| *reloc.get(&(t + i * 16 + 8)).unwrap();
+        assert_eq!(handler(0), 0x101_8800, "udt 0 -> decode with *0x191A3A0");
+        assert_eq!(handler(1), 0x101_8990, "udt 1 -> decode with *0x191A410");
+        assert_eq!(handler(3), 0x101_8E30, "udt 4 -> decode with *0x191A388");
+        assert_eq!(handler(4), 0x29_D950, "udt 11 replicate_membership");
+        assert_eq!(handler(7), 0x29_D7E0, "udt 7 sensor_message");
+        for (udt, g) in [(0u32, 0x191_A3A0u64), (1, 0x191_A410), (4, 0x191_A388), (11, 0x191_A308)] {
+            assert!(CALL_SITES_56578.iter().any(|(u, x, _)| *u == udt && *x == g), "udt {udt}");
+        }
     }
 
     /// A solo membership is an **echo**: every non-zero byte in it either came from the client's

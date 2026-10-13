@@ -82,9 +82,9 @@ impl MessageOracle {
     pub fn encode(&mut self, handle: u64, capacity: u64) -> Result<Vec<u8>> {
         let out = self.s.h.alloc(capacity)?;
         let out_len = self.s.h.alloc(8)?;
-        let rc = (self.s.h.call(ENCODER, &[handle, 1, out, capacity, out_len])? & 0xFF) as u8;
+        let rc = (self.s.h.call(self.s.c.msg_encoder, &[handle, 1, out, capacity, out_len])? & 0xFF) as u8;
         if rc != 1 {
-            return Err(OracleError::CodecReturned { func: ENCODER, rc });
+            return Err(OracleError::CodecReturned { func: self.s.c.msg_encoder, rc });
         }
         let n = self.s.h.read_u32(out_len)? as usize;
         self.s.h.read(out, n)
@@ -98,7 +98,7 @@ impl MessageOracle {
         let rc = (self
             .s
             .h
-            .call(DECODER, &[inp, wire.len() as u64, 1, out, capacity, dsz])?
+            .call(self.s.c.msg_decoder, &[inp, wire.len() as u64, 1, out, capacity, dsz])?
             & 0xFF) as u8;
         let objp = self.s.h.read_u64(out + 8)?; // ⚠ the handle's object pointer, not `out`
         let object =

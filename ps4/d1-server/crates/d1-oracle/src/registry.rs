@@ -95,6 +95,7 @@ pub fn build(
     image: &Image,
     idx: &Index,
     root: u32,
+    registry_global: u64,
 ) -> Result<BTreeSet<u32>> {
     let tags = closure(image, idx, root);
     if tags.is_empty() {
@@ -136,6 +137,6 @@ pub fn build(
 
     let holder = h.alloc(8)?;
     h.write_u64(holder, registry)?;
-    h.write_u64(REGISTRY_GLOBAL, holder)?;
+    h.write_u64(registry_global, holder)?;
     Ok(tags)
 }

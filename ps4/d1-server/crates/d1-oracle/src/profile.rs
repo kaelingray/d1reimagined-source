@@ -142,6 +142,71 @@ pub const OFF_ALL_CONTENT_OVERRIDE: usize = 0x6E4C;
 /// Written by the same flag because the two are one feature; `[I]` that they are separable.
 pub const OFF_ALL_CONTENT_OVERRIDE_ITEMS: usize = 0x6E4D;
 
+/// The offsets that differ between builds. The `OFF_*` constants above are 01.29's, with their
+/// derivations. [`offs`] picks this build's set by image hash, and [`controls`] checks the chosen
+/// set against [`derive_layout`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Offs {
+    pub struct_size: usize,
+    pub off_stat_block: usize,
+    pub off_stat_override_present: usize,
+    pub off_stat_override: usize,
+    pub off_stat_override_block_2: usize,
+    pub off_all_content_override: usize,
+    pub off_all_content_override_items: usize,
+}
+
+pub const OFFS_0129: Offs = Offs {
+    struct_size: STRUCT_SIZE,
+    off_stat_block: OFF_STAT_BLOCK,
+    off_stat_override_present: OFF_STAT_OVERRIDE_PRESENT,
+    off_stat_override: OFF_STAT_OVERRIDE,
+    off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2,
+    off_all_content_override: OFF_ALL_CONTENT_OVERRIDE,
+    off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
+};
+
+/// How far 56578 moved everything from body field `[12]` onward.
+///
+/// Field `[10]` `0x80801701` grew `0x100` (5,168 → 5,424 B). Field `[11]`, the dense completion
+/// flags, grew `0x200`: 01.29 `0x80804C21` (2,048 elements) is replaced by `0x8080165B` (2,560
+/// elements of the same `kind 0x103` 2-bit leaf), and `0x80804C21` no longer exists in 56578.
+/// Fields `[0]`..`[9]` (identity, customization, item slots, equipment, progressions) are unchanged.
+pub const SHIFT_56578: usize = 0x300;
+
+/// Build 56578 (01.33). Struct `0x7378` = 29,560 B.
+pub const OFFS_56578: Offs = Offs {
+    struct_size: 29_560,
+    off_stat_block: OFF_STAT_BLOCK + SHIFT_56578,
+    off_stat_override_present: OFF_STAT_OVERRIDE_PRESENT + SHIFT_56578,
+    off_stat_override: OFF_STAT_OVERRIDE + SHIFT_56578,
+    off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2 + SHIFT_56578,
+    off_all_content_override: OFF_ALL_CONTENT_OVERRIDE + SHIFT_56578,
+    off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS + SHIFT_56578,
+};
+
+/// The offset set for an image, by its SHA-256.
+pub fn offs_for(sha256: &str) -> Option<Offs> {
+    match sha256 {
+        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(OFFS_0129),
+        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(OFFS_56578),
+        _ => None,
+    }
+}
+
+/// The selected build's offsets. Panics when the image has no measured set: a profile built at
+/// another build's offsets decodes into the wrong fields with no error.
+pub fn offs() -> Offs {
+    static O: std::sync::OnceLock<std::result::Result<Offs, String>> = std::sync::OnceLock::new();
+    O.get_or_init(|| {
+        let image = Image::open_default().map_err(|e| e.to_string())?;
+        offs_for(&image.sha256())
+            .ok_or_else(|| format!("no profile offset set for image sha256 {}", image.sha256()))
+    })
+    .clone()
+    .unwrap_or_else(|e| panic!("{e}"))
+}
+
 /// ⭐ The Light stat index is **0**. `THE-EMPTY-PROFILE.md` §4: `0x281F50` replayed on
 /// `runs/snapshots/orbit-all.snap` returns `rax & 0xFF == 0x00`, with `0x276220` → `0x28` = the
 /// level cap 40 as the positive control and `0x281F70` → `0x01` as the discriminator.
@@ -266,11 +331,18 @@ impl Default for ProfileSpec {
 }
 
 impl ProfileSpec {
-    /// Lay the spec out as the decoded 28,792-byte C struct.
+    /// Lay the spec out as the decoded C struct of the selected build (28,792 B on 01.29, 29,560 B
+    /// on 56578).
     ///
     /// This never touches the wire - [`build`] hands the result to the client's own encoder, which
     /// is the only thing allowed to turn it into bytes.
     pub fn to_object(&self) -> Result<Vec<u8>> {
+        self.to_object_for(offs())
+    }
+
+    /// [`ProfileSpec::to_object`] at an explicit build's offsets. Needs no image.
+    pub fn to_object_for(&self, o: Offs) -> Result<Vec<u8>> {
+        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = o;
         let too_many = |what: &str, got: usize, cap: usize| {
             Err(OracleError::Shape(format!(
                 "{got} {what} exceeds the schema's {cap} slots - the extra entries would land in \
@@ -290,7 +362,7 @@ impl ProfileSpec {
             return too_many("inventory slots", self.item_slots.len(), ITEM_SLOTS);
         }
 
-        let mut o = vec![0u8; STRUCT_SIZE];
+        let mut o = vec![0u8; struct_size];
         o[OFF_SOID..OFF_SOID + 8].copy_from_slice(&self.soid.to_le_bytes());
         o[OFF_IDENTITY..OFF_IDENTITY + 3].copy_from_slice(&self.identity);
         o[OFF_LAST_ORBITED_DESTINATION..OFF_LAST_ORBITED_DESTINATION + 4]
@@ -325,14 +397,14 @@ impl ProfileSpec {
         }
 
         if self.all_content {
-            o[OFF_ALL_CONTENT_OVERRIDE] = 1;
-            o[OFF_ALL_CONTENT_OVERRIDE_ITEMS] = 1;
+            o[off_all_content_override] = 1;
+            o[off_all_content_override_items] = 1;
         }
 
         if !self.stat_overrides.is_empty() {
-            o[OFF_STAT_OVERRIDE_PRESENT] = 1;
+            o[off_stat_override_present] = 1;
             for (i, (key, value)) in self.stat_overrides.iter().enumerate() {
-                let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
+                let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
                 o[at] = *key;
                 o[at + 4..at + 8].copy_from_slice(&value.to_le_bytes());
             }
@@ -342,6 +414,7 @@ impl ProfileSpec {
 
     /// The `(offset, value)` pairs this spec *claims* it wrote, as qwords, for the round-trip check.
     fn claimed_qwords(&self) -> Vec<(usize, &'static str)> {
+        let Offs { off_stat_override_present, off_stat_override, off_all_content_override, .. } = offs();
         let mut v = vec![(OFF_SOID, "SOID"), (OFF_IDENTITY, "identity {race,gender,class}")];
         // +0x28 shares a qword with +0x2C; it is asserted as a u32 by `verify`, not here.
         if !self.equipped.is_empty() {
@@ -351,11 +424,11 @@ impl ProfileSpec {
             v.push((OFF_PROGRESSIONS, "progression[0]"));
         }
         if !self.stat_overrides.is_empty() {
-            v.push((OFF_STAT_OVERRIDE_PRESENT & !7, "stat-override present flag"));
-            v.push((OFF_STAT_OVERRIDE, "stat-override[0] {index,value}"));
+            v.push((off_stat_override_present & !7, "stat-override present flag"));
+            v.push((off_stat_override, "stat-override[0] {index,value}"));
         }
         if self.all_content {
-            v.push((OFF_ALL_CONTENT_OVERRIDE & !7, "all-content override bools"));
+            v.push((off_all_content_override & !7, "all-content override bools"));
         }
         v
     }
@@ -399,13 +472,14 @@ pub fn build(oracle: &mut ObjectOracle, spec: &ProfileSpec) -> Result<BuiltProfi
 /// ⚠ `round_trip` already proves the whole struct survived; this exists so a *silently empty* spec
 /// (all defaults dropped, an empty vector) cannot pass as a populated profile.
 pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
+    let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = offs();
     let u32_at = |off: usize| -> u32 {
         u32::from_le_bytes(dec.object[off..off + 4].try_into().unwrap_or([0; 4]))
     };
     let bad = |m: String| Err(OracleError::Shape(m));
 
-    if dec.object.len() != STRUCT_SIZE {
-        return bad(format!("decoded {} bytes, expected {STRUCT_SIZE}", dec.object.len()));
+    if dec.object.len() != struct_size {
+        return bad(format!("decoded {} bytes, expected {struct_size}", dec.object.len()));
     }
     if dec.qword(OFF_SOID) != spec.soid {
         return bad(format!("+{OFF_SOID:#06x} SOID is {:#x}, expected {:#x}", dec.qword(OFF_SOID), spec.soid));
@@ -461,15 +535,15 @@ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
                  {{progress {}, index {:#06x}}}", u32_at(at), p.progress, p.index));
         }
     }
-    let present = dec.object[OFF_STAT_OVERRIDE_PRESENT];
+    let present = dec.object[off_stat_override_present];
     let want_present = u8::from(!spec.stat_overrides.is_empty());
     if present != want_present {
         return bad(format!(
-            "+{OFF_STAT_OVERRIDE_PRESENT:#06x} override-present is {present}, expected {want_present} \
+            "+{off_stat_override_present:#06x} override-present is {present}, expected {want_present} \
              - without it 0x265EF0 skips the table entirely and sums over gear"));
     }
     for (i, (key, value)) in spec.stat_overrides.iter().enumerate() {
-        let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
+        let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
         if dec.object[at] != *key || u32_at(at + 4) != *value {
             return bad(format!(
                 "stat override[{i}] @+{at:#06x} is {{index {}, value {}}}, expected {{index {key}, \
@@ -480,8 +554,8 @@ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
     // field would still decode, and would still look like a populated profile.
     let want = u8::from(spec.all_content);
     for (off, what) in [
-        (OFF_ALL_CONTENT_OVERRIDE, "all-content override"),
-        (OFF_ALL_CONTENT_OVERRIDE_ITEMS, "all-content override (items)"),
+        (off_all_content_override, "all-content override"),
+        (off_all_content_override_items, "all-content override (items)"),
     ] {
         if dec.object[off] != want {
             return bad(format!(
@@ -661,10 +735,10 @@ pub fn derive_layout(image: &Image, idx: &Index) -> Result<Layout> {
     })
 }
 
-/// The layout this module's constants declare - what [`derive_layout`] must reproduce.
-pub fn declared_layout() -> Layout {
+/// The layout this module declares for one build - what [`derive_layout`] must reproduce.
+pub fn declared_layout_for(o: Offs) -> Layout {
     Layout {
-        struct_size: STRUCT_SIZE as u32,
+        struct_size: o.struct_size as u32,
         soid: OFF_SOID,
         identity: OFF_IDENTITY,
         customization: OFF_CUSTOMIZATION,
@@ -688,17 +762,22 @@ pub fn declared_layout() -> Layout {
             count: PROGRESSION_SLOTS as u32,
             elem_size: PROGRESSION_STRIDE as u32,
         },
-        stat_block: OFF_STAT_BLOCK,
-        stat_override_present: OFF_STAT_OVERRIDE_PRESENT,
+        stat_block: o.off_stat_block,
+        stat_override_present: o.off_stat_override_present,
         stat_overrides: ArrayShape {
             tag: 0x8080_4768,
-            base: OFF_STAT_OVERRIDE,
+            base: o.off_stat_override,
             count: STAT_OVERRIDE_SLOTS as u32,
             elem_size: STAT_OVERRIDE_STRIDE as u32,
         },
-        all_content_override: OFF_ALL_CONTENT_OVERRIDE,
-        all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
+        all_content_override: o.off_all_content_override,
+        all_content_override_items: o.off_all_content_override_items,
     }
+}
+
+/// The layout this module declares for the selected build.
+pub fn declared_layout() -> Layout {
+    declared_layout_for(offs())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -814,6 +893,7 @@ fn no(name: &'static str, detail: impl Into<String>) -> Control {
 /// | `built-profile` | the shipped spec round-trips and `verify` accepts it |
 /// | `strictly-more-than-baseline` | ⭐ a *monotonicity* check: the new profile's non-zero set must be a strict superset of the baseline's. Catches a rewrite that quietly drops the SOID or the destination |
 pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
+    let Offs { off_stat_override_present, off_stat_override_block_2, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = offs();
     let mut out = Vec::new();
 
     // 1. Layout, re-derived.
@@ -845,35 +925,35 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
 
     // 2. The stat-override array base, positive: all 7 entries at +0x6CE0.
     let mut o = base.to_object()?;
-    o[OFF_STAT_OVERRIDE_PRESENT] = 1;
+    o[off_stat_override_present] = 1;
     for i in 0..STAT_OVERRIDE_SLOTS {
-        let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
+        let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
         o[at] = i as u8;
         o[at + 4..at + 8].copy_from_slice(&(100u32 * (i as u32 + 1)).to_le_bytes());
     }
     out.push(match oracle.round_trip(&o, 0x9000) {
         Ok(_) => ok("stat-array-full", format!(
-            "{STAT_OVERRIDE_SLOTS} entries at +{OFF_STAT_OVERRIDE:#x} round-trip IDENTICAL")),
+            "{STAT_OVERRIDE_SLOTS} entries at +{off_stat_override:#x} round-trip IDENTICAL")),
         Err(e) => no("stat-array-full", e.to_string()),
     });
 
     // 3. ⭐ The SAME array, based eight bytes later - the reading two live documents publish.
     //    It MUST be refused, at +0x6D18, which is the second override block's `present` bool.
     let mut o = base.to_object()?;
-    o[OFF_STAT_OVERRIDE_PRESENT] = 1;
+    o[off_stat_override_present] = 1;
     for i in 0..STAT_OVERRIDE_SLOTS {
-        let at = OFF_STAT_OVERRIDE + 8 + i * STAT_OVERRIDE_STRIDE;
+        let at = off_stat_override + 8 + i * STAT_OVERRIDE_STRIDE;
         o[at] = i as u8;
         o[at + 4..at + 8].copy_from_slice(&(100u32 * (i as u32 + 1)).to_le_bytes());
     }
     out.push(match oracle.round_trip(&o, 0x9000) {
-        Err(OracleError::Shape(m)) if m.contains(&format!("+{OFF_STAT_OVERRIDE_BLOCK_2:#x}:")) => ok(
+        Err(OracleError::Shape(m)) if m.contains(&format!("+{off_stat_override_block_2:#x}:")) => ok(
             "stat-array-base-NEGATIVE",
-            format!("+{:#x} correctly REFUSED - {m}", OFF_STAT_OVERRIDE + 8)),
+            format!("+{:#x} correctly REFUSED - {m}", off_stat_override + 8)),
         Ok(_) => no("stat-array-base-NEGATIVE", format!(
             "a 7-entry array at +{:#x} round-tripped. It must not: the 7th entry lands on \
-             +{OFF_STAT_OVERRIDE_BLOCK_2:#x}, the SECOND override block's present bool. Either the \
-             schema moved or this control no longer tests anything.", OFF_STAT_OVERRIDE + 8)),
+             +{off_stat_override_block_2:#x}, the SECOND override block's present bool. Either the \
+             schema moved or this control no longer tests anything.", off_stat_override + 8)),
         Err(e) => no("stat-array-base-NEGATIVE", format!("refused, but not where expected: {e}")),
     });
 
@@ -916,7 +996,7 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
                     let nz = d.nonzero_offsets();
                     out.push(if nz == vec![OFF_SOID, OFF_LAST_ORBITED_DESTINATION] {
                         ok("baseline-is-empty", format!(
-                            "{} decodes to EXACTLY 2 non-zero qwords of {STRUCT_SIZE}: +0x00 SOID \
+                            "{} decodes to EXACTLY 2 non-zero qwords of {struct_size}: +0x00 SOID \
                              {:#018x}, +0x28 destination {:#010x}",
                             p.display(), d.qword(OFF_SOID), d.qword(OFF_LAST_ORBITED_DESTINATION) as u32))
                     } else {
@@ -961,24 +1041,24 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
     // Negative: the *neighbouring* byte +0x6E4E is NOT a field - if it ever round-trips, fields [7]
     // and [8] have moved and the offsets above are naming something else.
     let mut o = base.to_object()?;
-    o[OFF_ALL_CONTENT_OVERRIDE] = 1;
-    o[OFF_ALL_CONTENT_OVERRIDE_ITEMS] = 1;
+    o[off_all_content_override] = 1;
+    o[off_all_content_override_items] = 1;
     out.push(match oracle.round_trip(&o, 0x9000) {
         Ok((_, d))
-            if d.object[OFF_ALL_CONTENT_OVERRIDE] == 1
-                && d.object[OFF_ALL_CONTENT_OVERRIDE_ITEMS] == 1 =>
+            if d.object[off_all_content_override] == 1
+                && d.object[off_all_content_override_items] == 1 =>
         {
             ok("all-content-override", format!(
-                "+{OFF_ALL_CONTENT_OVERRIDE:#x}/+{OFF_ALL_CONTENT_OVERRIDE_ITEMS:#x} survive the \
+                "+{off_all_content_override:#x}/+{off_all_content_override_items:#x} survive the \
                  codec - 0x808018BB fields [7]/[8], the bools 28 investment predicates read"))
         }
         Ok((_, d)) => no("all-content-override", format!(
             "wrote 1/1, decoded {}/{}",
-            d.object[OFF_ALL_CONTENT_OVERRIDE], d.object[OFF_ALL_CONTENT_OVERRIDE_ITEMS])),
+            d.object[off_all_content_override], d.object[off_all_content_override_items])),
         Err(e) => no("all-content-override", e.to_string()),
     });
 
-    let neighbour = OFF_ALL_CONTENT_OVERRIDE_ITEMS + 1; // +0x6E4E - between [8] and [9] @+0x180
+    let neighbour = off_all_content_override_items + 1; // +0x6E4E - between [8] and [9] @+0x180
     let mut o = base.to_object()?;
     o[neighbour] = 1;
     out.push(match oracle.round_trip(&o, 0x9000) {
@@ -987,7 +1067,7 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
             format!("+{neighbour:#x} is correctly NOT a field - {m}")),
         Ok(_) => no("all-content-override-NEGATIVE", format!(
             "+{neighbour:#x} round-tripped. 0x808018BB's bools are not where this module says they \
-             are, so +{OFF_ALL_CONTENT_OVERRIDE:#x} is naming the wrong field.")),
+             are, so +{off_all_content_override:#x} is naming the wrong field.")),
         Err(e) => no("all-content-override-NEGATIVE", format!("refused, but not where expected: {e}")),
     });
 
@@ -1059,7 +1139,23 @@ mod tests {
     fn layout_is_derived_from_the_eboot_not_transcribed() {
         let image = Image::open_reference().expect("pinned eboot");
         let idx = descriptors::index(&image).expect("descriptor index");
-        assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
+        assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout_for(OFFS_0129));
+    }
+
+    /// Build 56578's profile moved `+0x300` from field `[12]` on; the walk must agree. Skips when the
+    /// 56578 image is absent.
+    #[test]
+    fn the_56578_layout_is_derived_from_its_eboot() {
+        let Some(b) = d1_build::builds().ok().and_then(|b| b.all.iter().find(|x| x.id == "later-56578"))
+        else {
+            return;
+        };
+        if !b.eboot_path().exists() {
+            return;
+        }
+        let image = Image::open(b.eboot_path()).unwrap();
+        let idx = descriptors::index(&image).unwrap();
+        assert_eq!(derive_layout(&image, &idx).unwrap(), declared_layout_for(OFFS_56578));
     }
 
     #[test]
@@ -1068,7 +1164,7 @@ mod tests {
             stat_overrides: (0..8).map(|i| (i as u8, 1)).collect(),
             ..Default::default()
         };
-        assert!(matches!(spec.to_object(), Err(OracleError::Shape(_))));
+        assert!(matches!(spec.to_object_for(OFFS_0129), Err(OracleError::Shape(_))));
     }
 
     #[test]
@@ -1078,11 +1174,11 @@ mod tests {
             empty_item_slots: false,
             ..Default::default()
         }
-        .to_object()
+        .to_object_for(OFFS_0129)
         .unwrap();
         assert_eq!(u64::from_le_bytes(o[0..8].try_into().unwrap()), DEFAULT_SOID);
         assert_eq!(u32::from_le_bytes(o[0x28..0x2c].try_into().unwrap()), DESTINATION_OLD_RUSSIA);
-        assert_eq!(o[OFF_STAT_OVERRIDE_PRESENT], 0);
+        assert_eq!(o[OFFS_0129.off_stat_override_present], 0);
     }
 
     /// The whole control set, so `cargo test` and `d1-oracle profile controls` cannot drift.

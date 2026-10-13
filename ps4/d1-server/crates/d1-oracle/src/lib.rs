@@ -64,6 +64,7 @@ pub mod activity_host;
 pub mod activity_modes;
 pub mod art_arrangement;
 pub mod character;
+pub mod codec;
 pub mod control;
 pub mod error;
 pub mod harness;

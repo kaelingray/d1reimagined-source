@@ -1,0 +1,171 @@
+// SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
+// SPDX-License-Identifier: GPL-2.0-or-later
+//! The RSAT codec's game addresses, **per executable build**.
+//!
+//! The `pub const`s in [`crate::object`], [`crate::message`], [`crate::schema`],
+//! [`crate::registry`] and [`crate::activity_host`] are the 01.29 reference values and keep their
+//! derivation notes. The oracles do not call them directly: they call through the
+//! [`CodecAddrs`] chosen by the image's SHA-256, and an image with no measured set is refused.
+//! Reusing 01.29 numbers on another build would call into the middle of unrelated functions.
+//!
+//! # How the 56578 set was measured (static, 2026-10-13)
+//!
+//! Every value was re-found from structure, not by offsetting the 01.29 numbers. The 01.29 ELF is
+//! not on disk, so each identification uses only the 56578 image and the 01.29 notes.
+//!
+//! * **Bitstream primitives:** these are at the **same** addresses as 01.29, and each body matches
+//!   its documented behaviour. The ctor stores `buf`, `buf+len` and `len`. begin-write sets
+//!   alignment at `+0x14` and mode 1. begin-read sets mode 3, end sets mode 5. The spill writes
+//!   `+0x24/+0x28/+0x30`, and read-bit returns `bs[0x28] >> 63`.
+//!   `WRITE_ONE_BIT` is `c_network_channel_simulation_gatekeeper` vtable slot 5 (RTTI, vtable
+//!   `0x196B170`) = `0xAF1650`. Its body is byte-for-byte the 01.29 listing, including the tail
+//!   call to the spill at `0x733A0`.
+//! * **Object codec:** the only `call` that follows a begin-read in more than one caller and is
+//!   not a bitstream primitive is `0x2C9A90`; the begin-write counterpart is `0x2C9A80`. Both are
+//!   `call inner; mov al,1; ret` wrappers, as in 01.29, and they sit `+0xA90` from 01.29's.
+//!   The replicated wrapper `0x2C9AE0` takes the tag in `ecx` and opens with the `tag_slot`
+//!   arithmetic.
+//! * **RSAT memset allowance:** the three documented bitset sites, each shifted by `+0xA90`, are
+//!   the zeroing memset in the encode inner `0x2C8F82`, `bitset_set_all`'s `0xFF` fill at
+//!   `0x2C76D5`, and the replicated wrapper's large-bitset arm returning to `0x2C9BD8`. Each has
+//!   the same `cmp rdx,0x21` or `test dil,3` guard. The window ends at **`0x2C9E20`**, the
+//!   prologue after the encode counterpart `0x2C9D20`, and not at a blind `+0xA90`. `0x2C9E20`
+//!   memsets a 0x100-byte stack buffer that is not a bitset, and the allowance must not cover it.
+//! * **Message codec:** the only callers of the object encoder and decoder in the message
+//!   module are `0x261E90` and `0x262260`. The encoder takes
+//!   `(handle, 1, out, capacity, out_len)`. It calls the manager getter `0x25CBD0` (a
+//!   `lea; mov; ret` singleton read) and then `vfunc[0x4D0]`, and reads the definition's
+//!   `+0x14`/`+0x18` tags. The decoder reads 16 bits and passes them to `0x2800E0`. That function
+//!   walks the manager's definitions through `vfunc[0x4D0]` and returns `0xFFFF` on a miss: id → index.
+//! * **Registry global:** the decoder has exactly three rip-references to `0x1A238A0`, which
+//!   matches the three inlined walks in 01.29. The walk at `0x262559` is the construction
+//!   contract in [`crate::registry`] instruction for instruction: `tag_slot × 0x40`, `+0x10`
+//!   base, `+0x30` entry size, `+0x34` mask and `tag & 0x1FFF`.
+//! * **Activity Host:** the decode and encode wrappers are the functions that bracket the object
+//!   codec with ctor/begin/end, at `0x2A4AC0` and `0x2A4B70`. The encode wrapper still hands the
+//!   bitstream `0x1DF00`. Its one caller is `activity_client_send_message`, `0x299D10`, which
+//!   still tests bit 0 of the seventh argument for the raw arm.
+//!   [`crate::activity_host::CALL_SITES_56578`] says how its rows were read.
+//! * **AH receive dispatch table:** it is the only `.data` run with the 01.29 shape, `{type, pad,
+//!   fnptr}` with type 4, 11, 10 and 7 at indices 3, 4, 5 and 7, and it is at `0x1910480`. All 17
+//!   stored types are in 01.29's order. Its handlers, read through relocations, confirm the
+//!   call-site rows independently. udt 0, 1 and 4 point at the decode functions whose descriptor
+//!   globals those rows hold (`0x1018800`, `0x1018990`, `0x1018E30`). udt 11's handler
+//!   `0x29D950` first calls `0x29D130`, the replicated-decode caller, and udt 7 is
+//!   `sensor_message` at `0x29D7E0`.
+
+/// One build's codec address set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CodecAddrs {
+    pub bs_ctor: u64,
+    pub bs_begin_write: u64,
+    pub bs_begin_read: u64,
+    pub bs_flush: u64,
+    pub bs_end: u64,
+    pub write_bits_spill: u64,
+    pub write_one_bit: u64,
+    pub read_bit: u64,
+    pub encode_obj: u64,
+    pub decode_obj: u64,
+    pub decode_obj_replicated: u64,
+    /// `[lo, hi)`: where a direct `call memset` may clear a stack bitset. See [`crate::object`].
+    pub codec_lo: u64,
+    pub codec_hi: u64,
+    pub msg_encoder: u64,
+    pub msg_decoder: u64,
+    pub get_manager: u64,
+    pub id_to_index: u64,
+    pub registry_global: u64,
+    pub ah_decode_fn: u64,
+    pub ah_encode_fn: u64,
+    pub ah_send_message_fn: u64,
+    pub ah_call_sites: &'static [(u32, u64, Option<usize>)],
+    pub ah_raw_send: &'static [(u32, u64, &'static str)],
+    /// The AH receive dispatch table, `{i32 type; i32 pad; fnptr}` × 17. See [`crate::activity_host`].
+    pub ah_rx_dispatch: u64,
+    /// Where the dynamic-flags decode faults in a static harness. `None` until it has been observed
+    /// on this build: the refusal text then names the grow function only.
+    pub dynamic_flags_fault_rip: Option<u64>,
+    pub dynamic_flags_grow_fn: u64,
+}
+
+pub const CODEC_0129: CodecAddrs = CodecAddrs {
+    bs_ctor: crate::object::BS_CTOR,
+    bs_begin_write: crate::object::BS_BEGIN_WRITE,
+    bs_begin_read: crate::object::BS_BEGIN_READ,
+    bs_flush: crate::object::BS_FLUSH,
+    bs_end: crate::object::BS_END,
+    write_bits_spill: crate::object::WRITE_BITS_SPILL,
+    write_one_bit: crate::object::WRITE_ONE_BIT,
+    read_bit: crate::object::READ_BIT,
+    encode_obj: crate::object::ENCODE_OBJ,
+    decode_obj: crate::object::DECODE_OBJ,
+    decode_obj_replicated: crate::object::DECODE_OBJ_REPLICATED,
+    codec_lo: crate::object::CODEC_LO,
+    codec_hi: crate::object::CODEC_HI,
+    msg_encoder: crate::message::ENCODER,
+    msg_decoder: crate::message::DECODER,
+    get_manager: crate::schema::GET_MANAGER,
+    id_to_index: crate::schema::ID_TO_INDEX,
+    registry_global: crate::registry::REGISTRY_GLOBAL,
+    ah_decode_fn: crate::activity_host::DECODE_FN,
+    ah_encode_fn: crate::activity_host::ENCODE_FN,
+    ah_send_message_fn: crate::activity_host::SEND_MESSAGE_FN,
+    ah_call_sites: crate::activity_host::CALL_SITES,
+    ah_raw_send: crate::activity_host::RAW_SEND,
+    ah_rx_dispatch: 0x18F_84A0,
+    dynamic_flags_fault_rip: Some(crate::activity_host::DYNAMIC_FLAGS_FAULT_RIP),
+    dynamic_flags_grow_fn: crate::activity_host::DYNAMIC_FLAGS_GROW_FN,
+};
+
+/// Build 56578 (01.33). Measured as described in the module docs.
+pub const CODEC_56578: CodecAddrs = CodecAddrs {
+    bs_ctor: 0x7_2240,
+    bs_begin_write: 0x7_23B0,
+    bs_begin_read: 0x7_2400,
+    bs_flush: 0x7_2560,
+    bs_end: 0x7_2650,
+    write_bits_spill: 0x7_33A0,
+    write_one_bit: 0xAF_1650,
+    read_bit: 0x7_3430,
+    encode_obj: 0x2C_9A80,
+    decode_obj: 0x2C_9A90,
+    decode_obj_replicated: 0x2C_9AE0,
+    codec_lo: 0x2C_6A90,
+    codec_hi: 0x2C_9E20,
+    msg_encoder: 0x26_1E90,
+    msg_decoder: 0x26_2260,
+    get_manager: 0x25_CBD0,
+    id_to_index: 0x28_00E0,
+    registry_global: 0x1A2_38A0,
+    ah_decode_fn: 0x2A_4AC0,
+    ah_encode_fn: 0x2A_4B70,
+    ah_send_message_fn: 0x29_9D10,
+    ah_call_sites: crate::activity_host::CALL_SITES_56578,
+    ah_raw_send: crate::activity_host::RAW_SEND_56578,
+    ah_rx_dispatch: 0x191_0480,
+    dynamic_flags_fault_rip: None,
+    dynamic_flags_grow_fn: 0x2C_7630,
+};
+
+/// The codec set for an image, by its SHA-256. `None` = no measured set: refuse to run.
+pub fn codec_for(sha256: &str) -> Option<&'static CodecAddrs> {
+    match sha256 {
+        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(&CODEC_0129),
+        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(&CODEC_56578),
+        _ => None,
+    }
+}
+
+/// The set for the selected build's image. Errors name the image when there is no set.
+pub fn selected() -> crate::error::Result<&'static CodecAddrs> {
+    let image = d1_eboot::image::Image::open_default()
+        .map_err(|e| crate::error::OracleError::Eboot(e.to_string()))?;
+    codec_for(&image.sha256()).ok_or_else(|| {
+        crate::error::OracleError::Eboot(format!(
+            "no codec address set for image sha256 {} - the codecs would be called at the wrong \
+             addresses",
+            image.sha256()
+        ))
+    })
+}
