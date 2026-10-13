@@ -381,9 +381,22 @@ struct SignonCfg {
 /// * The URL *prefix* (key 102) defaults to empty with use-prefix (key 894) defaulting to 1, so
 ///   `prefix + body == body` and **key 100 alone is sufficient.**
 /// * The string setters have **no length clamp**; the field is `char[0x100]`, so keep it under 255.
-fn client_config_delta(manifest_url: &str) -> Vec<u8> {
+///
+/// ## Build 56578 (01.33): the signon external-address fallback
+///
+/// Measured on 56578 with the retail diagnostics sink: when STUN fails (no STUN server answers in
+/// the lab), the client logs `STUN address discovery failed and not configured to use external
+/// address from signon.` and `bootflow:package_registration` then fails prerequisite 15 with
+/// `error.transport_method_invalid` (marionberry). The decision (`0x2E0560`) reads two engine-config
+/// bools: `+0x598` "on STUN failure, use the signon f14 address" and `+0x599` "prefer the signon
+/// address over STUN". Their setter cases are SPARSE keys `0xF1048` (`+0x598`) and `0x4409EC`
+/// (`+0x599`) in the 56578 setter switch `0x1033F80`; neither exists in 01.29, where an unknown key
+/// would abort the whole signon parse. So the fallback key is sent ONLY when the request's build is
+/// 56578, and only the conservative one: STUN is still attempted, then our f14 is used.
+fn client_config_delta(manifest_url: &str, build: Option<&str>) -> Vec<u8> {
     const MAGIC: u32 = 0x0012_3456;
     const KEY_CONTENT_MANIFEST_URL: u32 = 100;
+    const KEY_56578_SIGNON_EXTERNAL_FALLBACK: u32 = 0x000F_1048;
 
     let mut v = Vec::new();
     v.extend_from_slice(&MAGIC.to_le_bytes());
@@ -392,6 +405,10 @@ fn client_config_delta(manifest_url: &str) -> Vec<u8> {
     let url = &manifest_url.as_bytes()[..manifest_url.len().min(0xFE)];
     varint(&mut v, url.len() as u64);
     v.extend_from_slice(url);
+    if build.is_some_and(|b| b.starts_with("56578.")) {
+        v.extend_from_slice(&KEY_56578_SIGNON_EXTERNAL_FALLBACK.to_le_bytes());
+        v.push(1); // bool: one raw byte
+    }
     v.extend_from_slice(&0u32.to_le_bytes()); // terminator
     v
 }
@@ -431,7 +448,7 @@ fn signon_success(build: Option<&str>, c: &SignonCfg) -> Vec<u8> {
         let mut cc = Vec::new();
         pb_varint(&mut cc, 1, 0); // f4.1 cookie
         pb_varint(&mut cc, 2, 0); // f4.2 social_matchmaking_id
-        pb_bytes(&mut cc, 3, &client_config_delta(&c.manifest_url)); // f4.3 config delta
+        pb_bytes(&mut cc, 3, &client_config_delta(&c.manifest_url, build)); // f4.3 config delta
         pb_bytes(&mut v, 4, &cc);
     }
     pb_varint(&mut v, 5, c.silo_id);
@@ -4925,11 +4942,21 @@ mod tests {
     /// "do not emit f4.3". Magic and key are raw u32 LE; only the string is LEB128-prefixed.
     #[test]
     fn client_config_delta_is_fixed32_framed() {
-        let blob = client_config_delta("http://cdn.deadorbit.net/manifest.bin");
+        let url = "http://cdn.deadorbit.net/manifest.bin";
+        let blob = client_config_delta(url, Some("52553.16.09.28.1551.evil"));
         assert_eq!(&blob[0..4], &0x0012_3456u32.to_le_bytes(), "magic, u32 LE");
         assert_eq!(&blob[4..8], &100u32.to_le_bytes(), "key 100 = content manifest URL, u32 LE");
         assert_eq!(blob[8], 37, "LEB128 string length");
         assert_eq!(&blob[blob.len() - 4..], &[0, 0, 0, 0], "u32 terminator");
+        // 01.29 (and an absent build) get NO extra key: unknown keys abort the whole signon parse.
+        assert_eq!(blob.len(), 4 + 4 + 1 + 37 + 4);
+        assert_eq!(client_config_delta(url, None), blob);
+        // 56578 additionally gets the sparse fallback key 0xF1048 with a one-byte bool 1.
+        let later = client_config_delta(url, Some("56578.17.04.12.1251.evil"));
+        assert_eq!(&later[..46], &blob[..46], "magic + key 100 unchanged");
+        assert_eq!(&later[46..50], &0x000F_1048u32.to_le_bytes());
+        assert_eq!(later[50], 1);
+        assert_eq!(&later[51..], &[0, 0, 0, 0]);
     }
 }
 
