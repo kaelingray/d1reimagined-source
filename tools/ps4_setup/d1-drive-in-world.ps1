@@ -1,7 +1,7 @@
 param(
     # Folder for screenshots and the driver log.
     [Parameter(Mandatory)][string]$Out,
-    [int]$ActivityId = 407,
+    [int]$ActivityId = 416,   # 56578: 416 = Elimination (407 is Salvage here; 01.29 numbering differs)
     [int]$InWorldShots = 6,
     [int]$ShotIntervalSeconds = 15,
     # Leave the rung-34 steps to the client: no task-7 suppress byte, no done-mask force. The

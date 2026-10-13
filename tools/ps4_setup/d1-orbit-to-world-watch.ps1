@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$Out,
-    [int]$ActivityId = 407,
+    [int]$ActivityId = 416,   # 56578: 416 = Elimination (407 is Salvage here; 01.29 numbering differs)
     [int]$WatchMinutes = 10,
     [int]$NudgeSeconds = 45
 )

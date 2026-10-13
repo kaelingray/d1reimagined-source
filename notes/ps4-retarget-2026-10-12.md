@@ -1072,6 +1072,16 @@ So every 56578 run so far launched **Salvage** (hash `0x19BC2182`, which is the 
 phase, not RUNNING. `activity_modes.rs` is 01.29-pinned like the item index; it needs the same
 per-build source.
 
+Run `later-56578-elim` (`--activity-id 416`, everything else as `geared3`, phase 3):
+- composition `game mode 0x6D714C3A` (Elimination) on pvp_moonbase;
+- rung 34 clears by itself;
+- the served spawn works: link `0x4EFA2007`, biped `0x4CFAC067`, no pending sensor clients with the
+  Salvage-derived list, phase 3.
+
+The view is identical to Salvage: same spawn point, Ghost-raise pose, armored forearm, and still
+no weapon sobjects (types: 1 biped, the rest props). The mode was wrong but was not the cause.
+Launch Elimination with **416** from now on.
+
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
 connected and gave up after 3 s with no ServerInfo header. A plain relaunch passed. So the probe
 failure is intermittent and separate from the orphaned-server cause; its root cause is open.
