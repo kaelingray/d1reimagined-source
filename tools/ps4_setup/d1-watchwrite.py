@@ -159,6 +159,30 @@ def main():
             if tid == '_attach_bp':
                 continue
             k32.SuspendThread(h); arm(h, addrs, on=False); k32.ResumeThread(h)
+        # Drain before detaching: a hit already raised on another thread is still queued, and once
+        # detached it reaches the emulator as an unhandled 0x80000004 and kills it (13 Oct, run
+        # bundle7d, at the watched store 0x409CAD). Swallow single-steps until the queue is quiet.
+        quiet_until = time.time() + 1.0
+        while time.time() < quiet_until:
+            if not k32.WaitForDebugEvent(ev, 100):
+                continue
+            code, epid, tid = struct.unpack_from('<III', ev.raw, 0)
+            cont = DBG_CONTINUE
+            if code == EXCEPTION_DEBUG_EVENT:
+                exc, = struct.unpack_from('<I', ev.raw, 16)
+                if exc == SINGLE_STEP:
+                    h = threads.get(tid)
+                    if h:
+                        arm(h, addrs, on=False)
+                    quiet_until = time.time() + 1.0
+                else:
+                    cont = DBG_EXCEPTION_NOT_HANDLED
+            elif code == CREATE_THREAD:
+                hthr, = struct.unpack_from('<Q', ev.raw, 16); threads[tid] = hthr
+            elif code in (CREATE_PROCESS, LOAD_DLL):
+                hfile, = struct.unpack_from('<Q', ev.raw, 16)
+                if hfile: k32.CloseHandle(hfile)
+            k32.ContinueDebugEvent(epid, tid, cont)
         k32.DebugActiveProcessStop(pid)
         log(event='detached', hits=hits, values=[hex(p.u(x, 'I')) for x in addrs])
     return 0

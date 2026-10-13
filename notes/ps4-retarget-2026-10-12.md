@@ -868,6 +868,58 @@ is 0x78 for both. Fix that in the harness, then encode sub 7's A value:
 
 Then serve it through `D1_AH_SENSOR_CLIENTS` with a value.
 
+*🎉 Served spawn on build 56578 (13 October, run `later-56578-served-spawn`).* A Guardian spawned
+in pvp_moonbase with **no spawn hooks, no gate patch, no spawn poke and no unfade**. The fade lifts
+by itself, the Ghost-raise intro plays, and the view moves.
+
+What is synthetic is unchanged from the drive to `in_world`:
+- the launch poke;
+- the task-7 suppress byte;
+- the rung-34 done-mask force.
+
+The chain, all measured live:
+1. *Oracle.* Kind 0x23 is encoded by `0x102A450` as type `[[0x197E160]]` = `0x80801932`.
+   - The selector `0x25CC10` is `[[0x26527E0]+0xC] != -1`; it is true live. Otherwise the type is
+     `[[0x191A240]]` = `0x808004AC`.
+   - The box encoders read further start-up cells: `0x1996050`, `0x1974C00`, `0x1974BE0`.
+   - All of these are zero in the file. Seeding them (`CodecAddrs::type_cells`) makes `0x80800646`
+     and the bundle types `0x808022A5`/`0x80802C30` encode and round-trip.
+   - Kind-0x23 field (the identity) comes out byte-reversed on the client relative to the oracle
+     image (`01020000000000d1` → `d100000000000201`), so the image carries it reversed.
+2. *Link.* The bundle setter `0x409710` copies the 0x78-byte A value to `obj+0x218`. When the
+   identity at `+0x258` changes, it calls the linker `0x1195F0` for the old and new key. Serving
+   the player key therefore links the player when the value lands, whatever the load order. Live:
+   `entry+0x50 = 0x4EFA2007`.
+3. *Gate record.* The gate's record is the bundle's B record (`obj+0x200` = 0x290), not A. The
+   client rewrites B every tick from local state in `0x4098E0` (path `0x409BD1`), called from the
+   sensor post-pass `0x2CF13D`/`0x2D1F46`. Serving B is pointless (the format is
+   `has_b, flag→+0x16, fresh, presence, object, u32→+0x10`).
+   - `+0x298` = local id ≤ 0x7F and `!0x9141F0()`.
+   - `+0x299` (the gate byte) latches to 1 when the A value's `+0x38` (`obj+0x250`) equals
+     `players[i]+0x738` (copied to `+0x2C8`; −1 live), and `0x77B920()` holds (`[[0x26CA0C8]] == 4`,
+     true live).
+4. *Value served for sub 7.* A `0x808022A5` with:
+   - `+0..8 = ffffffff c59d1c81`
+   - `+8/+9 = 1`
+   - `+0x38 = 0xFFFFFFFF`
+   - `+0x40` = the player key reversed
+
+   `d1-winguest.py sensor-clients --all --bundle` writes it.
+
+Result: `+0x298 = 01 01 00 02`, the spawn word is consumed, and the biped is `0x4CFAC067` within
+seconds of in_world.
+
+A SYNTHETIC one-byte test (`+0x250 = -1`) on the previous run gave the same spawn first. The fully
+served run then reproduced it with nothing written.
+
+Tooling: `d1-watchwrite.py` drains pending breakpoint hits before detaching. A queued hit
+delivered after detach killed run `bundle7d` with an unhandled `0x80000004`.
+
+Next:
+- earn back the three drive pokes (task 7, rung-34 tasks 9/10). Task 9 reads this same bundle
+  record's `[+8]`, now 1.
+- input/possession past the Ghost intro.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.

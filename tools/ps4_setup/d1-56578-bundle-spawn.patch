@@ -1,0 +1,243 @@
+diff --git a/ps4/d1-server/crates/d1-oracle/src/codec.rs b/ps4/d1-server/crates/d1-oracle/src/codec.rs
+index 9d43f7e..38de65d 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/codec.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/codec.rs
+@@ -87,6 +87,12 @@ pub struct CodecAddrs {
+     /// on this build: the refusal text then names the grow function only.
+     pub dynamic_flags_fault_rip: Option<u64>,
+     pub dynamic_flags_grow_fn: u64,
++    /// Start-up type cells the field encoders (kind 0x23 `0x102A450`, the box encoders `0x10295D0`,
++    /// `0x1029740`, `0x102A3xx`) read through pointer globals that the file leaves zero:
++    /// `(pointer slot, cell, tag, descriptor object)`; the cell holds `{u32 tag, pad, u64 descriptor
++    /// object}`. Read live on 56578. Without them every box field (e.g. the client bundle's player
++    /// identity, kind `0x23`) encodes as tag 0 and faults. Empty until measured on a build.
++    pub type_cells: &'static [(u64, u64, u32, u64)],
+ }
+ 
+ pub const CODEC_0129: CodecAddrs = CodecAddrs {
+@@ -116,6 +122,7 @@ pub const CODEC_0129: CodecAddrs = CodecAddrs {
+     ah_rx_dispatch: 0x18F_84A0,
+     dynamic_flags_fault_rip: Some(crate::activity_host::DYNAMIC_FLAGS_FAULT_RIP),
+     dynamic_flags_grow_fn: crate::activity_host::DYNAMIC_FLAGS_GROW_FN,
++    type_cells: &[],
+ };
+ 
+ /// Build 56578 (01.33). Measured as described in the module docs.
+@@ -146,6 +153,15 @@ pub const CODEC_56578: CodecAddrs = CodecAddrs {
+     ah_rx_dispatch: 0x191_0480,
+     dynamic_flags_fault_rip: None,
+     dynamic_flags_grow_fn: 0x2C_7630,
++    type_cells: &[
++        (0x199_6050, 0x28D_BAD0, 0x8080_0046, 0x13D_2258),
++        (0x197_4C00, 0x28B_F2D0, 0x8080_40F7, 0x133_BF70),
++        (0x197_4BE0, 0x28B_F190, 0x8080_424E, 0x13D_9870),
++        // Kind 0x23 (`0x102A450`): type from `0x197E160` when the selector `0x25CC10` holds
++        // (`[[0x26527E0]+0xC] != -1`, true live), else from `0x191A240`.
++        (0x197_E160, 0x28C_37F0, 0x8080_1932, 0x131_8320),
++        (0x191_A240, 0x269_8FA0, 0x8080_04AC, 0x131_78F0),
++    ],
+ };
+ 
+ /// The codec set for an image, by its SHA-256. `None` = no measured set: refuse to run.
+diff --git a/ps4/d1-server/crates/d1-oracle/src/harness.rs b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+index bf04cb1..17c937c 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/harness.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+@@ -554,9 +554,23 @@ fn dispatch(
+         let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
+         let mut b = [0u8; 8];
+         uc.mem_read(rsp, &mut b).map_err(e)?;
++        let r13 = uc.reg_read(RegisterX86::R13).map_err(e)?;
++        let rbx = uc.reg_read(RegisterX86::RBX).map_err(e)?;
++        let mut stk = vec![0u8; 0x800];
++        let _ = uc.mem_read(rsp, &mut stk);
++        let frames: Vec<String> = stk
++            .chunks_exact(8)
++            .map(|c| u64::from_le_bytes(c.try_into().unwrap()))
++            .filter(|&q| (0x1000..0x18D_8000).contains(&q))
++            .take(16)
++            .map(|q| format!("{q:#x}"))
++            .collect();
++        let rbx = (rbx, frames.join(","));
+         Err(format!(
+-            "{what} with length {n:#x} (return address {:#x}) - no guest buffer is that large; the              caller's arguments are not what this stub was told they are",
+-            u64::from_le_bytes(b)
++            "{what} with length {n:#x} (return address {:#x}, r13 {r13:#x}, rbx {:#x}, stack {}) - no guest              buffer is that large; the caller's arguments are not what this stub was told they are",
++            u64::from_le_bytes(b),
++            rbx.0,
++            rbx.1
+         ))
+     };
+     match stub {
+diff --git a/ps4/d1-server/crates/d1-oracle/src/registry.rs b/ps4/d1-server/crates/d1-oracle/src/registry.rs
+index 2a75b92..2c91fd5 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/registry.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/registry.rs
+@@ -96,8 +96,12 @@ pub fn build(
+     idx: &Index,
+     root: u32,
+     registry_global: u64,
++    extra_roots: &[u32],
+ ) -> Result<BTreeSet<u32>> {
+-    let tags = closure(image, idx, root);
++    let mut tags = closure(image, idx, root);
++    for &r in extra_roots {
++        tags.extend(closure(image, idx, r));
++    }
+     if tags.is_empty() {
+         return Err(OracleError::UnknownTag(root));
+     }
+diff --git a/ps4/d1-server/crates/d1-oracle/src/schema.rs b/ps4/d1-server/crates/d1-oracle/src/schema.rs
+index 42a91f5..34c62fb 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/schema.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/schema.rs
+@@ -80,7 +80,15 @@ impl SchemaHarness {
+         h.stub(STUB_ACCESSOR, Stub::Return(definition));
+         h.stub(c.id_to_index, Stub::Return(0));
+ 
+-        registry::build(&mut h, &image, &index, tag, c.registry_global)?;
++        // Box fields encode their in-band tag through start-up type cells: seed them and make
++        // their types resolvable (see `CodecAddrs::type_cells`).
++        let extra: Vec<u32> = c.type_cells.iter().map(|&(_, _, t, _)| t).collect();
++        for &(slot, cell, t, desc) in c.type_cells {
++            h.write_u64(slot, cell)?;
++            h.write_u32(cell, t)?;
++            h.write_u64(cell + 8, desc)?;
++        }
++        registry::build(&mut h, &image, &index, tag, c.registry_global, &extra)?;
+ 
+         // ⭐ Everything allocated from here on is one call's scratch. Nothing after this line may
+         // allocate scaffolding that outlives a call - `begin_call` releases it.
+diff --git a/ps4/d1-server/crates/d1-oracle/src/sensor.rs b/ps4/d1-server/crates/d1-oracle/src/sensor.rs
+index 94509d4..2718969 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/sensor.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/sensor.rs
+@@ -132,10 +132,22 @@ pub struct SensorClientRef {
+     pub has_a: bool,
+     /// The client's B type (`+8`) is set, so the entry ends with a `has_b = 0` bit.
+     pub has_b: bool,
++    /// `Some((A type tag, value image))` sends the A value instead of leaving the default:
++    /// `fresh = 1, presence = 1`, then the object encoded by the client's own codec. Build 56578's
++    /// type-12 client bundles (`0xC2DACAF7` subs 7-18, A `0x808022A5`) need one: the player is
++    /// linked to the bundle whose value `+0x40` equals its identity, and the spawn gate reads the
++    /// bundle's `+9`.
++    pub a_value: Option<(u32, Vec<u8>)>,
++    /// `Some((B type tag, value image))` sends the B value: `has_b = 1`, a flag bit the walker
++    /// stores at the client's `+0x16` (0, as live B-carrying clients hold), `fresh = 1`,
++    /// `presence = 1`, the object, then the `u32` stored at `+0x10` (0) - walker `0x2D0F63..0x2D1012`. The type-12
++    /// bundle's spawn-gate record is its B value (`obj+0x200` = 0x290 live), not A.
++    pub b_value: Option<(u32, Vec<u8>)>,
+ }
+ 
+ impl SensorClientRef {
+-    /// Parse one `hash i8 sub has_a has_b` line (`0xC2DACAF7 0x8 0 1 1`); `#` starts a comment.
++    /// Parse one `hash i8 sub has_a has_b [a_tag a_image_hex [b_tag b_image_hex]]` line
++    /// (`0xC2DACAF7 0x8 0 1 1`); `#` starts a comment.
+     pub fn parse_line(line: &str) -> Option<Self> {
+         let line = line.split('#').next()?.trim();
+         if line.is_empty() {
+@@ -151,6 +163,14 @@ impl SensorClientRef {
+             name_sub: num(f.get(2)?)? as i16,
+             has_a: num(f.get(3)?)? != 0,
+             has_b: num(f.get(4)?)? != 0,
++            a_value: match (f.get(5), f.get(6)) {
++                (Some(t), Some(h)) => Some((num(t)? as u32, hex_bytes(h)?)),
++                _ => None,
++            },
++            b_value: match (f.get(7), f.get(8)) {
++                (Some(t), Some(h)) => Some((num(t)? as u32, hex_bytes(h)?)),
++                _ => None,
++            },
+         })
+     }
+ 
+@@ -230,16 +250,47 @@ impl SensorPhaseUpdate {
+             let mut name = ObjectOracle::new(TAG_NAME_REF)?;
+             for c in &self.clients {
+                 let e = name.encode(&c.name_ref_image(), 0x1_0000)?;
+-                let body = 2 * u32::from(c.has_a) + u32::from(c.has_b);
++                let value = match (&c.a_value, c.has_a) {
++                    (Some((tag, image)), true) => {
++                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
++                    }
++                    _ => None,
++                };
++                let value_bits = value.as_ref().map_or(0, |v| v.bits);
++                let b_val = match (&c.b_value, c.has_b) {
++                    (Some((tag, image)), true) => {
++                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
++                    }
++                    _ => None,
++                };
++                // B part: has_b, then (if set) flag + fresh + presence + object + u32.
++                let b_bits = u32::from(c.has_b) + b_val.as_ref().map_or(0, |v| 3 + v.bits + 32);
++                let body = 2 * u32::from(c.has_a) + value_bits + b_bits;
+                 w.put(1, 1); // has_entry
+                 w.raw(&e.payload, e.bits as usize);
+                 w.put(u64::from(body), 32);
+                 if c.has_a {
+                     w.put(1, 1); // fresh
+-                    w.put(0, 1); // presence = 0: keep the default the fresh bit just installed
++                    match &value {
++                        Some(v) => {
++                            w.put(1, 1); // presence
++                            w.raw(&v.payload, v.bits as usize);
++                        }
++                        None => w.put(0, 1), // presence = 0: keep the default fresh installed
++                    }
+                 }
+                 if c.has_b {
+-                    w.put(0, 1); // has_b = 0
++                    match &b_val {
++                        Some(v) => {
++                            w.put(1, 1); // has_b
++                            w.put(0, 1); // flag -> client +0x16
++                            w.put(1, 1); // fresh
++                            w.put(1, 1); // presence
++                            w.raw(&v.payload, v.bits as usize);
++                            w.put(0, 32); // -> client +0x10
++                        }
++                        None => w.put(0, 1), // has_b = 0
++                    }
+                 }
+             }
+         }
+@@ -257,6 +308,13 @@ impl SensorPhaseUpdate {
+     }
+ }
+ 
++fn hex_bytes(h: &str) -> Option<Vec<u8>> {
++    if h.len() % 2 != 0 {
++        return None;
++    }
++    (0..h.len()).step_by(2).map(|i| u8::from_str_radix(h.get(i..i + 2)?, 16).ok()).collect()
++}
++
+ fn put_u32(b: &mut [u8], off: usize, v: u32) {
+     b[off..off + 4].copy_from_slice(&v.to_le_bytes());
+ }
+@@ -517,4 +575,24 @@ mod tests {
+         }
+         assert_eq!(super::read_bits(&many, 471, 1), 1, "the next has_entry is set");
+     }
++
++    /// A client line with an A value parses, encodes through the client's codec, and grows the
++    /// entry by exactly the value's bits (presence then object) over the value-less form.
++    #[test]
++    fn a_valued_client_carries_its_object() {
++        let mut img = vec![0u8; 0x78];
++        img[0..4].copy_from_slice(&[0xFF; 4]);
++        img[8] = 1;
++        img[9] = 1;
++        img[0x40..0x48].copy_from_slice(&0xD100_0000_0000_0201u64.to_le_bytes());
++        let hex: String = img.iter().map(|b| format!("{b:02x}")).collect();
++        let bare = super::SensorClientRef::parse_line("0xC2DACAF7 0xc 7 1 1").unwrap();
++        let valued =
++            super::SensorClientRef::parse_line(&format!("0xC2DACAF7 0xc 7 1 1 0x808022A5 {hex}"))
++                .unwrap();
++        assert_eq!(valued.a_value.as_ref().map(|v| (v.0, v.1.len())), Some((0x8080_22A5, 0x78)));
++        let f = |c| super::SensorPhaseUpdate { clients: vec![c], ..super::audit(3, None) }.encode();
++        let (a, b) = (f(bare).expect("bare"), f(valued).expect("valued"));
++        assert!(b.len() > a.len(), "the valued entry must be longer ({} vs {})", b.len(), a.len());
++    }
+ }

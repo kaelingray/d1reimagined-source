@@ -239,6 +239,7 @@ def main():
         data, base_off, esz, mask, flags = p.u(P + 8, 'Q'), p.u(P + 0x1C, 'I'), p.u(P + 0x20, 'I'), p.u(P + 0x24, 'I'), p.u(P + 0x34, 'I')
         reg = p.u(p.u(base + REGISTRY, 'Q'), 'Q')
         out = [f'# world {w:#x} gen {p.read(w + 0x1D, 1)[0]} local id {local}: hash i8 sub has_a has_b']
+        bundled = False
         for slot in range(min(cnt, 8192)):
             if not (p.u(bm + 4 * (slot // 32), 'I') >> (slot % 32)) & 1:
                 continue
@@ -255,8 +256,24 @@ def main():
             obj = e - (mk & p.u(e + 8, 'Q'))
             h, i8, sub, tb, ta = struct.unpack('<IBxhII', p.read(obj, 0x10))
             pend, own = p.read(obj + 0x15, 1)[0], p.u(obj + 0x60, 'I')
-            if pend and (own == local or own > 0x7F):
-                out.append(f'{h:#010x} {i8:#x} {sub} {int(ta != 0xFFFFFFFF)} {int(tb != 0xFFFFFFFF)}')
+            # --all also lists clients already delivered (pending clear), e.g. on a run that serves them.
+            if (pend or '--all' in sys.argv) and (own == local or own > 0x7F):
+                line = f'{h:#010x} {i8:#x} {sub} {int(ta != 0xFFFFFFFF)} {int(tb != 0xFFFFFFFF)}'
+                # --bundle: give the first type-12 client bundle (i8 0x0C) the local player's value,
+                # which is what links the player and lets the spawn gate pass (notes, 13 Oct):
+                #   +0x08/+0x09 = 1, +0x38 = players[0]+0x738 (sign-extended), +0x40 = the player key
+                #   (player-array entry +0x18), byte-reversed because the client stores that kind-0x23
+                #   field reversed relative to the oracle image.
+                if '--bundle' in sys.argv and i8 == 0x0C and not bundled and ta == 0x808022A5:
+                    pa = p.u(base + 0x2689580 + 8, 'Q')
+                    r13 = p.u(p.u(base + PLAYER_POOL, 'Q') + 8, 'Q')
+                    img = bytearray(0x78)
+                    img[0:8] = bytes.fromhex('ffffffffc59d1c81'); img[8] = 1; img[9] = 1
+                    img[0x38:0x3C] = struct.pack('<i', struct.unpack('<b', p.read(r13 + 0x738, 1))[0])
+                    img[0x40:0x48] = p.read(pa + 0x18, 8)[::-1]
+                    line += f' {ta:#010X} {img.hex()}'.replace('0X', '0x')
+                    bundled = True
+                out.append(line)
         text = chr(10).join(out) + chr(10)
         if '--out' in sys.argv:
             open(sys.argv[sys.argv.index('--out') + 1], 'w').write(text)
