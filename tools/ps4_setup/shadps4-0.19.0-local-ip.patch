@@ -88,6 +88,213 @@ index f0bd459..cb6ca57 100644
          break;
      }
      case ORBIS_NET_CTL_INFO_NETMASK: {
+diff --git a/src/core/libraries/network/posix_sockets.cpp b/src/core/libraries/network/posix_sockets.cpp
+index f1d8030..2dc06f2 100644
+--- a/src/core/libraries/network/posix_sockets.cpp
++++ b/src/core/libraries/network/posix_sockets.cpp
+@@ -1,6 +1,8 @@
+ // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <algorithm>
++#include <cstring>
+ #include <vector>
+ #include <common/assert.h>
+ #include "common/error.h"
+@@ -227,61 +229,41 @@ int PosixSocket::SendMessage(const OrbisNetMsghdr* msg, int flags) {
+     std::scoped_lock lock{m_mutex};
+ 
+ #ifdef _WIN32
+-    int totalSent = 0;
+-    bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
+-    bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
+-
+-    // stream socket with multiple buffers
+-    bool use_wsamsg =
+-        (socket_type == ORBIS_NET_SOCK_STREAM || socket_type == ORBIS_NET_SOCK_STREAM_P2P) &&
+-        msg->msg_iovlen > 1;
+-
++    // D1: gather the iovecs into one buffer and send() it. The previous code reinterpreted
++    // OrbisNetMsghdr as a WSAMSG - whose WSABUF is {len, buf} where an iovec is {base, len} - and
++    // called WSASendMsg, which Windows does not support on TCP. A multi-buffer send on a stream
++    // socket therefore "sent" 0 bytes forever, and Destiny's network_send job spun until its hitch
++    // detector halted the client.
++    const bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
++    const bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
++    std::vector<char> gathered;
+     for (int i = 0; i < msg->msg_iovlen; ++i) {
+-        char* buf = (char*)msg->msg_iov[i].iov_base;
+-        size_t remaining = msg->msg_iov[i].iov_len;
+-
+-        while (remaining > 0) {
+-            if (dontWait) {
+-                int ready = socket_is_ready(sock, false);
+-                if (ready <= 0)
+-                    return ready;
+-            }
+-
+-            int sent = 0;
+-            if (use_wsamsg) {
+-                // only call WSASendMsg if we have multiple buffers
+-                LPFN_WSASENDMSG wsasendmsg = nullptr;
+-                GUID guid = WSAID_WSASENDMSG;
+-                DWORD bytes = 0;
+-                if (WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid),
+-                             &wsasendmsg, sizeof(wsasendmsg), &bytes, nullptr, nullptr) != 0) {
+-                    // fallback to send()
+-                    sent = ::send(sock, buf, remaining, 0);
+-                } else {
+-                    DWORD bytesSent = 0;
+-                    int res = wsasendmsg(
+-                        sock, reinterpret_cast<LPWSAMSG>(const_cast<OrbisNetMsghdr*>(msg)), 0,
+-                        &bytesSent, nullptr, nullptr);
+-                    if (res == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                    sent = bytesSent;
+-                }
+-            } else {
+-                sent = ::send(sock, buf, remaining, 0);
+-                if (sent == SOCKET_ERROR)
+-                    return ConvertReturnErrorCode(WSAGetLastError());
+-            }
+-
+-            totalSent += sent;
+-            remaining -= sent;
+-            buf += sent;
+-
+-            if (!waitAll)
+-                break;
+-        }
++        const char* base = static_cast<const char*>(msg->msg_iov[i].iov_base);
++        gathered.insert(gathered.end(), base, base + msg->msg_iov[i].iov_len);
+     }
+-
+-    return totalSent;
++    sockaddr to{};
++    const bool addressed = msg->msg_name != nullptr && msg->msg_namelen != 0;
++    if (addressed) {
++        convertOrbisNetSockaddrToPosix(static_cast<const OrbisNetSockaddr*>(msg->msg_name), &to);
++    }
++    size_t totalSent = 0;
++    do {
++        if (dontWait) {
++            int ready = socket_is_ready(sock, false);
++            if (ready <= 0)
++                return totalSent > 0 ? static_cast<int>(totalSent) : ready;
++        }
++        const int len = static_cast<int>(gathered.size() - totalSent);
++        const int sent = addressed ? ::sendto(sock, gathered.data() + totalSent, len, 0, &to,
++                                              static_cast<int>(sizeof(to)))
++                                   : ::send(sock, gathered.data() + totalSent, len, 0);
++        if (sent == SOCKET_ERROR)
++            return totalSent > 0 ? static_cast<int>(totalSent)
++                                 : ConvertReturnErrorCode(WSAGetLastError());
++        totalSent += static_cast<size_t>(sent);
++    } while (waitAll && totalSent < gathered.size());
++
++    return static_cast<int>(totalSent);
+ 
+ #else
+     int native_flags = convertOrbisFlagsToPosix(socket_type, flags);
+@@ -316,65 +298,43 @@ int PosixSocket::ReceiveMessage(OrbisNetMsghdr* msg, int flags) {
+     std::scoped_lock lock{receive_mutex};
+ 
+ #ifdef _WIN32
+-    int totalReceived = 0;
+-    bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
+-    bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
+-
+-    // stream socket with multiple buffers
+-    bool use_wsarecvmsg =
+-        (socket_type == ORBIS_NET_SOCK_STREAM || socket_type == ORBIS_NET_SOCK_STREAM_P2P) &&
+-        msg->msg_iovlen > 1;
+-
+-    for (int i = 0; i < msg->msg_iovlen; ++i) {
+-        char* buf = (char*)msg->msg_iov[i].iov_base;
+-        size_t remaining = msg->msg_iov[i].iov_len;
+-
+-        while (remaining > 0) {
+-            // emulate DONTWAIT
+-            if (dontWait) {
+-                int ready = socket_is_ready(sock, true);
+-                if (ready <= 0)
+-                    return ready; // returns ORBIS_NET_ERROR_EWOULDBLOCK or error
++    // D1: recv() into one buffer and scatter it over the iovecs (see SendMessage for why the
++    // WSARecvMsg path cannot work on a stream socket).
++    const bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
++    const bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
++    size_t capacity = 0;
++    for (int i = 0; i < msg->msg_iovlen; ++i)
++        capacity += msg->msg_iov[i].iov_len;
++    std::vector<char> buffer(capacity);
++    size_t totalReceived = 0;
++    do {
++        if (dontWait) {
++            int ready = socket_is_ready(sock, true);
++            if (ready <= 0) {
++                if (totalReceived > 0)
++                    break;
++                return ready; // ORBIS_NET_ERROR_EWOULDBLOCK or error
+             }
+-
+-            int received = 0;
+-            if (use_wsarecvmsg) {
+-                // only call WSARecvMsg if multiple buffers + stream
+-                LPFN_WSARECVMSG wsarecvmsg = nullptr;
+-                GUID guid = WSAID_WSARECVMSG;
+-                DWORD bytes = 0;
+-                if (WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid),
+-                             &wsarecvmsg, sizeof(wsarecvmsg), &bytes, nullptr, nullptr) != 0) {
+-                    // fallback to recv()
+-                    received = ::recv(sock, buf, remaining, 0);
+-                    if (received == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                } else {
+-                    DWORD bytesReceived = 0;
+-                    int res = wsarecvmsg(sock, reinterpret_cast<LPWSAMSG>(msg), &bytesReceived,
+-                                         nullptr, nullptr);
+-                    if (res == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                    received = bytesReceived;
+-                }
+-            } else {
+-                // fallback to recv() for UDP or single-buffer
+-                received = ::recv(sock, buf, remaining, 0);
+-                if (received == SOCKET_ERROR)
+-                    return ConvertReturnErrorCode(WSAGetLastError());
+-            }
+-
+-            totalReceived += received;
+-            remaining -= received;
+-            buf += received;
+-
+-            // stop after first receive if WAITALL is not set
+-            if (!waitAll)
++        }
++        const int received = ::recv(sock, buffer.data() + totalReceived,
++                                    static_cast<int>(capacity - totalReceived), 0);
++        if (received == SOCKET_ERROR) {
++            if (totalReceived > 0)
+                 break;
++            return ConvertReturnErrorCode(WSAGetLastError());
+         }
++        if (received == 0)
++            break; // orderly shutdown
++        totalReceived += static_cast<size_t>(received);
++    } while (waitAll && totalReceived < capacity);
++
++    size_t offset = 0;
++    for (int i = 0; i < msg->msg_iovlen && offset < totalReceived; ++i) {
++        const size_t n = std::min<size_t>(msg->msg_iov[i].iov_len, totalReceived - offset);
++        std::memcpy(msg->msg_iov[i].iov_base, buffer.data() + offset, n);
++        offset += n;
+     }
+-
+-    return totalReceived;
++    return static_cast<int>(totalReceived);
+ 
+ #else
+     int native_flags = convertOrbisFlagsToPosix(socket_type, flags);
 diff --git a/src/shader_recompiler/frontend/translate/vector_alu.cpp b/src/shader_recompiler/frontend/translate/vector_alu.cpp
 index 434bf0a..db6b529 100644
 --- a/src/shader_recompiler/frontend/translate/vector_alu.cpp

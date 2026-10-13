@@ -496,6 +496,54 @@ Public commit `dba749c` (local, not pushed); patch `d1-56578-codec-ah-profile.pa
 `0x2C7630` only), field [10]'s internal change (no 01.29 sub-layout on record), and the 56578
 `IMP_NOP` equivalent.
 
+**Build 56578 reaches orbit (13 October, lab runs, user away; runs authorised).**
+
+Run `20261013-130110-later-56578-lab-orbit-c` went title → … → `investment_signin` →
+`prepare_for_orbit` → `character:signin` → `character:prologue` → `cleanup` → `setup:orbit_loading`
+→ **`setup:orbit`**. It stayed in orbit, with no guest halt and no host fault, until the 14-minute
+limit. A frame shows the orbit screen with the D1Guardian nameplate, Set Destination and a "Crucible
+Unlocked" prompt. Everything is reached through synthetic client patches
+(`patches/CUSA00219-56578-lab-orbit.xml`), so it is `synthetic_ancestor`.
+
+*The "profile_setup stall" was not the wizard.* Three earlier runs halted with
+`hitch detected … job name: 'network_send' … stalled`. The first one was put down to a locked
+session. Wizard taps did not help: the posted keys never reached the unfocused window, and focused
+taps lost focus. With the wizard skipped (c1: `0x57F5E0` → `mov al,1; ret`; it is the 56578 form of
+`0x57E490`, called only at `0x79DAE0`), the same hitch moved to `prepare_for_orbit`. Lib.Net debug
+logging showed the client spinning on `sys_sendmsg(BAP socket)`. **shadPS4's Windows
+`PosixSocket::SendMessage` cast `OrbisNetMsghdr` to `WSAMSG`, whose `WSABUF` is `{len, buf}` where
+an iovec is `{base, len}`, and called `WSASendMsg`, which Windows does not support on TCP.** A
+multi-buffer stream send returned 0 bytes forever. Under the fix, stream sendmsg/recvmsg
+gather/scatter through one `send`/`recv`, and the client's `0x0015` purchased-offers request
+arrived and the conversation continued. That fix is in `shadps4-0.19.0-local-ip.patch`, in the
+binary with sha `e96f7308…` (receipt in `F:\d1\tools\shadPS4\SWAP-RECEIPT.txt`).
+
+*Voice.* shadPS4 stubs libSceVoice. In `cleanup` the client faulted three times in its voice-port
+layer:
+* a NULL port object in the SetMuteFlag thunk `0xB47E50`;
+* the same in the GetPortInfo thunk `0xB47CA8`;
+* `#DE` at `0xB493D9`, a divide by a GetPortInfo field the stub never fills.
+
+The root is `0xB483EC` `mov byte [r14],1`. It marks voice "started" unconditionally after
+Init/GetResourceInfo/Start, and every voice entry point opens with `cmp byte [rdi],0; je`. The lab
+patch writes 0 there, the console-without-voice path, and keeps `xor eax,eax; ret` guards on the
+six dereferencing thunks as a backstop.
+
+*Next gate.* In orbit the client sends `0x000C` subscription requests about every 10 s, roughly
+100 in the run. Each is answered with `0x000D`, yet it logs
+`Failed peer-subscription validation [error error_timeout][account_soid 0xD100000000000001]` 86
+times. It is waiting for something the server does not send after subscribe.
+
+*Orchestrator.* `Start-D1ContainedBoot.ps1` now:
+* taps confirm while the log reports `profile_setup`, controlled by `-WizardTaps`/`-WizardIntervalSeconds`;
+* brings the window to the foreground and sends real key input, with `-NoForeground` to opt out.
+
+A PowerShell trap cost one run: `$wizardTaps` and the `$WizardTaps` parameter are the same variable.
+
+*Lab patch files* (PS4 tree):
+* `CUSA00219-56578-lab-diag-skip-wizard.xml` is lab-diag plus the c1 skip.
+* `CUSA00219-56578-lab-orbit.xml` is that plus the voice entries. It is the set that reached orbit.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at

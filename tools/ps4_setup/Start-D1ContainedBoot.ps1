@@ -21,6 +21,10 @@ param(
     # Explicit, address-specific client patch (synthetic). Never applied by default.
     [string]$ClientPatch = '',
     [switch]$OperatorInput,
+    # By default each virtual tap first brings the emulator window to the foreground and is then
+    # sent as real keyboard input: the emulator ignores keys posted to an unfocused window, so the
+    # profile_setup wizard never saw them. -NoForeground restores the posted-message-only taps.
+    [switch]$NoForeground,
     [switch]$AllowUnredirected,
     # The isolated "D1 Lab" adapter address from d1-lab-net.cmd (the game rejects a loopback-only
     # transport). Empty = the original loopback setup.
@@ -186,6 +190,10 @@ Add-Type -Namespace D1 -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
 [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
 [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 '@
 Add-Type -AssemblyName System.Drawing
@@ -205,9 +213,26 @@ function Snap([IntPtr]$h, [string]$file) {
 function Tap([IntPtr]$h, [string]$key) {
     $vk = [uint32][Windows.Forms.Keys]::$key
     $scan = [D1.Win]::MapVirtualKey($vk, 0)
+    if (-not $NoForeground) {
+        if ([D1.Win]::GetForegroundWindow() -ne $h) {
+            # A background process may only take the foreground right after keyboard input; a
+            # bare Alt press/release grants that without typing anything.
+            [D1.Win]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [D1.Win]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+            [void][D1.Win]::ShowWindow($h, 9)
+            [void][D1.Win]::SetForegroundWindow($h)
+            Start-Sleep -Milliseconds 300
+        }
+        if ([D1.Win]::GetForegroundWindow() -eq $h) {
+            [D1.Win]::keybd_event([byte]$vk, [byte]$scan, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 120
+            [D1.Win]::keybd_event([byte]$vk, [byte]$scan, 2, [UIntPtr]::Zero)
+            return 'foreground'
+        }
+    }
     [void][D1.Win]::PostMessage($h, 0x100, [IntPtr]$vk, [IntPtr](1 -bor ($scan -shl 16)))
     Start-Sleep -Milliseconds 120
     [void][D1.Win]::PostMessage($h, 0x101, [IntPtr]$vk, [IntPtr]((1 -bor ($scan -shl 16)) -bor 0xC0000000))
+    'posted'
 }
 Add-Type -AssemblyName System.Windows.Forms
 $userDir = Join-Path (Split-Path $exe) 'user'
@@ -221,7 +246,7 @@ $emu = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThr
 $receipt.emulatorPid = $emu.Id
 $taps = 0; $nextSnap = $started.AddSeconds(15); $shot = 0
 $shadLog = Join-Path $userDir 'log\shad_log.txt'
-$logPos = 0L; $inWizard = $false; $wizardTaps = 0; $nextWizardTap = Get-Date; $nextLogRead = Get-Date
+$logPos = 0L; $inWizard = $false; $wizardTapCount = 0; $nextWizardTap = Get-Date; $nextLogRead = Get-Date
 $end = $started.AddMinutes($Minutes)
 while (-not $emu.HasExited -and (Get-Date) -lt $end) {
     Start-Sleep -Milliseconds 500
@@ -233,8 +258,8 @@ while (-not $emu.HasExited -and (Get-Date) -lt $end) {
     }
     if (-not $OperatorInput -and $taps -lt $TitleTaps -and
         (Get-Date) -ge $started.AddSeconds($TitleDelaySeconds + $taps * $TapIntervalSeconds)) {
-        Tap $h $TitleKey; $taps++
-        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) tap $TitleKey"
+        $how = Tap $h $TitleKey; $taps++
+        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) tap $TitleKey ($how)"
     }
     if (-not $OperatorInput -and (Get-Date) -ge $nextLogRead -and (Test-Path -LiteralPath $shadLog)) {
         $nextLogRead = (Get-Date).AddSeconds(1)
@@ -249,16 +274,16 @@ while (-not $emu.HasExited -and (Get-Date) -lt $end) {
             if ($text -match "Entering state 'bootflow:profile_setup'") { $inWizard = $true }
             if ($text -match "Leaving state 'bootflow:profile_setup'") {
                 $inWizard = $false
-                Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) left profile_setup after $wizardTaps wizard tap(s)"
+                Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) left profile_setup after $wizardTapCount wizard tap(s)"
             }
         } catch { }
     }
-    if ($inWizard -and $wizardTaps -lt $WizardTaps -and (Get-Date) -ge $nextWizardTap) {
-        Tap $h $TitleKey; $wizardTaps++; $nextWizardTap = (Get-Date).AddSeconds($WizardIntervalSeconds)
-        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) wizard tap $TitleKey ($wizardTaps)"
+    if ($inWizard -and $wizardTapCount -lt $WizardTaps -and (Get-Date) -ge $nextWizardTap) {
+        $how = Tap $h $TitleKey; $wizardTapCount++; $nextWizardTap = (Get-Date).AddSeconds($WizardIntervalSeconds)
+        Add-Content -LiteralPath (Join-Path $out 'input.log') "$([DateTime]::UtcNow.ToString('o')) wizard tap $TitleKey ($wizardTapCount, $how)"
     }
 }
-$receipt.wizardTaps = $wizardTaps
+$receipt.wizardTaps = $wizardTapCount
 $receipt.emulatorExitedByItself = $emu.HasExited
 if (-not $emu.HasExited) { Stop-Process -Id $emu.Id; $emu.WaitForExit(15000) | Out-Null }
 $receipt.emulatorExitCode = if ($emu.HasExited) { $emu.ExitCode } else { $null }
