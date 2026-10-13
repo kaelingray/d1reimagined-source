@@ -1082,6 +1082,28 @@ The view is identical to Salvage: same spawn point, Ghost-raise pose, armored fo
 no weapon sobjects (types: 1 biped, the rest props). The mode was wrong but was not the cause.
 Launch Elimination with **416** from now on.
 
+*World-tag loader and the 4/2 + 4/4 objects (13 October, runs `wtl`, `f42`).*
+
+Per d1preservation (`character-and-investment.md` §7.4), the character-instance art loader works
+from family 4/2 and 4/4 via the selection manager, and our responder sends neither by default. Both
+instance checksums are unchanged on 56578: 4/2 `0x80800FB2` → `0x0ECCD1F8`; 4/4 `0x8080102E` →
+`0xC4060975`. Run `f42` served `D1_FAMILY42=1` and `D1_UNLOCKS=key`.
+
+The eight `fill_desired_*` strategies (56578 methods `0x575F30` character_instance, `0x576410`
+talent grids, `0x575FA0` peer_view, `0x576070` select-character view, `0x576150` default_gear,
+`0x5763B0` character creation, `0x576480` rich presence, `0x5764A0` reward incidents):
+- counted from boot (text-segment cave): they run during boot and orbit, 1–6 calls each;
+- they make **no** further calls during the Elimination launch, world load or spawn. Run `wtl`'s
+  all-zero reading was only because those counters went in after orbit had loaded.
+
+With 4/2 + 4/4 served:
+- the orbit nameplate now shows the character's EMBLEM (it was blank);
+- the Director is unchanged (only Earth, not selectable);
+- in world the view is unchanged, and the sobject census still has 0 weapons.
+
+So weapon creation is not driven by these per-view loaders at spawn. The open question is which
+spawn-time path creates a player's weapon sobjects (type 11), and what it needs.
+
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
 connected and gave up after 3 s with no ServerInfo header. A plain relaunch passed. So the probe
 failure is intermittent and separate from the orphaned-server cause; its root cause is open.
