@@ -1020,6 +1020,30 @@ Result in world (served route, launch poke only):
 
 Next: what holds the player in the Ghost pose instead of the weapon-ready state.
 
+*No weapons exist (run `geared3`).* The sobject pool (header `0x2692220`; 1,500 × 0xF0; type byte
+`+8`; free when `+6 == 0xFEFE`) in world held:
+- 1 biped;
+- 0 weapon (11), 0 gear (19), 0 item;
+- the rest: 356 system, 98 prop_simple, 39 interactive, 39 emitter, 20 static_mesh, 19 prop_simulated.
+
+So the player's weapons are never created. The armor seen is the biped's appearance (roster
+`0x80801855`), not gear objects.
+
+None of the action classes ran, idle or under R2 / Triangle / R1 / touchpad:
+- `c_action_impl_ghost_deploy` (vtable `0x1932E70`: `0x379980`/`0x379C80`/`0x379EB0`);
+- `ghost_summon` (`0x37BDB0`/`0x37BF10`/`0x37C050`);
+- `weapon_ready` (`0x39AE30`/`0x39B320`/`0x39B3A0`).
+
+The empty hand with the Ghost out is what the client draws with nothing to hold. The next layer is
+the gear content demand, the world-tag loader (`items-and-gear.md` §B15): eight
+`c_investment_world_tag_loader_fill_desired_*` strategies (56578 typeinfos `0x193EB50`…),
+including `..._items_peer_view` and `..._items_default_gear`. Weapons need their world tags
+resident before they can be created.
+
+*Teardown crash.* After `error.inactivity_timed_out` the served-route client crashed in cleanup at
+eboot `+0xBC09AE`, inside entity-definition vfunc 19 (`0xBC0990`), the same site as the forced
+route's crash. It is a teardown crash too, not only a forced-spawn artefact.
+
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
 connected and gave up after 3 s with no ServerInfo header. A plain relaunch passed. So the probe
 failure is intermittent and separate from the orphaned-server cause; its root cause is open.
