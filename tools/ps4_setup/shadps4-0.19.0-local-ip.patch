@@ -1,0 +1,90 @@
+diff --git a/src/core/libraries/network/net_util.cpp b/src/core/libraries/network/net_util.cpp
+index 0dda3c2..3e57026 100644
+--- a/src/core/libraries/network/net_util.cpp
++++ b/src/core/libraries/network/net_util.cpp
+@@ -35,6 +35,7 @@ typedef int net_socket;
+ #include <memory>
+ #include <mutex>
+ #include <vector>
++#include <cstdlib>
+ #include <string.h>
+ #include "common/assert.h"
+ #include "common/logging/log.h"
+@@ -346,10 +347,50 @@ u32 NetUtilInternal::GetNatType() const {
+     return nat_type;
+ }
+ 
++// D1-PRESERVATION FORK-LOCAL CHANGE - NOT AN UPSTREAM FIX.
++// The stock probe connect()s a TCP socket to 1.1.1.1:80 and reads getsockname(). Under a contained
++// lab (no route off the box, or an emulator firewall block) that real handshake fails and the guest
++// is told 127.0.0.1, which Destiny rejects as a transport. Instead:
++//   1. D1_GUEST_IP, if set, names the guest address explicitly. It is used only if it is an
++//      address of this machine (a UDP socket can bind to it).
++//   2. Otherwise a UDP route probe: connect() on a datagram socket only selects the route and the
++//      source address. It sends no packet and cannot block.
++static bool IsLocalIpv4(const char* text, in_addr* out) {
++    if (inet_pton(AF_INET, text, out) != 1 || out->s_addr == htonl(INADDR_LOOPBACK)) {
++        return false;
++    }
++    auto probe = socket(AF_INET, SOCK_DGRAM, 0);
++    if (probe == -1) {
++        return false;
++    }
++    sockaddr_in local{};
++    local.sin_family = AF_INET;
++    local.sin_addr = *out;
++    const bool bound = bind(probe, (sockaddr*)&local, sizeof(local)) == 0;
++#ifdef _WIN32
++    closesocket(probe);
++#else
++    ::close(probe);
++#endif
++    return bound;
++}
++
+ bool NetUtilInternal::RetrieveIp() {
+     std::scoped_lock lock{m_mutex};
+ 
+-    auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
++    if (const char* guest = std::getenv("D1_GUEST_IP"); guest && *guest) {
++        in_addr addr{};
++        if (IsLocalIpv4(guest, &addr)) {
++            char text[INET_ADDRSTRLEN];
++            inet_ntop(AF_INET, &addr, text, INET_ADDRSTRLEN);
++            ip = text;
++            LOG_INFO(Lib_Net, "local ip {} (D1_GUEST_IP)", ip);
++            return true;
++        }
++        LOG_ERROR(Lib_Net, "D1_GUEST_IP={} is not an address of this machine; ignored", guest);
++    }
++
++    auto sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+     if (sockfd == -1) {
+         return false;
+     }
+diff --git a/src/core/libraries/network/netctl.cpp b/src/core/libraries/network/netctl.cpp
+index f0bd459..cb6ca57 100644
+--- a/src/core/libraries/network/netctl.cpp
++++ b/src/core/libraries/network/netctl.cpp
+@@ -184,14 +184,15 @@ int PS4_SYSV_ABI sceNetCtlGetInfo(int code, OrbisNetCtlInfo* info) {
+                                                              : ORBIS_NET_CTL_LINK_DISCONNECTED;
+         break;
+     case ORBIS_NET_CTL_INFO_IP_ADDRESS: {
+-        strcpy(info->ip_address,
+-               "127.0.0.1"); // placeholder in case ip retrieval failed
+-        auto success = netinfo->RetrieveIp();
+-        if (success) {
+-            strncpy(info->ip_address, netinfo->GetIp().data(), sizeof(info->ip_address));
+-        } else {
++        // D1-PRESERVATION FORK-LOCAL CHANGE: on failure report NOT_AVAIL with an empty address
++        // instead of a fabricated 127.0.0.1 with success, so the guest takes its own error path.
++        memset(info->ip_address, 0, sizeof(info->ip_address));
++        if (!netinfo->RetrieveIp()) {
+             LOG_WARNING(Lib_NetCtl, "local ip: failed to retrieve");
++            return ORBIS_NET_CTL_ERROR_NOT_AVAIL;
+         }
++        strncpy(info->ip_address, netinfo->GetIp().data(), sizeof(info->ip_address) - 1);
++        LOG_INFO(Lib_NetCtl, "local ip: {}", info->ip_address);
+         break;
+     }
+     case ORBIS_NET_CTL_INFO_NETMASK: {
