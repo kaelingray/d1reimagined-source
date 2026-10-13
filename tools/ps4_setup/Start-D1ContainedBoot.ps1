@@ -15,7 +15,10 @@ param(
     # Explicit, address-specific client patch (synthetic). Never applied by default.
     [string]$ClientPatch = '',
     [switch]$OperatorInput,
-    [switch]$AllowUnredirected
+    [switch]$AllowUnredirected,
+    # The isolated "D1 Lab" adapter address from d1-lab-net.cmd (the game rejects a loopback-only
+    # transport). Empty = the original loopback setup.
+    [ValidateSet('', '10.77.0.2')][string]$LabIp = ''
 )
 $ErrorActionPreference = 'Stop'
 # A contained Windows boot of the selected build: shadPS4 on Windows, the existing servers in WSL
@@ -45,13 +48,24 @@ $exe = (Get-Item -LiteralPath $Emulator).FullName
 $blocks = @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Outbound -Action Block -Enabled True -ErrorAction SilentlyContinue |
     Where-Object { $_.Profile -eq 'Any' -and (($_ | Get-NetFirewallApplicationFilter).Program -eq $exe) })
 Check 'enabled outbound block for the exact emulator, all profiles' ($blocks.Count -ge 1) (@($blocks.DisplayName) -join '; ')
+$target = if ($LabIp) { $LabIp } else { '127.0.0.1' }
+if ($LabIp) {
+    $labAddr = Get-NetIPAddress -IPAddress $LabIp -AddressFamily IPv4 -ErrorAction SilentlyContinue
+    $nic = if ($labAddr) { Get-NetAdapter -InterfaceIndex $labAddr.InterfaceIndex -IncludeHidden } else { $null }
+    Check 'lab address on the virtual KM-TEST adapter' ([bool]$nic -and $nic.InterfaceDescription -like 'Microsoft KM-TEST Loopback Adapter*') ([ordered]@{ alias = $labAddr.InterfaceAlias; description = $nic.InterfaceDescription })
+    $labRoutes = @(if ($labAddr) { Get-NetRoute -InterfaceIndex $labAddr.InterfaceIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue })
+    Check 'lab adapter has no default route' ($labRoutes.Count -eq 0) $labRoutes.Count
+    $blockRanges = @(foreach ($b in $blocks) { ($b | Get-NetFirewallAddressFilter).RemoteAddress }) | Sort-Object -Unique
+    $expectedRanges = @('0.0.0.0-10.76.255.255', '10.78.0.0-255.255.255.255', '::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff') | Sort-Object
+    Check 'emulator block covers everything except 10.77.0.0/24' ((@($blockRanges) -join ',') -eq ($expectedRanges -join ',')) $blockRanges
+}
 $hostsText = Get-Content -LiteralPath "$env:SystemRoot\System32\drivers\etc\hosts"
 $wanted = @(Get-Content -LiteralPath $HostsList | Where-Object { $_ -match '^\s*127\.0\.0\.1\s+(\S+)' } | ForEach-Object { ($_ -split '\s+')[1] })
-$missing = @($wanted | Where-Object { $n = $_; -not ($hostsText | Where-Object { $_ -match "^\s*127\.0\.0\.1\s+$([regex]::Escape($n))\s*$" }) })
+$missing = @($wanted | Where-Object { $n = $_; -not ($hostsText | Where-Object { $_ -match "^\s*$([regex]::Escape($target))\s+$([regex]::Escape($n))\s*$" }) })
 Check 'hosts redirects applied' ($missing.Count -eq 0 -or $AllowUnredirected) ([ordered]@{ wanted = $wanted.Count; missing = $missing; allowedBecauseFirewallBlocks = [bool]$AllowUnredirected })
 foreach ($hostName in $wanted | Where-Object { $missing -notcontains $_ }) {
     $resolved = @(try { [Net.Dns]::GetHostAddresses($hostName) | ForEach-Object { $_.ToString() } } catch { 'UNRESOLVED' })
-    if (@($resolved | Where-Object { $_ -ne '127.0.0.1' -and $_ -ne '::1' }).Count) { Check "resolves to loopback: $hostName" $false $resolved }
+    if (@($resolved | Where-Object { $_ -ne $target -and $_ -ne '::1' }).Count) { Check "resolves to ${target}: $hostName" $false $resolved }
 }
 # shadPS4 0.19's -i also drops an explicit -p patch, so with -ClientPatch the emulator's automatic
 # patch folder must be empty instead.
@@ -72,7 +86,7 @@ $manifestPinned = $entry.manifest_sha256 -and $manifestSha -eq $entry.manifest_s
 Check 'served manifest matches the recorded build pin' $manifestPinned ([ordered]@{ path = $Manifest; sha256 = $manifestSha })
 
 $receipt = [ordered]@{
-    name = $Name; build = $Build; build_label = $entry.build_label; addresses_valid = $entry.addresses_valid
+    name = $Name; labIp = $(if ($LabIp) { $LabIp } else { $null }); build = $Build; build_label = $entry.build_label; addresses_valid = $entry.addresses_valid
     startedUtc = [DateTime]::UtcNow.ToString('o'); emulator = $exe
     emulatorSha256 = (Get-FileHash -LiteralPath $exe).Hash.ToLowerInvariant()
     launch = $launch; autoPatchesDisabled = (-not $ClientPatch); autoPatchFolderEmpty = ($autoPatches.Count -eq 0)
@@ -92,7 +106,7 @@ if ($failed.Count) {
 $linuxOut = Linux $out
 $serverLog = Join-Path $out 'wsl-servers.console.log'
 $server = Start-Process -FilePath 'wsl.exe' -PassThru -WindowStyle Hidden `
-    -ArgumentList @('-d', $Distro, '-u', 'root', '--', 'bash', (Linux $ServerScript), $linuxOut, (Linux $Manifest)) `
+    -ArgumentList @('-d', $Distro, '-u', 'root', '--', 'bash', (Linux $ServerScript), $linuxOut, (Linux $Manifest), $target) `
     -RedirectStandardOutput $serverLog -RedirectStandardError "$serverLog.err"
 $deadline = (Get-Date).AddSeconds(45)
 while (-not (Test-Path -LiteralPath (Join-Path $out 'servers.ready'))) {
@@ -102,8 +116,8 @@ while (-not (Test-Path -LiteralPath (Join-Path $out 'servers.ready'))) {
     }
     Start-Sleep -Milliseconds 250
 }
-$tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port 443 -WarningAction SilentlyContinue
-$receipt.windowsReachesLoopback443 = $tcp.TcpTestSucceeded
+$tcp = Test-NetConnection -ComputerName $target -Port 443 -WarningAction SilentlyContinue
+$receipt.windowsReaches443 = [ordered]@{ address = $target; ok = $tcp.TcpTestSucceeded }
 
 # -- emulator -------------------------------------------------------------------------------------
 Add-Type -Namespace D1 -Name Win -MemberDefinition @'
