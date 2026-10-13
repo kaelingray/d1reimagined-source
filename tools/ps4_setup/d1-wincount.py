@@ -45,7 +45,16 @@ TARGETS_TERMINATOR = [
     (0x2D1600, 'walker terminator: called when has_entry = 0'),
     (0x2D2F20, 'walker -> post-pass bridge'),
 ]
-TARGETS = {'walker': TARGETS_WALKER, 'term': TARGETS_TERMINATOR}.get(os.environ.get('D1_COUNT_SET', ''), TARGETS_SENSOR_PATH)
+# Forced-spawn pass: how far does the spawner (01.29 FUN_00411830 -> 0x412800) get once the
+# getter hook, the reject NOP and the spawn word are in place?
+TARGETS_SPAWN = [
+    (0x412800, 'spawner (per tick)'),
+    (0x415700, 'spawn gate (accepts phase 3/6)'),
+    (0x10CB60, 'lifetime +0x674/+0x678 reader'),
+    (0x32DBF0, 'construction candidate (01.29 FUN_0032D180)'),
+    (0x32E340, 'construction candidate 2'),
+]
+TARGETS = {'walker': TARGETS_WALKER, 'term': TARGETS_TERMINATOR, 'spawn': TARGETS_SPAWN}.get(os.environ.get('D1_COUNT_SET', ''), TARGETS_SENSOR_PATH)
 STUB = 0x40
 
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)

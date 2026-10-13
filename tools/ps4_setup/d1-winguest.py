@@ -43,6 +43,16 @@ LT_COUNT, LT_TABLE, REGISTRY = 0x25D6FF8, 0x1AD5000, 0x1A238A0
 # The world pool the udt-5 decoder resolves into (0x2A00A0: [0x26556D8] + (i & 0x1FFF) * [0x26556E0]).
 # The decoder (0x2A1C40) drops the frame unless world+0x1C != 0 and frame gen == world+0x1D (0x2A1E88).
 WORLD_POOL, WORLD_STRIDE = 0x26556D8, 0x26556E0
+# 01.29's forced spawn (design/GUARDIAN-IN-WORLD.md §4-5), re-derived for 56578. All SYNTHETIC.
+#  * 0x10C500 lifetime-state getter (same address and bytes as 01.29) -> mov [rdi],3; mov eax,1; ret
+#  * 0x412DD6 per-player reject `je +0x371` after the spawn gate 0x415700 (01.29 0x411E16) -> NOP x6
+#  * player pool: r13 = [[0x273EA80]+8] (01.29 0x2725700), player i at r13 + i*0x2AF0, spawn word +0x0C
+GETTER, GETTER_ORIG, GETTER_HOOK = 0x10C500, '554889e54156534883ec2049', 'c70703000000b801000000c3'
+REJECT_JE, REJECT_ORIG, REJECT_NOP = 0x412DD6, '0f8471030000', '909090909090'
+PLAYER_POOL, PLAYER_STRIDE, SPAWN_WORD = 0x273EA80, 0x2AF0, 0x0C
+#  * screen-fade block: [0x26AD7F0] (01.29 [0x2694B90]) -> +0x00 count, +0x14 mode, +0x18 alpha
+#    (1.0f = black). Parked at 1.0 after a forced spawn; zeroing all three lifts the picture.
+FADE_PTR = 0x26AD7F0
 DATA_LO, DATA_HI = 0x18D8000, 0x2F6C000   # eboot RW segment .. end of image (BSS included)
 RUNG_IN_WORLD = 0x24
 
@@ -54,7 +64,7 @@ k32.WriteProcessMemory.argtypes = k32.ReadProcessMemory.argtypes
 
 class Proc:
     def __init__(self, pid):
-        self.h = k32.OpenProcess(0x0010 | 0x0020 | 0x0008 | 0x0400, False, pid)
+        self.h = k32.OpenProcess(0x0010 | 0x0020 | 0x0008 | 0x0400 | 0x0800, False, pid)
         if not self.h:
             sys.exit(f'OpenProcess({pid}) failed: {ctypes.get_last_error()}')
 
@@ -94,6 +104,32 @@ def open_client():
     return p, base
 
 
+ntdll = ctypes.WinDLL('ntdll')
+
+
+def patch_code(p, addr, data):
+    # Freeze-write-thaw: a torn multi-byte patch on a hot function (the lifetime getter runs every
+    # frame) crashed a 01.29 run (GUARDIAN-IN-WORLD.md, LESSONS.md). Suspend the whole emulator
+    # process around the write.
+    if ntdll.NtSuspendProcess(p.h) != 0:
+        raise OSError('NtSuspendProcess failed')
+    try:
+        _patch_code(p, addr, data)
+    finally:
+        ntdll.NtResumeProcess(p.h)
+
+
+def _patch_code(p, addr, data):
+    old = wt.DWORD()
+    k32.VirtualProtectEx.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_size_t, wt.DWORD, ctypes.POINTER(wt.DWORD)]
+    if not k32.VirtualProtectEx(p.h, ctypes.c_void_p(addr), len(data), 0x40, ctypes.byref(old)):
+        raise OSError(f'VirtualProtectEx {addr:#x} failed ({ctypes.get_last_error()})')
+    p.write(addr, data)
+    k32.VirtualProtectEx(p.h, ctypes.c_void_p(addr), len(data), old.value, ctypes.byref(wt.DWORD()))
+    k32.FlushInstructionCache.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_size_t]
+    k32.FlushInstructionCache(p.h, ctypes.c_void_p(addr), len(data))
+
+
 def session(p, base):
     mgr = p.u(base + MANAGER_PTR, 'Q')
     if not mgr or p.read(mgr, 1)[0] == 0:
@@ -128,6 +164,48 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'base'
     p, base = open_client()
     if cmd == 'base':
+        return 0
+    if cmd == 'players':
+        r13 = p.u(p.u(base + PLAYER_POOL, 'Q') + 8, 'Q')
+        print(f'player pool r13 {r13:#x} (stride {PLAYER_STRIDE:#x})')
+        for i in range(4):
+            a = r13 + i * PLAYER_STRIDE
+            print(f'  player[{i}] {a:#x}: +0x0C = {p.u(a + SPAWN_WORD, "I"):#x}  +0x00..0x20 {p.read(a, 0x20).hex(" ")}')
+        return 0
+    if cmd in ('spawn-hooks', 'restore-hooks'):
+        for va, orig, new in ((GETTER, GETTER_ORIG, GETTER_HOOK), (REJECT_JE, REJECT_ORIG, REJECT_NOP)):
+            cur = p.read(base + va, len(orig) // 2).hex()
+            want_from, want_to = (orig, new) if cmd == 'spawn-hooks' else (new, orig)
+            print(f'  {va:#x}: now {cur}')
+            if cur == want_to:
+                print('    already in place'); continue
+            if cur != want_from:
+                sys.exit(f'REFUSING {va:#x}: bytes are neither the original nor the hook')
+            if '--confirm' in sys.argv:
+                patch_code(p, base + va, bytes.fromhex(want_to))
+                print(f'    wrote {p.read(base + va, len(orig) // 2).hex()}  (SYNTHETIC)')
+            else:
+                print('    dry run (add --confirm)')
+        return 0
+    if cmd == 'unfade':
+        blk = p.u(base + FADE_PTR, 'Q')
+        cnt, mode, alpha = p.u(blk, 'I'), p.u(blk + 0x14, 'I'), p.u(blk + 0x18, 'f')
+        print(f'fade block {blk:#x}: count {cnt} mode {mode} alpha {alpha}')
+        if '--confirm' in sys.argv:
+            p.write(blk, bytes(4)); p.write(blk + 0x14, bytes(8))
+            print(f'  zeroed (SYNTHETIC): count {p.u(blk, "I")} mode {p.u(blk + 0x14, "I")} alpha {p.u(blk + 0x18, "f")}')
+        else:
+            print('  dry run (add --confirm)')
+        return 0
+    if cmd == 'spawn':
+        i = int(sys.argv[sys.argv.index('--player') + 1]) if '--player' in sys.argv else 0
+        r13 = p.u(p.u(base + PLAYER_POOL, 'Q') + 8, 'Q')
+        a = r13 + i * PLAYER_STRIDE + SPAWN_WORD
+        print(f'player[{i}] spawn word @{a:#x} = {p.u(a, "I"):#x}')
+        if '--confirm' in sys.argv:
+            p.write(a, struct.pack('<I', 3)); print(f'  wrote 3 (SYNTHETIC spawn word); now {p.u(a, "I"):#x}')
+        else:
+            print('  dry run (add --confirm)')
         return 0
     if cmd == 'worlds':
         pool, stride = p.u(base + WORLD_POOL, 'Q'), p.u(base + WORLD_STRIDE, 'I')

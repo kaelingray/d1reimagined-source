@@ -682,6 +682,35 @@ The remaining in-world options are serving the task-9/10 content, or 01.29's syn
 lifetime-state getter hook, the per-player reject `je`, and the spawn word). 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
+*🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run
+`…-later-56578-forced-spawn`, `pvp_moonbase` / 407).* This is 01.29's GUARDIAN-IN-WORLD recipe,
+re-derived for 56578, driven through `d1-winguest.py`:
+1. **Served:** `D1_ROSTER_DIR=capture-rig/rosters-f0-hybrid` (family 0 answered with the
+   2-object hybrid fixture, 2,415 B) with `D1_ANSWER_FAMILIES=0,2`, and the Activity Host with
+   membership. With the fixture, **rung-34 task 7 cleared on its own** (done `0x17F → 0x1FF`, no
+   suppress poke). The character definition was installed (`player+0x85C = player+0x1660 =
+   0x811C9DC580A6A06C`, 01.29's value), and **player slot 0** appeared in the spawner's player table
+   (`0x2689580`, 20 slots; it was empty without the fixture, which is why the spawner never reached
+   its gate in earlier runs).
+2. **Synthetic:** the launch poke, then the frozen hooks (`NtSuspendProcess` around the write): the
+   getter `0x10C500` set to `mov [rdi],3; mov eax,1; ret`, and the per-player reject `je` at
+   `0x412DD6` (spawner `0x412800`, gate `0x415700`) set to NOPs. Then the done mask forced to
+   `0x7FF`, `in_world`, and the spawn word `player[0]+0x0C = 3` (pool `[[0x273EA80]+8]`, stride
+   `0x2AF0`; player 0 is at the start of the pool).
+3. **Body built:** `player[0]+0x644` went `0xFFFFFFFF → 0x7BFAC57B`.
+4. **Picture:** still black until the stuck screen fade was cleared. That is `[0x26AD7F0]` (01.29
+   `[0x2694B90]`) → block `0x3806FCA00` (**the same heap address 01.29 recorded**): count 1,
+   mode 1, alpha 1.0. All three were zeroed (`unfade`), and the task-7 suppress byte is held by
+   re-writing it every 2 s. **First-person view on the Moon, Ghost out, radar up**
+   (`cfw-staging/2026-10-13-op/64-unfaded.png`).
+5. **Control:** 2 s of left stick moved the view through the scene (`65-moved.png`). The forced
+   spawn is controllable on 56578, which 01.29's first forced spawn was not.
+
+Still synthetic: the lab-orbit client patches, the launch poke, the getter hook, the reject NOP, the
+done-mask force, the spawn word, the fade zero and the held suppress byte. The served route
+(udt-5 phase) remains blocked at the residency sweep (above), and the done-mask force skips the
+world content that would fix it.
+
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
 * taps confirm while the log reports `profile_setup`, controlled by `-WizardTaps`/`-WizardIntervalSeconds`;
 * brings the window to the foreground and sends real key input, with `-NoForeground` to opt out.
