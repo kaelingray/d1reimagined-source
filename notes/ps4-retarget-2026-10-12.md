@@ -1268,3 +1268,17 @@ A PowerShell trap cost one run: `$wizardTaps` and the `$WizardTaps` parameter ar
 Window frames are window-rectangle captures and include a sliver of the desktop
 at the edges. They are private evidence and need cropping before any daily
 media use.
+
+### 14 Oct: the clean spawn never reads the peer roster's gear slots (run peerread3)
+
+- The socket fix held. The run reached orbit and then Elimination (416, `pvp_moonbase`) with no BUFFALO, CHICKEN or CENTIPEDE. The Guardian spawned in world holding the Ghost, with no weapon.
+- The peer f0/1 object was again at 0x37F8E4040, with equipment at +0x218.
+  - Heavy content index 6323 (Gjallarhorn) is at 0x37F8E4460. The earlier "primary" label was wrong.
+  - Helmet 0x1972 is at 0x37F8E42A0.
+  - The slot at 0x37F8E4560 (content index 0x5E8) is read about 50 times a second at orbit by 0xA2F862 (from 0xA3FA27). That is a UI consumer.
+- An 8-byte read/write watch on the heavy and helmet slots ran for 200 s, from just before the launch until well after the spawn: **0 hits**.
+  - The spawn path does not consult this copy of the equipment.
+  - The armour that renders must come from another copy, such as the character transcript or the profile's render data.
+- Together with 8118aeb (the equipped list is never read), this rules out "the data is served but ignored by the spawn".
+  - What is missing is the step that asks for the player's gear on spawn.
+  - Next candidates: the activity script's loadout grant at round start (a sim-queue element), and whether Elimination waits for a round state that phase 3 never reaches.
