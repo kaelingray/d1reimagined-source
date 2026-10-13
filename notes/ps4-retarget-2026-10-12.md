@@ -1282,3 +1282,36 @@ media use.
 - Together with 8118aeb (the equipped list is never read), this rules out "the data is served but ignored by the spawn".
   - What is missing is the step that asks for the player's gear on spawn.
   - Next candidates: the activity script's loadout grant at round start (a sim-queue element), and whether Elimination waits for a round state that phase 3 never reaches.
+
+### 14 Oct: where weapons are not made, phases, and teams (runs `weapcount`, `phasestep`, `teams`)
+
+**Not the weapon path.**
+- The constructor callers clustered at 0x711690–0x71B7B0 are the projectile system: `c_projectile_component_game_system` has slots at 0x7286A0…, and 0x728160 → 0x7161D0 → 0x7157D0 spawns projectiles.
+- In world, 0x7161D0/0x728160 ran 1,253 times and the creator 0x7157D0 ran 0 times.
+- The `c_native_weapon_instance` code (0x6FCE80–0x70A0D0) ran 0 times through the launch and spawn.
+- The usable-equipment iterators (0x269370/0x269510/0x269550) ran 0 times.
+- The gear-manager content request 0x640160 ran 26 times, and `c_gear_manager_component_game_system[3]` (0x63FA80) once.
+- Counter tool note: 0x63FA10 and 0x63F9B0 start with a RIP-relative `lea` and can't be hooked. Pre-check with a capstone pass before installing; one refusal aborts the whole install.
+
+**Lifetime phase stepping** (the new `D1_AH_SENSOR_PHASE_FILE`; public `f1fc2a7`), in world on Elimination:
+- 4: the screen goes black with the loading glyph.
+- 5 and 2: no visible change; still no weapon.
+- 7: the post-game "ACTIVITY REWARDS" screen, then `cleanup` and the known teardown crash at +0xBC09AE.
+- So 7 is post-game. This agrees with d1preservation's note that the post-game skill write is requested only at game phase 7. No phase produced a weapon.
+
+**Teams.**
+- In every run the client logged "Activity configured for teams, no teams found, highest index '-1'" and "Multiplayer Team=-1".
+- The client picks teams itself in `setup:matchmaking`: handler `c_world_controller_state_setup_matchmaking_handler[7]` 0x7AA6C0 → 0x7AB270 → 0xB9A040 → 0xB9A140 → `team_picker` 0x418360/0x418C80. These are 01.29's 0xB97FC0/0xB980C0 shifted by +0x2080.
+- The lab launch poke writes goal 0x24 (in_world) directly. 0x7AB5D0 reads that as "Activity-session host has finished matchmaking and is telling us to move on" (logged), so the pick never runs. Even the no-teams mode would have written 0, so −1 means it was never called.
+- `d1-teams.py` (new) reads and sets the team byte at `membership + player*0xE8 + 0x1D08`. Membership = `[eboot+0x26CA4E0] + i*0x131C8 + [..+8]*0x98E0 + 0x630`.
+- Holding team 0 in both sessions from orbit through the Elimination load: the client logged "Multiplayer Team=0" and the composition warnings disappeared. **But the player was never spawned** (`player+0x644` stayed 0xFFFFFFFF, spawn word 1). It then timed out for inactivity and returned to orbit cleanly, without the teardown crash.
+- Team 1 set in world, and phases 4/5 with team 1: still no spawn.
+- A second launch from the same session (Rumble 406, team 0, then −1): no spawn. That run is confounded: it was a second launch, and the sensor list was for Elimination's world.
+- So a team ≥ 0 at load stops the current served spawn path. The spawn we have is the no-team path. Teams are probably needed for a real PvP round, but the team-0 spawn needs something else as well (team spawn zones or a round start); not found yet.
+- The team byte is read in game code by 0x40E3D0 (no direct callers; it builds a player→team list via 0x40EAB0), 0x7977A0 and 0x756C80.
+
+**Item loader.** `c_investment_item_loader_game_system` (vtable 0x193EAC0) drives the world-tag loader object at [this+8]: 0x576AE0, 0x5764D0, 0x577120. Its `fill_desired_*` strategies were already shown not to run at spawn.
+
+Next:
+1. Count 0x576AE0/0x577120 in world. Find what makes the world-tag loader refill for a player in world (the peer_view strategy), since a weapon can't be created before its item tags are resident.
+2. Trace the team-0 spawn refusal at the spawner (0x412800, gate 0x415700) with the existing counters.
