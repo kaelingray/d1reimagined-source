@@ -933,6 +933,38 @@ script mid-run left the previous session's `shadnet-server`/`d1-responder` alive
 emulator probe got "reachable but no ServerInfo header". Kill all four server processes (and check
 port 31313 is free) before relaunching.
 
+*The last poke, and the Director (13 October, runs `director`–`director5`).* The launch poke stands
+in for the desired-activity session parameter, which the orbit Director sets when the player
+chooses an activity. Driving orbit by pad (`d1-drive-to-orbit.ps1`):
+- The served unlock flags show their popups ("Crucible unlocked", Armsday, Age of Triumph, a
+  Destiny 2 pre-order ad: dismiss that one with Circle, never Cross).
+- "Set Destination" opens the Director (bottom-left button).
+- The Director draws only Earth, Earth gets no hover tooltip, and nothing is selectable. Same
+  wall as 01.29 (architecture.md §3.5).
+
+Measured on 56578, with counters installed before orbit loads:
+- The node builder `0x9DAF40` (01.29 `0x9D92A0` + 0x1CA0; sticky "do not offer" ORs at
+  `0x9DB760`/`0x9DBA80`/`0x9DBA91`, `[+0x138]`/`[+0x100]` at `0x9DBAC0`/`0x9DBAEF`) **never runs**:
+  not at orbit load, not on opening the Director, not on clicking Earth.
+- Its callers are vtable methods. The per-frame Director update `0x9E7B50` passes the
+  family-4/type-4 lookup (`0x5753C0(4)` non-null every frame) but calls the builder only when the
+  focused-destination index `[0x955380()+2]` differs from its cached `+0xEA`, or `+0x100` has
+  bit 0x8000. Focus never changes because Earth never takes focus.
+- Availability: `0x2601F0` (the requester, 70 callers) sees valid=1, dirty=0 and never rebuilds
+  through `0x260280`; the other builder `0x2604B0` ran twice at load.
+
+Next:
+- why Earth's map node is not focusable (the planet/book node list, upstream of `0x955380`);
+- whether it needs the activity-availability content our server does not yet supply.
+
+*Tooling.* `d1-wincount.py` now places stubs in the text segment's unused tail
+(`0x18D4400`, 0x3C00 bytes, zeroed again on remove). It range-checks every rel32 before writing,
+and rolls back on any failure.
+
+An early-boot install had crashed mid-way (an external stub page out of range) inside a 20-try
+retry loop. That left the client failing sign-in with CHICKEN (`error.no_investment_connection`).
+The retry loop is now 3 attempts and each attempt is all-or-nothing.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.

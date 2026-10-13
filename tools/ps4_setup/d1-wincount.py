@@ -93,13 +93,44 @@ def prologue(p, addr):
     sys.exit(f'REFUSING {addr:#x}: no 5-byte prologue')
 
 
-def alloc_near(p, near):
-    for k in range(1, 0x4000):
-        for cand in (near - k * 0x10000, near + 0x3000000 + k * 0x10000):
+def alloc_near(p, lo, hi):
+    """A RWX page every rel32 jump between it and [lo, hi) can reach. The returned page is checked,
+    not assumed: an early-boot install once got a page out of range and crashed mid-install
+    (13 Oct, run director3), leaving the client to fail sign-in."""
+    k32.VirtualAllocEx.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_size_t, wt.DWORD, wt.DWORD]
+    k32.VirtualFreeEx.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_size_t, wt.DWORD]
+    limit = 0x7FFF0000
+    for k in range(1, 0x6000):
+        for cand in (lo - k * 0x10000, hi + k * 0x10000):
+            if cand <= 0x10000:
+                continue
             a = k32.VirtualAllocEx(p.h, ctypes.c_void_p(cand & ~0xFFFF), 0x1000, 0x3000, 0x40)
-            if a:
+            if not a:
+                continue
+            if abs(a - lo) < limit and abs(a + 0x1000 - hi) < limit and abs(a - hi) < limit:
                 return a
-    sys.exit('could not allocate a page within 2 GB of the image')
+            k32.VirtualFreeEx(p.h, ctypes.c_void_p(a), 0, 0x8000)
+    sys.exit('could not allocate a page within 2 GB of every target')
+
+
+# The text segment's mapped tail past its file data (build 56578: 0x18D4394 .. 0x18D8000) is always
+# within rel32 reach of the code and is unused. Early in boot the emulator still reserves the whole
+# region around the image, so no external page is in range there (13 Oct, run director4).
+CAVE_VA, CAVE_LEN = 0x18D_4400, 0x3C00
+
+
+def cave_page(p, base):
+    a = base + CAVE_VA
+    if any(p.read(a, CAVE_LEN)):
+        return None                       # not empty: not ours to use (or a stale install)
+    old = wt.DWORD()
+    if not k32.VirtualProtectEx(p.h, ctypes.c_void_p(a), CAVE_LEN, 0x40, ctypes.byref(old)):
+        return None
+    return a
+
+
+def fits(v):
+    return -0x80000000 <= v <= 0x7FFFFFFF
 
 
 def hook(p, base, page, i, va, why, orig):
@@ -127,13 +158,27 @@ def main():
         # Check every prologue BEFORE touching anything: a refusal mid-way used to leave the earlier
         # hooks live with no state file to remove them (2026-10-13, the lifetime getter 0x10C500).
         origs = [prologue(p, base + va) for va, _ in TARGETS]
-        page = alloc_near(p, base)
+        if len(TARGETS) * STUB > 0x1000:
+            sys.exit(f'too many targets for one stub page ({len(TARGETS)})')
+        vas = [va for va, _ in TARGETS]
+        page = cave_page(p, base) if len(TARGETS) * STUB <= CAVE_LEN else None
+        page = page or alloc_near(p, base + min(vas), base + max(vas) + 0x20)
+        print(f'stub page {page:#x} ({"text-segment cave" if page == base + CAVE_VA else "allocated"})')
+        # Every displacement is checked before anything is written.
+        for i, (va, _) in enumerate(TARGETS):
+            fn, stub = base + va, page + i * STUB
+            if not (fits(stub - (fn + 5)) and fits(fn + len(origs[i]) - (stub + 8 + len(origs[i]) + 5))):
+                sys.exit(f'REFUSING: stub {stub:#x} out of rel32 range of {fn:#x}; nothing written')
         saved = []
         if wg.ntdll.NtSuspendProcess(p.h) != 0:
             sys.exit('NtSuspendProcess failed')
         try:
             for i, ((va, why), orig) in enumerate(zip(TARGETS, origs)):
                 saved.append(hook(p, base, page, i, va, why, orig))
+        except Exception:
+            for h in saved:     # roll back what was written; leave the process as it was
+                patch(p, base + h['va'], bytes.fromhex(h['orig']))
+            raise
         finally:
             wg.ntdll.NtResumeProcess(p.h)
         json.dump({'base': base, 'page': page, 'hooks': saved}, open(STATE, 'w'), indent=1)
@@ -148,6 +193,8 @@ def main():
         for h in st['hooks']:
             patch(p, base + h['va'], bytes.fromhex(h['orig']))
             print(f"restored {h['va']:#x}")
+        if st.get('page') == base + CAVE_VA:      # leave the cave empty for the next install
+            p.write(base + CAVE_VA, bytes(len(st['hooks']) * STUB))
         os.remove(STATE)
         return 0
     sys.exit(f'unknown command {cmd}')
