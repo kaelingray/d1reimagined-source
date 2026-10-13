@@ -2353,7 +2353,7 @@ fn served_205_body() -> Vec<u8> {
         warn!("      205 RAW BODY override ({}B) - the ten-flag default is NOT in play", raw.len());
         return raw;
     }
-    d1_bap::INVESTMENT_205_UNLOCKS_BODY.to_vec()
+    d1_bap::investment_205_unlocks_body().to_vec()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
