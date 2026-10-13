@@ -679,7 +679,21 @@ element outside that set is parsed and dropped.** The resident set is what tasks
 content) load, which is exactly what the forced done mask skips. The served sensor therefore cannot
 land on this route until the world content is served or its residency is established another way.
 The remaining in-world options are serving the task-9/10 content, or 01.29's synthetic spawn (the
-lifetime-state getter hook, the per-player reject `je`, and the spawn word). 01.29's next steps
+lifetime-state getter hook, the per-player reject `je`, and the spawn word).
+
+*Where the sweep's range comes from (static, 56578).* The decoder calls the walker with
+`world+0x28` (`add r13,0x28` at `0x2A1E99`). At `0x2D134B..0x2D13DC` the walker sets its sweep
+container to `[rbp-0xAF30]+0x10`, i.e. `world+0x38`. That container holds a total count at `+8`, a
+group count at `+0x5E8` and group start indices at `+0x5EC`. The `0x2D1400` loop iterates those
+entries, resolves each through `0x10304F0` and the registry, and post-passes the matching objects.
+**The lifetime record is a globals record (`0x1072C0(0x10)`), not a member of the world container,
+so the sweep cannot reach it however correct the frame is.** For the served phase to land, the
+activity world must hold an entry for that record. That entry is presumably established by the
+content tasks 9/10 load, which is the circularity both 01.29 and this build hit. Task 9 itself
+(01.29 `FUN_00794D30`, 56578 `0x7965A0`) gates on two lookups: leg A, `0x1192A0(entity)` with
+`[+8] != 0`, keyed by the controller→player map; and leg B, this phase. Next measurement: read
+`world[0]+0x38` live (counts, groups and entry ids) in world, to see which records the world
+container does hold and whether any lifetime-class record ever appears. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run
