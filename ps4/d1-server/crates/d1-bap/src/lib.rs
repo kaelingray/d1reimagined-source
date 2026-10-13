@@ -2349,6 +2349,38 @@ pub const ROSTER_INSTANCE_TYPE: u32 = 0xA2AC_2C74;
 /// Instance checksum of the family-4 slot-1 **profile** object. Schema record `0x1304808`.
 pub const PROFILE_INSTANCE_TYPE: u32 = 0x8127_F15A;
 
+/// Build 56578 (01.33) account checksum: wrapper tag `0x80801803` (anchor `0x130A440`), inner
+/// `0x808018C7` - still 25 top-level fields with the same leading fields, struct `0x75C8`
+/// (01.29: `0x7338`). Read from the 56578 descriptor at `anchor - 0x50 + 8`.
+pub const ACCOUNT_INSTANCE_TYPE_56578: u32 = 0x6B30_D2B4;
+/// Build 56578 profile checksum: wrapper tag `0x80801743` (anchor `0x12E7250`), inner
+/// `0x80801714` - still 18 top-level fields, SOID first, struct `0x7378` (01.29: `0x7078`).
+pub const PROFILE_INSTANCE_TYPE_56578: u32 = 0x003B_C6E5;
+
+static CLIENT_BUILD_56578: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Record the client build from its SignOn request (`build=` query). Only the account and profile
+/// checksums differ between 01.29 and 56578; the roster, character and family-4/4 objects, and the
+/// minimal encodings of account and profile, are unchanged (measured on both descriptor tables).
+pub fn set_client_build(build: &str) {
+    CLIENT_BUILD_56578.store(build.starts_with("56578."), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the connected client reported build 56578 at SignOn.
+pub fn client_is_56578() -> bool {
+    CLIENT_BUILD_56578.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The account instance checksum for the connected client's build.
+pub fn account_instance_type() -> u32 {
+    if client_is_56578() { ACCOUNT_INSTANCE_TYPE_56578 } else { ACCOUNT_INSTANCE_TYPE }
+}
+
+/// The profile instance checksum for the connected client's build.
+pub fn profile_instance_type() -> u32 {
+    if client_is_56578() { PROFILE_INSTANCE_TYPE_56578 } else { PROFILE_INSTANCE_TYPE }
+}
+
 /// Top-level field count of the **account** schema (`0x1322B68`), needed for the absent-field tail.
 const ACCOUNT_FIELD_COUNT: u32 = 25;
 /// Top-level field count of the **roster** schema (`0x139AE28`).
@@ -2667,7 +2699,7 @@ pub fn account_rsat_no_profile(account_soid: u64, characters: &[u64]) -> Vec<u8>
 pub fn queuez_family4_account_only_body(account_soid: u64) -> Vec<u8> {
     let acct = account_rsat_no_profile(account_soid, &[]);
     let mut b = queuez_family_header_for(QUEUEZ_FAMILY_ACCOUNT, account_soid, 1);
-    b.extend_from_slice(&ACCOUNT_INSTANCE_TYPE.to_be_bytes());
+    b.extend_from_slice(&account_instance_type().to_be_bytes());
     b.extend_from_slice(&account_soid.to_be_bytes());
     b.extend_from_slice(&(acct.len() as u32).to_be_bytes());
     b.extend_from_slice(&acct);
@@ -3005,11 +3037,11 @@ fn queuez_family4_from_parts(
 ) -> Vec<u8> {
     let count = 2 + unlocks.is_some() as u32 + extras.len() as u32;
     let mut b = queuez_family_header_for(QUEUEZ_FAMILY_ACCOUNT, account_soid, count);
-    b.extend_from_slice(&ACCOUNT_INSTANCE_TYPE.to_be_bytes());
+    b.extend_from_slice(&account_instance_type().to_be_bytes());
     b.extend_from_slice(&account_soid.to_be_bytes());
     b.extend_from_slice(&(acct.len() as u32).to_be_bytes());
     b.extend_from_slice(&acct);
-    b.extend_from_slice(&PROFILE_INSTANCE_TYPE.to_be_bytes());
+    b.extend_from_slice(&profile_instance_type().to_be_bytes());
     b.extend_from_slice(&profile_soid.to_be_bytes());
     b.extend_from_slice(&(prof.len() as u32).to_be_bytes());
     b.extend_from_slice(&prof);
@@ -3114,7 +3146,7 @@ pub fn queuez_account_body(account_soid: u64, characters: &[u64], profile_soid: 
     queuez_object_body(
         QUEUEZ_FAMILY_ACCOUNT,
         account_soid,
-        ACCOUNT_INSTANCE_TYPE,
+        account_instance_type(),
         account_soid,
         &account_rsat(account_soid, characters, profile_soid),
     )

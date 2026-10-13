@@ -471,6 +471,13 @@ async fn signon(
 ) -> impl IntoResponse {
     let seq = SIGNON_SEQ.fetch_add(1, Ordering::SeqCst);
     info!("=== SIGNON REQUEST - the bootstrap ===");
+    // The account/profile instance checksums differ between 01.29 and 56578; every later BAP
+    // object for this client is stamped from what it reports here.
+    if let Some(b) = q.get("build") {
+        d1_bap::set_client_build(b);
+        info!("    client build {b} -> account {:#010x}, profile {:#010x}",
+              d1_bap::account_instance_type(), d1_bap::profile_instance_type());
+    }
     log_req("POST", &headers, "/SignOn", &body);
     if !body.is_empty() {
         info!("    hex: {}", hexdump(&body, 256));
@@ -1473,7 +1480,7 @@ fn build_family4_delta(base: &[u8], mode: Family4Invalidate, version: u32) -> Op
                     let prof = env_soid("D1_PROFILE_SOID", 0xD100_0000_0000_0201);
                     let bumped = d1_bap::account_rsat_with_serial(acct, &[chr], prof, serial);
                     match d1_bap::queuez_span_replace_object_payload(
-                        base, 0, d1_bap::ACCOUNT_INSTANCE_TYPE, &bumped)
+                        base, 0, d1_bap::account_instance_type(), &bumped)
                     {
                         Some(s) => {
                             warn!("      ⭐ D1_FAMILY4_SERIAL={serial}: account field [2] (+0x60) set \
@@ -1484,7 +1491,7 @@ fn build_family4_delta(base: &[u8], mode: Family4Invalidate, version: u32) -> Op
                         None => {
                             warn!("      ⛔ D1_FAMILY4_SERIAL={serial} REFUSED: object 0 of the \
                                    recorded family-4 span is not {:#010x} - sending the verbatim \
-                                   re-stamp instead", d1_bap::ACCOUNT_INSTANCE_TYPE);
+                                   re-stamp instead", d1_bap::account_instance_type());
                             base.to_vec()
                         }
                     }
@@ -1573,7 +1580,7 @@ fn build_family_body_inner(family: u32, acct: u64, chr: u64, probe: &str) -> Vec
                                                                               pay.len());
                                                                         d1_bap::queuez_object_body(
                                                                             d1_bap::QUEUEZ_FAMILY_ACCOUNT, acct,
-                                                                            d1_bap::ACCOUNT_INSTANCE_TYPE, acct, &pay)
+                                                                            d1_bap::account_instance_type(), acct, &pay)
                                                                     } else {
                                                                         // ⭐⭐ PHASE-AWARE, and it has to be. Measured 2026-08-10
                                                                         // across three boots (CREATE-1/2/3):
@@ -1620,8 +1627,8 @@ fn build_family_body_inner(family: u32, acct: u64, chr: u64, probe: &str) -> Vec
                                                                         let dest = (dest != 0).then_some(dest);
                                                                         match dest {
                                                                             Some(d) => warn!("      QUEUEZ family 4 baseline: account (instance {:#010x}, character list [{chr:#018x}]) + profile (instance {:#010x}, soid {prof:#018x}) ⭐ last_orbited_destination = {d} ({d:#010x})",
-                                                                                             d1_bap::ACCOUNT_INSTANCE_TYPE,
-                                                                                             d1_bap::PROFILE_INSTANCE_TYPE),
+                                                                                             d1_bap::account_instance_type(),
+                                                                                             d1_bap::profile_instance_type()),
                                                                             None => warn!("      QUEUEZ family 4 baseline: account + profile (soid {prof:#018x}), destination NOT set (D1_ORBIT_DESTINATION=0)"),
                                                                         }
                                                                         // D1_PROFILE_FILE: a verbatim profile payload produced
@@ -2376,11 +2383,11 @@ fn run_controls() -> usize {
     std::env::set_var("D1_EMPTY_ROSTER", "1");
     let f4 = build_family_body(d1_bap::QUEUEZ_FAMILY_ACCOUNT, acct, 0, "");
     let count = f4.get(21..25).map(|b| u32::from_be_bytes(b.try_into().unwrap()));
-    let has_profile = f4.windows(4).any(|w| w == d1_bap::PROFILE_INSTANCE_TYPE.to_be_bytes());
+    let has_profile = f4.windows(4).any(|w| w == d1_bap::profile_instance_type().to_be_bytes());
     check("P1a empty-roster family 4: object_count == 1", count == Some(1),
           format!("[count {count:?}]"));
     check("P1a empty-roster family 4: NO family-4/type-1 profile object", !has_profile,
-          format!("[{} bytes, 0x{:08x} {}]", f4.len(), d1_bap::PROFILE_INSTANCE_TYPE,
+          format!("[{} bytes, 0x{:08x} {}]", f4.len(), d1_bap::profile_instance_type(),
                   if has_profile { "PRESENT" } else { "absent" }));
     // The account payload's field 3 must be ABSENT, not zero. 93 bits -> 12 bytes; the
     // present-with-value form is 157 bits -> 20 bytes and is indistinguishable at `+0x68` once
@@ -2394,7 +2401,7 @@ fn run_controls() -> usize {
     let old = d1_bap::queuez_family4_baseline_body_with_unlocks(
         acct, &[], 0xD100_0000_0000_0201, None, None, &[]);
     let old_count = old.get(21..25).map(|b| u32::from_be_bytes(b.try_into().unwrap()));
-    let old_has_profile = old.windows(4).any(|w| w == d1_bap::PROFILE_INSTANCE_TYPE.to_be_bytes());
+    let old_has_profile = old.windows(4).any(|w| w == d1_bap::profile_instance_type().to_be_bytes());
     check("P1a INVERTED: the pre-2026-08-10 builder DOES emit the profile (control discriminates)",
           old_count == Some(2) && old_has_profile, format!("[count {old_count:?}]"));
 
@@ -2528,7 +2535,7 @@ fn run_controls() -> usize {
     // Both arms are asserted, so the inversion is shipped rather than described.
     let acct_payload = |span: &[u8]| -> Option<Vec<u8>> {
         let o = *d1_bap::queuez_span_objects(span)?.first()?;
-        (o.instance_type == d1_bap::ACCOUNT_INSTANCE_TYPE)
+        (o.instance_type == d1_bap::account_instance_type())
             .then(|| span[o.payload.0..o.payload.1].to_vec())
     };
     std::env::set_var("D1_FAMILY4_SERIAL", "7");
