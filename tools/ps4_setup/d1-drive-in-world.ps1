@@ -3,7 +3,11 @@ param(
     [Parameter(Mandatory)][string]$Out,
     [int]$ActivityId = 407,
     [int]$InWorldShots = 6,
-    [int]$ShotIntervalSeconds = 15
+    [int]$ShotIntervalSeconds = 15,
+    # Leave the rung-34 steps to the client: no task-7 suppress byte, no done-mask force. The
+    # masks are logged every 20 s for -ObserveSeconds instead.
+    [switch]$NoForce,
+    [int]$ObserveSeconds = 240
 )
 $ErrorActionPreference = 'Stop'
 # Drives a contained -OperatorInput session of build 56578 from the title screen to
@@ -33,10 +37,19 @@ Start-Sleep 15
 Say 'SYNTHETIC launch poke'; python $guest launch --activity-id $ActivityId --confirm | ForEach-Object { Say $_ }
 if (-not (WaitFor "Entering state 'activity:initial_slice_set_loading'" 600)) { exit 2 }
 Start-Sleep 10
+if ($NoForce) {
+    $end = (Get-Date).AddSeconds($ObserveSeconds)
+    while ((Get-Date) -lt $end) {
+        python $guest masks | Select-String 'rung-34' | ForEach-Object { Say $_.ToString() }
+        if (Select-String -LiteralPath $shad -Pattern "Entering state 'activity:physics_join'" -Quiet) { Say 'left rung 34 on its own'; break }
+        Start-Sleep 20
+    }
+} else {
 Say 'SYNTHETIC task-7 suppress'; python $guest suppress --confirm | ForEach-Object { Say $_ }
 Start-Sleep 30
 python $guest masks | ForEach-Object { Say $_ }
 Say 'SYNTHETIC rung-34 done-mask force'; python $guest masks --force-done --confirm | ForEach-Object { Say $_ }
+}
 if (-not (WaitFor "Entering state 'activity:in_world'" 300)) { exit 2 }
 Say 'IN WORLD'
 for ($i = 1; $i -le $InWorldShots; $i++) {

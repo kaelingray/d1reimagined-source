@@ -920,6 +920,19 @@ Next:
   record's `[+8]`, now 1.
 - input/possession past the Ghost intro.
 
+*Rung 34 now clears by itself (13 October, run `later-56578-noforce2`).* With the served bundle in
+place, `d1-drive-in-world.ps1 -NoForce` writes neither the task-7 suppress byte nor the done-mask.
+Rung 34 reached `requested 0x7FF started 0x7FF done 0x7FF missing 0`. The client went
+initial_slice_set_loading → physics_join → in_world on its own (rung 34 to in_world in under 30 s),
+and the Guardian spawned (biped `0x4CFAC067`, gate byte latched, link `0x4EFA2007`).
+
+The only synthetic step left on the route is the launch poke from orbit (`d1-winguest.py launch`).
+
+A BUFFALO error the operator saw at boot that evening came from my own stop. Killing the boot
+script mid-run left the previous session's `shadnet-server`/`d1-responder` alive, and the next
+emulator probe got "reachable but no ServerInfo header". Kill all four server processes (and check
+port 31313 is free) before relaunching.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.
