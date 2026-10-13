@@ -219,6 +219,36 @@ is `127.0.0.1`, and shadPS4 logs `sceNetCtlGetInfo: local ip: failed to retrieve
 four times. This is the open Windows guest-transport gate. Everything past the
 lab byte is `synthetic_ancestor`.
 
+**Lab network (13 October).** The user ran `d1-lab-net.cmd`. "D1 Lab" (KM-TEST
+loopback adapter) now has `10.77.0.2/24` with no gateway, the redirects point
+there, and the shadPS4 block covers everything except `10.77.0.0/24`.
+
+- With WSL servers (`20261013-083045-later-56578-labnet`), the game's OAuth timed
+  out. Under mirrored networking Windows owns `10.77.0.2` itself, so Windows
+  clients never reach a WSL listener on it.
+- The orchestrator's `-LabIp` mode therefore runs the same `d1-responder.exe`
+  and `shadnet-server.exe` natively on Windows: guest-facing responder on the
+  lab address, a loopback responder for the emulator's WebAPI, shadNet on
+  `127.0.0.1:31313`. Every listener is checked to be loopback or lab, and only
+  its own processes are stopped (verified).
+- Run `20261013-084057-later-56578-labnet-win`: OAuth, `/SignOn` and the
+  manifest were served at `10.77.0.2`, the game resolved all STUN names there,
+  but it still ended in `marionberry`. No BAP connection was made.
+
+**Root cause: shadPS4's local-IP probe.** `sceNetCtlGetInfo(IP_ADDRESS)` calls
+`NetUtilInternal::RetrieveIp()`, which `connect()`s a **TCP** socket to
+`1.1.1.1:80` and reads `getsockname()`. Our firewall block correctly prevents
+that real off-box connection, so it fails and shadPS4 reports the placeholder
+`127.0.0.1` with success. The game's Demonware layer (`0x2E9FC0` on 01.29) uses
+that as its own address and rejects the transport. The PS4 project fixed this
+in its private fork (`shadPS4-d1trace`; `status/shadps4.md`, "local-IP fix",
+with `capture-rig/retrieve-ip-control.py`): the probe becomes `SOCK_DGRAM`
+(route lookup only, no packet) with a `getifaddrs()` fallback, and total
+failure returns `NOT_AVAIL` instead of a fabricated loopback. Current upstream
+still uses the TCP probe. Allowing the TCP probe would make a real internet
+handshake and is not acceptable. The next step needs a shadPS4 build carrying
+that fix; see the questions in the report.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at

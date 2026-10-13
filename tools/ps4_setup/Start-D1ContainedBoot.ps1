@@ -103,6 +103,58 @@ if ($failed.Count) {
 }
 
 # -- servers --------------------------------------------------------------------------------------
+# Loopback runs use the WSL servers (mirrored networking forwards 127.0.0.1). With -LabIp the same
+# servers run natively on Windows: under mirrored networking Windows owns 10.77.0.2 itself, so a
+# Windows client never reaches a WSL listener on that address.
+$winServers = @()
+function Stop-WinServers {
+    foreach ($p in $winServers) { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; $p.WaitForExit(10000) | Out-Null } }
+    $alive = @($winServers | Where-Object { -not $_.HasExited } | ForEach-Object { $_.Id })
+    "stopped $([DateTime]::UtcNow.ToString('o')): $(@($winServers.Id) -join ' ') alive=$($alive -join ' ')" |
+        Set-Content -LiteralPath (Join-Path $out 'servers-stopped.txt')
+}
+if ($LabIp) {
+    $bin = Join-Path $Repo 'd1-server\target\release'
+    $openssl = 'C:\Program Files\Git\mingw64\bin\openssl.exe'
+    & $openssl req -x509 -newkey rsa:2048 -nodes -keyout (Join-Path $out 'tls.key') -out (Join-Path $out 'tls.crt') -days 2 `
+        -subj '/CN=signon.deadorbit.net' `
+        -addext 'subjectAltName=DNS:signon.deadorbit.net,DNS:signon.gravityshavings.net,DNS:www1.signon.deadorbit.net,DNS:www1.signon.gravityshavings.net' 2>$null
+    if (-not (Test-Path -LiteralPath (Join-Path $out 'tls.key'))) { throw 'Lab certificate generation failed' }
+    $busy = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 80,443,8080,8788,3075,31313,31315,32556 })
+    if ($busy.Count) { throw "Refusing: server ports already in use: $(@($busy | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ' ')" }
+    # The canonical responder knobs (same as wsl-servers-loopback.sh), transport pointed at the lab.
+    $serverEnv = [ordered]@{
+        D1_ACCOUNT_SOID = '0xD100000000000001'; D1_CHARACTER_SOID = '0xD100000000000101'; D1_503_SOID = '1'
+        D1_CHARACTER_LIFECYCLE = '1'; D1_PROFILE_FILE = (Join-Path $Repo 'capture-rig\profiles\profile-old-russia.bin')
+        D1_PUSH_CHARACTER = '1'; D1_PUSH_FAMILY = '4,3'; D1_PUSH_AT = 'echo'; D1_ACTIVITY_HOST = '0'
+        D1_IP = $LabIp; D1_BAP_IP = $LabIp; D1_CLIENT_IP = $LabIp; D1_MANIFEST_FILE = $Manifest
+        D1_UPLOAD_DIR = (Join-Path $out 'uploads'); D1_CHARACTER_TRANSCRIPT_DIR = (Join-Path $out 'character-transcripts')
+    }
+    foreach ($k in $serverEnv.Keys) { Set-Item -Path "env:$k" -Value $serverEnv[$k] }
+    $serverEnv.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Set-Content -LiteralPath (Join-Path $out 'server-environment.txt')
+    $cert = @('--cert', (Join-Path $out 'tls.crt'), '--key', (Join-Path $out 'tls.key'))
+    $winServers += Start-Process -FilePath (Join-Path $bin 'shadnet-server.exe') -ArgumentList @('--bind', '127.0.0.1:31313') -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $out 'shadnet.log') -RedirectStandardError (Join-Path $out 'shadnet.err.log')
+    $winServers += Start-Process -FilePath (Join-Path $bin 'd1-responder.exe') -ArgumentList (@('--bind', $LabIp) + $cert) -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $out 'responder.log') -RedirectStandardError (Join-Path $out 'responder.err.log')
+    # The emulator's own WebAPI (friend list) is configured on 127.0.0.1:31315.
+    $winServers += Start-Process -FilePath (Join-Path $bin 'd1-responder.exe') -ArgumentList (@('--bind', '127.0.0.1') + $cert) -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $out 'responder-loopback.log') -RedirectStandardError (Join-Path $out 'responder-loopback.err.log')
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        Start-Sleep -Milliseconds 300
+        $listen = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -in $winServers.Id })
+        $ready = @($listen | Where-Object { $_.LocalAddress -eq $LabIp -and $_.LocalPort -eq 443 }).Count -and
+                 @($listen | Where-Object { $_.LocalAddress -eq '127.0.0.1' -and $_.LocalPort -eq 31313 }).Count
+        if (@($winServers | Where-Object HasExited).Count -or (Get-Date) -gt $deadline) { Stop-WinServers; throw 'Windows servers did not become ready' }
+    } until ($ready)
+    $udp = @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -in $winServers.Id })
+    $listeners = @($listen | ForEach-Object { "tcp $($_.LocalAddress):$($_.LocalPort)" }) + @($udp | ForEach-Object { "udp $($_.LocalAddress):$($_.LocalPort)" })
+    $listeners | Set-Content -LiteralPath (Join-Path $out 'listeners.txt')
+    $outside = @($listen + $udp | Where-Object { $_.LocalAddress -notin @('127.0.0.1', $LabIp) })
+    if ($outside.Count) { Stop-WinServers; throw "Refusing: a server listener is outside loopback/lab: $(@($outside | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ' ')" }
+    'ready' | Set-Content -LiteralPath (Join-Path $out 'servers.ready')
+} else {
 $linuxOut = Linux $out
 $serverLog = Join-Path $out 'wsl-servers.console.log'
 $server = Start-Process -FilePath 'wsl.exe' -PassThru -WindowStyle Hidden `
@@ -115,6 +167,7 @@ while (-not (Test-Path -LiteralPath (Join-Path $out 'servers.ready'))) {
         throw "Servers did not become ready; see $serverLog"
     }
     Start-Sleep -Milliseconds 250
+}
 }
 $tcp = Test-NetConnection -ComputerName $target -Port 443 -WarningAction SilentlyContinue
 $receipt.windowsReaches443 = [ordered]@{ address = $target; ok = $tcp.TcpTestSucceeded }
@@ -173,7 +226,8 @@ $receipt.endedUtc = [DateTime]::UtcNow.ToString('o')
 
 # -- evidence -------------------------------------------------------------------------------------
 New-Item -ItemType File -Path (Join-Path $out 'stop') | Out-Null
-$server.WaitForExit(30000) | Out-Null
+if ($LabIp) { Stop-WinServers } else { $server.WaitForExit(30000) | Out-Null }
+$receipt.serverHost = if ($LabIp) { 'windows' } else { 'wsl' }
 $receipt.serversStopped = Test-Path -LiteralPath (Join-Path $out 'servers-stopped.txt')
 # shad_log.txt is the emulator's full log; shadps4.log holds only the launcher lines.
 Copy-Item -LiteralPath (Join-Path $userDir 'log\shad_log.txt') -Destination (Join-Path $out 'emulator.log') -ErrorAction SilentlyContinue
