@@ -610,7 +610,21 @@ forced done mask. Everything else is served. The screen locked at 15:09 local (W
 screen), so there is no in-world frame. I did not try to get past the lock. The client later left
 `in_world` with the game's own `error.inactivity_timed_out` (the idle kick; no input reached it
 while the screen was locked) and returned through `cleanup` to `setup:orbit` cleanly. The run ended
-at its 45-minute limit with no fault, no crash ticket, and the servers stopped. 01.29's next steps
+at its 45-minute limit with no fault, no crash ticket, and the servers stopped.
+
+*Watched rerun (screen unlocked, run `…-in-world-watch-b`).* The first attempt failed with
+**BUFFALO**: shadPS4's startup probe of the local shadNet server got no ServerInfo within its window,
+so it disabled shadNet for the run and PSN sign-in failed. The previous probe answered in 0.15 s; it
+looked transient, and a restart probed OK. The rerun repeated the same route. Task 7 clears with the
+suppress byte, tasks 9/10 do not, and after the forced done mask the client reaches `in_world`. The
+slice-set manager reports `initial_slice_set_instantion → fully_enabled` on region `PRV00.00`
+(`pvp_moonbase`, `0x65BDC6F8`), the private match advertises, and session updates succeed. **The
+screen is black:** no player character is constructed, so there is no camera, exactly 01.29's
+"no handle = no camera". Next frontier: the spawn. Served route: the Activity Host's udt-5
+`sensor_auth_update` (`D1_AH_SENSOR_PHASE`, `design/activity-lifetime-state.md`), which needs the
+per-load sensor-name hash and generation (`world+0x1D`) read from 56578 memory, and was `[U]` on
+01.29 too. Synthetic route: 01.29's two code hooks (lifetime-state getter, per-player reject `je`)
+plus the spawn poke, re-derived for 56578. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
