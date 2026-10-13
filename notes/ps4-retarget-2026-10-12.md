@@ -607,7 +607,10 @@ transport for this emulator, which is a separate piece of work.
 
 Synthetic in this run: the lab-orbit client patches, the launch poke, the task-7 byte and the
 forced done mask. Everything else is served. The screen locked at 15:09 local (Windows lock
-screen), so there is no in-world frame. I did not try to get past the lock. 01.29's next steps
+screen), so there is no in-world frame. I did not try to get past the lock. The client later left
+`in_world` with the game's own `error.inactivity_timed_out` (the idle kick; no input reached it
+while the screen was locked) and returned through `cleanup` to `setup:orbit` cleanly. The run ended
+at its 45-minute limit with no fault, no crash ticket, and the servers stopped. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
