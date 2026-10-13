@@ -8,6 +8,8 @@ in the root README. Run each analysis tool's controls before citing its output.
 Keep exact executable and manifest pins intact, and keep one format implementation.
 Bring small pull requests with reproduction steps and actual checks. GitHub issues
 are enabled for build failures, protocol investigations and proposed experiments.
+For questions and early discussion before an issue, use the help and ideas forums
+on the [community Discord](https://d1reimagined.com/discord).
 
 PS4 contributions retain GPL-2.0-or-later and their attribution notices. Original
 retained PS3 files use the existing root license unless their notices say otherwise.

@@ -3,6 +3,7 @@
 Experimental, independent Destiny 1 preservation research and original local service implementation. **The complete game is not playable.** This source-only release includes local service stand-ins, protocol experiments, mission rules, diagnostic tools, scoped emulator patches and regression tests.
 
 Project website: https://d1reimagined.com
+Community Discord: https://d1reimagined.com/discord (questions, ideas and contributor discussion)
 
 ## Scope
 
