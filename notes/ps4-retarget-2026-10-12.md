@@ -723,7 +723,18 @@ pass. Our Activity Host never establishes that ownership, and its membership nam
 client) as peer-session host. The served fix is in the AH's session/authority protocol (entity-slot
 and authority-mask messages: udt 0 `entity_slots_allocated`, 30/31
 `query_entity_slot_authority_mask…`, membership host identity), not in the sensor frame. Next:
-find the client writer of replica `+0x60`. 01.29's next steps
+find the client writer of replica `+0x60`.
+
+*The owner writers (static).* The only stores of a computed owner to replica `+0x60` are
+`0x2C16A0` and `0x2C2000`: `owner = 0x2C1040(id)`, also mirrored to `+0x64`, with negative meaning
+unowned. Both `0xFFFFFFFF` stores are resets (`0x2C16F0`, `0x2C1F80`). `0x2C1040` searches an
+identity table at `[0x2671BC8]` with `memcmp` (`0x12AA800`) and returns the matching index, so
+ownership is assigned by peer identity. Callers are `0x2BC910` (16 callers), `0x2BCA10`, and
+caller-less `0x2C2710`/`0x2C2890` (likely vtable slots). One chain climbs `0x2BC910 ← 0x2B5EE0 ←
+0x2B7060 ← 0xB6AB80 ← 0xB641D0 ← 0xAE3A40` (network-channel layer). Working hypothesis: replica
+authority is granted when a remote peer's identity is registered with the simulation, and our
+Activity Host never registers as that peer (membership names the client as host). Next: identify
+the identity table's entries live (who is registered) and the message that adds a peer to it. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run
