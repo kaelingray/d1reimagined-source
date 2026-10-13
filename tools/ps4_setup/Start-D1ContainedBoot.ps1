@@ -199,6 +199,10 @@ function Tap([IntPtr]$h, [string]$key) {
 }
 Add-Type -AssemblyName System.Windows.Forms
 $userDir = Join-Path (Split-Path $exe) 'user'
+# The D1 shadPS4 build (shadps4-0.19.0-local-ip.patch) reports this as the guest's own address;
+# a stock build ignores it and falls back to its blocked 1.1.1.1 probe.
+if ($LabIp) { $env:D1_GUEST_IP = $LabIp } else { Remove-Item env:D1_GUEST_IP -ErrorAction SilentlyContinue }
+$receipt.guestIpOverride = $env:D1_GUEST_IP
 $started = Get-Date
 $emu = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru `
     -ArgumentList ($(if ($ClientPatch) { @('-p', "`"$((Get-Item -LiteralPath $ClientPatch).FullName)`"") } else { @('-i') }) + @('-g', "`"$launch`""))

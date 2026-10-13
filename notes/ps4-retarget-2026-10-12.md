@@ -249,6 +249,37 @@ still uses the TCP probe. Allowing the TCP probe would make a real internet
 handshake and is not acceptable. The next step needs a shadPS4 build carrying
 that fix; see the questions in the report.
 
+**Patched shadPS4 (user-approved downloads, 13 October).** The shadPS4 source
+at tag `v.0.19.0` (`c7e065d1`, the commit embedded in the binary in use) was
+cloned with 45 submodules to `F:\d1	ools\shadPS4-src`. The official LLVM
+23.1.3 Windows archive was downloaded; its SHA-256 `9ee6a219…` matches the
+release's GitHub build attestation. It is unpacked to
+`F:\d1	ools\llvm-23.1.3`. `Build-D1ShadPS4.cmd` builds Release with
+`clang-cl`, Discord RPC and the updater off, and `HAVE_ENDIAN_H=OFF` (LLVM 23's
+`endian.h` lacks the Windows byte-order helpers, which broke the vendored
+LibreSSL). Result: 2,449 steps, `shadPS4.exe` `1297c91c…`. It was swapped in at
+the firewall-blocked path. The stock binary (`91eb69a5…`) is kept as
+`F:\d1	ools\shadPS4\stock-0.19.0-shadPS4.exe.bak`, which is deliberately not
+launchable because the block is path-based; `SWAP-RECEIPT.txt` records both
+hashes and how to restore.
+
+Run `20261013-091447-later-56578-labnet-guestip` (guard + lab manifest, lab
+network, Windows servers, `D1_GUEST_IP=10.77.0.2`): shadPS4 now reports
+`local ip: 10.77.0.2` four times, with no IP warnings. No fault occurred in 8
+minutes. The game resolves all 16 STUN names three times and opens 13 UDP
+sockets. OAuth → `/SignOn` (the reply advertises BAP `10.77.0.2:3075`, client
+IP `10.77.0.2`) → manifest → one retry, but still **`marionberry`** and still no
+BAP connection. The local address was necessary but not sufficient.
+
+Leading hypothesis (not yet tested): the 56578 client parses the transport
+fields of our 01.29-shaped SignOn reply differently. The static check already
+showed account/profile schema changes, and the client re-signs-on after the
+manifest instead of dialling BAP. `error.transport_method_invalid` is at
+`0x1654414`; its only reference is the error-table function `0x7855C0`, not the
+decision site. Next: locate the 56578 SignOn response parser and compare its
+field layout with `d1-responder`'s reply (f2.6/f2.7 BAP, f14 client IP, the
+STUN/transport method), using RTTI, strings and the 01.29 design notes.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at
