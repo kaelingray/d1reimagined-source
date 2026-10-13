@@ -32,10 +32,14 @@ on the new executable (RTTI, NID resolution, name hashes, character/roster
 schemas); account/profile schemas and all fixed-address controls fail, as
 expected until re-derivation.
 
-First contained Windows boots run the game's code through graphics
-initialisation, then fault before the title screen at executable address
-`0xFAAF4`. A non-worker thread waits on an unfinished job and dereferences a
-null job-worker pointer. No request reaches the local servers yet. See
+Unpatched contained Windows boots fault before the title screen at executable
+address `0xFAAF4`: a non-worker thread runs a pending job with a null job-worker
+pointer. `patches/CUSA00219-56578-job-helper-guard.xml` is a **synthetic** guard
+that returns the function's own "no job run" result in that case. With it, the
+game shows its logo, title and **Connecting**, then reports that its servers are
+unavailable. Its PSN OAuth host (`auth.api.sonyentertainmentnetwork.com`) differs
+from 01.29's and must be redirected locally; `/SignOn` is not reached yet.
+shadPS4 0.19 requires `AppElf="eboot.bin"` on patch entries. See
 [the current evidence summary](../docs/STATUS.md).
 
 The supplied project's `status/` and `design/` documents preserve its August 2026
