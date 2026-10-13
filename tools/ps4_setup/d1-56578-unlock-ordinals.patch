@@ -1,0 +1,119 @@
+From 704c8d33be514ac20d5e204a8b6c47b92e84aaba Mon Sep 17 00:00:00 2001
+From: p3n1cillin <lcmcclellan12@gmail.com>
+Date: Tue, 13 Oct 2026 14:55:22 +0100
+Subject: [PATCH] Serve build 56578's own unlock-flag ordinals
+
+The default ten-flag 503/205 pair encodes positions in the client's
+master flag table, and positions move between content versions. Reading
+both builds' tables from their packages shows five of the ten 01.29
+ordinals moved on 56578 (2667, 3389, 5015, 5987 and 6018 became 2668,
+3391, 5021, 5998 and 6029), so the 01.29 bodies would grant the wrong
+flags. The 56578 pair, encoded by that client's own codec after the
+pinned-body control, is now served when SignOn reports 56578.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ ps4/d1-server/crates/d1-bap/src/lib.rs        | 57 ++++++++++++++++++-
+ ps4/d1-server/crates/d1-responder/src/main.rs |  2 +-
+ 2 files changed, 56 insertions(+), 3 deletions(-)
+
+diff --git a/ps4/d1-server/crates/d1-bap/src/lib.rs b/ps4/d1-server/crates/d1-bap/src/lib.rs
+index d468dfe..d9a961b 100644
+--- a/ps4/d1-server/crates/d1-bap/src/lib.rs
++++ b/ps4/d1-server/crates/d1-bap/src/lib.rs
+@@ -1590,6 +1590,46 @@ pub const INVESTMENT_205_UNLOCKS_BODY: &[u8] = &[
+     0x82, 0xf0, 0x22, 0x00, 0x00, 0x00, 0x01, 0x00,
+ ];
+ 
++/// The ten unlock flags for build **56578**, as that client's own ordinals.
++///
++/// The 01.29 set `{98, 308, 419, 440, 834, 2667, 3389, 5015, 5987, 6018}` is a list of positions
++/// in the client's master flag table, and **positions are not stable across content versions**.
++/// The 56578 table (content tag `0x80A5FFCD`, class `0x8080179C`, 7,731 rows of
++/// `{u32 hash, u16 kind, u16 sub}`, element class `0x808018B8`) was read from both builds' packages
++/// with the client's own decoder. Each 01.29 ordinal was then resolved to its hash and the hash
++/// looked up in 56578's table. Controls: 01.29[98] = `3638915056`, and the 01.29 ordinal of
++/// `1681748763` = 2538. Both are documented values. 56578 places that hash at 2539, which is the
++/// 2020 manifest's `value`. Five flags kept their ordinal and five moved, by +1 to +11. Every
++/// moved flag kept the same kind and subindex.
++pub const UNLOCK_FLAGS_56578: [u16; 10] = [98, 308, 419, 440, 834, 2668, 3391, 5021, 5998, 6029];
++
++/// [`INVESTMENT_503_UNLOCKS_RAW`] for build 56578 (flags [`UNLOCK_FLAGS_56578`]).
++///
++/// Emitted by the 56578 client's own message codec, from the same object image as the 01.29
++/// constant with only the indices changed. The positive control ran first: `count = 0` reproduced
++/// [`INVESTMENT_503_PINNED_RAW`] and the pinned 205 body byte for byte on 56578.
++pub const INVESTMENT_503_UNLOCKS_RAW_56578: &[u8] = &[
++    0x18, 0x00, 0x00, 0x00, 0x0d, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
++    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
++    0xfc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x09, 0x58, 0x06, 0x2f, 0x81,
++    0x34, 0xf8, 0x1a, 0x3f, 0x81, 0xb8, 0xf8, 0x34, 0x2f, 0x8a, 0x6c, 0xf8, 0xd3, 0xff,
++    0x93, 0x9d, 0xf9, 0x76, 0xef, 0x97, 0x8d, 0xf0, 0x22, 0x00, 0x00, 0x00, 0x01, 0x00,
++];
++
++/// [`INVESTMENT_205_UNLOCKS_BODY`] for build 56578; agrees with
++/// [`INVESTMENT_503_UNLOCKS_RAW_56578`] on the shared `0x80801941` tail.
++pub const INVESTMENT_205_UNLOCKS_BODY_56578: &[u8] = &[
++    0x1b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x00,
++    0x00, 0x00, 0x02, 0x09, 0x58, 0x06, 0x2f, 0x81, 0x34, 0xf8, 0x1a, 0x3f, 0x81, 0xb8,
++    0xf8, 0x34, 0x2f, 0x8a, 0x6c, 0xf8, 0xd3, 0xff, 0x93, 0x9d, 0xf9, 0x76, 0xef, 0x97,
++    0x8d, 0xf0, 0x22, 0x00, 0x00, 0x00, 0x01, 0x00,
++];
++
++/// The default 205 body for the client build reported at SignOn (see [`set_client_build`]).
++pub fn investment_205_unlocks_body() -> &'static [u8] {
++    if client_is_56578() { INVESTMENT_205_UNLOCKS_BODY_56578 } else { INVESTMENT_205_UNLOCKS_BODY }
++}
++
+ // ── the `0x80804681` flag array on the wire: measured, then implemented ──────────────────────────
+ //
+ // ⛔ EVERYTHING BELOW IS A BIT GRAMMAR, WHICH THIS PROJECT DOES NOT GUESS. Each field was measured
+@@ -1695,10 +1735,13 @@ pub fn unlock_flag_bodies(indices: &[u16]) -> Option<(Vec<u8>, Vec<u8>)> {
+ /// `D1_ACCOUNT_SOID` would have been handed someone else's account id with no diagnostic anywhere -
+ /// the same silent-identity hazard `d1-harness` already guards for multi-participant runs.
+ pub fn investment_503_unlocks_raw_for(account_soid: u64) -> Vec<u8> {
++    // The flag indices are build-specific (see [`UNLOCK_FLAGS_56578`]); the SOID splice is not.
++    let template =
++        if client_is_56578() { INVESTMENT_503_UNLOCKS_RAW_56578 } else { INVESTMENT_503_UNLOCKS_RAW };
+     if account_soid == UNLOCK_ANCHOR_ACCOUNT_SOID {
+-        return INVESTMENT_503_UNLOCKS_RAW.to_vec();
++        return template.to_vec();
+     }
+-    let mut bits = to_bits(INVESTMENT_503_UNLOCKS_RAW);
++    let mut bits = to_bits(template);
+     for i in 0..64 {
+         bits[INV_503_ACCOUNT_SOID_BIT_OFFSET + i] = account_soid >> (63 - i) & 1 == 1;
+     }
+@@ -4351,6 +4394,16 @@ mod investment_205_tests {
+     /// question the client asks.
+     ///
+     /// The inverted half is `unlock_control_goes_red_when_an_index_is_dropped` below.
++    #[test]
++    fn the_56578_bodies_carry_the_56578_ordinals_and_agree() {
++        let want: Vec<(u16, u8)> = UNLOCK_FLAGS_56578.iter().map(|&i| (i, UNLOCK_FLAG_VALUE)).collect();
++        assert_eq!(unlock_flags_in_shared_tail(&INVESTMENT_503_UNLOCKS_RAW_56578[21..]), Some(want.clone()));
++        assert_eq!(unlock_flags_in_shared_tail(&INVESTMENT_205_UNLOCKS_BODY_56578[1..]), Some(want));
++        assert_eq!(INVESTMENT_503_UNLOCKS_RAW_56578[21..], INVESTMENT_205_UNLOCKS_BODY_56578[1..]);
++        // Five ordinals differ from 01.29's, so the 01.29 body must NOT decode to this set.
++        assert_ne!(INVESTMENT_503_UNLOCKS_RAW_56578, INVESTMENT_503_UNLOCKS_RAW);
++    }
++
+     #[test]
+     fn served_bodies_decode_to_the_ten_flags_at_value_two() {
+         for (name, tail) in [
+diff --git a/ps4/d1-server/crates/d1-responder/src/main.rs b/ps4/d1-server/crates/d1-responder/src/main.rs
+index ac64ef3..03a47c3 100644
+--- a/ps4/d1-server/crates/d1-responder/src/main.rs
++++ b/ps4/d1-server/crates/d1-responder/src/main.rs
+@@ -2353,7 +2353,7 @@ fn served_205_body() -> Vec<u8> {
+         warn!("      205 RAW BODY override ({}B) - the ten-flag default is NOT in play", raw.len());
+         return raw;
+     }
+-    d1_bap::INVESTMENT_205_UNLOCKS_BODY.to_vec()
++    d1_bap::investment_205_unlocks_body().to_vec()
+ }
+ 
+ // ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- 
+2.55.0.windows.5
+

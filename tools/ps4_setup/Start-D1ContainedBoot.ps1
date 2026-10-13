@@ -28,6 +28,10 @@ param(
     # Extra responder knobs for this run, as KEY=VALUE (lab mode). They override the canonical set
     # below and are recorded in server-environment.txt with it.
     [string[]]$ExtraServerEnv = @(),
+    # Lab mode: also run d1-activity-host on <LabIp>:4110 and point BAP messages 7/17 at it (the
+    # rung-30 deliverable; see capture-rig/run-boot.sh for why the three values must agree).
+    [switch]$ActivityHost,
+    [string]$Activity = '',
     [switch]$AllowUnredirected,
     # The isolated "D1 Lab" adapter address from d1-lab-net.cmd (the game rejects a loopback-only
     # transport). Empty = the original loopback setup.
@@ -146,6 +150,13 @@ if ($LabIp) {
         D1_IP = $LabIp; D1_BAP_IP = $LabIp; D1_CLIENT_IP = $LabIp; D1_MANIFEST_FILE = $Manifest
         D1_UPLOAD_DIR = (Join-Path $out 'uploads'); D1_CHARACTER_TRANSCRIPT_DIR = (Join-Path $out 'character-transcripts')
     }
+    if ($ActivityHost) {
+        $serverEnv['D1_ACTIVITY_HOST'] = '1'
+        $serverEnv['D1_AH_HOST_TOKEN'] = '0xD1A0000000000001'
+        $serverEnv['D1_AH_HOST_TEXT'] = 'd1ah-d1a0000000000001'
+        $serverEnv['D1_AH_PORT'] = '4110'
+        if ($Activity) { $serverEnv['D1_AH_ACTIVITY'] = $Activity }
+    }
     foreach ($kv in $ExtraServerEnv) {
         if ($kv -notmatch '^(D1_[A-Z0-9_]+)=(.*)$') { throw "ExtraServerEnv entry is not D1_KEY=VALUE: $kv" }
         $serverEnv[$Matches[1]] = $Matches[2]
@@ -157,6 +168,12 @@ if ($LabIp) {
         -RedirectStandardOutput (Join-Path $out 'shadnet.log') -RedirectStandardError (Join-Path $out 'shadnet.err.log')
     $winServers += Start-Process -FilePath (Join-Path $bin 'd1-responder.exe') -ArgumentList (@('--bind', $LabIp) + $cert) -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $out 'responder.log') -RedirectStandardError (Join-Path $out 'responder.err.log')
+    if ($ActivityHost) {
+        $ahArgs = @('serve', '--bind', "${LabIp}:4110")
+        if ($Activity) { $ahArgs += @('--activity', $Activity) }
+        $winServers += Start-Process -FilePath (Join-Path $bin 'd1-activity-host.exe') -ArgumentList $ahArgs -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $out 'activity-host.log') -RedirectStandardError (Join-Path $out 'activity-host.err.log')
+    }
     # The emulator's own WebAPI (friend list) is configured on 127.0.0.1:31315.
     $winServers += Start-Process -FilePath (Join-Path $bin 'd1-responder.exe') -ArgumentList (@('--bind', '127.0.0.1') + $cert) -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $out 'responder-loopback.log') -RedirectStandardError (Join-Path $out 'responder-loopback.err.log')

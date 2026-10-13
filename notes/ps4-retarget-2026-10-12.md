@@ -544,6 +544,38 @@ family answer after its ACK, the answer-once shape proven on 01.29. In run
 orchestrator passes such knobs as `-ExtraServerEnv 'D1_ANSWER_FAMILIES=0,2'`, and they are
 recorded in `server-environment.txt`.
 
+*Driving orbit by hand (same day; the user was away and asked me to do the controls).* For a
+session with `-OperatorInput`, two helpers in `tools/ps4_setup` stand in for the pad:
+`d1-pad.ps1` focuses the emulator and sends real key input (cross `NumPad2`, circle `NumPad6`, left
+stick `W/A/S/D` with hold times), and `d1-shot.ps1` captures the window. The first attempt stalled
+behind a Windows Firewall prompt for the new `d1-activity-host.exe` listener. I left that decision to
+the user, who allowed it. From the title I reached orbit and dismissed its notices (Crucible
+Unlocked, Armsday, Age of Triumph, a Destiny 2 advert dismissed with circle, not cross, so as not
+to press Pre-order). I then opened the Director through Set Destination. **The Director is empty:**
+Earth has no destination nodes, and the Crucible emblem shows no tooltip and does not respond.
+
+*Unlock flags are build-specific.* The 01.29 ten-flag set is ordinals in the client's master flag
+table. That table is content: tag `0x80A5FFCD`, class `0x8080179C`, element class `0x808018B8`, rows
+`{u32 hash, u16 kind, u16 sub}`. It has 6,944 rows in 01.29's `012f_3` and **7,731 in 56578**, the
+same count as the 2020 manifest's hash universe. Read with the client's own decoder and joined by
+hash: 98, 308, 419, 440 and 834 are unchanged; 2667→2668, 3389→3391, 5015→5021, 5987→5998 and
+6018→6029. Controls: 01.29[98] = `3638915056` and 01.29 ord(`1681748763`) = 2538, both documented;
+56578 puts the latter at 2539, the 2020 manifest value. The responder's built-in default would have
+granted the wrong five.
+
+The 56578 503/205 pair was encoded by the 56578 client's codec after the pinned-body control. The
+shared tail agrees at `503[23:]==205[3:]` with ids, `[21:]/[1:]` without. It is now the default when
+SignOn reports 56578 (public `704c8d3`, patch `d1-56578-unlock-ordinals.patch`). It was also served
+by override in run `…-operator-grants`: delivered (503 once, 205 by poll), and the responder
+confirmed agreement. **The Director stayed empty.** The ten flags are the rung-33 DLC/permission
+gates, not Director content.
+
+*How 01.29 left orbit.* Not through the Director: `design/GUARDIAN-IN-WORLD.md` §3 used a live
+memory poke (`session-params.py --launch-poke --activity-id 407`), then a cinematic-suppress byte, a
+done-mask force, a join counter, two code hooks and a spawn poke. The biped existed but could not be
+controlled. Reproducing that on 56578 means re-deriving those addresses and having a live poke
+transport for this emulator, which is a separate piece of work.
+
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
 * taps confirm while the log reports `profile_setup`, controlled by `-WizardTaps`/`-WizardIntervalSeconds`;
 * brings the window to the foreground and sends real key input, with `-NoForeground` to opt out.
