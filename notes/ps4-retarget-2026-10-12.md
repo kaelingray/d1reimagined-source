@@ -734,7 +734,59 @@ caller-less `0x2C2710`/`0x2C2890` (likely vtable slots). One chain climbs `0x2BC
 0x2B7060 ← 0xB6AB80 ← 0xB641D0 ← 0xAE3A40` (network-channel layer). Working hypothesis: replica
 authority is granted when a remote peer's identity is registered with the simulation, and our
 Activity Host never registers as that peer (membership names the client as host). Next: identify
-the identity table's entries live (who is registered) and the message that adds a peer to it. 01.29's next steps
+the identity table's entries live (who is registered) and the message that adds a peer to it.
+
+*Correction, and the served fix (13 October, run `later-56578-sensorclients2`).* The ownership
+hypothesis above is wrong. `0x2C1040` is a refcounted WebApi user-context cache keyed by an
+NP online ID: four 0x1C-byte slots (20-byte ID, handle `+0x14`, refcount `+0x18`). On a miss it calls a
+runtime-bound function with `(libCtxId, onlineId)` and releases through its pair. Live, slot 0 is
+`D1Guardian` with handle `0x10008`. `0x2C16A0`/`0x2C2000` store that handle into WebApi request
+objects that happen to use `+0x60`. They are unrelated to replicas.
+
+The replicas are pool "sensor entity clients 0" (tag `0xF42`, 750 slots of 0x70 bytes, created
+at `0x7595B4`). Each holds:
+- `+0`: name `{u32 hash, i8 @+4, i16 sub @+6}`
+- `+8` / `+0xC`: B and A types
+- `+0x10`: checksum
+- `+0x15`: pending
+- `+0x60`: owner
+
+The walker `0x2D0CD0` clears a client's pending byte (`0x2D106D`) only when the frame carries an
+entry for it. The terminator's owner test means "the local machine must receive this one":
+owner == local id, or unassigned (> 0x7F). A client owned by another machine is skipped. So the
+fix is in the frame, not in authority: deliver every such client. Entry grammar from the walker:
+1. `has_entry`, then the name ref (codec `0x808004B1`)
+2. `u32 body_bit_length`, used only to skip unresolved names
+3. if A is set: `fresh` plus the replicated value (a presence bit; the object follows only when it is set)
+4. if B is set: `has_b`
+5. then a `u32` into `+0x10` when B is present
+
+`fresh=1, presence=0, has_b=0` default-initialises a client and clears it.
+
+Live, pvp_moonbase had 97 clients in three groups: `0xC2DACAF7` ×19, `0x39774EE1` ×60, `0xD472B0EB` ×18.
+Only the audited lifetime entry (sub 3) was clear. `d1-winguest.py sensor-clients` writes the list;
+`D1_AH_SENSOR_CLIENTS` serves it, which made a 1,147-byte frame with 96 extra entries
+(`d1-56578-sensor-clients.patch`).
+
+Result, all served, with no getter hook, spawn hook or unfade:
+- 0 clients pending.
+- Lifetime phase byte `0x38026207C` = **3**.
+- Player 0's spawn word = **1**.
+
+The spawner and gate then ran every tick: 609 hits in 20 s, no reject message formatted, and the
+lifetime `+0x674/+0x678` reader `0x10CB60` was never reached. The biped handle stayed −1 and the
+screen stayed at full fade. About 6 minutes after in_world the client left with
+`error.inactivity_timed_out` (no input in world) and returned to orbit.
+
+Not yet known: whether the gate now returns true and what stops construction. Next: rerun with
+periodic input to hold off the AFK timer, then trace past the gate.
+
+*Tooling.* `d1-wincount.py`:
+- now checks every prologue before hooking any, and hooks with the process frozen;
+- takes `D1_COUNT_ADDRS`.
+
+A mid-way refusal had left a live counting jump on the lifetime getter, with no state file to
+remove it. It was restored by hand to the original bytes and verified. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *🎉 Build 56578: a Guardian in world, rendered and moving (13 October, run

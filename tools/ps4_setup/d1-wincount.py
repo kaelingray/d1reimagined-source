@@ -55,6 +55,9 @@ TARGETS_SPAWN = [
     (0x32E340, 'construction candidate 2'),
 ]
 TARGETS = {'walker': TARGETS_WALKER, 'term': TARGETS_TERMINATOR, 'spawn': TARGETS_SPAWN}.get(os.environ.get('D1_COUNT_SET', ''), TARGETS_SENSOR_PATH)
+# D1_COUNT_ADDRS=0x10c500,0x240840 counts ad-hoc function entries instead of a named set.
+if os.environ.get('D1_COUNT_ADDRS'):
+    TARGETS = [(int(x, 16), 'ad hoc') for x in os.environ['D1_COUNT_ADDRS'].split(',')]
 STUB = 0x40
 
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)
@@ -95,6 +98,21 @@ def alloc_near(p, near):
     sys.exit('could not allocate a page within 2 GB of the image')
 
 
+def hook(p, base, page, i, va, why, orig):
+    fn = base + va
+    stub = page + i * STUB
+    counter = stub + STUB - 8
+    body = bytes.fromhex('f048ff05') + struct.pack('<i', counter - (stub + 8))   # lock inc qword [rip+x]
+    body += orig
+    back = fn + len(orig)
+    body += bytes.fromhex('e9') + struct.pack('<i', back - (stub + len(body) + 5))
+    p.write(stub, body.ljust(STUB - 8, bytes.fromhex('cc')) + bytes(8))
+    entry = bytes.fromhex('e9') + struct.pack('<i', stub - (fn + 5))
+    patch(p, fn, entry + bytes.fromhex('90') * (len(orig) - 5))
+    print(f'hooked {va:#x} ({why}): {len(orig)} bytes relocated, stub {stub:#x}')
+    return {'va': va, 'why': why, 'orig': orig.hex(), 'counter': counter}
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'read'
     p, base = wg.open_client()
@@ -102,22 +120,18 @@ def main():
     if cmd == 'install':
         if st and st.get('base') == base:
             sys.exit('hooks already installed in this process; run remove first')
+        # Check every prologue BEFORE touching anything: a refusal mid-way used to leave the earlier
+        # hooks live with no state file to remove them (2026-10-13, the lifetime getter 0x10C500).
+        origs = [prologue(p, base + va) for va, _ in TARGETS]
         page = alloc_near(p, base)
         saved = []
-        for i, (va, why) in enumerate(TARGETS):
-            fn = base + va
-            orig = prologue(p, fn)
-            stub = page + i * STUB
-            counter = stub + STUB - 8
-            body = b'\xf0\x48\xff\x05' + struct.pack('<i', counter - (stub + 8))   # lock inc qword [rip+x]
-            body += orig
-            back = fn + len(orig)
-            body += b'\xe9' + struct.pack('<i', back - (stub + len(body) + 5))
-            p.write(stub, body.ljust(STUB - 8, b'\xcc') + b'\x00' * 8)
-            entry = b'\xe9' + struct.pack('<i', stub - (fn + 5))
-            patch(p, fn, entry + b'\x90' * (len(orig) - 5))
-            saved.append({'va': va, 'why': why, 'orig': orig.hex(), 'counter': counter})
-            print(f'hooked {va:#x} ({why}): {len(orig)} bytes relocated, stub {stub:#x}')
+        if wg.ntdll.NtSuspendProcess(p.h) != 0:
+            sys.exit('NtSuspendProcess failed')
+        try:
+            for i, ((va, why), orig) in enumerate(zip(TARGETS, origs)):
+                saved.append(hook(p, base, page, i, va, why, orig))
+        finally:
+            wg.ntdll.NtResumeProcess(p.h)
         json.dump({'base': base, 'page': page, 'hooks': saved}, open(STATE, 'w'), indent=1)
         return 0
     if not st or st.get('base') != base:

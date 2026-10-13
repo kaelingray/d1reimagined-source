@@ -224,6 +224,45 @@ def main():
                 print(f'  slot {slot:5d} tag {tag:#010x} obj {obj:#x} pending {pend} owner {own:#x}{"  <== REJECTS" if reject else ""}')
                 shown += 1
         return 0
+    if cmd == 'sensor-clients':
+        # Every PENDING sensor entity client of world 0 that the local machine must receive (owner
+        # +0x60 == local id or > 0x7F), as `hash i8 sub has_a has_b` lines for D1_AH_SENSOR_CLIENTS.
+        # Client layout (pool "sensor entity clients 0"): +0 name {u32 hash, i8 @+4, i16 @+6},
+        # +8 B type, +0xC A type, +0x15 pending, +0x60 owner. Names are per-load: read them after the
+        # world is resident. Read-only.
+        pool, stride = p.u(base + WORLD_POOL, 'Q'), p.u(base + WORLD_STRIDE, 'I')
+        w = pool + int(sys.argv[sys.argv.index('--world') + 1] if '--world' in sys.argv else 0) * stride
+        raw = p.u(p.u(base + 0x2693B60 + 8, 'Q') + 0x2114, 'I')
+        local = -1 if raw == 0xFFFFFFFF else (raw >> 3) & 0x3F
+        P = p.u(w + 0x28, 'Q'); cnt = p.u(P + 0x14, 'i')
+        bm = p.u(p.u(p.u(P, 'Q') + 8, 'Q') + 0x10, 'Q')
+        data, base_off, esz, mask, flags = p.u(P + 8, 'Q'), p.u(P + 0x1C, 'I'), p.u(P + 0x20, 'I'), p.u(P + 0x24, 'I'), p.u(P + 0x34, 'I')
+        reg = p.u(p.u(base + REGISTRY, 'Q'), 'Q')
+        out = [f'# world {w:#x} gen {p.read(w + 0x1D, 1)[0]} local id {local}: hash i8 sub has_a has_b']
+        for slot in range(min(cnt, 8192)):
+            if not (p.u(bm + 4 * (slot // 32), 'I') >> (slot % 32)) & 1:
+                continue
+            hi = p.u(data + base_off + esz * slot, 'I') & mask
+            if flags & 0x40000000:
+                tag = 0x80000000 | ((hi & 7) << 27) | ((flags << 13) & 0x7FFE000) | (slot & 0x1FFF)
+            else:
+                tag = ((hi << 23) & 0x7F800000) | ((flags << 13) & 0x7FE000) | (slot & 0x1FFF)
+            esi = struct.unpack('<i', struct.pack('<I', tag))[0] >> 13
+            sl = (((esi & 0xFFFFFFFF) >> 0x12) | 0x3FF) & esi & 0xFFFFFFFF
+            rec = reg + sl * 0x40
+            d, es, mk = p.u(rec + 0x10, 'Q'), p.u(rec + 0x30, 'i'), p.u(rec + 0x34, 'i') & 0xFFFFFFFFFFFFFFFF
+            e = d + (tag & 0x1FFF) * es
+            obj = e - (mk & p.u(e + 8, 'Q'))
+            h, i8, sub, tb, ta = struct.unpack('<IBxhII', p.read(obj, 0x10))
+            pend, own = p.read(obj + 0x15, 1)[0], p.u(obj + 0x60, 'I')
+            if pend and (own == local or own > 0x7F):
+                out.append(f'{h:#010x} {i8:#x} {sub} {int(ta != 0xFFFFFFFF)} {int(tb != 0xFFFFFFFF)}')
+        text = chr(10).join(out) + chr(10)
+        if '--out' in sys.argv:
+            open(sys.argv[sys.argv.index('--out') + 1], 'w').write(text)
+        print(text, end='')
+        print(f'{len(out) - 1} pending clients', file=sys.stderr)
+        return 0
     if cmd == 'worldset':
         # The udt-5 post-pass sweep's container is world+0x38 (walker 0x2D134B..0x2D13DC); entries are
         # u16 slots at +0xC, groups at +0x5E8/+0x5EC, tags composed as 0x10304F0 does.
