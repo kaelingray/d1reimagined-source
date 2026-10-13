@@ -843,6 +843,31 @@ Next: serve one bundle (sub 7) a real value, with identity = the player key and 
 That needs the A/B type setters (the post-pass dispatch `0x2CED30` per type) and the schema layout
 of `0x808022A5`/`0x80802C30`.
 
+*Bundle test (SYNTHETIC, `d1-bundle-poke.py`, 13 October 18:54 UTC).* In world, the first
+type-12 bundle (tag `0x4EFA2007`) was given:
+- the player key at `+0x258`;
+- `1` at `+0x220`/`+0x221`.
+
+Within 10 s both were back to defaults (`+0x218 = ffffffffc59d1c81 0000…`, `+0x258 = 0`), and
+`entry+0x50`, the spawn word (1) and the biped (−1) did not move. The AH re-sends the udt-5 frame
+every 10 s, and its fresh, value-less entries for subs 7–18 default-initialise exactly these bytes.
+So the sensor value for those clients *is* the bundle record, starting at `+0x218`. The identity sits
+at value `+0x40`, the gate byte at `+9`, and task 9's byte at `+8`.
+
+The post-pass `0x2CED30` hands each value to a bound BlamScript function (`0x353240` /
+`0x353420` on the record's `+0xA8` binding), not a fixed setter.
+
+Blocker for serving it: `d1-oracle object --tag 0x808022A5` (and `0x80802C30`) faults in the encoder.
+The field bitmask size is computed from the descriptor's field count (`[desc+desc[0x48]+0x5C]`,
+`0x2C8F3B`), and the harness gets a negative memset length at `0x2C8F89`. The reported struct size
+is 0x78 for both. Fix that in the harness, then encode sub 7's A value:
+- default image;
+- `+0x40` = the player key (`entry+0x18`, live `0xD100000000000201` = member id `0x201`, high
+  byte `0xD1`);
+- `+8`/`+9` = 1.
+
+Then serve it through `D1_AH_SENSOR_CLIENTS` with a value.
+
 *Tooling.* `d1-wincount.py`:
 - now checks every prologue before hooking any, and hooks with the process frozen;
 - takes `D1_COUNT_ADDRS`.
