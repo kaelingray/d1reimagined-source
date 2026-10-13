@@ -534,6 +534,16 @@ six dereferencing thunks as a backstop.
 `Failed peer-subscription validation [error error_timeout][account_soid 0xD100000000000001]` 86
 times. It is waiting for something the server does not send after subscribe.
 
+*Peer-subscription gate closed (same day).* Classes 0 and 2 subscribe and, with only bare `0x000D`
+ACKs, time out as they did on 01.29: the client marks them LOST, a permanent state that refuses
+later updates. The responder's existing `D1_ANSWER_FAMILIES=0,2` sends each one empty baseline
+family answer after its ACK, the answer-once shape proven on 01.29. In run
+`20261013-132144-later-56578-answer-fam02` both classes then subscribed exactly once and there were
+**0** `Failed peer-subscription validation` lines (86 without it). The client stayed in
+`setup:orbit` for the rest of the 12-minute run with no faults and only routine log lines. The
+orchestrator passes such knobs as `-ExtraServerEnv 'D1_ANSWER_FAMILIES=0,2'`, and they are
+recorded in `server-environment.txt`.
+
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:
 * taps confirm while the log reports `profile_setup`, controlled by `-WizardTaps`/`-WizardIntervalSeconds`;
 * brings the window to the foreground and sends real key input, with `-NoForeground` to opt out.

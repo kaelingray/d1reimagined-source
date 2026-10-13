@@ -25,6 +25,9 @@ param(
     # sent as real keyboard input: the emulator ignores keys posted to an unfocused window, so the
     # profile_setup wizard never saw them. -NoForeground restores the posted-message-only taps.
     [switch]$NoForeground,
+    # Extra responder knobs for this run, as KEY=VALUE (lab mode). They override the canonical set
+    # below and are recorded in server-environment.txt with it.
+    [string[]]$ExtraServerEnv = @(),
     [switch]$AllowUnredirected,
     # The isolated "D1 Lab" adapter address from d1-lab-net.cmd (the game rejects a loopback-only
     # transport). Empty = the original loopback setup.
@@ -142,6 +145,10 @@ if ($LabIp) {
         D1_PUSH_CHARACTER = '1'; D1_PUSH_FAMILY = '4,3'; D1_PUSH_AT = 'echo'; D1_ACTIVITY_HOST = '0'
         D1_IP = $LabIp; D1_BAP_IP = $LabIp; D1_CLIENT_IP = $LabIp; D1_MANIFEST_FILE = $Manifest
         D1_UPLOAD_DIR = (Join-Path $out 'uploads'); D1_CHARACTER_TRANSCRIPT_DIR = (Join-Path $out 'character-transcripts')
+    }
+    foreach ($kv in $ExtraServerEnv) {
+        if ($kv -notmatch '^(D1_[A-Z0-9_]+)=(.*)$') { throw "ExtraServerEnv entry is not D1_KEY=VALUE: $kv" }
+        $serverEnv[$Matches[1]] = $Matches[2]
     }
     foreach ($k in $serverEnv.Keys) { Set-Item -Path "env:$k" -Value $serverEnv[$k] }
     $serverEnv.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Set-Content -LiteralPath (Join-Path $out 'server-environment.txt')
