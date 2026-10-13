@@ -171,6 +171,39 @@ applied): no fault for the full 8 minutes; the orchestrator stopped it.
   `/2.0/oauth/token` regardless of host, so applying the redirect is the next
   step.
 
+**After the redirects (13 October, run `20261013-074718-later-56578-guard-redirected`).**
+The user applied `contain-d1.cmd`, so all 54 names resolve to loopback. Readiness
+now fails only the permanent native-runtime flag. The boot ran with the guard
+and without `-AllowUnredirected`; no fault occurred in 8 minutes. Responder log:
+
+- `POST auth.api.sonyentertainmentnetwork.com/2.0/oauth/token` → 200 with
+  `id_token`.
+- **`POST www4.signon.deadorbit.net/SignOn`** (795 B, client build
+  `56578.17.04.12.1251.evil`) → 200 placeholder success (BAP `127.0.0.1:3075`,
+  manifest URL `http://cdn.deadorbit.net/manifest.bin`).
+- `GET cdn.deadorbit.net/manifest.bin` → our 71,003-byte unsigned manifest.
+- One full retry of SignOn and the manifest fetch, then the game's own dialog:
+  **"Failed to download configuration files from Bungie servers", error code
+  `turtle`**. No guest crash report.
+
+So the server stack still answers the new build through OAuth and `/SignOn`. The
+next gate is the CDN manifest's RSA signature envelope, as predicted. It cannot
+be forged.
+
+**Lab equivalent re-derived, not yet run.** The one RSA-2048 DER key is at
+`0x15A0440` (01.29: `0x1591800`). The `cdn_content_manifest` handler is
+`0x2B0980` (01.29: `0x2B0030`). Its only flag read is `0x2B09F0`:
+`cmp byte [0x18DC974],0; je 0x2B0AF2`, which otherwise requires a body over
+`0x107` bytes and verifies a signature over `body+0x108`, matching the 01.29
+description. The flag ships as `0x01`, at 01.29's `0x18C4974` plus the
+second-segment shift of `0x18000`.
+`make-job-helper-guard.py --unsigned-manifest` writes
+`patches/CUSA00219-56578-lab-manifest.xml` (guard plus that byte set to `00`,
+after verifying the shipped value). The run using it was blocked by the session's
+permission policy as a security-check bypass, so it awaits the user's decision.
+The 1,392-entry manifest also exceeds the 01.29-measured descriptor cap, which
+may be the next gate after that.
+
 ## Handoff items
 
 - 12 October package `matildaspc-20261012T201422-…`: NAS re-check at
@@ -182,13 +215,10 @@ applied): no fault for the full 8 minutes; the orchestrator stopped it.
 
 ## Next
 
-1. **Run `contain-d1.cmd` as administrator** to apply the four new redirects
-   (this also stops their DNS lookups leaving the machine). Then rerun with
-   `-ClientPatch …job-helper-guard.xml` and read OAuth → `/SignOn` in the
-   responder log.
-2. After `/SignOn`, expect the manifest signature check (the 01.29 lab patch
-   that cleared it is address-specific) and the 1,392-entry manifest against the
-   unmeasured descriptor cap.
+1. ~~Apply the redirects~~ (done 13 October); OAuth and `/SignOn` now pass.
+2. Decide on the unsigned-manifest lab byte (above). Then the 1,392-entry
+   manifest meets the unmeasured descriptor cap; a newest-generation or capped
+   selection is the fallback.
 3. Re-derive the build-specific parts: Oodle entry points (blocking schema
    `0x80A5E37A`), the eboot atlas, BAP tables/registry, the manifest cap and the
    account/profile schemas. Use RTTI and strings, since the 01.29 bytes are not
