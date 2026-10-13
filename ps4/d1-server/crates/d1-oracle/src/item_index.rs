@@ -65,6 +65,60 @@ pub const COUNT: usize = 7544;
 /// The default location of the generated table, relative to the repo root.
 pub const DEFAULT_PATH: &str = "capture-rig/item-content-index.tsv";
 
+/// Where one build's item table comes from and where its generated TSVs live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Source {
+    pub package: &'static str,
+    pub entry: u32,
+    pub count: usize,
+    pub path: &'static str,
+    /// The art-arrangement TSV for this build.
+    pub art_path: &'static str,
+    /// `(content index, arrangement)` the art table must reproduce for class 1 - see
+    /// [`PINNED_ARRANGEMENT`]. Content indices differ per build, so this is per build.
+    pub art_pin: (u16, u16),
+    /// `(content index, curve offset)` - see [`PINNED_CURVE_OFFSET`]. `None` when no staged item of
+    /// this build carries a non-zero curve to discriminate with.
+    pub curve_pin: Option<(u16, i16)>,
+}
+
+/// 01.29: the pinned constants above, unchanged.
+pub const SOURCE_0129: Source = Source {
+    package: SOURCE_PACKAGE,
+    entry: SOURCE_ENTRY,
+    count: COUNT,
+    path: DEFAULT_PATH,
+    art_path: ART_DEFAULT_PATH,
+    art_pin: PINNED_ARRANGEMENT,
+    curve_pin: Some(PINNED_CURVE_OFFSET),
+};
+
+/// Build 56578 (package 01.33). The same entry (tag `0x80A5FFBE`, class `0x80801933`, index 8126)
+/// is in every generation `012f_2`..`012f_6`; the client loads the highest, `012f_6` (206,664
+/// bytes = 0x30 header + 8,609 x 24). Generations `0130`-`0133` do not carry it. Measured 13 Oct
+/// with `d1-pkg entries` over the 56578 estate.
+pub const SOURCE_56578: Source = Source {
+    package: "ps4_investment_globals_012f_6",
+    entry: 8126,
+    count: 8609,
+    path: "capture-rig/builds/later-56578/item-content-index.tsv",
+    art_path: "capture-rig/builds/later-56578/item-art-arrangement.tsv",
+    // The 01.29 anchors, re-found by item HASH on 56578 (13 Oct, `art-arrangement write` over the
+    // 012f_6 definitions, identity-checked at def+0x78): Gjallarhorn 0xD471D331 moved ci 6299 ->
+    // 6323 and still names arrangement 1229; Oryx Mask 0x74CB6B9B moved ci 6488 -> 6514 and still
+    // carries curve offset 70. Every staged item's equip ordinal matches the 01.29 table.
+    art_pin: (6323, 1229),
+    curve_pin: Some((6514, 70)),
+};
+
+/// The selected build's source (`$D1_BUILD`, else the registry default).
+pub fn source() -> &'static Source {
+    match d1_build::selected().id.as_str() {
+        "later-56578" => &SOURCE_56578,
+        _ => &SOURCE_0129,
+    }
+}
+
 /// ⭐ The public-manifest catalogue, relative to the repo root - the **positive control** for
 /// [`controls`]'s hash-space check.
 ///
@@ -181,24 +235,24 @@ impl IndexTable {
             );
             t.by_hash.insert(h as u32, (i as u16, tag as u32));
         }
-        if t.source_package != SOURCE_PACKAGE
-            || t.source_entry != SOURCE_ENTRY
+        let src = source();
+        if t.source_package != src.package
+            || t.source_entry != src.entry
             || t.element_class != ELEMENT_CLASS
-            || t.declared_count != COUNT
+            || t.declared_count != src.count
             || t.source_sha256.len() != 64
         {
             return Err(OracleError::Shape(format!(
                 "{}: provenance header says package {:?} entry {} element class {:#010x} count {} \
-                 sha256 {:?}; this build requires {SOURCE_PACKAGE:?} / {SOURCE_ENTRY} / \
-                 {ELEMENT_CLASS:#010x} / {COUNT} and a 64-hex-digit sha256. Regenerate with \
-                 `d1-oracle item-index write`",
+                 sha256 {:?}; this build requires {:?} / {} / {ELEMENT_CLASS:#010x} / {} and a \
+                 64-hex-digit sha256. Regenerate with `d1-oracle item-index write`",
                 path.display(), t.source_package, t.source_entry, t.element_class,
-                t.declared_count, t.source_sha256)));
+                t.declared_count, t.source_sha256, src.package, src.entry, src.count)));
         }
-        if t.by_hash.len() != COUNT {
+        if t.by_hash.len() != src.count {
             return Err(OracleError::Shape(format!(
-                "{}: {} distinct hashes, expected {COUNT} - a duplicate makes an index ambiguous",
-                path.display(), t.by_hash.len())));
+                "{}: {} distinct hashes, expected {} - a duplicate makes an index ambiguous",
+                path.display(), t.by_hash.len(), src.count)));
         }
         Ok(t)
     }
@@ -209,15 +263,15 @@ impl IndexTable {
         let mut dir = std::env::current_dir()
             .map_err(|e| OracleError::Shape(format!("cwd: {e}")))?;
         loop {
-            let p = dir.join(DEFAULT_PATH);
+            let p = dir.join(source().path);
             if p.exists() {
                 return IndexTable::load(&p);
             }
             if !dir.pop() {
                 return Err(OracleError::Shape(format!(
-                    "{DEFAULT_PATH} not found in this directory or any parent. Generate it from \
-                     the packages: `d1-oracle item-index write` (needs the owned-media dump at \
-                     dumps/patch-01.29-CUSA00219, or $D1_PKGDIR)")));
+                    "{} not found in this directory or any parent. Generate it from the \
+                     packages: `d1-oracle item-index write` (needs the selected build's \
+                     packages, or $D1_PKGDIR)", source().path)));
             }
         }
     }
@@ -330,14 +384,15 @@ impl SourceTable {
     /// duplicate hash (which would make an index ambiguous) all stop the tool rather than produce a
     /// table of plausible numbers.
     pub fn read(content: &mut crate::oodle::Content) -> Result<SourceTable> {
+        let src = source();
         let (class_tag, raw) = content
-            .entry_bytes(SOURCE_PACKAGE, SOURCE_ENTRY)
-            .map_err(|e| OracleError::Shape(format!("{SOURCE_PACKAGE} entry {SOURCE_ENTRY}: {e}")))?;
+            .entry_bytes(src.package, src.entry)
+            .map_err(|e| OracleError::Shape(format!("{} entry {}: {e}", src.package, src.entry)))?;
         if class_tag != SOURCE_ENTRY_CLASS {
             return Err(OracleError::Shape(format!(
-                "{SOURCE_PACKAGE} entry {SOURCE_ENTRY} is class {class_tag:#010x}, not \
-                 {SOURCE_ENTRY_CLASS:#010x} - that is a different structure, refusing to read it as \
-                 the item table"
+                "{} entry {} is class {class_tag:#010x}, not {SOURCE_ENTRY_CLASS:#010x} - that is \
+                 a different structure, refusing to read it as the item table",
+                src.package, src.entry
             )));
         }
         SourceTable::parse(raw)
@@ -431,8 +486,10 @@ impl SourceTable {
         s.push_str("# \u{2b50} item content hash -> the u16 CONTENT INDEX the client keys items by.\n");
         s.push_str(&format!("# GENERATED by {generator} - do not hand-edit.\n"));
         s.push_str(&format!(
-            "# source: {SOURCE_PACKAGE}.pkg entry {SOURCE_ENTRY} tag {SOURCE_ENTRY_TAG:#010x} class \
-             {SOURCE_ENTRY_CLASS:#010x}\n"
+            "# source: {}.pkg entry {} tag {SOURCE_ENTRY_TAG:#010x} class \
+             {SOURCE_ENTRY_CLASS:#010x}\n",
+            source().package,
+            source().entry
         ));
         s.push_str(&format!(
             "# element class {ELEMENT_CLASS:#010x}, {ELEMENT_SIZE} B, count {}\n",
@@ -590,41 +647,44 @@ impl ArtTable {
         }
         // The anchor, when its row is present: a regenerated table that moved Gjallarhorn's model
         // fails here rather than silently re-skinning every fixture.
-        if let Some(a) = t.arrangement_for(PINNED_ARRANGEMENT.0, 1) {
-            if a != PINNED_ARRANGEMENT.1 {
+        let pin = source().art_pin;
+        if let Some(a) = t.arrangement_for(pin.0, 1) {
+            if a != pin.1 {
                 return Err(OracleError::Shape(format!(
                     "{}: content index {} resolves arrangement {a}, the pinned measurement is {} - \
                      the table and the anchor disagree",
-                    t.path.display(), PINNED_ARRANGEMENT.0, PINNED_ARRANGEMENT.1)));
+                    t.path.display(), pin.0, pin.1)));
             }
         }
         // The curve-offset anchor, when its column is present: Oryx Mask is the one staged item
         // whose value is nonzero, so a generator drift (shifted base, wrong record) fails here.
-        if let Some(&c) = t.curve_offsets.get(&PINNED_CURVE_OFFSET.0) {
-            if c != PINNED_CURVE_OFFSET.1 {
-                return Err(OracleError::Shape(format!(
-                    "{}: content index {} carries curve offset {c}, the pinned measurement is {} - \
-                     the generator's def+0x30 walk has drifted",
-                    t.path.display(), PINNED_CURVE_OFFSET.0, PINNED_CURVE_OFFSET.1)));
+        if let Some(cp) = source().curve_pin {
+            if let Some(&c) = t.curve_offsets.get(&cp.0) {
+                if c != cp.1 {
+                    return Err(OracleError::Shape(format!(
+                        "{}: content index {} carries curve offset {c}, the pinned measurement is \
+                         {} - the generator's def+0x30 walk has drifted",
+                        t.path.display(), cp.0, cp.1)));
+                }
             }
         }
         Ok(t)
     }
 
-    /// Load from [`ART_DEFAULT_PATH`], searched upward from the current directory.
+    /// Load from the selected build's art path, searched upward from the current directory.
     pub fn load_default() -> Result<ArtTable> {
         let mut dir = std::env::current_dir()
             .map_err(|e| OracleError::Shape(format!("cwd: {e}")))?;
         loop {
-            let p = dir.join(ART_DEFAULT_PATH);
+            let p = dir.join(source().art_path);
             if p.exists() {
                 return ArtTable::load(&p);
             }
             if !dir.pop() {
                 return Err(OracleError::Shape(format!(
-                    "{ART_DEFAULT_PATH} not found in this directory or any parent. Generate it \
-                     from the packages: `d1-oracle art-arrangement write` (needs the owned-media \
-                     dump at dumps/patch-01.29-CUSA00219, or $D1_PKGDIR)")));
+                    "{} not found in this directory or any parent. Generate it from the \
+                     packages: `d1-oracle art-arrangement write` (the selected build's packages, \
+                     or $D1_PKGDIR)", source().art_path)));
             }
         }
     }

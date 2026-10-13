@@ -171,8 +171,9 @@ enum ItemIndexCmd {
     /// ⭐ Read the table out of the packages and write the TSV. **Exit 2** if the result would not
     /// load through [`d1_oracle::item_index::IndexTable`], so a bad table is never left on disk.
     Write {
-        #[arg(long, short, default_value = d1_oracle::item_index::DEFAULT_PATH)]
-        out: PathBuf,
+        /// Default: the selected build's path (`item_index::source().path`).
+        #[arg(long, short)]
+        out: Option<PathBuf>,
         /// Render and report without touching the file.
         #[arg(long)]
         dry_run: bool,
@@ -216,8 +217,9 @@ enum ArtCmd {
     /// ⭐ Resolve every content index in the staged inventory (plus the emblem) and write the TSV.
     /// **Exit 2** if the result would not load through [`d1_oracle::item_index::ArtTable`].
     Write {
-        #[arg(long, short, default_value = d1_oracle::art_arrangement::DEFAULT_PATH)]
-        out: PathBuf,
+        /// Default: the selected build's art path (`item_index::source().art_path`).
+        #[arg(long, short)]
+        out: Option<PathBuf>,
         #[arg(long, default_value = "capture-rig/inventory")]
         inventory: PathBuf,
         #[arg(long)]
@@ -523,6 +525,13 @@ enum InventoryCmd {
         legacy: bool,
         #[arg(long)]
         dry_run: bool,
+        /// The item-index TSV the staged elements were BUILT against, when that is another build's
+        /// (e.g. `capture-rig/item-content-index.tsv` = 01.29 when rebuilding for 56578). Each
+        /// element's stored content index is turned back into its item hash through THAT table,
+        /// then re-resolved in the selected build's. Without it a moved index names the wrong
+        /// item (13 Oct: 01.29 ci 6299 Gjallarhorn came back as 56578 ci 6299 = 0x7EAF157D).
+        #[arg(long)]
+        from_index: Option<String>,
     },
 }
 
@@ -1730,14 +1739,18 @@ fn run_item_index(_cli: &Cli, cmd: &ItemIndexCmd) -> anyhow::Result<ExitCode> {
         }
 
         ItemIndexCmd::Write { out, dry_run } => {
-            let out = &resolve_repo_path(out);
+            let out = out.clone().unwrap_or_else(|| PathBuf::from(ii::source().path));
+            let out = &resolve_repo_path(&out);
+            if let Some(dir) = out.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
             let mut c = d1_oracle::oodle::Content::open_default()?;
             let t = ii::SourceTable::read(&mut c)?;
             let text = t.render_tsv(ii::GENERATOR);
             println!(
                 "{}.pkg entry {}: {} elements, sha256(entry payload) = {}",
-                ii::SOURCE_PACKAGE,
-                ii::SOURCE_ENTRY,
+                ii::source().package,
+                ii::source().entry,
                 t.count,
                 t.source_sha256()
             );
@@ -1839,7 +1852,8 @@ fn run_art(_cli: &Cli, cmd: &ArtCmd) -> anyhow::Result<ExitCode> {
         }
 
         ArtCmd::Write { out, inventory, dry_run } => {
-            let (out, inventory) = (&resolve_repo_path(out), &resolve_repo_path(inventory));
+            let out = out.clone().unwrap_or_else(|| PathBuf::from(ii::source().art_path));
+            let (out, inventory) = (&resolve_repo_path(&out), &resolve_repo_path(inventory));
             let table = ii::IndexTable::load_default()?;
             let sha16 = art::index_tsv_sha16(&table.path)?;
             let mut c = d1_oracle::oodle::Content::open_default()?;
@@ -1984,8 +1998,25 @@ fn run_inventory(cli: &Cli, cmd: &InventoryCmd) -> anyhow::Result<ExitCode> {
             Ok(if ok { ExitCode::SUCCESS } else { ExitCode::from(2) })
         }
 
-        InventoryCmd::Rebuild { dir, out_dir, level, equip_min, legacy, dry_run } => {
+        InventoryCmd::Rebuild { dir, out_dir, level, equip_min, legacy, dry_run, from_index } => {
             let table = d1_oracle::item_index::IndexTable::load_default()?;
+            // ci -> hash of the build the staged elements came from (plain TSV read: its
+            // provenance is another build's, so the selected-build loader would refuse it).
+            let from: Option<std::collections::HashMap<u16, u32>> = match from_index {
+                Some(p) => {
+                    let text = std::fs::read_to_string(resolve_repo_path(std::path::Path::new(p)))?;
+                    let mut m = std::collections::HashMap::new();
+                    for l in text.lines().filter(|l| l.starts_with("0x")) {
+                        let f: Vec<&str> = l.split_whitespace().collect();
+                        let h = u32::from_str_radix(f[0].trim_start_matches("0x"), 16)?;
+                        let i: u16 = f[1].parse()?;
+                        m.insert(i, h);
+                    }
+                    println!("--from-index {p}: {} items", m.len());
+                    Some(m)
+                }
+                None => None,
+            };
             // The art table also carries the def-derived +0x20 curve offset and the def+0x68 stat
             // list (both what the client's own constructor FUN_0026E0E0 would write). Optional:
             // without it every element keeps its defaults, exactly as before.
@@ -2019,7 +2050,11 @@ fn run_inventory(cli: &Cli, cmd: &InventoryCmd) -> anyhow::Result<ExitCode> {
                 // is re-derived from `+0x18`.
                 let rebuilt = s.content_index != inv::EMPTY_INDEX
                     && s.content_index != d1_oracle::character::LEGACY_BRONZE_TIER_INDEX;
-                let hash = if rebuilt {
+                let hash = if rebuilt && from.is_some() {
+                    *from.as_ref().unwrap().get(&s.content_index).ok_or_else(|| anyhow::anyhow!(
+                        "{}: content index {} is not in --from-index", s.file.display(),
+                        s.content_index))?
+                } else if rebuilt {
                     table.hash_of(s.content_index).ok_or_else(|| anyhow::anyhow!(
                         "{}: element states content index {} but the table has no item at that \
                          index - the element and the content table disagree",
