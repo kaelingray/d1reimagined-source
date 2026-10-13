@@ -703,8 +703,8 @@ mod tests {
     /// and `gjallarhorn-arrangement` goes red immediately.
     #[test]
     fn the_walks_reproduce_every_pinned_anchor() {
-        if !crate::oodle::default_pkgdir().is_dir() {
-            eprintln!("SKIP: no package estate");
+        if !d1_build::reference_selected() || !crate::oodle::default_pkgdir().is_dir() {
+            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
             return;
         }
         if IndexTable::load_default().is_err() {

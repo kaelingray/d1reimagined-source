@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn region_of_separates_file_from_bss() {
-        let img = match Image::open_default() {
+        let img = match Image::open_reference() {
             Ok(i) => i,
             Err(_) => return, // the pinned dump is not present in every checkout
         };

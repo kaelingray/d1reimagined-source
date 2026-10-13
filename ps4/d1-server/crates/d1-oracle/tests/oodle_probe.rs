@@ -46,11 +46,11 @@ fn sha1_hex(b: &[u8]) -> Option<String> {
 
 #[test]
 fn the_rust_decode_matches_the_sha1_the_python_tool_printed() {
-    if !default_pkgdir().is_dir() {
-        eprintln!("SKIP: no package estate");
+    if !d1_build::reference_selected() || !std::path::Path::new(d1_oracle::oodle::PINNED_PKGDIR).is_dir() {
+        eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
         return;
     }
-    let mut c = Content::open_default().expect("estate + eboot");
+    let mut c = Content::open_reference().expect("estate + eboot");
     let (stored, compressed) = c.stored_block(PIN_PACKAGE, PIN_BLOCK).expect("stored block");
     assert!(compressed, "block {PIN_BLOCK} must be Oodle-compressed for this to test anything");
     let d = c.oodle().decompress_whole(&stored).expect("decode");

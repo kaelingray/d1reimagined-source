@@ -1322,7 +1322,7 @@ mod tests {
 
     #[test]
     fn layout_is_derived_from_the_eboot_not_transcribed() {
-        let image = Image::open_default().expect("pinned eboot");
+        let image = Image::open_reference().expect("pinned eboot");
         let idx = descriptors::index(&image).expect("descriptor index");
         assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
     }
@@ -1331,7 +1331,7 @@ mod tests {
     /// third answer is believed.
     #[test]
     fn instance_checksums_reproduce_the_shipped_constants() {
-        let image = Image::open_default().expect("pinned eboot");
+        let image = Image::open_reference().expect("pinned eboot");
         let idx = descriptors::index(&image).expect("descriptor index");
         assert_eq!(instance_type(&image, &idx, CONTACT_TAG).unwrap(), CONTACT_INSTANCE_TYPE);
         assert_eq!(instance_type(&image, &idx, CARD_TAG).unwrap(), CARD_INSTANCE_TYPE);
@@ -1356,7 +1356,7 @@ mod tests {
     /// Family 0/0 is family 2/0's twin - the claim a future family-0 build would rest on.
     #[test]
     fn family_0_type_0_has_the_same_tree_as_family_2_type_0() {
-        let image = Image::open_default().expect("pinned eboot");
+        let image = Image::open_reference().expect("pinned eboot");
         let idx = descriptors::index(&image).expect("descriptor index");
         assert_eq!(desc(&idx, PEER_CONTACT_TAG).unwrap().struct_size as usize, PEER_CONTACT_SIZE);
         assert_eq!(

@@ -171,6 +171,12 @@ pub fn reference() -> &'static Build {
     &builds().unwrap_or_else(|e| panic!("{e}")).reference
 }
 
+/// Whether the selected build is the reference. Tests whose expectations are 01.29 facts reached
+/// through default-opening library functions gate on this (run them with `D1_BUILD=01.29`).
+pub fn reference_selected() -> bool {
+    builds().map(|b| b.selected.id == b.reference.id).unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

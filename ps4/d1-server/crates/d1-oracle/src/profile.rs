@@ -1057,7 +1057,7 @@ mod tests {
 
     #[test]
     fn layout_is_derived_from_the_eboot_not_transcribed() {
-        let image = Image::open_default().expect("pinned eboot");
+        let image = Image::open_reference().expect("pinned eboot");
         let idx = descriptors::index(&image).expect("descriptor index");
         assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
     }

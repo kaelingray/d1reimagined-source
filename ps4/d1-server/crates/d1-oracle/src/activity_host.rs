@@ -1725,7 +1725,7 @@ mod tests {
     /// ids, so this needs no index-to-udt mapping at all - which is the mistake it guards against.
     #[test]
     fn the_rx_dispatch_table_is_not_dense_over_the_sorted_id_list() {
-        let image = Image::open_default().unwrap();
+        let image = Image::open_reference().unwrap();
         let row = |i: u64| (image.u32(0x18F_84A0 + i * 16).unwrap(), image.u64(0x18F_84A0 + i * 16 + 8).unwrap());
         // The fnptr words are relocation slots and read 0 statically; only the types are inline.
         assert_eq!(row(4).0, 11, "index 4 is udt 11 replicate_membership");

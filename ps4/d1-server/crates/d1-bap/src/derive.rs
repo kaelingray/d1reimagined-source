@@ -79,6 +79,45 @@ pub const PUSH_SLOTS: usize = 15;
 pub const HEADER_CODECS: u64 = 0x192_34A0;
 pub const HEADER_CODEC_COUNT: usize = 8;
 
+/// The table anchors for one image. The constants above are the 01.29 reference set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Anchors {
+    pub registry: u64,
+    pub policy_names: u64,
+    pub policy_ptrs: u64,
+    pub push_table: u64,
+    pub header_codecs: u64,
+}
+
+pub const ANCHORS_0129: Anchors = Anchors {
+    registry: REGISTRY,
+    policy_names: POLICY_NAMES,
+    policy_ptrs: POLICY_PTRS,
+    push_table: PUSH_TABLE,
+    header_codecs: HEADER_CODECS,
+};
+
+/// Build 56578 (01.33). `policy_ptrs` is the only run of 33 consecutive relocated slots whose
+/// targets are the 33 objects whose vptr is a `c_investment_bap_message_policy_*` vtable (RTTI);
+/// the other four sit at the same `+0x180A0` shift and each matches its structure (58/58 relocated
+/// registry slots, 33 policy-name strings, 8 codec singletons, 15 push slots with 13 non-null).
+pub const ANCHORS_56578: Anchors = Anchors {
+    registry: 0x193_A1B0,
+    policy_names: 0x193_BB40,
+    policy_ptrs: 0x193_BD50,
+    push_table: 0x193_DB30,
+    header_codecs: 0x193_B540,
+};
+
+/// The anchors for an image, by its SHA-256. `None` = not measured.
+pub fn anchors_for(sha256: &str) -> Option<Anchors> {
+    match sha256 {
+        PINNED_EBOOT_SHA256 => Some(ANCHORS_0129),
+        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(ANCHORS_56578),
+        _ => None,
+    }
+}
+
 /// The pinned investment message definition table, beside the pinned eboot.
 /// Like [`d1_eboot::image::PINNED_EBOOT`] this resolves relative to the source tree; both files
 /// are local-only artifacts (owned media) and everything that needs them skips or refuses when
@@ -130,6 +169,9 @@ impl Thunk {
 pub struct Reader {
     image: Image,
     slots: HashMap<u64, u64>,
+    /// The table anchors for this image (`ANCHORS_0129` when the image has none measured, so the
+    /// identity control below fails instead of the reader silently using them).
+    pub anchors: Anchors,
 }
 
 impl Reader {
@@ -145,7 +187,8 @@ impl Reader {
 
     pub fn from_image(image: Image) -> Result<Self, String> {
         let slots = reloc::by_slot(&image).map_err(|e| e.to_string())?;
-        Ok(Reader { image, slots })
+        let anchors = anchors_for(&image.sha256()).unwrap_or(ANCHORS_0129);
+        Ok(Reader { image, slots, anchors })
     }
 
     pub fn image(&self) -> &Image {
@@ -250,7 +293,7 @@ pub struct TransportMessage {
 pub fn transport_registry(r: &Reader) -> Result<Vec<TransportMessage>, String> {
     let mut out = Vec::with_capacity(REGISTRY_COUNT);
     for entry in 0..REGISTRY_COUNT {
-        let slot = REGISTRY + entry as u64 * 8;
+        let slot = r.anchors.registry + entry as u64 * 8;
         let vtable =
             r.ptr(slot).ok_or_else(|| format!("registry slot {entry} at {slot:#x} unresolved"))?;
         let (_, class) = {
@@ -333,8 +376,8 @@ pub struct PolicyFamily {
 pub fn policy_families(r: &Reader) -> Vec<PolicyFamily> {
     (0..POLICY_COUNT)
         .map(|index| {
-            let name_string = r.ptr(POLICY_NAMES + index as u64 * 8).and_then(|p| r.cstr(p));
-            let singleton = r.ptr(POLICY_PTRS + index as u64 * 8);
+            let name_string = r.ptr(r.anchors.policy_names + index as u64 * 8).and_then(|p| r.cstr(p));
+            let singleton = r.ptr(r.anchors.policy_ptrs + index as u64 * 8);
             let (vtable, rtti_class) = match singleton {
                 Some(obj) => r.rtti(obj),
                 None => (None, None),
@@ -351,7 +394,8 @@ pub fn policy_families(r: &Reader) -> Vec<PolicyFamily> {
 /// The two words after the policy table (`[33]`, `[34]`) - the "table really ends" control reads
 /// them and demands `(None, None)`.
 pub fn policy_table_end(r: &Reader) -> (Option<u64>, Option<u64>) {
-    (r.ptr(POLICY_PTRS + POLICY_COUNT as u64 * 8), r.ptr(POLICY_PTRS + (POLICY_COUNT as u64 + 1) * 8))
+    let t = r.anchors.policy_ptrs;
+    (r.ptr(t + POLICY_COUNT as u64 * 8), r.ptr(t + (POLICY_COUNT as u64 + 1) * 8))
 }
 
 // ── (3) the push accept-set ───────────────────────────────────────────────────────────────────
@@ -359,7 +403,7 @@ pub fn policy_table_end(r: &Reader) -> (Option<u64>, Option<u64>) {
 /// The ids of the non-null singletons at [`PUSH_TABLE`], in slot order.
 pub fn push_accept_ids(r: &Reader) -> Vec<u16> {
     (0..PUSH_SLOTS)
-        .filter_map(|i| r.ptr(PUSH_TABLE + i as u64 * 8))
+        .filter_map(|i| r.ptr(r.anchors.push_table + i as u64 * 8))
         .filter_map(|obj| r.ptr(obj))
         .filter_map(|vt| r.thunk_at(r.ptr(vt)?).value())
         .map(|v| v as u16)
@@ -373,7 +417,7 @@ pub fn header_lengths(r: &Reader) -> Result<[usize; 8], String> {
     let mut out = [0usize; 8];
     for (class, slot) in out.iter_mut().enumerate() {
         let obj = r
-            .ptr(HEADER_CODECS + class as u64 * 8)
+            .ptr(r.anchors.header_codecs + class as u64 * 8)
             .ok_or_else(|| format!("header codec {class} unresolved"))?;
         let vt = r.ptr(obj).ok_or_else(|| format!("header codec {class} has no vptr"))?;
         *slot = r
@@ -647,11 +691,11 @@ pub fn run_controls(r: &Reader, defs: Option<&[DefRow]>) -> Vec<Control> {
 pub fn run_eboot_controls(r: &Reader) -> Vec<Control> {
     let mut out = Vec::new();
 
-    // The addresses in this module are for the pinned 01.29 build and no other.
+    // The table addresses are per image: 01.29 (reference) and 56578 are measured, nothing else.
     let sha = r.image().sha256();
     out.push(ctl(
-        sha == PINNED_EBOOT_SHA256,
-        "image is the pinned 01.29 build (fixed table addresses apply)",
+        anchors_for(&sha).is_some(),
+        "image has measured table anchors (01.29 reference or 56578)",
         format!("sha256 {}...", &sha[..12]),
     ));
 
@@ -690,8 +734,8 @@ pub fn run_eboot_controls(r: &Reader) -> Vec<Control> {
         Ok(rows) => {
             out.push(ctl(
                 rows.len() == REGISTRY_COUNT,
-                "the registry at 0x1922110 holds 58 message classes",
-                format!("{}", rows.len()),
+                "the transport message registry holds 58 message classes",
+                format!("{} at {:#x}", rows.len(), r.anchors.registry),
             ));
             let unnamed = rows.iter().filter(|m| m.class_name.is_empty()).count();
             out.push(ctl(

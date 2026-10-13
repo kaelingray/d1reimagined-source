@@ -195,7 +195,7 @@ mod tests {
     /// bootflow table at `0x274DA80` by hand; this asserts the harvester agrees, name for name.
     #[test]
     fn reproduces_the_hand_decoded_bootflow_table() {
-        let Ok(image) = Image::open_default() else { return };
+        let Ok(image) = Image::open_reference() else { return };
         let mut corpus = Corpus::build(&image, 3).unwrap();
         corpus.add_names(crate::rtti::harvest(&image).unwrap().types.into_iter().map(|t| t.name));
         let tables = harvest(&image, &corpus, REGISTRAR).unwrap();

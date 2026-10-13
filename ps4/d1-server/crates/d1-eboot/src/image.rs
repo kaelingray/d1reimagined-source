@@ -168,10 +168,15 @@ pub struct Image {
 }
 
 impl Image {
-    /// Open the pinned eboot, or whatever `D1_EBOOT` names.
+    /// Open the selected build's eboot, or whatever `D1_EBOOT` names.
     pub fn open_default() -> Result<Self> {
-        let path = std::env::var("D1_EBOOT").unwrap_or_else(|_| PINNED_EBOOT.to_string());
-        Self::open(path)
+        Self::open(default_eboot())
+    }
+
+    /// Open the 01.29 address reference. Tests and controls that assert its measured facts use
+    /// this, so they skip when it is absent instead of judging another build by its numbers.
+    pub fn open_reference() -> Result<Self> {
+        Self::open(PINNED_EBOOT)
     }
 
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {

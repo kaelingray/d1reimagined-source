@@ -67,6 +67,42 @@ pub const DECODE_SOME: u64 = 0x0126_72E0;
 /// Measured 2026-08-11 by running the decode with the guard on and reading the refusal.
 pub const DECODE_SOME_MEMSET_RETURN: u64 = 0x0127_0A85;
 
+/// The decoder's entry points for one image. The constants above are the 01.29 reference set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OodleAddrs {
+    pub q_scratch: u64,
+    pub init: u64,
+    pub decode_some: u64,
+    pub memset_return: u64,
+}
+
+pub const OODLE_0129: OodleAddrs = OodleAddrs {
+    q_scratch: Q_SCRATCH,
+    init: INIT,
+    decode_some: DECODE_SOME,
+    memset_return: DECODE_SOME_MEMSET_RETURN,
+};
+
+/// Build 56578 (01.33). `DecodeSome` is the only function referencing the assertion name string
+/// `"OodleLZDecoder_DecodeSome"` (`0x16C3BB1`); the scratch query and create sit at the same
+/// offsets before it as in 01.29 (`-0x1C0`, `-0x140`), and the frame-local `memset` returns to
+/// `0x12761A5` (`call 0x12AA980` = memset by NID). The Oodle object moved by `+0x5720`.
+pub const OODLE_56578: OodleAddrs = OodleAddrs {
+    q_scratch: 0x0126_C840,
+    init: 0x0126_C8C0,
+    decode_some: 0x0126_CA00,
+    memset_return: 0x0127_61A5,
+};
+
+/// The entry points for an image, by its SHA-256. `None` = not measured: refuse to decode.
+pub fn addrs_for(sha256: &str) -> Option<OodleAddrs> {
+    match sha256 {
+        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(OODLE_0129),
+        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(OODLE_56578),
+        _ => None,
+    }
+}
+
 /// A block decompresses to **at most** this much. Same constant as [`d1_pkg::BLOCK_PLAIN_SIZE`],
 /// restated as a `u64` because it is a guest-side argument here.
 pub const PLAIN_CAP: u64 = d1_pkg::BLOCK_PLAIN_SIZE as u64;
@@ -105,13 +141,14 @@ pub struct Decoded {
 /// reuse is sound by decoding, decoding something else, and decoding the first thing again.
 pub struct Oodle {
     h: Harness,
+    a: OodleAddrs,
     input: u64,
     output: u64,
     mark: u64,
 }
 
 impl Oodle {
-    /// Open the pinned eboot and prepare the decoder.
+    /// Open the selected build's eboot and prepare the decoder.
     pub fn open_default() -> Result<Self> {
         Oodle::open_with_memset_allow(true)
     }
@@ -121,15 +158,26 @@ impl Oodle {
     /// load-bearing rather than decorative. A decode built this way is expected to fail; nothing
     /// it produces may be used.
     pub fn open_with_memset_allow(allow: bool) -> Result<Self> {
-        let (_image, mut h) = Harness::open_default()?;
+        Oodle::from_harness(Harness::open_default()?, allow)
+    }
+
+    /// [`Oodle::open_with_memset_allow`] on the 01.29 address reference (tests and controls).
+    pub fn open_reference_with_memset_allow(allow: bool) -> Result<Self> {
+        Oodle::from_harness(Harness::open_reference()?, allow)
+    }
+
+    fn from_harness((image, mut h): (d1_eboot::image::Image, Harness), allow: bool) -> Result<Self> {
+        let a = addrs_for(&image.sha256()).ok_or_else(|| {
+            OracleError::Shape(format!("no Oodle entry points measured for image sha256 {}", image.sha256()))
+        })?;
         if allow {
             // ⭐ See DECODE_SOME_MEMSET_RETURN. Registered once, for exactly one site.
-            h.allow_stack_memset_from([DECODE_SOME_MEMSET_RETURN]);
+            h.allow_stack_memset_from([a.memset_return]);
         }
         let input = h.alloc_aligned(IO_SPAN, 16)?;
         let output = h.alloc_aligned(IO_SPAN, 16)?;
         let mark = h.heap_mark();
-        Ok(Oodle { h, input, output, mark })
+        Ok(Oodle { h, a, input, output, mark })
     }
 
     /// Decompress one stored block. Terminates on **input** exhaustion (see the module note).
@@ -155,16 +203,16 @@ impl Oodle {
         self.h.heap_rewind(self.mark)?;
         self.h.write(self.input, stored)?;
 
-        let need = self.h.call(Q_SCRATCH, &[0])?;
+        let need = self.h.call(self.a.q_scratch, &[0])?;
         let scratch = self.h.alloc_aligned(need, 16)?;
-        let decoder = self.h.call(INIT, &[0, plain_cap, scratch])?;
+        let decoder = self.h.call(self.a.init, &[0, plain_cap, scratch])?;
         let result = self.h.alloc_aligned(0x20, 16)?;
 
         let (mut dec, mut comp, mut chunks) = (0u64, 0u64, 0usize);
         while dec < plain_cap && (comp as usize) < stored.len() {
             self.h.write(result, &[0u8; 0x20])?;
             let ok = self.h.call(
-                DECODE_SOME,
+                self.a.decode_some,
                 &[
                     decoder,
                     self.output,
@@ -226,12 +274,21 @@ pub struct Content {
 }
 
 impl Content {
-    /// Open [`default_pkgdir`] and the pinned eboot.
+    /// Open [`default_pkgdir`] and the selected build's eboot.
     pub fn open_default() -> Result<Self> {
         Content::open(&default_pkgdir())
     }
 
+    /// The 01.29 reference estate and image, for tests and controls that assert its facts.
+    pub fn open_reference() -> Result<Self> {
+        Content::open_with(Path::new(PINNED_PKGDIR), Oodle::open_reference_with_memset_allow(true)?)
+    }
+
     pub fn open(dir: &Path) -> Result<Self> {
+        Content::open_with(dir, Oodle::open_default()?)
+    }
+
+    fn open_with(dir: &Path, oodle: Oodle) -> Result<Self> {
         let estate = Estate::load(dir).map_err(|e| {
             OracleError::Shape(format!(
                 "{}: {e} (set $D1_PKGDIR, or check the owned-media dump is present)",
@@ -240,7 +297,7 @@ impl Content {
         })?;
         Ok(Content {
             estate,
-            oodle: Oodle::open_default()?,
+            oodle,
             dir: dir.to_path_buf(),
             cache: BTreeMap::new(),
             order: Vec::new(),
@@ -418,15 +475,17 @@ fn no(name: &'static str, detail: impl Into<String>) -> Control {
 ///
 /// One of them is **inverted**: a single flipped stored byte must change the output (or fault). A
 /// decoder that ignored its input would pass every positive check here and fail that one.
+/// Controls of the 01.29 reference decode (a pinned block and its digest): they always run on
+/// the reference estate and image, never on the selected build.
 pub fn controls() -> Vec<Control> {
-    let dir = default_pkgdir();
+    let dir = PathBuf::from(PINNED_PKGDIR);
     if !dir.is_dir() {
         return vec![no(
             "estate",
             format!("{} is not a directory - the owned-media dump is absent, so nothing here ran", dir.display()),
         )];
     }
-    let mut c = match Content::open(&dir) {
+    let mut c = match Content::open_reference() {
         Ok(c) => c,
         Err(e) => return vec![no("estate", e.to_string())],
     };
@@ -568,8 +627,8 @@ mod tests {
     /// trip on `memset would clobber the STACK`.
     #[test]
     fn the_clients_own_decoder_reproduces_the_python_paths_pinned_block() {
-        if !default_pkgdir().is_dir() {
-            eprintln!("SKIP: no package estate");
+        if !d1_build::reference_selected() || !Path::new(PINNED_PKGDIR).is_dir() {
+            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
             return;
         }
         for c in controls() {
@@ -584,16 +643,16 @@ mod tests {
     /// only record in the tree that the address matters; delete the constant and it goes red.
     #[test]
     fn without_the_memset_allow_site_the_decode_is_refused() {
-        if !default_pkgdir().is_dir() {
-            eprintln!("SKIP: no package estate");
+        if !d1_build::reference_selected() || !Path::new(PINNED_PKGDIR).is_dir() {
+            eprintln!("SKIP: 01.29 reference facts - run with D1_BUILD=01.29 and its estate present");
             return;
         }
-        let c = Content::open_default().expect("estate");
+        let c = Content::open_reference().expect("estate");
         let (stored, compressed) = c.stored_block(PIN_PACKAGE, PIN_BLOCK).expect("block");
         assert!(compressed, "the pinned block must be compressed for this to test anything");
         drop(c);
 
-        let mut bare = Oodle::open_with_memset_allow(false).expect("harness");
+        let mut bare = Oodle::open_reference_with_memset_allow(false).expect("harness");
         match bare.decompress(&stored) {
             Err(e) => {
                 let m = e.to_string();

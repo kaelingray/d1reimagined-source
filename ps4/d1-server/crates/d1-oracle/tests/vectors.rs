@@ -256,7 +256,7 @@ fn tag_slot_is_not_just_the_low_13_bits() {
     use d1_eboot::descriptors;
     use d1_oracle::registry::tag_slot;
     need_eboot!();
-    let img = d1_eboot::image::Image::open_default().unwrap();
+    let img = d1_eboot::image::Image::open_reference().unwrap();
     let idx = descriptors::index(&img).unwrap();
     let tags: Vec<u32> = idx.tags().collect();
     let full: std::collections::HashSet<(u32, u32)> = tags.iter().map(|&t| tag_slot(t)).collect();

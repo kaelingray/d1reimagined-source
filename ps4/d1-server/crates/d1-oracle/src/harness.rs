@@ -58,6 +58,57 @@ pub const IMP_MEMSET: u64 = 0x0129_D240;
 pub const IMP_MEMCPY: u64 = 0x0129_D370;
 pub const IMP_STACK_CHK_FAIL: u64 = 0x0129_D0B0;
 
+/// The harness's image-specific addresses, chosen by the loaded image's SHA-256. The `IMP_*`
+/// constants above are the 01.29 reference set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildAddrs {
+    pub canary_slot: u64,
+    /// A function the 01.29 decode path reaches that is stubbed to return 0. Not yet identified
+    /// for 56578; `None` leaves the game's own code to run.
+    pub imp_nop: Option<u64>,
+    pub alloc_aligned: u64,
+    pub free: u64,
+    pub memcpy: u64,
+    pub memmove: u64,
+    pub memset: u64,
+    pub stack_chk_fail: u64,
+}
+
+pub const ADDRS_0129: BuildAddrs = BuildAddrs {
+    canary_slot: CANARY_SLOT,
+    imp_nop: Some(IMP_NOP),
+    alloc_aligned: IMP_ALLOC_ALIGNED,
+    free: IMP_FREE,
+    memcpy: IMP_MEMCPY,
+    memmove: IMP_MEMMOVE,
+    memset: IMP_MEMSET,
+    stack_chk_fail: IMP_STACK_CHK_FAIL,
+};
+
+/// Build 56578 (01.33). PLT stubs confirmed by NID (memcpy `Q3VBxCXhUHs`, memmove `+P6FRGH4LfA`,
+/// memset `8zTFvBIAIN8`, `__stack_chk_fail` `Ou3iL1abvng`); the stack guard slot is the one every
+/// 56578 prologue reads; the allocator pair are Oodle's plugin-routed aligned alloc / free
+/// (`[0x2954538]` / `[0x2954540]`), at the same offset from `DecodeSome` as in 01.29.
+pub const ADDRS_56578: BuildAddrs = BuildAddrs {
+    canary_slot: 0x01A1_F100,
+    imp_nop: None,
+    alloc_aligned: 0x0127_8720,
+    free: 0x0127_87B0,
+    memcpy: 0x012A_A7C0,
+    memmove: 0x012A_AAB0,
+    memset: 0x012A_A980,
+    stack_chk_fail: 0x012A_A7F0,
+};
+
+/// The address set for an image, by its SHA-256. `None` = no measured set: refuse to run.
+pub fn addrs_for(sha256: &str) -> Option<BuildAddrs> {
+    match sha256 {
+        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(ADDRS_0129),
+        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(ADDRS_56578),
+        _ => None,
+    }
+}
+
 const ARG_REGS: [RegisterX86; 6] = [
     RegisterX86::RDI,
     RegisterX86::RSI,
@@ -181,6 +232,12 @@ impl Harness {
     /// `0x1A0D100 + 0xBDD0` (ATLAS §4.3 - a superseded constant surviving in a sibling tool is a
     /// failure this project has already paid for).
     pub fn new(image: &Image) -> Result<Self> {
+        let addrs = addrs_for(&image.sha256()).ok_or_else(|| {
+            OracleError::Eboot(format!(
+                "no harness address set for image sha256 {} - stubs would land on the wrong code",
+                image.sha256()
+            ))
+        })?;
         let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).map_err(uce)?;
         uc.mem_map(0, GUEST_LIMIT, Prot::ALL).map_err(uce)?;
         uc.mem_map(STACK, STACK_SIZE, Prot::ALL).map_err(uce)?;
@@ -214,18 +271,20 @@ impl Harness {
 
         uc.mem_write(STOP, &[0xCC]).map_err(uce)?;
         uc.mem_write(CANARY_PTR, &CANARY.to_le_bytes()).map_err(uce)?;
-        uc.mem_write(CANARY_SLOT, &CANARY_PTR.to_le_bytes()).map_err(uce)?;
+        uc.mem_write(addrs.canary_slot, &CANARY_PTR.to_le_bytes()).map_err(uce)?;
 
         let mut stubs = HashMap::new();
         stubs.insert(0u64, Stub::NullDispatch);
         stubs.insert(STOP, Stub::Stop);
-        stubs.insert(IMP_NOP, Stub::Return(0));
-        stubs.insert(IMP_ALLOC_ALIGNED, Stub::AllocAligned);
-        stubs.insert(IMP_FREE, Stub::Free);
-        stubs.insert(IMP_MEMMOVE, Stub::MemCopy);
-        stubs.insert(IMP_MEMCPY, Stub::MemCopy);
-        stubs.insert(IMP_MEMSET, Stub::MemSet);
-        stubs.insert(IMP_STACK_CHK_FAIL, Stub::StackChkFail);
+        if let Some(nop) = addrs.imp_nop {
+            stubs.insert(nop, Stub::Return(0));
+        }
+        stubs.insert(addrs.alloc_aligned, Stub::AllocAligned);
+        stubs.insert(addrs.free, Stub::Free);
+        stubs.insert(addrs.memmove, Stub::MemCopy);
+        stubs.insert(addrs.memcpy, Stub::MemCopy);
+        stubs.insert(addrs.memset, Stub::MemSet);
+        stubs.insert(addrs.stack_chk_fail, Stub::StackChkFail);
 
         let st = Rc::new(RefCell::new(State {
             heap_next: HEAP,
@@ -304,6 +363,13 @@ impl Harness {
     /// Open the pinned eboot (or `$D1_EBOOT`) and build a harness on it.
     pub fn open_default() -> Result<(Image, Self)> {
         let image = Image::open_default().map_err(|e| OracleError::Eboot(e.to_string()))?;
+        let h = Self::new(&image)?;
+        Ok((image, h))
+    }
+
+    /// [`Harness::open_default`] on the 01.29 address reference (tests and controls).
+    pub fn open_reference() -> Result<(Image, Self)> {
+        let image = Image::open_reference().map_err(|e| OracleError::Eboot(e.to_string()))?;
         let h = Self::new(&image)?;
         Ok((image, h))
     }
