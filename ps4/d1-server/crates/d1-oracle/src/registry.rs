@@ -96,8 +96,12 @@ pub fn build(
     idx: &Index,
     root: u32,
     registry_global: u64,
+    extra_roots: &[u32],
 ) -> Result<BTreeSet<u32>> {
-    let tags = closure(image, idx, root);
+    let mut tags = closure(image, idx, root);
+    for &r in extra_roots {
+        tags.extend(closure(image, idx, r));
+    }
     if tags.is_empty() {
         return Err(OracleError::UnknownTag(root));
     }

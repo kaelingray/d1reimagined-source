@@ -132,10 +132,22 @@ pub struct SensorClientRef {
     pub has_a: bool,
     /// The client's B type (`+8`) is set, so the entry ends with a `has_b = 0` bit.
     pub has_b: bool,
+    /// `Some((A type tag, value image))` sends the A value instead of leaving the default:
+    /// `fresh = 1, presence = 1`, then the object encoded by the client's own codec. Build 56578's
+    /// type-12 client bundles (`0xC2DACAF7` subs 7-18, A `0x808022A5`) need one: the player is
+    /// linked to the bundle whose value `+0x40` equals its identity, and the spawn gate reads the
+    /// bundle's `+9`.
+    pub a_value: Option<(u32, Vec<u8>)>,
+    /// `Some((B type tag, value image))` sends the B value: `has_b = 1`, a flag bit the walker
+    /// stores at the client's `+0x16` (0, as live B-carrying clients hold), `fresh = 1`,
+    /// `presence = 1`, the object, then the `u32` stored at `+0x10` (0) - walker `0x2D0F63..0x2D1012`. The type-12
+    /// bundle's spawn-gate record is its B value (`obj+0x200` = 0x290 live), not A.
+    pub b_value: Option<(u32, Vec<u8>)>,
 }
 
 impl SensorClientRef {
-    /// Parse one `hash i8 sub has_a has_b` line (`0xC2DACAF7 0x8 0 1 1`); `#` starts a comment.
+    /// Parse one `hash i8 sub has_a has_b [a_tag a_image_hex [b_tag b_image_hex]]` line
+    /// (`0xC2DACAF7 0x8 0 1 1`); `#` starts a comment.
     pub fn parse_line(line: &str) -> Option<Self> {
         let line = line.split('#').next()?.trim();
         if line.is_empty() {
@@ -151,6 +163,14 @@ impl SensorClientRef {
             name_sub: num(f.get(2)?)? as i16,
             has_a: num(f.get(3)?)? != 0,
             has_b: num(f.get(4)?)? != 0,
+            a_value: match (f.get(5), f.get(6)) {
+                (Some(t), Some(h)) => Some((num(t)? as u32, hex_bytes(h)?)),
+                _ => None,
+            },
+            b_value: match (f.get(7), f.get(8)) {
+                (Some(t), Some(h)) => Some((num(t)? as u32, hex_bytes(h)?)),
+                _ => None,
+            },
         })
     }
 
@@ -230,16 +250,47 @@ impl SensorPhaseUpdate {
             let mut name = ObjectOracle::new(TAG_NAME_REF)?;
             for c in &self.clients {
                 let e = name.encode(&c.name_ref_image(), 0x1_0000)?;
-                let body = 2 * u32::from(c.has_a) + u32::from(c.has_b);
+                let value = match (&c.a_value, c.has_a) {
+                    (Some((tag, image)), true) => {
+                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
+                    }
+                    _ => None,
+                };
+                let value_bits = value.as_ref().map_or(0, |v| v.bits);
+                let b_val = match (&c.b_value, c.has_b) {
+                    (Some((tag, image)), true) => {
+                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
+                    }
+                    _ => None,
+                };
+                // B part: has_b, then (if set) flag + fresh + presence + object + u32.
+                let b_bits = u32::from(c.has_b) + b_val.as_ref().map_or(0, |v| 3 + v.bits + 32);
+                let body = 2 * u32::from(c.has_a) + value_bits + b_bits;
                 w.put(1, 1); // has_entry
                 w.raw(&e.payload, e.bits as usize);
                 w.put(u64::from(body), 32);
                 if c.has_a {
                     w.put(1, 1); // fresh
-                    w.put(0, 1); // presence = 0: keep the default the fresh bit just installed
+                    match &value {
+                        Some(v) => {
+                            w.put(1, 1); // presence
+                            w.raw(&v.payload, v.bits as usize);
+                        }
+                        None => w.put(0, 1), // presence = 0: keep the default fresh installed
+                    }
                 }
                 if c.has_b {
-                    w.put(0, 1); // has_b = 0
+                    match &b_val {
+                        Some(v) => {
+                            w.put(1, 1); // has_b
+                            w.put(0, 1); // flag -> client +0x16
+                            w.put(1, 1); // fresh
+                            w.put(1, 1); // presence
+                            w.raw(&v.payload, v.bits as usize);
+                            w.put(0, 32); // -> client +0x10
+                        }
+                        None => w.put(0, 1), // has_b = 0
+                    }
                 }
             }
         }
@@ -255,6 +306,13 @@ impl SensorPhaseUpdate {
             ))
         })
     }
+}
+
+fn hex_bytes(h: &str) -> Option<Vec<u8>> {
+    if h.len() % 2 != 0 {
+        return None;
+    }
+    (0..h.len()).step_by(2).map(|i| u8::from_str_radix(h.get(i..i + 2)?, 16).ok()).collect()
 }
 
 fn put_u32(b: &mut [u8], off: usize, v: u32) {
@@ -516,5 +574,25 @@ mod tests {
             assert_eq!(super::read_bits(&one, bit, 1), super::read_bits(&many, bit, 1), "bit {bit}");
         }
         assert_eq!(super::read_bits(&many, 471, 1), 1, "the next has_entry is set");
+    }
+
+    /// A client line with an A value parses, encodes through the client's codec, and grows the
+    /// entry by exactly the value's bits (presence then object) over the value-less form.
+    #[test]
+    fn a_valued_client_carries_its_object() {
+        let mut img = vec![0u8; 0x78];
+        img[0..4].copy_from_slice(&[0xFF; 4]);
+        img[8] = 1;
+        img[9] = 1;
+        img[0x40..0x48].copy_from_slice(&0xD100_0000_0000_0201u64.to_le_bytes());
+        let hex: String = img.iter().map(|b| format!("{b:02x}")).collect();
+        let bare = super::SensorClientRef::parse_line("0xC2DACAF7 0xc 7 1 1").unwrap();
+        let valued =
+            super::SensorClientRef::parse_line(&format!("0xC2DACAF7 0xc 7 1 1 0x808022A5 {hex}"))
+                .unwrap();
+        assert_eq!(valued.a_value.as_ref().map(|v| (v.0, v.1.len())), Some((0x8080_22A5, 0x78)));
+        let f = |c| super::SensorPhaseUpdate { clients: vec![c], ..super::audit(3, None) }.encode();
+        let (a, b) = (f(bare).expect("bare"), f(valued).expect("valued"));
+        assert!(b.len() > a.len(), "the valued entry must be longer ({} vs {})", b.len(), a.len());
     }
 }

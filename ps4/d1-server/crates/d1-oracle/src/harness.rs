@@ -554,9 +554,23 @@ fn dispatch(
         let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
         let mut b = [0u8; 8];
         uc.mem_read(rsp, &mut b).map_err(e)?;
+        let r13 = uc.reg_read(RegisterX86::R13).map_err(e)?;
+        let rbx = uc.reg_read(RegisterX86::RBX).map_err(e)?;
+        let mut stk = vec![0u8; 0x800];
+        let _ = uc.mem_read(rsp, &mut stk);
+        let frames: Vec<String> = stk
+            .chunks_exact(8)
+            .map(|c| u64::from_le_bytes(c.try_into().unwrap()))
+            .filter(|&q| (0x1000..0x18D_8000).contains(&q))
+            .take(16)
+            .map(|q| format!("{q:#x}"))
+            .collect();
+        let rbx = (rbx, frames.join(","));
         Err(format!(
-            "{what} with length {n:#x} (return address {:#x}) - no guest buffer is that large; the              caller's arguments are not what this stub was told they are",
-            u64::from_le_bytes(b)
+            "{what} with length {n:#x} (return address {:#x}, r13 {r13:#x}, rbx {:#x}, stack {}) - no guest              buffer is that large; the caller's arguments are not what this stub was told they are",
+            u64::from_le_bytes(b),
+            rbx.0,
+            rbx.1
         ))
     };
     match stub {

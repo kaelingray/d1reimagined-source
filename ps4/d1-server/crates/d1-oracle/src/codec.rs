@@ -87,6 +87,12 @@ pub struct CodecAddrs {
     /// on this build: the refusal text then names the grow function only.
     pub dynamic_flags_fault_rip: Option<u64>,
     pub dynamic_flags_grow_fn: u64,
+    /// Start-up type cells the field encoders (kind 0x23 `0x102A450`, the box encoders `0x10295D0`,
+    /// `0x1029740`, `0x102A3xx`) read through pointer globals that the file leaves zero:
+    /// `(pointer slot, cell, tag, descriptor object)`; the cell holds `{u32 tag, pad, u64 descriptor
+    /// object}`. Read live on 56578. Without them every box field (e.g. the client bundle's player
+    /// identity, kind `0x23`) encodes as tag 0 and faults. Empty until measured on a build.
+    pub type_cells: &'static [(u64, u64, u32, u64)],
 }
 
 pub const CODEC_0129: CodecAddrs = CodecAddrs {
@@ -116,6 +122,7 @@ pub const CODEC_0129: CodecAddrs = CodecAddrs {
     ah_rx_dispatch: 0x18F_84A0,
     dynamic_flags_fault_rip: Some(crate::activity_host::DYNAMIC_FLAGS_FAULT_RIP),
     dynamic_flags_grow_fn: crate::activity_host::DYNAMIC_FLAGS_GROW_FN,
+    type_cells: &[],
 };
 
 /// Build 56578 (01.33). Measured as described in the module docs.
@@ -146,6 +153,15 @@ pub const CODEC_56578: CodecAddrs = CodecAddrs {
     ah_rx_dispatch: 0x191_0480,
     dynamic_flags_fault_rip: None,
     dynamic_flags_grow_fn: 0x2C_7630,
+    type_cells: &[
+        (0x199_6050, 0x28D_BAD0, 0x8080_0046, 0x13D_2258),
+        (0x197_4C00, 0x28B_F2D0, 0x8080_40F7, 0x133_BF70),
+        (0x197_4BE0, 0x28B_F190, 0x8080_424E, 0x13D_9870),
+        // Kind 0x23 (`0x102A450`): type from `0x197E160` when the selector `0x25CC10` holds
+        // (`[[0x26527E0]+0xC] != -1`, true live), else from `0x191A240`.
+        (0x197_E160, 0x28C_37F0, 0x8080_1932, 0x131_8320),
+        (0x191_A240, 0x269_8FA0, 0x8080_04AC, 0x131_78F0),
+    ],
 };
 
 /// The codec set for an image, by its SHA-256. `None` = no measured set: refuse to run.

@@ -80,7 +80,15 @@ impl SchemaHarness {
         h.stub(STUB_ACCESSOR, Stub::Return(definition));
         h.stub(c.id_to_index, Stub::Return(0));
 
-        registry::build(&mut h, &image, &index, tag, c.registry_global)?;
+        // Box fields encode their in-band tag through start-up type cells: seed them and make
+        // their types resolvable (see `CodecAddrs::type_cells`).
+        let extra: Vec<u32> = c.type_cells.iter().map(|&(_, _, t, _)| t).collect();
+        for &(slot, cell, t, desc) in c.type_cells {
+            h.write_u64(slot, cell)?;
+            h.write_u32(cell, t)?;
+            h.write_u64(cell + 8, desc)?;
+        }
+        registry::build(&mut h, &image, &index, tag, c.registry_global, &extra)?;
 
         // ⭐ Everything allocated from here on is one call's scratch. Nothing after this line may
         // allocate scaffolding that outlives a call - `begin_call` releases it.
