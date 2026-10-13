@@ -487,6 +487,7 @@ fn main() -> anyhow::Result<()> {
             // phase (`record+0x1AC`) the player-spawn gate reads. Off unless `D1_AH_SENSOR_PHASE`
             // is set - this is `synthetic-minimal` and its post-pass dispatch is `[U]` until the
             // live watch on `record+0x1AC` confirms it. ⇒ design/activity-lifetime-state.md.
+            let mut sensor_phase_file = None;
             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
                 .ok()
                 .and_then(|s| s.trim().parse::<i8>().ok())
@@ -551,6 +552,29 @@ fn main() -> anyhow::Result<()> {
                         tail,
                         clients,
                     };
+                    // `D1_AH_SENSOR_PHASE_FILE` + `D1_AH_SENSOR_PHASES=3,4,5`: one frame per listed
+                    // phase, chosen per send from the file's content (state.rs).
+                    if let (Ok(path), Ok(list)) = (
+                        std::env::var("D1_AH_SENSOR_PHASE_FILE"),
+                        std::env::var("D1_AH_SENSOR_PHASES"),
+                    ) {
+                        let mut frames = std::collections::BTreeMap::new();
+                        for p in list.split(',').filter_map(|s| s.trim().parse::<i8>().ok()) {
+                            let mut each = params.clone();
+                            each.phase = p;
+                            match d1_activity_host::codec::SchemaCodec::build_sensor(&each) {
+                                Ok(b) => {
+                                    frames.insert(p, b);
+                                }
+                                Err(e) => tracing::error!("⛔ sensor frame for phase {p}: {e}"),
+                            }
+                        }
+                        tracing::info!(
+                            "udt-5 sensor phase file {path}: frames for phases {:?}",
+                            frames.keys().collect::<Vec<_>>()
+                        );
+                        sensor_phase_file = Some((std::path::PathBuf::from(path), frames));
+                    }
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
                             tracing::info!(
@@ -608,6 +632,9 @@ fn main() -> anyhow::Result<()> {
                         i.set_sensor_payload(bytes);
                         if let Some(s) = sensor_repeat_s {
                             i.set_sensor_repeat(std::time::Duration::from_secs(s));
+                        }
+                        if let Some((path, frames)) = sensor_phase_file.clone() {
+                            i.set_sensor_phase_file(path, frames);
                         }
                     }
                     i.set_host_heartbeat(std::time::Duration::from_millis(heartbeat_ms));

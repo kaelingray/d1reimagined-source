@@ -224,6 +224,10 @@ pub struct ActivityInstance {
     sensor_repeat: Option<Duration>,
     /// When the sensor frame last went out (repeat mode pacing).
     sensor_last_sent: Option<Instant>,
+    /// `D1_AH_SENSOR_PHASE_FILE`: a file naming the phase to send, re-read on every send, and one
+    /// pre-built frame per allowed phase. An unreadable file or an unlisted phase falls back to
+    /// [`Self::sensor_payload`]. Lets an operator step the lifetime phase during one live run.
+    sensor_phase_file: Option<(std::path::PathBuf, std::collections::BTreeMap<i8, Vec<u8>>)>,
 }
 
 impl ActivityInstance {
@@ -320,6 +324,7 @@ impl ActivityInstance {
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
+            sensor_phase_file: None,
             sensor_last_sent: None,
         }
     }
@@ -435,6 +440,28 @@ impl ActivityInstance {
         self.sensor_repeat = Some(every);
     }
 
+    /// Choose the sensor frame per send from the phase named in `path` (see
+    /// [`Self::sensor_phase_file`]). `frames` holds one finished frame per allowed phase.
+    pub fn set_sensor_phase_file(
+        &mut self,
+        path: std::path::PathBuf,
+        frames: std::collections::BTreeMap<i8, Vec<u8>>,
+    ) {
+        self.sensor_phase_file = Some((path, frames));
+    }
+
+    fn current_sensor_payload(&self) -> Option<(Vec<u8>, Option<i8>)> {
+        if let Some((path, frames)) = &self.sensor_phase_file {
+            let phase = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| s.trim().parse::<i8>().ok());
+            if let Some(bytes) = phase.and_then(|p| frames.get(&p)) {
+                return Some((bytes.clone(), phase));
+            }
+        }
+        self.sensor_payload.clone().map(|b| (b, None))
+    }
+
     /// ⭐⭐ The udt-5 `sensor_auth_update`, sent **once** after the instance reaches [`Live`]
     /// (or on an interval, in [`Self::set_sensor_repeat`] mode).
     ///
@@ -469,14 +496,17 @@ impl ActivityInstance {
                 }
             }
         }
-        let payload = self.sensor_payload.clone()?;
+        let (payload, phase) = self.current_sensor_payload()?;
         self.sensor_sent = true;
         self.sensor_last_sent = Some(now);
         self.sensors_sent += 1;
         self.last_pushed = now;
         // Visible send accounting: RADV-12 (2026-08-11) could not tell whether the repeat sends
         // were happening at all - the arming was logged, the sends were not.
-        tracing::info!("udt-5 sensor_auth_update send #{}", self.sensors_sent);
+        match phase {
+            Some(p) => tracing::info!("udt-5 sensor_auth_update send #{} (phase file: {p})", self.sensors_sent),
+            None => tracing::info!("udt-5 sensor_auth_update send #{}", self.sensors_sent),
+        }
         Some(AhPush::new(self.ah_id, AhMessage::SensorAuthUpdate { payload }))
     }
 
