@@ -610,6 +610,7 @@ fn run_sensor(_cli: &Cli, cmd: &SensorCmd) -> anyhow::Result<ExitCode> {
                 name_sub: *name_sub,
                 phase: *phase,
                 tail,
+                clients: Vec::new(),
             };
             let payload = m.encode()?;
             println!(

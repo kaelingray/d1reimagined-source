@@ -107,6 +107,60 @@ pub struct SensorPhaseUpdate {
     /// `Some((id, hash))` also sets `record+0x674`/`record+0x678` (value fields `[8]`/`[9]`), the
     /// second spawn precondition `FUN_0010CB60` checks. `None` leaves them at their defaults.
     pub tail: Option<(u32, u32)>,
+    /// The world's OTHER pending sensor entity clients, each sent as a fresh, value-less entry.
+    /// Empty reproduces the audited single-entry frame. See [`SensorClientRef`].
+    pub clients: Vec<SensorClientRef>,
+}
+
+/// One pending sensor entity client the frame must deliver for the walker terminator to accept it.
+///
+/// ⭐ Build 56578, read live 2026-10-13: the walker `0x2D0CD0` clears a client's pending byte
+/// (`+0x15`) only when the frame carries an entry for it, and the terminator `0x2D1600` rejects the
+/// whole frame while any client the local machine must receive (owner `+0x60` == the local id or
+/// `> 0x7F`, i.e. unassigned) is still pending. pvp_moonbase has 97 such clients in pool
+/// "sensor entity clients 0" (tag `0xF42`); the audited frame delivered one. Per entry, after the
+/// name ref and `body_bit_length`: if the client's A type (`+0xC`) is set, `fresh` + the replicated
+/// value (a presence bit, then the object only when it is set); if its B type (`+8`) is set, a
+/// `has_b` bit. `fresh=1, presence=0, has_b=0` default-initialises the client and clears pending.
+/// Names are per-load like the phase record's, so the list comes from the live client.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SensorClientRef {
+    pub name_hash: u32,
+    pub name_i8: u8,
+    pub name_sub: i16,
+    /// The client's A type (`+0xC`) is set, so the entry carries `fresh` + presence.
+    pub has_a: bool,
+    /// The client's B type (`+8`) is set, so the entry ends with a `has_b = 0` bit.
+    pub has_b: bool,
+}
+
+impl SensorClientRef {
+    /// Parse one `hash i8 sub has_a has_b` line (`0xC2DACAF7 0x8 0 1 1`); `#` starts a comment.
+    pub fn parse_line(line: &str) -> Option<Self> {
+        let line = line.split('#').next()?.trim();
+        if line.is_empty() {
+            return None;
+        }
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let num = |s: &str| -> Option<i64> {
+            s.strip_prefix("0x").map_or_else(|| s.parse().ok(), |h| i64::from_str_radix(h, 16).ok())
+        };
+        Some(Self {
+            name_hash: num(f.first()?)? as u32,
+            name_i8: num(f.get(1)?)? as u8,
+            name_sub: num(f.get(2)?)? as i16,
+            has_a: num(f.get(3)?)? != 0,
+            has_b: num(f.get(4)?)? != 0,
+        })
+    }
+
+    fn name_ref_image(&self) -> Vec<u8> {
+        let mut b = vec![0u8; 8];
+        put_u32(&mut b, 0, self.name_hash);
+        b[4] = self.name_i8;
+        b[6..8].copy_from_slice(&self.name_sub.to_le_bytes());
+        b
+    }
 }
 
 impl SensorPhaseUpdate {
@@ -172,7 +226,29 @@ impl SensorPhaseUpdate {
         w.put(1, 1); // fresh
         w.put(1, 1); // presence
         w.raw(&value_pay, value_bits as usize);
+        if !self.clients.is_empty() {
+            let mut name = ObjectOracle::new(TAG_NAME_REF)?;
+            for c in &self.clients {
+                let e = name.encode(&c.name_ref_image(), 0x1_0000)?;
+                let body = 2 * u32::from(c.has_a) + u32::from(c.has_b);
+                w.put(1, 1); // has_entry
+                w.raw(&e.payload, e.bits as usize);
+                w.put(u64::from(body), 32);
+                if c.has_a {
+                    w.put(1, 1); // fresh
+                    w.put(0, 1); // presence = 0: keep the default the fresh bit just installed
+                }
+                if c.has_b {
+                    w.put(0, 1); // has_b = 0
+                }
+            }
+        }
         w.put(0, 1); // terminator (has_entry = 0)
+        if !self.clients.is_empty() {
+            // Zero-pad to a byte: the walker stops at the terminator and never reads past it. The
+            // audited single-entry frame is exactly 472 bits and stays unpadded (and checked).
+            w.pad_to_byte();
+        }
         w.finish().map_err(|n| {
             OracleError::Shape(format!(
                 "sensor frame is {n} bits, not a byte multiple - a field width is wrong"
@@ -204,6 +280,12 @@ impl BitWriter {
     fn raw(&mut self, payload: &[u8], nbits: usize) {
         for i in 0..nbits {
             self.bits.push((payload[i >> 3] >> (7 - (i & 7))) & 1);
+        }
+    }
+
+    fn pad_to_byte(&mut self) {
+        while self.bits.len() % 8 != 0 {
+            self.put(0, 1);
         }
     }
 
@@ -243,6 +325,7 @@ fn audit(phase: i8, tail: Option<(u32, u32)>) -> SensorPhaseUpdate {
         name_sub: AUDIT_NAME_SUB,
         phase,
         tail,
+        clients: Vec::new(),
     }
 }
 
@@ -412,5 +495,26 @@ mod tests {
         let failed: Vec<&str> =
             super::run().into_iter().filter(|c| !c.passed).map(|c| c.name).collect();
         assert!(failed.is_empty(), "failed sensor controls: {failed:?}");
+    }
+
+    /// A frame with extra sensor clients must still build (byte-padded) and must carry the audited
+    /// phase entry unchanged as its prefix: only the terminator bit moves.
+    #[test]
+    fn extra_clients_extend_the_audited_frame() {
+        let one = super::audit(3, None).encode().expect("audited frame");
+        let lines = "0xC2DACAF7 0x8 0 1 1
+# comment
+0x39774EE1 0x4 3 0 1
+";
+        let clients: Vec<_> = lines.lines().filter_map(super::SensorClientRef::parse_line).collect();
+        assert_eq!(clients.len(), 2);
+        assert!(clients[0].has_a && clients[0].has_b && !clients[1].has_a);
+        let many = super::SensorPhaseUpdate { clients, ..super::audit(3, None) }.encode().expect("multi");
+        assert!(many.len() > one.len());
+        // Bits 0..471 (everything before the single frame's terminator) are identical.
+        for bit in 0..471 {
+            assert_eq!(super::read_bits(&one, bit, 1), super::read_bits(&many, bit, 1), "bit {bit}");
+        }
+        assert_eq!(super::read_bits(&many, 471, 1), 1, "the next has_entry is set");
     }
 }

@@ -519,6 +519,29 @@ fn main() -> anyhow::Result<()> {
                         (Some(id), Some(h)) => Some((id, h)),
                         _ => None,
                     };
+                    // ⭐ `D1_AH_SENSOR_CLIENTS=<file>`: the world's other pending sensor entity
+                    // clients (`hash i8 sub has_a has_b` per line, read off the live client with
+                    // `d1-winguest.py sensor-clients`). Without them the terminator 0x2D1600
+                    // rejects the frame (build 56578: 96 of 97 pending), so the phase never lands.
+                    let clients: Vec<d1_oracle::sensor::SensorClientRef> =
+                        match std::env::var("D1_AH_SENSOR_CLIENTS") {
+                            Ok(path) => match std::fs::read_to_string(&path) {
+                                Ok(text) => text
+                                    .lines()
+                                    .filter_map(d1_oracle::sensor::SensorClientRef::parse_line)
+                                    .filter(|c| {
+                                        !(c.name_hash == name_hash
+                                            && c.name_i8 == name_i8
+                                            && c.name_sub == name_sub)
+                                    })
+                                    .collect(),
+                                Err(e) => {
+                                    tracing::error!("⛔ D1_AH_SENSOR_CLIENTS={path}: {e}");
+                                    Vec::new()
+                                }
+                            },
+                            Err(_) => Vec::new(),
+                        };
                     let params = d1_oracle::sensor::SensorPhaseUpdate {
                         gen,
                         name_hash,
@@ -526,18 +549,20 @@ fn main() -> anyhow::Result<()> {
                         name_sub,
                         phase,
                         tail,
+                        clients,
                     };
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
                             tracing::info!(
                                 "⭐⭐ D1_AH_SENSOR_PHASE={phase} - armed a udt-5 sensor_auth_update \
-                                 ({} bytes) to write activity lifetime phase {phase} into \
+                                 ({} bytes, {} extra sensor clients) to write activity lifetime phase {phase} into \
                                  record+0x1AC (name {{hash {name_hash:#010x}, i8 {name_i8:#x}, sub \
                                  {name_sub}}}, gen {gen}). Sent ONCE after the instance reaches \
                                  Live. ⚠ synthetic-minimal: the post-pass dispatch is [U] until a \
                                  live watch on record+0x1AC confirms it, and gen MUST equal the \
                                  client's world+0x1D or the applier silently skips the frame.",
-                                bytes.len()
+                                bytes.len(),
+                                params.clients.len()
                             );
                             Some(bytes)
                         }
