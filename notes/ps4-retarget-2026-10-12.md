@@ -706,6 +706,12 @@ re-derived for 56578, driven through `d1-winguest.py`:
 5. **Control:** 2 s of left stick moved the view through the scene (`65-moved.png`). The forced
    spawn is controllable on 56578, which 01.29's first forced spawn was not.
 
+6. **End of run:** the emulator later exited on an access violation at eboot `0xBC09AE`, the first
+   dereference (`mov edi,[rcx]`, rcx NULL) in **`c_simulation_sobject_entity_definition::vfunc[19]`
+   = `0xBC0990`** (RTTI). That is 01.29's documented forced-path crash (`0xBBDEDE`, "the NOP'd-gate
+   biped lacks an entity-definition backpointer a legit spawn would fill"), on the same vfunc. No
+   guest crash ticket. The servers stopped cleanly.
+
 Still synthetic: the lab-orbit client patches, the launch poke, the getter hook, the reject NOP, the
 done-mask force, the spawn word, the fade zero and the held suppress byte. The served route
 (udt-5 phase) remains blocked at the residency sweep (above), and the done-mask force skips the
