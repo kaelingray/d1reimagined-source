@@ -624,7 +624,31 @@ screen is black:** no player character is constructed, so there is no camera, ex
 `sensor_auth_update` (`D1_AH_SENSOR_PHASE`, `design/activity-lifetime-state.md`), which needs the
 per-load sensor-name hash and generation (`world+0x1D`) read from 56578 memory, and was `[U]` on
 01.29 too. Synthetic route: 01.29's two code hooks (lifetime-state getter, per-player reject `je`)
-plus the spawn poke, re-derived for 56578. 01.29's next steps
+plus the spawn poke, re-derived for 56578.
+
+*Served spawn route, measured live (runs `…-sensor-phase3`, `…-sensor-measure`).* The Activity Host
+sent udt-5 `sensor_auth_update` phase 3 every 10 s: 25 frames, ~18 of them while in world.
+`d1-winguest.py` now reads the decoder's preconditions live, each re-derived for 56578:
+* **Lifetime record:** `lifetime` replicates `0x10C500` (same address as 01.29): `0x1072C0(0x10,0)`
+  (count word `0x25D6FF8`, table `0x1AD5000`), then the registry walk (`0x1A238A0`), then
+  `+0x1AC`. The phase byte is at **`0x38026207C`, the same address 01.29 recorded**.
+* **World pool:** `worlds` reads the pool via `0x2A00A0` (`[0x26556D8] + i*[0x26556E0]`, stride
+  `0xDB0` as on 01.29).
+* **Group table:** read from the globals container (`0x1071D0`: groups `{base, hash}` at `+0x10`,
+  stride `0x14`).
+
+Results in world:
+* `world[0]+0x1C = 1` (enabled) and **`+0x1D = 0`**, equal to the frame's `gen` (check at
+  `0x2A1E88`).
+* Group 0 hash is **`0xC2DACAF7`** with base 0, so name-ref sub 3 = record index 3, the lifetime
+  record. In orbit the single group is `0x4786C0E0`, as on 01.29.
+* The record stays at phase **−1**, `+0x1B4 = 0x811C9DC5`, and `+0x674/+0x678 = −1/0x811C9DC5`.
+
+So every precondition this side of the walker holds, and the 01.29 defaults are correct for 56578,
+yet nothing is stored. That isolates the one step 01.29 left `[U]`: whether the post-pass
+(`FUN_002CE2A0` dispatch via `record+0xA8`) fires for a freshly delivered element. The next probe
+needs a runtime hit counter or breakpoint in the client (the decoder `0x2A1C40`, the walker
+`0x2D0CD0`, the setter `0x11DE30`), which is a new capability. 01.29's next steps
 (two code hooks and a spawn poke to construct a biped) are not attempted on 56578.
 
 *Orchestrator.* `Start-D1ContainedBoot.ps1` now:

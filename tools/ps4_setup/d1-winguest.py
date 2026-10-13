@@ -35,6 +35,14 @@ SLICE_VTABLE, REQUESTED, STARTED, DONE = 0x1945A50, 0x198, 0x1A0, 0x1A8
 # selection record == 1 (or 0x78C710()). The record pointer is the qword at 0x26BC068 (0x574EF0 =
 # lea rax,[0x26BC060]; mov rax,[rax+8]) - 01.29's [0x26A33E8]. Does not survive a teardown.
 SELECTION_RECORD_PTR = 0x26BC068
+# The activity lifetime phase the spawn gate reads, exactly as 0x10C500 computes it (same address
+# as 01.29): 0x1072C0(0x10, 0) -> {tag, offset} via the count word 0x25D6FF8 and the self-relative
+# table at 0x1AD5000; then the registry walk (global 0x1A238A0) resolves tag -> object, and the
+# phase is the signed byte at object + offset + 0x1AC (-1 = unset). udt 5 sensor_auth_update writes it.
+LT_COUNT, LT_TABLE, REGISTRY = 0x25D6FF8, 0x1AD5000, 0x1A238A0
+# The world pool the udt-5 decoder resolves into (0x2A00A0: [0x26556D8] + (i & 0x1FFF) * [0x26556E0]).
+# The decoder (0x2A1C40) drops the frame unless world+0x1C != 0 and frame gen == world+0x1D (0x2A1E88).
+WORLD_POOL, WORLD_STRIDE = 0x26556D8, 0x26556E0
 DATA_LO, DATA_HI = 0x18D8000, 0x2F6C000   # eboot RW segment .. end of image (BSS included)
 RUNG_IN_WORLD = 0x24
 
@@ -120,6 +128,46 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'base'
     p, base = open_client()
     if cmd == 'base':
+        return 0
+    if cmd == 'worlds':
+        pool, stride = p.u(base + WORLD_POOL, 'Q'), p.u(base + WORLD_STRIDE, 'I')
+        print(f'world pool {pool:#x} stride {stride:#x}')
+        for i in range(4):
+            w = pool + i * stride
+            try:
+                b = p.read(w + 0x10, 0x10)
+            except OSError:
+                break
+            print(f'  world[{i}] {w:#x}: +0x1C enabled={b[0xC]} +0x1D gen={b[0xD]}  +0x10..0x20 {b.hex(" ")}')
+        return 0
+    if cmd == 'lifetime':
+        cnt = p.u(base + LT_COUNT, 'H')
+        t = base + LT_TABLE
+        rcx = 0
+        if cnt:
+            rcx = p.u(cnt * p.u(t + 0x10, 'Q') + t + p.u(t, 'q') + 0x30, 'Q')
+        if not rcx:
+            sys.exit('globals table not resolved')
+        idx = 0x10
+        if p.u(rcx + idx * 4 + 0x2BD1E, 'h') <= 0:
+            sys.exit('globals record 0x10 absent')
+        r8 = p.u(rcx + p.u(rcx + idx * 4 + 0x2BD1C, 'h') * 2 + 0x2A51C, 'H')
+        if r8 == 0xFFFF:
+            sys.exit('globals record 0x10 unmapped')
+        ent = rcx + r8 * 0x38 + 0x520
+        tag, off = p.u(ent, 'I'), p.u(ent + 8, 'Q')
+        if tag == 0xFFFFFFFF:
+            sys.exit('lifetime record tag unset')
+        reg = p.u(p.u(base + REGISTRY, 'Q'), 'Q')
+        esi = struct.unpack('<i', struct.pack('<I', tag))[0] >> 13
+        slot = (((esi & 0xFFFFFFFF) >> 0x12) | 0x3FF) & esi & 0xFFFFFFFF
+        rec = reg + slot * 0x40
+        data, esz, mask = p.u(rec + 0x10, 'Q'), p.u(rec + 0x30, 'i'), p.u(rec + 0x34, 'i') & 0xFFFFFFFFFFFFFFFF
+        e = data + (tag & 0x1FFF) * esz
+        obj = e - (mask & p.u(e + 8, 'Q'))
+        phase_at = obj + off + 0x1AC
+        phase = struct.unpack('<b', p.read(phase_at, 1))[0]
+        print(f'lifetime record tag {tag:#010x} object {obj:#x} offset {off:#x}: phase byte @{phase_at:#x} = {phase}')
         return 0
     if cmd == 'suppress':
         rec = p.u(base + SELECTION_RECORD_PTR, 'Q')
