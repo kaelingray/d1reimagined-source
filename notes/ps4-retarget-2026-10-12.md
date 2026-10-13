@@ -1101,7 +1101,31 @@ With 4/2 + 4/4 served:
 - the Director is unchanged (only Earth, not selectable);
 - in world the view is unchanged, and the sobject census still has 0 weapons.
 
-So weapon creation is not driven by these per-view loaders at spawn. The open question is which
+So weapon creation is not driven by these per-view loaders at spawn.
+
+Spawn-time counts (run `spawncount`, counters installed at orbit, Elimination 416):
+
+| function | orbit | at in_world | +45 s |
+|---|---|---|---|
+| spawner `0x412800` | 50 | 825 | 2163 |
+| spawner accept path `0x412DDC` | 0 | 0 | 127 |
+| sobject constructor `0x32DBF0` | 0 | 579 | 584 |
+| creation helpers `0x308CA0` | 0 | 22 | 44 |
+| `0x3090D0` | 0 | 20 | 39 |
+| `0x309360` | 0 | 0 | 9 |
+| `0x32E4F0` | 0 | 11 | 35 |
+| `0x32E340` | 0 | 47 | 47 |
+
+So 5 sobjects were constructed after in_world (1 is the biped). The census afterwards still shows
+no weapon and nothing pending delete, and the only recently freed slot near the top was an emitter.
+
+Other leads that came up empty:
+- `c_simulation_weapons_game_system` methods only allocate its globals (`0x9210`-byte block).
+- The equipment iterators' vtables are referenced only inside the investment layer (`0x2693A0`,
+  `0x269470`).
+
+Open: identify the 4 non-biped constructions (their definition type) and the spawn-time
+weapon-giving path. The open question is which
 spawn-time path creates a player's weapon sobjects (type 11), and what it needs.
 
 BUFFALO again at one boot this evening on a fully clean start (fresh server, port free): the probe
