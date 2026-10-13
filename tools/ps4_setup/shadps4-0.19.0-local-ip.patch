@@ -89,7 +89,7 @@ index f0bd459..cb6ca57 100644
      }
      case ORBIS_NET_CTL_INFO_NETMASK: {
 diff --git a/src/core/libraries/network/posix_sockets.cpp b/src/core/libraries/network/posix_sockets.cpp
-index f1d8030..2dc06f2 100644
+index f1d8030..1674f16 100644
 --- a/src/core/libraries/network/posix_sockets.cpp
 +++ b/src/core/libraries/network/posix_sockets.cpp
 @@ -1,6 +1,8 @@
@@ -188,7 +188,7 @@ index f1d8030..2dc06f2 100644
 +                                   : ::send(sock, gathered.data() + totalSent, len, 0);
 +        if (sent == SOCKET_ERROR)
 +            return totalSent > 0 ? static_cast<int>(totalSent)
-+                                 : ConvertReturnErrorCode(WSAGetLastError());
++                                 : ConvertReturnErrorCode(SOCKET_ERROR) /* maps WSAGetLastError() itself; passing the positive WSA code returned it as a byte count (CHICKEN/CENTIPEDE) */;
 +        totalSent += static_cast<size_t>(sent);
 +    } while (waitAll && totalSent < gathered.size());
 +
@@ -276,7 +276,7 @@ index f1d8030..2dc06f2 100644
 +        if (received == SOCKET_ERROR) {
 +            if (totalReceived > 0)
                  break;
-+            return ConvertReturnErrorCode(WSAGetLastError());
++            return ConvertReturnErrorCode(SOCKET_ERROR) /* maps WSAGetLastError() itself; passing the positive WSA code returned it as a byte count (CHICKEN/CENTIPEDE) */;
          }
 +        if (received == 0)
 +            break; // orderly shutdown
@@ -295,6 +295,29 @@ index f1d8030..2dc06f2 100644
  
  #else
      int native_flags = convertOrbisFlagsToPosix(socket_type, flags);
+diff --git a/src/core/libraries/np/np_handler.cpp b/src/core/libraries/np/np_handler.cpp
+index 99fe06b..3af6abd 100644
+--- a/src/core/libraries/np/np_handler.cpp
++++ b/src/core/libraries/np/np_handler.cpp
+@@ -107,7 +107,17 @@ void NpHandler::Initialize() {
+ 
+     {
+         const auto [host, port] = ParseServerAddress();
+-        const ShadNet::ProbeInfo probe = ShadNet::ProbeServer(host, port);
++        // D1 fork: retry the probe. A single 3 s window lost the ServerInfo handshake on some
++        // boots under load (BUFFALO), although the local server sends it on accept. Up to five
++        // attempts of SHAD_PROBE_TIMEOUT_MS each; a real version mismatch or protocol error is
++        // not retried.
++        ShadNet::ProbeInfo probe = ShadNet::ProbeServer(host, port);
++        for (int attempt = 2; attempt <= 5 && probe.result == ShadNet::ProbeResult::Unreachable;
++             ++attempt) {
++            LOG_WARNING(NpHandler, "shadNet probe of {}:{} failed; retrying ({}/5)", host, port,
++                        attempt);
++            probe = ShadNet::ProbeServer(host, port);
++        }
+         if (probe.result != ShadNet::ProbeResult::Ok) {
+             EmulatorSettings.SetShadNetSessionDisabled(true);
+             switch (probe.result) {
 diff --git a/src/shader_recompiler/frontend/translate/vector_alu.cpp b/src/shader_recompiler/frontend/translate/vector_alu.cpp
 index 434bf0a..db6b529 100644
 --- a/src/shader_recompiler/frontend/translate/vector_alu.cpp
@@ -312,6 +335,33 @@ index 434bf0a..db6b529 100644
          } else {
              UNREACHABLE_MSG("Unsupported float class mask: {:#x}", static_cast<u32>(class_mask));
          }
+diff --git a/src/shadnet/server_probe.cpp b/src/shadnet/server_probe.cpp
+index f616b47..53f45cc 100644
+--- a/src/shadnet/server_probe.cpp
++++ b/src/shadnet/server_probe.cpp
+@@ -136,6 +136,9 @@ ProbeInfo ProbeServer(const std::string& host, u16 port, u32 timeout_ms) {
+         SHAD_CLOSE(sock);
+         LOG_WARNING(ShadNet, "probe: {}:{} reachable but no ServerInfo header received", host,
+                     port);
++        // D1 fork: a header that did not arrive in time is a timeout, not a malformed handshake;
++        // report it as Unreachable so the caller's retry applies.
++        info.result = ProbeResult::Unreachable;
+         return info;
+     }
+     if (static_cast<PacketType>(hdr[0]) != PacketType::ServerInfo) {
+diff --git a/src/shadnet/server_probe.h b/src/shadnet/server_probe.h
+index 2035535..e667102 100644
+--- a/src/shadnet/server_probe.h
++++ b/src/shadnet/server_probe.h
+@@ -9,7 +9,7 @@
+ namespace ShadNet {
+ 
+ // Default timeout for the startup reachability probe.
+-static constexpr u32 SHAD_PROBE_TIMEOUT_MS = 3000;
++static constexpr u32 SHAD_PROBE_TIMEOUT_MS = 10000; // D1 fork: was 3000 (BUFFALO under boot load)
+ 
+ enum class ProbeResult {
+     Ok,              // reachable and protocol version matches SHAD_PROTOCOL_VERSION
 diff --git a/src/video_core/texture_cache/texture_cache.cpp b/src/video_core/texture_cache/texture_cache.cpp
 index 2d18c10..0a55bba 100644
 --- a/src/video_core/texture_cache/texture_cache.cpp
