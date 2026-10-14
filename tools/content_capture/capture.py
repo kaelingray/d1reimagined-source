@@ -227,22 +227,6 @@ def validate_video(path, ffmpeg):
             "full_decode": "PASS", "video_properties": inspect_video_properties(result.stderr)}
 
 
-def validate_screenshot(path, ffmpeg):
-    """Decode a PNG original without rewriting it or inventing a video duration."""
-    with path.open("rb") as stream:
-        signature = stream.read(8)
-    if path.suffix.lower() != ".png" or signature != b"\x89PNG\r\n\x1a\n":
-        raise ValueError("Reviewed report screenshots must be PNG images")
-    result = subprocess.run(
-        [ffmpeg, "-hide_banner", "-nostdin", "-xerror", "-threads", "2", "-i", str(path),
-         "-map", "0:v:0", "-f", "null", "-"],
-        capture_output=True, text=True, errors="replace", timeout=60)
-    properties = inspect_video_properties(result.stderr)
-    if result.returncode or not properties["width"] or not properties["height"]:
-        raise ValueError("Screenshot failed decode or dimensions are unavailable")
-    return {"decode": "PASS", "width": properties["width"], "height": properties["height"]}
-
-
 def git_context():
     def git(*args):
         r = subprocess.run(["git", "-C", str(REPO), *args], capture_output=True,
@@ -417,14 +401,13 @@ class Capture:
                 files[path.relative_to(package).as_posix()] = {"size": path.stat().st_size, "sha256": digest(path)}
         atomic_json(package / "hashes.json", {"schema_version": 1, "files": files})
 
-    def package_report(self, report, events, metadata, reviewed_screenshots=()):
+    def package_report(self, report, events, metadata):
         """Queue a private engineering handoff without resending referenced media."""
         if not self.cfg.get("CONTENT_CAPTURE_ENABLED", True):
             raise ValueError("Content capture is disabled")
         reserved = {"schema_version", "clip_id", "source_machine", "project", "git_commit", "git_branch",
                     "dirty_worktree", "repository", "sha256", "package_kind", "contains_sensitive_information",
-                    "requires_manual_review", "contains_voice", "full_decode", "video_properties",
-                    "reviewed_screenshots"}
+                    "requires_manual_review", "contains_voice", "full_decode", "video_properties"}
         if reserved & metadata.keys():
             raise ValueError("Metadata supplies reserved traceability fields")
         if not metadata.get("description", "").strip():
@@ -445,19 +428,6 @@ class Capture:
         try:
             copy_closed(Path(report), work / "daily-report.md")
             check_text((work / "daily-report.md").read_text(encoding="utf-8-sig"))
-            screenshots = []
-            for index, source in enumerate(reviewed_screenshots, 1):
-                source = Path(source)
-                if source.is_symlink() or source.suffix.lower() != ".png":
-                    raise ValueError("Reviewed report screenshots must be closed PNG originals")
-                relative = f"screenshots/{index:02d}.png"
-                image = work / relative
-                image.parent.mkdir(exist_ok=True)
-                copy_closed(source, image)
-                decoded = validate_screenshot(image, self.ffmpeg)
-                screenshots.append({"file": relative, "size": image.stat().st_size,
-                                    "sha256": digest(image), **decoded,
-                                    "visual_review": "inspected for private handoff only"})
             meta = {**metadata, **git_context(), "schema_version": 1, "clip_id": clip_id,
                     "source_machine": self.machine, "project": "destiny1-preservation",
                     "package_kind": "engineering-report", "devblog": None,
@@ -465,7 +435,6 @@ class Capture:
                     "game_build": self.cfg.get("CURRENT_GAME_BUILD", "01.24"),
                     "event_type": event_type, "importance": importance, "contains_voice": False,
                     "contains_sensitive_information": True, "requires_manual_review": True,
-                    "reviewed_screenshots": screenshots,
                     "automatic_security_check": {"target": "private engineering report only",
                                                  "text_scan": "PASS", "publication_review_required": True}}
             check_text(json.dumps(meta, allow_nan=False))
@@ -597,21 +566,8 @@ class Capture:
         native_review = (auto_security.get("target") == "owned RPCS3 native game and audio only"
                          and auto_security.get("text_scan") == "PASS"
                          and auto_security.get("publication_review_required") is True)
-        screenshots = meta.get("reviewed_screenshots", [])
-        approved_images = {}
-        if isinstance(screenshots, list):
-            for shot in screenshots:
-                if (isinstance(shot, dict) and isinstance(shot.get("file"), str)
-                        and re.fullmatch(r"screenshots/[0-9]{2,}\.png", shot["file"])
-                        and shot.get("decode") == "PASS"
-                        and shot.get("visual_review") == "inspected for private handoff only"
-                        and type(shot.get("width")) is int and shot["width"] > 0
-                        and type(shot.get("height")) is int and shot["height"] > 0):
-                    approved_images[shot["file"]] = {"size": shot.get("size"), "sha256": shot.get("sha256")}
         report_review = (meta.get("package_kind") == "engineering-report"
-                         and isinstance(screenshots, list) and len(approved_images) == len(screenshots)
-                         and all(manifest["files"].get(name) == pin for name, pin in approved_images.items())
-                         and set(manifest["files"]) == {"metadata.json", "daily-report.md", "events.json"} | set(approved_images)
+                         and set(manifest["files"]) == {"metadata.json", "daily-report.md", "events.json"}
                          and auto_security.get("target") == "private engineering report only"
                          and auto_security.get("text_scan") == "PASS"
                          and auto_security.get("publication_review_required") is True)
@@ -620,8 +576,7 @@ class Capture:
         check_text(json.dumps(meta))
         if report_review:
             for relative in manifest["files"]:
-                if relative not in approved_images:
-                    check_text((package / relative).read_text(encoding="utf-8-sig"))
+                check_text((package / relative).read_text(encoding="utf-8-sig"))
         for source in (package / "support").glob("*"):
             if source.suffix not in {".png", ".jpg"}:
                 check_text(source.read_text(encoding="utf-8-sig"))
@@ -854,8 +809,6 @@ def main(argv=None):
     report.add_argument("report", type=Path)
     report.add_argument("--events", type=Path, required=True)
     report.add_argument("--metadata", type=Path, required=True)
-    report.add_argument("--reviewed-screenshot", type=Path, action="append", default=[],
-                        help="Closed PNG visually inspected for private transfer; publication review remains required")
     buf = sub.add_parser("buffer-add", help="Add a finalized native recording segment to the bounded local buffer")
     buf.add_argument("video", type=Path)
     buf.add_argument("--recorded-at", required=True)
@@ -894,8 +847,7 @@ def main(argv=None):
         result = capture.status()
     elif args.command == "report":
         result = str(capture.package_report(args.report, json.loads(args.events.read_text(encoding="utf-8-sig")),
-                                           json.loads(args.metadata.read_text(encoding="utf-8-sig")),
-                                           args.reviewed_screenshot))
+                                           json.loads(args.metadata.read_text(encoding="utf-8-sig"))))
     elif args.command == "buffer-add":
         result = capture.add_buffer(args.video, args.recorded_at)
     elif args.command == "event":
