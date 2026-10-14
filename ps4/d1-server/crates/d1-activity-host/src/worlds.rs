@@ -121,8 +121,23 @@ pub const PVP_CITY_DEFENSE: KnownWorld = KnownWorld {
     chosen: &[0],
 };
 
+/// `act_cosmo_m0_highway` - the Cosmodrome's first story world, captured on build 56578 the same
+/// way as [`PVP_CITY_DEFENSE`] (run `2026-10-14-world-act_cosmo_m0_highway`): PRIVATE checksum
+/// `0x8FE07299`, 22 bubbles. Served with every bubble CHOSEN, this world's own sensor-client list
+/// and its sensor group `0x4786C0E0` (`D1_AH_SENSOR_NAME_HASH`), rung 34 completed and the Guardian
+/// spawned armed and walked. The first PvE world on the served route.
+///
+/// ⚠ All 22 bubbles were chosen without a sub-bubble check (orbit's rule); this one passed.
+pub const ACT_COSMO_M0_HIGHWAY: KnownWorld = KnownWorld {
+    name: "act_cosmo_m0_highway",
+    scenario_tag: 0,
+    checksum: 0x8FE0_7299,
+    bubble_count: 22,
+    chosen: &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+};
+
 /// Every world whose scenario record has been captured.
-pub const KNOWN_WORLDS: &[KnownWorld] = &[PVP_MOONBASE, ORBIT, PVP_CITY_DEFENSE];
+pub const KNOWN_WORLDS: &[KnownWorld] = &[PVP_MOONBASE, ORBIT, PVP_CITY_DEFENSE, ACT_COSMO_M0_HIGHWAY];
 
 /// The world an Activity Host publishes when nothing overrides it.
 ///
