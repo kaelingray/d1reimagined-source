@@ -98,6 +98,7 @@ def main():
     ap.add_argument('--max-hits', type=int, default=200)
     ap.add_argument('--read', action='append', default=[], help='absolute 8-aligned address: break on read or write (8 bytes)')
     ap.add_argument('--exec', action='append', default=[], help='eboot-relative address: execute breakpoint; logs rax/rbp/rdi and 16 bytes at [rbp-0x150]')
+    ap.add_argument('--log-av', action='store_true', help='log access violations outside the guest image (still passed on)')
     a = ap.parse_args()
     p, base = wg['open_client']()
     addrs = [int(x, 16) for x in a.addr]
@@ -177,11 +178,26 @@ def main():
                 elif exc == BREAKPOINT and not threads.get('_attach_bp'):
                     threads['_attach_bp'] = 1      # the attach break-in
                 else:
+                    # --log-av: record access violations outside the guest image (the emulator's own
+                    # handlers still get every one, first chance included - nothing is swallowed).
+                    if a.log_av and exc == 0xC0000005 and tid in threads and threads.get('_avs', 0) < 50:
+                        threads['_avs'] = threads.get('_avs', 0) + 1
+                        c = Ctx()
+                        if c.get(threads[tid]):
+                            rip, rsp = c.u64(OFF_RIP), c.u64(OFF_RSP)
+                            if not base <= rip < base + 0x18D8000:
+                                try:
+                                    stack = struct.unpack('<128Q', p.read(rsp, 1024))
+                                except OSError:
+                                    stack = ()
+                                img = [hex(q - base) for q in stack if base <= q < base + 0x18D8000][:16]
+                                log(event='av', tid=tid, rip=hex(rip), rax=hex(c.u64(OFF_RAX)),
+                                    rdi=hex(c.u64(OFF_RDI)), rsi=hex(c.u64(OFF_RSI)), stack_img=img)
                     cont = DBG_EXCEPTION_NOT_HANDLED
             k32.ContinueDebugEvent(epid, tid, cont)
     finally:
         for tid, h in list(threads.items()):
-            if tid == '_attach_bp':
+            if isinstance(tid, str):        # '_attach_bp', '_avs' bookkeeping keys
                 continue
             k32.SuspendThread(h); arm(h, addrs, on=False); k32.ResumeThread(h)
         # Drain before detaching: a hit already raised on another thread is still queued, and once

@@ -1,0 +1,237 @@
+diff --git a/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs b/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
+index 986c575..7963d6d 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/art_arrangement.rs
+@@ -93,6 +93,9 @@ pub struct ItemDefinition {
+     pub stats: Option<Vec<(u16, u32)>>,
+     /// `(record present, value)` from `def+0x30`. An absent record leaves the schema default.
+     pub curve_offset: (bool, u16),
++    /// ⭐ `def_client+0x1C8` (u16) - the item's **weapon object index** ([`weapon_object`]), or
++    /// `None` when the definition has no client record.
++    pub weapon_object: Option<u16>,
+ }
+ 
+ fn i64_at(d: &[u8], o: usize) -> Result<i64> {
+@@ -162,6 +165,40 @@ pub fn equip_slot(d: &[u8]) -> Result<Option<u8>> {
+     Ok(Some(d[dc as usize + 0x18]))
+ }
+ 
++/// Offset of the weapon object index inside the definition's client record.
++pub const DEF_CLIENT_WEAPON_OBJECT: usize = 0x1C8;
++
++/// ⭐ The item's **weapon object index** - `def_client + 0x1C8` (u16), the value equipment element
++/// `+0x0A` must carry.
++///
++/// Build 56578 (14 Oct 2026): the player-configuration builder `0x912240` calls `0x910C60` once
++/// per weapon slot. `0x910C60` reads element `+0x0A`, indexes the 208-entry table behind
++/// `investment_globals+0x350` (tag `0x80A5FFA9`, 32-byte records) with it, and resolves the
++/// record's name hash (`0x33FC20`) to the object-definition tag the loadout method `0x668D80`
++/// then constructs at spawn. Element `+0x0A = 0` (every fixture before this) names record 0 ->
++/// tag `0x80A7E218`, a type-8 object, so all three weapons spawned as non-weapons and the
++/// player held only the Ghost. Serving this field (12/13/39 for the staged primary, special and
++/// heavy) gave type-11 tags `0x80A6A02E`/`0x80A6A035`/`0x80A6A017` and a drawn hand cannon with
++/// the weapon HUD. `None` when the definition has no client record.
++pub fn weapon_object(d: &[u8]) -> Result<Option<u16>> {
++    let rel = i64_at(d, 0x18)?;
++    if rel == 0 {
++        return Ok(None);
++    }
++    let dc = self_rel(0x18, rel)
++        .ok_or_else(|| OracleError::Shape(format!("def_client self-relative {rel:#x} overflows")))?;
++    let at = dc + DEF_CLIENT_WEAPON_OBJECT as i64;
++    if dc < 0 {
++        return Err(OracleError::Shape(format!("def_client self-relative {rel:#x} is negative")));
++    }
++    // Armor and other non-weapon definitions are shorter (546 B against a weapon's 776 B): their
++    // client record ends before +0x1C8, which means "no weapon object", not a malformed entry.
++    if at > d.len() as i64 - 2 {
++        return Ok(None);
++    }
++    Ok(Some(u16_at(d, at as usize)?))
++}
++
+ /// ⭐ The definition's **stat list** at `def+0x68` - the record `FUN_0028B6E0` (called by the
+ /// client's own element default-constructor `FUN_0026E0E0`, gated on `*(i64*)(def+0x68) != 0`)
+ /// copies into element `+0x88` (u16 stat indices) / `+0x98` (u32 values):
+@@ -327,6 +364,7 @@ pub fn resolve(content: &mut Content, ci: u16, table: &IndexTable) -> Result<Ite
+         equip_slot: equip_slot(&d)?,
+         stats: stat_list(&d)?,
+         curve_offset: curve_offset(&d)?,
++        weapon_object: weapon_object(&d)?,
+     })
+ }
+ 
+@@ -370,6 +408,8 @@ pub struct Row {
+     pub equip_slot: u8,
+     pub curve_offset: u16,
+     pub stats: String,
++    /// [`weapon_object`]; `0xFFFF` when the definition has no client record.
++    pub weapon_object: u16,
+ }
+ 
+ /// Expand one resolved definition into its three rows.
+@@ -394,6 +434,7 @@ pub fn rows_for(def: &ItemDefinition) -> Vec<Row> {
+             equip_slot: slot,
+             curve_offset: def.curve_offset.1,
+             stats: stats.clone(),
++            weapon_object: def.weapon_object.unwrap_or(0xFFFF),
+         })
+         .collect()
+ }
+@@ -425,10 +466,12 @@ pub fn render_tsv(rows: &[Row], index_tsv_sha16: &str, generator: &str) -> Strin
+          gear, ci {EMBLEM_INDEX} equip_slot {EMBLEM_SLOT}, ci {ORYX_MASK} curve_offset \
+          {ORYX_MASK_CURVE}.\n"
+     ));
+-    s.push_str("content_index\titem_hash\tworld_tag\tclass\tarrangement\tequip_slot\tcurve_offset\tstats\n");
++    s.push_str("# weapon_object: element +0x0A's source - def_client+0x1C8, the index 0x910C60 resolves through\n");
++    s.push_str("# investment_globals+0x350 to the weapon's object-definition tag. 65535 = no client record.\n");
++    s.push_str("content_index\titem_hash\tworld_tag\tclass\tarrangement\tequip_slot\tcurve_offset\tstats\tweapon_object\n");
+     for r in rows {
+         s.push_str(&format!(
+-            "{}\t{:#010x}\t{:#010x}\t{}\t{}\t{}\t{}\t{}\n",
++            "{}\t{:#010x}\t{:#010x}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+             r.content_index,
+             r.item_hash,
+             r.world_tag,
+@@ -436,7 +479,8 @@ pub fn render_tsv(rows: &[Row], index_tsv_sha16: &str, generator: &str) -> Strin
+             r.arrangement,
+             r.equip_slot,
+             r.curve_offset,
+-            r.stats
++            r.stats,
++            r.weapon_object
+         ));
+     }
+     s
+diff --git a/ps4/d1-server/crates/d1-oracle/src/character.rs b/ps4/d1-server/crates/d1-oracle/src/character.rs
+index 576bbc5..2da6ae8 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/character.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/character.rs
+@@ -135,8 +135,16 @@ pub const EQUIP_ITEM_SOID: usize = 0x00;
+ /// ⭐ Element `+0x08`, `u16` - the **content index**, and the emblem. `0xA11627` reads
+ /// `[card + 0x258 + 64*slot]`, i.e. exactly this field. `[C]`
+ pub const EQUIP_CONTENT_INDEX: usize = 0x08;
+-/// Element `+0x0A`, `u16` - `[U]`, no identified reader. Left `0`, as every fixture has it.
++/// ⭐ Element `+0x0A`, `u16` - the **weapon object index**. Reader found 2026-10-14 on build 56578:
++/// `0x910C60` (one call per weapon slot from the player-configuration builder `0x912240`) indexes
++/// the `investment_globals+0x350` table with it and resolves the weapon's object-definition tag.
++/// `0` names record 0, a type-8 object: the loadout spawned as non-weapons. Source:
++/// [`crate::art_arrangement::weapon_object`] (`def_client+0x1C8`), written for [`WEAPON_ORDINALS`].
+ pub const EQUIP_FIELD_0A: usize = 0x0A;
++/// The equipped ordinals (`def_client+0x18`) of the primary, special and heavy weapon - measured on
++/// build 56578 from the staged weapons' definitions (6, 7, 8). Element `+0x0A` is written only for
++/// these; every other slot keeps the `0` all fixtures have always shipped.
++pub const WEAPON_ORDINALS: [usize; 3] = [6, 7, 8];
+ /// ⭐⭐ Element `+0x0C`, `u16` - **THE ART-ARRANGEMENT INDEX. This is what makes gear DRAW.**
+ ///
+ /// `FUN_0054CF70` (the render-description builder; callers `0x54CF40` ← `0x58D350` the world-tag
+@@ -212,6 +220,8 @@ pub struct EquipSlot {
+     /// [`crate::item_index::ArtTable`], never invent one - a wrong index renders SOMETHING and
+     /// reads as success.
+     pub art_arrangement: u16,
++    /// Element `+0x0A` - the **weapon object index** ([`EQUIP_FIELD_0A`]); `0` for non-weapons.
++    pub weapon_object: u16,
+ }
+ 
+ impl EquipSlot {
+@@ -219,6 +229,7 @@ impl EquipSlot {
+         item_soid: 0,
+         content_index: EMPTY_CONTENT_INDEX,
+         art_arrangement: crate::item_index::EMPTY_ARRANGEMENT,
++        weapon_object: 0,
+     };
+ }
+ 
+@@ -322,6 +333,8 @@ impl CharacterSpec {
+                 .copy_from_slice(&e.content_index.to_le_bytes());
+             o[at + EQUIP_ART_ARRANGEMENT..at + EQUIP_ART_ARRANGEMENT + 2]
+                 .copy_from_slice(&e.art_arrangement.to_le_bytes());
++            o[at + EQUIP_FIELD_0A..at + EQUIP_FIELD_0A + 2]
++                .copy_from_slice(&e.weapon_object.to_le_bytes());
+         }
+ 
+         // Stats: sentinel first, then the real entries on top. ⭐ Order matters - see the module
+@@ -1542,7 +1555,18 @@ pub fn equipment_from_inventory_with(
+             }
+             _ => crate::item_index::EMPTY_ARRANGEMENT,
+         };
+-        let slot = EquipSlot { item_soid: it.soid, content_index, art_arrangement };
++        // ⭐ Element +0x0A for the three weapon ordinals: the definition's weapon object index.
++        // Without it every weapon resolves record 0 of the object table and spawns as a non-weapon.
++        let weapon_object = match art {
++            Some((t, _)) if t
++                .equip_slot_for(content_index)
++                .is_some_and(|s| WEAPON_ORDINALS.contains(&s)) =>
++            {
++                t.weapon_object_for(content_index).unwrap_or(0)
++            }
++            _ => 0,
++        };
++        let slot = EquipSlot { item_soid: it.soid, content_index, art_arrangement, weapon_object };
+ 
+         if let Some((t, _)) = art {
+             match t.equip_slot_for(content_index) {
+diff --git a/ps4/d1-server/crates/d1-oracle/src/item_index.rs b/ps4/d1-server/crates/d1-oracle/src/item_index.rs
+index e8a1e85..393a62e 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/item_index.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/item_index.rs
+@@ -562,6 +562,10 @@ pub struct ArtTable {
+     /// **measured none** (a NULL or empty record - the constructor writes nothing either way);
+     /// absent from the map is *never measured*. The two must stay distinguishable.
+     stats: BTreeMap<u16, Vec<(u16, u32)>>,
++    /// ⭐ content_index → the definition's **weapon object index** (`def_client+0x1C8`), the value
++    /// equipment element `+0x0A` carries ([`crate::art_arrangement::weapon_object`]). Absent from
++    /// the map = never measured (a table older than column 9).
++    weapon_objects: BTreeMap<u16, u16>,
+ }
+ 
+ impl ArtTable {
+@@ -585,6 +589,7 @@ impl ArtTable {
+         let mut slots = BTreeMap::new();
+         let mut curve_offsets = BTreeMap::new();
+         let mut stats: BTreeMap<u16, Vec<(u16, u32)>> = BTreeMap::new();
++        let mut weapon_objects = BTreeMap::new();
+         for line in text.lines() {
+             if line.starts_with('#') || line.starts_with("content_index") || line.trim().is_empty() {
+                 continue;
+@@ -632,8 +637,22 @@ impl ArtTable {
+                 };
+                 stats.insert(ci as u16, list);
+             }
++            // Column 9 (weapon_object) exists from 2026-10-14 on; older tables leave it unmeasured.
++            if let Some(w) = f.get(8) {
++                let v = hexnum(w).ok_or_else(|| {
++                    OracleError::Shape(format!("bad weapon object {w:?}"))
++                })?;
++                weapon_objects.insert(ci as u16, v as u16);
++            }
+         }
+-        let t = ArtTable { path: path.to_path_buf(), rows, slots, curve_offsets, stats };
++        let t = ArtTable {
++            path: path.to_path_buf(),
++            rows,
++            slots,
++            curve_offsets,
++            stats,
++            weapon_objects,
++        };
+         // ⭐ The equip-slot anchor: the emblem definition must name slot 12, the byte a SNAPSHOT
+         // REPLAY of `investment_globals->vtbl[0x160]()[0x18]` independently returned (EMBLEM_SLOT).
+         // Two instruments, one byte; a generator drift fails here, not on screen.
+@@ -738,6 +757,16 @@ impl ArtTable {
+     pub fn stats_for(&self, content_index: u16) -> Option<&[(u16, u32)]> {
+         self.stats.get(&content_index).map(|v| v.as_slice())
+     }
++
++    /// ⭐ The definition's **weapon object index** (`def_client+0x1C8`) for equipment element
++    /// `+0x0A`, or `None` when the definition has no client record (`0xFFFF`) or the table never
++    /// measured it - the caller then leaves the element's `0` alone.
++    pub fn weapon_object_for(&self, content_index: u16) -> Option<u16> {
++        match self.weapon_objects.get(&content_index) {
++            Some(&w) if w != 0xFFFF => Some(w),
++            _ => None,
++        }
++    }
+ }
+ 
+ // ─────────────────────────────────────────────────────────────────────────────────────────────────
