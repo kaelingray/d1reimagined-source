@@ -130,11 +130,11 @@ def _patch_code(p, addr, data):
     k32.FlushInstructionCache(p.h, ctypes.c_void_p(addr), len(data))
 
 
-def session(p, base):
+def session(p, base, index=0):
     mgr = p.u(base + MANAGER_PTR, 'Q')
     if not mgr or p.read(mgr, 1)[0] == 0:
         sys.exit(f'session manager [{base + MANAGER_PTR:#x}] = {mgr:#x}: not valid yet')
-    slot = mgr                                      # session index 0
+    slot = mgr + index * 0x131C8                    # session index (0x775180's stride)
     inner = struct.unpack('<i', p.read(slot + 8, 4))[0] * INNER_STRIDE
     state = p.u(slot + inner + STATE_OFF, 'I')
     if state > 0xA or not (VALID_MASK >> state) & 1:
@@ -399,6 +399,19 @@ def main():
             p.write(h + DONE, struct.pack('<Q', r))
             print(f'  wrote done = {p.u(h + DONE, "Q"):#x}  (SYNTHETIC: skips the unfinished tasks, as 01.29 did)')
         return 0
+    if cmd == 'goal':
+        # goal --session 1 --value 0x1d [--confirm]: during setup:matchmaking 0x7AB5D0 keeps the
+        # client matchmaking (team pick, ready-to-start) while session 1's goal is 0x1D; at 0x24 it
+        # treats matchmaking as finished by a remote host.
+        idx = int(sys.argv[sys.argv.index('--session') + 1]) if '--session' in sys.argv else 0
+        mgr, state, params = session(p, base, idx)
+        print(f'session {idx}: state {state} goal has={p.read(params + HAS_VALUE, 1)[0] & 1} '
+              f'value={p.u(params + GOAL_VALUE, "I"):#x}')
+        if '--value' in sys.argv and '--confirm' in sys.argv:
+            v = int(sys.argv[sys.argv.index('--value') + 1], 0)
+            p.write(params + GOAL_VALUE, struct.pack('<I', v))
+            print(f'  wrote goal = {p.u(params + GOAL_VALUE, "I"):#x}  (SYNTHETIC)')
+        return 0
     mgr, state, params = session(p, base)
     act = params + ACTIVITY_PARAM
     print(f'session 0: manager {mgr:#x} state {state} params {params:#x}')
@@ -412,8 +425,12 @@ def main():
         if len(hs) != 1:
             sys.exit(f'REFUSING: expected exactly one orbit handler (vtable {base + ORBIT_VTABLE:#x}), found {[hex(h) for h in hs]}')
         h = hs[0]
+        # --goal 0x1d asks for setup:matchmaking (rung 29) instead of in_world (rung 36), so the
+        # client runs its own matchmaking and team pick (0x7AB270) rather than reading goal 0x24
+        # as "the activity-session host already finished matchmaking" (0x7AB5D0).
+        goal = int(sys.argv[sys.argv.index('--goal') + 1], 0) if '--goal' in sys.argv else RUNG_IN_WORLD
         writes = [(act + ACTIVITY_ID, struct.pack('<H', aid), f'activity id = {aid}'),
-                  (params + GOAL_VALUE, struct.pack('<I', RUNG_IN_WORLD), 'goal = 0x24 (in_world)'),
+                  (params + GOAL_VALUE, struct.pack('<I', goal), f'goal = {goal:#x}'),
                   (h + DEBOUNCE, struct.pack('<Q', 0), 'orbit debounce stamp = 0')]
         print(f'  orbit handler {h:#x} (debounce now {p.u(h + DEBOUNCE, "Q"):#x})')
         for a, d, why in writes:
