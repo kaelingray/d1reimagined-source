@@ -259,6 +259,12 @@ def main():
             # --all also lists clients already delivered (pending clear), e.g. on a run that serves them.
             if (pend or '--all' in sys.argv) and (own == local or own > 0x7F):
                 line = f'{h:#010x} {i8:#x} {sub} {int(ta != 0xFFFFFFFF)} {int(tb != 0xFFFFFFFF)}'
+                if '--dump' in sys.argv and f'{h:#010x}/{i8:#x}/{sub}' == sys.argv[sys.argv.index('--dump') + 1]:
+                    raw = p.read(obj, 0x100)
+                    print(f'object {obj:#x}', file=sys.stderr)
+                    for o in range(0, 0x100, 16): print(f'  +{o:03x} ' + raw[o:o+16].hex(' '), file=sys.stderr)
+                if '--types' in sys.argv:
+                    line += f'  # A {ta:#010x} B {tb:#010x} owner {own:#x} pending {pend}'
                 # --bundle: give the first type-12 client bundle (i8 0x0C) the local player's value,
                 # which is what links the player and lets the spawn gate pass (notes, 13 Oct):
                 #   +0x08/+0x09 = 1, +0x38 = players[0]+0x738 (sign-extended), +0x40 = the player key
