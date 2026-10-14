@@ -152,8 +152,13 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'read'
     p, base = wg.open_client()
     st = json.load(open(STATE)) if os.path.exists(STATE) else None
+    # The image base repeats across launches (0x5140000 twice on 14 Oct), so the state is tied to
+    # the process id as well; a state file from a dead emulator is ignored, not trusted.
+    pid = ctypes.windll.kernel32.GetProcessId(p.h)
+    if st and (st.get('base') != base or st.get('pid') != pid):
+        st = None
     if cmd == 'install':
-        if st and st.get('base') == base:
+        if st:
             sys.exit('hooks already installed in this process; run remove first')
         # Check every prologue BEFORE touching anything: a refusal mid-way used to leave the earlier
         # hooks live with no state file to remove them (2026-10-13, the lifetime getter 0x10C500).
@@ -184,9 +189,9 @@ def main():
             raise
         finally:
             wg.ntdll.NtResumeProcess(p.h)
-        json.dump({'base': base, 'page': page, 'hooks': saved}, open(STATE, 'w'), indent=1)
+        json.dump({'base': base, 'pid': pid, 'page': page, 'hooks': saved}, open(STATE, 'w'), indent=1)
         return 0
-    if not st or st.get('base') != base:
+    if not st:
         sys.exit('no hooks recorded for this process')
     if cmd == 'read':
         for h in st['hooks']:
