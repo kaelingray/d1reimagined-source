@@ -499,6 +499,7 @@ fn main() -> anyhow::Result<()> {
             // is set - this is `synthetic-minimal` and its post-pass dispatch is `[U]` until the
             // live watch on `record+0x1AC` confirms it. ⇒ design/activity-lifetime-state.md.
             let mut sensor_phase_file = None;
+            let mut sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)> = None;
             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
                 .ok()
                 .and_then(|s| s.trim().parse::<i8>().ok())
@@ -585,6 +586,31 @@ fn main() -> anyhow::Result<()> {
                             frames.keys().collect::<Vec<_>>()
                         );
                         sensor_phase_file = Some((std::path::PathBuf::from(path), frames));
+                    }
+                    // ⭐ D1_AH_TEAM0_ACTIVITIES=410,416: build the frame twice, with the type-12
+                    // bundle's A+0x38 (the player's team) = 0 and = -1; the instance picks one per
+                    // join from the launched activity (Private Match 0, story -1).
+                    if let Ok(list) = std::env::var("D1_AH_TEAM0_ACTIVITIES") {
+                        let set: std::collections::HashSet<u16> =
+                            list.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+                        let with_team = |team: i32| {
+                            let mut p = params.clone();
+                            for c in p.clients.iter_mut() {
+                                if let Some((0x8080_22A5, img)) = c.a_value.as_mut() {
+                                    if img.len() >= 0x3C {
+                                        img[0x38..0x3C].copy_from_slice(&team.to_le_bytes());
+                                    }
+                                }
+                            }
+                            d1_activity_host::codec::SchemaCodec::build_sensor(&p)
+                        };
+                        match (with_team(0), with_team(-1)) {
+                            (Ok(a), Ok(b)) => {
+                                tracing::info!("⭐ per-activity spawn team armed: team 0 for {set:?}, -1 otherwise");
+                                sensor_team_frames = Some((a, b, set));
+                            }
+                            (Err(e), _) | (_, Err(e)) => tracing::error!("⛔ D1_AH_TEAM0_ACTIVITIES: {e}"),
+                        }
                     }
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
@@ -677,6 +703,9 @@ fn main() -> anyhow::Result<()> {
                     }
                     if let Some(bytes) = sensor_payload.clone() {
                         i.set_sensor_payload(bytes);
+                        if let Some((a, b, set)) = sensor_team_frames.clone() {
+                            i.set_sensor_team_frames(a, b, set);
+                        }
                         if let Some(s) = sensor_repeat_s {
                             i.set_sensor_repeat(std::time::Duration::from_secs(s));
                         }

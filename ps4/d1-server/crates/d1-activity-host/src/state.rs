@@ -211,6 +211,11 @@ pub struct ActivityInstance {
     /// send path. **Ships `synthetic-minimal`, off by default** - the post-pass dispatch is `[U]`
     /// until the live watch on `record+0x1AC` confirms it (task #4). ⇒ `design/activity-lifetime-state.md`.
     sensor_payload: Option<Vec<u8>>,
+    /// ⭐ Per-activity spawn-bundle team: `(team-0 frame, team -1 frame, team-0 activity indices)`.
+    /// The type-12 bundle's `A+0x38` must equal the player's team, which the client sets per
+    /// activity type: a Private Match picks team 0, a story mission leaves -1. Chosen at each join
+    /// from the activity index then in force (after [`Self::activity_follow`]).
+    sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)>,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -325,6 +330,7 @@ impl ActivityInstance {
             heartbeats: 0,
             state_refreshes: 0,
             sensor_payload: None,
+            sensor_team_frames: None,
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -426,6 +432,16 @@ impl ActivityInstance {
     /// [`crate::codec::SchemaCodec::build_sensor`]; the instance sends them once it is [`Live`].
     ///
     /// [`Live`]: InstanceState::Live
+    /// Arm the per-activity team choice (see [`Self::sensor_team_frames`]).
+    pub fn set_sensor_team_frames(
+        &mut self,
+        team0: Vec<u8>,
+        team_minus1: Vec<u8>,
+        team0_activities: std::collections::HashSet<u16>,
+    ) {
+        self.sensor_team_frames = Some((team0, team_minus1, team0_activities));
+    }
+
     pub fn set_sensor_payload(&mut self, payload: Vec<u8>) {
         self.sensor_payload = Some(payload);
     }
@@ -692,6 +708,15 @@ impl ActivityInstance {
                 } else if self.activity_follow.is_some() {
                     tracing::warn!(
                         "activity follow: no known launched activity; publishing the configured index {}",
+                        self.activity_index
+                    );
+                }
+                if let Some((t0, tm1, set)) = &self.sensor_team_frames {
+                    let team0 = set.contains(&self.activity_index);
+                    self.sensor_payload = Some(if team0 { t0.clone() } else { tm1.clone() });
+                    tracing::info!(
+                        "⭐ spawn bundle team {} for activity index {}",
+                        if team0 { 0 } else { -1 },
                         self.activity_index
                     );
                 }
