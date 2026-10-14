@@ -40,6 +40,7 @@ CONTEXT_DEBUG_CONTROL = 0x100013          # CONTEXT_AMD64 | CONTROL | INTEGER | 
 OFF_FLAGS, OFF_DR0, OFF_DR6, OFF_DR7, OFF_RSP, OFF_RIP = 0x30, 0x48, 0x68, 0x70, 0x98, 0xF8
 OFF_EFLAGS, OFF_RAX, OFF_RBP, OFF_RDI = 0x44, 0x78, 0xA0, 0xB0
 OFF_RDX, OFF_RSI = 0x88, 0xA8
+OFF_RCX, OFF_RBX = 0x80, 0x90
 
 
 class Ctx:
@@ -98,6 +99,7 @@ def main():
     ap.add_argument('--max-hits', type=int, default=200)
     ap.add_argument('--read', action='append', default=[], help='absolute 8-aligned address: break on read or write (8 bytes)')
     ap.add_argument('--exec', action='append', default=[], help='eboot-relative address: execute breakpoint; logs rax/rbp/rdi and 16 bytes at [rbp-0x150]')
+    ap.add_argument('--peek', action='append', default=[], help='on an exec hit, log the u32 at this register expression, e.g. "rcx+rdx*4+0xc" (repeatable)')
     ap.add_argument('--log-av', action='store_true', help='log access violations outside the guest image (still passed on)')
     ap.add_argument('--av-lo', type=lambda v: int(v, 0), default=0, help='only log AVs with rip >= this')
     ap.add_argument('--av-skip', type=lambda v: {int(x, 0) for x in v.split(',')}, default=set(), help='comma-separated RIPs never to log (routine faults)')
@@ -168,9 +170,18 @@ def main():
                                 dp = p.u(rbp - 0x150, 'Q'); defn = p.read(dp, 0x10).hex(); dtype = p.read(dp + 0x8E, 1)[0]
                             except OSError:
                                 dp, defn, dtype = 0, '', None
+                            regs = dict(rax=rax, rbx=c.u64(OFF_RBX), rcx=c.u64(OFF_RCX), rdx=c.u64(OFF_RDX),
+                                        rsi=c.u64(OFF_RSI), rdi=rdi, rbp=rbp, rsp=rsp)
+                            peeks = {}
+                            for expr in a.peek:
+                                try:
+                                    at = eval(expr, {'__builtins__': {}}, regs) & 0xFFFFFFFFFFFFFFFF
+                                    peeks[expr] = hex(p.u(at, 'I'))
+                                except Exception as e:
+                                    peeks[expr] = f'unreadable ({e})'
                             log(event='exec', tid=tid, rip_img=hex(rip - base), rax=hex(rax), al=rax & 0xFF,
-                                rdi=hex(rdi), rsi=hex(c.u64(OFF_RSI)), rdx=hex(c.u64(OFF_RDX)),
-                                defn=hex(dp), defn_head=defn, defn_type=dtype, stack_img=img)
+                                rdi=hex(rdi), rsi=hex(c.u64(OFF_RSI)), rdx=hex(c.u64(OFF_RDX)), rcx=hex(regs['rcx']),
+                                defn=hex(dp), defn_head=defn, defn_type=dtype, stack_img=img, peek=peeks)
                             ctypes.c_uint32.from_address(c.addr + OFF_EFLAGS).value |= 0x10000   # RF
                         else:
                             log(event='write', tid=tid, rip=hex(rip), rip_img=hex(rip - base) if base <= rip < base + 0x18D8000 else None,

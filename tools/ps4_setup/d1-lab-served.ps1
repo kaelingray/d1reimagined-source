@@ -1,6 +1,10 @@
 param(
     [Parameter(Mandatory)][string]$Name,
     [int]$Minutes = 90,
+    # The world the Activity Host publishes (global_activity_state+0x688).
+    [string]$World = 'pvp_moonbase',
+    # The world's sensor-client list (d1-winguest.py sensor-clients --all --bundle).
+    [string]$SensorClients = 'F:\d1\d1preservation-main\cfw-staging\sensor-clients-pvp_moonbase-bundle7-team0.txt',
     # Extra NAME=VALUE server variables appended after the served set.
     [string[]]$Extra = @()
 )
@@ -14,7 +18,7 @@ $envs = @(
     'D1_ANSWER_FAMILIES=0,2',
     "D1_ROSTER_DIR=$B\rosters-f0-geared",
     'D1_AH_SENSOR_PHASE=3', 'D1_AH_SENSOR_REPEAT_S=10',
-    "D1_AH_SENSOR_CLIENTS=$S\sensor-clients-pvp_moonbase-bundle7-team0.txt",
+    "D1_AH_SENSOR_CLIENTS=$SensorClients",
     "D1_ACTIVITY_FOLLOW_FILE=$follow", "D1_AH_ACTIVITY_FOLLOW_FILE=$follow",
     "D1_AH_ACTIVITY_TABLE=$B\activity-table.tsv",
     "D1_PROFILE_FILE=$B\profile-geared-385-director-c.bin",
@@ -22,6 +26,6 @@ $envs = @(
     "D1_INVENTORY=$B\inventory", 'D1_FAMILY42=1', 'D1_UNLOCKS=key'
 ) + $Extra
 & F:\d1\tools\Start-D1ContainedBoot.ps1 -Name $Name -LabIp 10.77.0.2 -Minutes $Minutes -OperatorInput -ActivityHost `
-    -Activity pvp_moonbase -ClientPatch F:\d1\d1preservation-main\patches\CUSA00219-56578-lab-orbit.xml `
+    -Activity $World -ClientPatch F:\d1\d1preservation-main\patches\CUSA00219-56578-lab-orbit.xml `
     -ExtraServerEnv $envs *> "$S\$Name.console"
 "done exit=$LASTEXITCODE"
