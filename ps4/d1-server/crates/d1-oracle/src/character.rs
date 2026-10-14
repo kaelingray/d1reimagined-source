@@ -135,8 +135,16 @@ pub const EQUIP_ITEM_SOID: usize = 0x00;
 /// ⭐ Element `+0x08`, `u16` - the **content index**, and the emblem. `0xA11627` reads
 /// `[card + 0x258 + 64*slot]`, i.e. exactly this field. `[C]`
 pub const EQUIP_CONTENT_INDEX: usize = 0x08;
-/// Element `+0x0A`, `u16` - `[U]`, no identified reader. Left `0`, as every fixture has it.
+/// ⭐ Element `+0x0A`, `u16` - the **weapon object index**. Reader found 2026-10-14 on build 56578:
+/// `0x910C60` (one call per weapon slot from the player-configuration builder `0x912240`) indexes
+/// the `investment_globals+0x350` table with it and resolves the weapon's object-definition tag.
+/// `0` names record 0, a type-8 object: the loadout spawned as non-weapons. Source:
+/// [`crate::art_arrangement::weapon_object`] (`def_client+0x1C8`), written for [`WEAPON_ORDINALS`].
 pub const EQUIP_FIELD_0A: usize = 0x0A;
+/// The equipped ordinals (`def_client+0x18`) of the primary, special and heavy weapon - measured on
+/// build 56578 from the staged weapons' definitions (6, 7, 8). Element `+0x0A` is written only for
+/// these; every other slot keeps the `0` all fixtures have always shipped.
+pub const WEAPON_ORDINALS: [usize; 3] = [6, 7, 8];
 /// ⭐⭐ Element `+0x0C`, `u16` - **THE ART-ARRANGEMENT INDEX. This is what makes gear DRAW.**
 ///
 /// `FUN_0054CF70` (the render-description builder; callers `0x54CF40` ← `0x58D350` the world-tag
@@ -212,6 +220,8 @@ pub struct EquipSlot {
     /// [`crate::item_index::ArtTable`], never invent one - a wrong index renders SOMETHING and
     /// reads as success.
     pub art_arrangement: u16,
+    /// Element `+0x0A` - the **weapon object index** ([`EQUIP_FIELD_0A`]); `0` for non-weapons.
+    pub weapon_object: u16,
 }
 
 impl EquipSlot {
@@ -219,6 +229,7 @@ impl EquipSlot {
         item_soid: 0,
         content_index: EMPTY_CONTENT_INDEX,
         art_arrangement: crate::item_index::EMPTY_ARRANGEMENT,
+        weapon_object: 0,
     };
 }
 
@@ -322,6 +333,8 @@ impl CharacterSpec {
                 .copy_from_slice(&e.content_index.to_le_bytes());
             o[at + EQUIP_ART_ARRANGEMENT..at + EQUIP_ART_ARRANGEMENT + 2]
                 .copy_from_slice(&e.art_arrangement.to_le_bytes());
+            o[at + EQUIP_FIELD_0A..at + EQUIP_FIELD_0A + 2]
+                .copy_from_slice(&e.weapon_object.to_le_bytes());
         }
 
         // Stats: sentinel first, then the real entries on top. ⭐ Order matters - see the module
@@ -1542,7 +1555,18 @@ pub fn equipment_from_inventory_with(
             }
             _ => crate::item_index::EMPTY_ARRANGEMENT,
         };
-        let slot = EquipSlot { item_soid: it.soid, content_index, art_arrangement };
+        // ⭐ Element +0x0A for the three weapon ordinals: the definition's weapon object index.
+        // Without it every weapon resolves record 0 of the object table and spawns as a non-weapon.
+        let weapon_object = match art {
+            Some((t, _)) if t
+                .equip_slot_for(content_index)
+                .is_some_and(|s| WEAPON_ORDINALS.contains(&s)) =>
+            {
+                t.weapon_object_for(content_index).unwrap_or(0)
+            }
+            _ => 0,
+        };
+        let slot = EquipSlot { item_soid: it.soid, content_index, art_arrangement, weapon_object };
 
         if let Some((t, _)) = art {
             match t.equip_slot_for(content_index) {

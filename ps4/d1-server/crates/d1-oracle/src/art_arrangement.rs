@@ -93,6 +93,9 @@ pub struct ItemDefinition {
     pub stats: Option<Vec<(u16, u32)>>,
     /// `(record present, value)` from `def+0x30`. An absent record leaves the schema default.
     pub curve_offset: (bool, u16),
+    /// ⭐ `def_client+0x1C8` (u16) - the item's **weapon object index** ([`weapon_object`]), or
+    /// `None` when the definition has no client record.
+    pub weapon_object: Option<u16>,
 }
 
 fn i64_at(d: &[u8], o: usize) -> Result<i64> {
@@ -160,6 +163,40 @@ pub fn equip_slot(d: &[u8]) -> Result<Option<u8>> {
         )));
     }
     Ok(Some(d[dc as usize + 0x18]))
+}
+
+/// Offset of the weapon object index inside the definition's client record.
+pub const DEF_CLIENT_WEAPON_OBJECT: usize = 0x1C8;
+
+/// ⭐ The item's **weapon object index** - `def_client + 0x1C8` (u16), the value equipment element
+/// `+0x0A` must carry.
+///
+/// Build 56578 (14 Oct 2026): the player-configuration builder `0x912240` calls `0x910C60` once
+/// per weapon slot. `0x910C60` reads element `+0x0A`, indexes the 208-entry table behind
+/// `investment_globals+0x350` (tag `0x80A5FFA9`, 32-byte records) with it, and resolves the
+/// record's name hash (`0x33FC20`) to the object-definition tag the loadout method `0x668D80`
+/// then constructs at spawn. Element `+0x0A = 0` (every fixture before this) names record 0 ->
+/// tag `0x80A7E218`, a type-8 object, so all three weapons spawned as non-weapons and the
+/// player held only the Ghost. Serving this field (12/13/39 for the staged primary, special and
+/// heavy) gave type-11 tags `0x80A6A02E`/`0x80A6A035`/`0x80A6A017` and a drawn hand cannon with
+/// the weapon HUD. `None` when the definition has no client record.
+pub fn weapon_object(d: &[u8]) -> Result<Option<u16>> {
+    let rel = i64_at(d, 0x18)?;
+    if rel == 0 {
+        return Ok(None);
+    }
+    let dc = self_rel(0x18, rel)
+        .ok_or_else(|| OracleError::Shape(format!("def_client self-relative {rel:#x} overflows")))?;
+    let at = dc + DEF_CLIENT_WEAPON_OBJECT as i64;
+    if dc < 0 {
+        return Err(OracleError::Shape(format!("def_client self-relative {rel:#x} is negative")));
+    }
+    // Armor and other non-weapon definitions are shorter (546 B against a weapon's 776 B): their
+    // client record ends before +0x1C8, which means "no weapon object", not a malformed entry.
+    if at > d.len() as i64 - 2 {
+        return Ok(None);
+    }
+    Ok(Some(u16_at(d, at as usize)?))
 }
 
 /// ⭐ The definition's **stat list** at `def+0x68` - the record `FUN_0028B6E0` (called by the
@@ -327,6 +364,7 @@ pub fn resolve(content: &mut Content, ci: u16, table: &IndexTable) -> Result<Ite
         equip_slot: equip_slot(&d)?,
         stats: stat_list(&d)?,
         curve_offset: curve_offset(&d)?,
+        weapon_object: weapon_object(&d)?,
     })
 }
 
@@ -370,6 +408,8 @@ pub struct Row {
     pub equip_slot: u8,
     pub curve_offset: u16,
     pub stats: String,
+    /// [`weapon_object`]; `0xFFFF` when the definition has no client record.
+    pub weapon_object: u16,
 }
 
 /// Expand one resolved definition into its three rows.
@@ -394,6 +434,7 @@ pub fn rows_for(def: &ItemDefinition) -> Vec<Row> {
             equip_slot: slot,
             curve_offset: def.curve_offset.1,
             stats: stats.clone(),
+            weapon_object: def.weapon_object.unwrap_or(0xFFFF),
         })
         .collect()
 }
@@ -425,10 +466,12 @@ pub fn render_tsv(rows: &[Row], index_tsv_sha16: &str, generator: &str) -> Strin
          gear, ci {EMBLEM_INDEX} equip_slot {EMBLEM_SLOT}, ci {ORYX_MASK} curve_offset \
          {ORYX_MASK_CURVE}.\n"
     ));
-    s.push_str("content_index\titem_hash\tworld_tag\tclass\tarrangement\tequip_slot\tcurve_offset\tstats\n");
+    s.push_str("# weapon_object: element +0x0A's source - def_client+0x1C8, the index 0x910C60 resolves through\n");
+    s.push_str("# investment_globals+0x350 to the weapon's object-definition tag. 65535 = no client record.\n");
+    s.push_str("content_index\titem_hash\tworld_tag\tclass\tarrangement\tequip_slot\tcurve_offset\tstats\tweapon_object\n");
     for r in rows {
         s.push_str(&format!(
-            "{}\t{:#010x}\t{:#010x}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{:#010x}\t{:#010x}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             r.content_index,
             r.item_hash,
             r.world_tag,
@@ -436,7 +479,8 @@ pub fn render_tsv(rows: &[Row], index_tsv_sha16: &str, generator: &str) -> Strin
             r.arrangement,
             r.equip_slot,
             r.curve_offset,
-            r.stats
+            r.stats,
+            r.weapon_object
         ));
     }
     s

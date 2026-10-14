@@ -562,6 +562,10 @@ pub struct ArtTable {
     /// **measured none** (a NULL or empty record - the constructor writes nothing either way);
     /// absent from the map is *never measured*. The two must stay distinguishable.
     stats: BTreeMap<u16, Vec<(u16, u32)>>,
+    /// ⭐ content_index → the definition's **weapon object index** (`def_client+0x1C8`), the value
+    /// equipment element `+0x0A` carries ([`crate::art_arrangement::weapon_object`]). Absent from
+    /// the map = never measured (a table older than column 9).
+    weapon_objects: BTreeMap<u16, u16>,
 }
 
 impl ArtTable {
@@ -585,6 +589,7 @@ impl ArtTable {
         let mut slots = BTreeMap::new();
         let mut curve_offsets = BTreeMap::new();
         let mut stats: BTreeMap<u16, Vec<(u16, u32)>> = BTreeMap::new();
+        let mut weapon_objects = BTreeMap::new();
         for line in text.lines() {
             if line.starts_with('#') || line.starts_with("content_index") || line.trim().is_empty() {
                 continue;
@@ -632,8 +637,22 @@ impl ArtTable {
                 };
                 stats.insert(ci as u16, list);
             }
+            // Column 9 (weapon_object) exists from 2026-10-14 on; older tables leave it unmeasured.
+            if let Some(w) = f.get(8) {
+                let v = hexnum(w).ok_or_else(|| {
+                    OracleError::Shape(format!("bad weapon object {w:?}"))
+                })?;
+                weapon_objects.insert(ci as u16, v as u16);
+            }
         }
-        let t = ArtTable { path: path.to_path_buf(), rows, slots, curve_offsets, stats };
+        let t = ArtTable {
+            path: path.to_path_buf(),
+            rows,
+            slots,
+            curve_offsets,
+            stats,
+            weapon_objects,
+        };
         // ⭐ The equip-slot anchor: the emblem definition must name slot 12, the byte a SNAPSHOT
         // REPLAY of `investment_globals->vtbl[0x160]()[0x18]` independently returned (EMBLEM_SLOT).
         // Two instruments, one byte; a generator drift fails here, not on screen.
@@ -737,6 +756,16 @@ impl ArtTable {
     /// content-correct, not a defect). `None` = never measured.
     pub fn stats_for(&self, content_index: u16) -> Option<&[(u16, u32)]> {
         self.stats.get(&content_index).map(|v| v.as_slice())
+    }
+
+    /// ⭐ The definition's **weapon object index** (`def_client+0x1C8`) for equipment element
+    /// `+0x0A`, or `None` when the definition has no client record (`0xFFFF`) or the table never
+    /// measured it - the caller then leaves the element's `0` alone.
+    pub fn weapon_object_for(&self, content_index: u16) -> Option<u16> {
+        match self.weapon_objects.get(&content_index) {
+            Some(&w) if w != 0xFFFF => Some(w),
+            _ => None,
+        }
     }
 }
 
