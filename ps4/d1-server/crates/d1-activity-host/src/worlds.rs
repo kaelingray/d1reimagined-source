@@ -103,8 +103,26 @@ pub const ORBIT: KnownWorld = KnownWorld {
     chosen: &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14],
 };
 
-/// Every world whose scenario record has been captured. Two, and the honest number is two.
-pub const KNOWN_WORLDS: &[KnownWorld] = &[PVP_MOONBASE, ORBIT];
+/// `pvp_city_defense` - **Bannerfall**, captured on build 56578 (run `2026-10-14-citydef`).
+///
+/// Read at the comparison itself rather than through the 100 ms record window: an exec breakpoint
+/// on 56578's `0x299B9A` (`cmp eax, [rcx + rdx*4 + 0xC]`, the build's `FUN_00299100`) logs the
+/// record's PRIVATE checksum while the client checks ours (`d1-watchwrite.py --exec 0x299b9a --peek
+/// "rcx+rdx*4+0xc"`). PUBLIC was `0xC4647343`, `+0x48` = 1. The positive control is the follow-up
+/// run: publishing this value made the same breakpoint read ours == the record's, rung 34 completed
+/// and the Guardian spawned armed (with Bannerfall's own sensor-client list).
+///
+/// ⚠ `scenario_tag` was not captured by this method and is 0.
+pub const PVP_CITY_DEFENSE: KnownWorld = KnownWorld {
+    name: "pvp_city_defense",
+    scenario_tag: 0,
+    checksum: 0x929D_89ED,
+    bubble_count: 1,
+    chosen: &[0],
+};
+
+/// Every world whose scenario record has been captured.
+pub const KNOWN_WORLDS: &[KnownWorld] = &[PVP_MOONBASE, ORBIT, PVP_CITY_DEFENSE];
 
 /// The world an Activity Host publishes when nothing overrides it.
 ///
