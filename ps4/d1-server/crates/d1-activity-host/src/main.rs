@@ -621,9 +621,14 @@ fn main() -> anyhow::Result<()> {
                             .map_err(|e| anyhow::anyhow!("D1_AH_WORLD_TABLE {path}: {e}"))?;
                         for line in text.lines().map(|l| l.split('#').next().unwrap_or("").trim()).filter(|l| !l.is_empty()) {
                             let f: Vec<&str> = line.split_whitespace().collect();
-                            if f.len() != 4 {
-                                anyhow::bail!("D1_AH_WORLD_TABLE line {line:?}: want `index world sensor_group sensor_file`");
+                            if f.len() != 4 && f.len() != 5 {
+                                anyhow::bail!("D1_AH_WORLD_TABLE line {line:?}: want `index world sensor_group sensor_file [start_region]`");
                             }
+                            let start_region = match f.get(4) {
+                                Some(r) => Some(parse_u32(r.to_string())
+                                    .ok_or_else(|| anyhow::anyhow!("D1_AH_WORLD_TABLE: bad start region {r:?}"))?),
+                                None => None,
+                            };
                             let index: u16 = f[0].parse()?;
                             let Some(known) = d1_activity_host::worlds::lookup(f[1]) else {
                                 anyhow::bail!("D1_AH_WORLD_TABLE: world {:?} has no captured scenario record", f[1]);
@@ -659,6 +664,7 @@ fn main() -> anyhow::Result<()> {
                                 checksum: known.checksum,
                                 bubble_count: known.bubble_count,
                                 chosen: known.chosen.to_vec(),
+                                start_region,
                                 team0,
                                 team_minus1,
                             });

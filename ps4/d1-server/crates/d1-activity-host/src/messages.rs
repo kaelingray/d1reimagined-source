@@ -234,6 +234,20 @@ impl GlobalActivityState {
     /// `*(int*)(FUN_002A1F50(world) + 0x5C)`, where `FUN_002A1F50` is the one-line leaf
     /// `return p + 0x50B0` - i.e. this blob. See [`Self::set_activity_checksum`].
     pub const CHECKSUM: usize = 0x5C;
+    /// ⭐ The START REGION, a `u32` at blob `+0x54` (10 bits used), and its name hash at `+0x58`.
+    /// 56578 `0x77FBF0` reads both from this blob and hands them to the slice-set transition
+    /// `0x77FD50` (kind 2), which stores the region as PENDING (`sstm+0x138`). The region id is the
+    /// BUBBLE index, printed `PRVbb.bb` / `PUBbb.bb` (measured: 8 -> `PRV08.08`, which loads; 64 ->
+    /// `PRV64.64`, which names no slice set - the transition "completes" and the world stays black).
+    ///
+    /// Left 0, every world starts in bubble 0. That is right for `act_cosmo_m0_highway`, but on
+    /// `act_cosmo_m1_dome_a` (The Dark Within) bubble 0 is a PUBLIC patrol bubble and rung 34 stops
+    /// on *"Region 'PUB00.00' is PUBLIC but not yet connected"*. The mission's own first phase,
+    /// `cosmo_m1_phase00_dome_a`, is in bubble 8 = region 8 (run `2026-10-14-dw-domea4`).
+    pub const START_REGION: usize = 0x54;
+    /// The start region's name hash; `0x811C9DC5` (FNV-1 of "") is what the client itself passes
+    /// when it has no name.
+    pub const START_REGION_HASH: usize = 0x58;
     /// ⭐⭐ The **bubble count**, a `u32` at blob `+0x10` (field `[4]` of `0x80800B8F`, `kind 0x5`
     /// = a 32-bit leaf). `FUN_002A0320` - the check `0x75A9E0` runs *immediately after*
     /// `FUN_00299100` passes - requires `*(int*)(blob+0x10) == *(long*)(scenario_record+0x48)`.
@@ -399,6 +413,17 @@ impl GlobalActivityState {
     ///
     /// ⚠ The correct value is `[U]`. `D1_AH_ACTIVITY_CHECKSUM` exists so a candidate can be tried
     /// per-poke (the AH hot-swaps) without a rebuild. Default `0` reproduces every run to date.
+    /// Set the start region (see [`Self::START_REGION`]).
+    pub fn set_start_region(&mut self, region: u32, hash: u32) {
+        self.blob[Self::START_REGION..Self::START_REGION + 4].copy_from_slice(&region.to_le_bytes());
+        self.blob[Self::START_REGION_HASH..Self::START_REGION_HASH + 4].copy_from_slice(&hash.to_le_bytes());
+    }
+
+    /// The start region currently in the blob.
+    pub fn start_region(&self) -> u32 {
+        u32::from_le_bytes(self.blob[Self::START_REGION..Self::START_REGION + 4].try_into().expect("4 bytes"))
+    }
+
     pub fn set_activity_checksum(&mut self, checksum: u32) {
         self.blob[Self::CHECKSUM..Self::CHECKSUM + 4].copy_from_slice(&checksum.to_le_bytes());
     }

@@ -136,8 +136,24 @@ pub const ACT_COSMO_M0_HIGHWAY: KnownWorld = KnownWorld {
     chosen: &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
 };
 
+/// ⭐ `act_cosmo_m1_dome_a` = **The Dark Within** (56578 activity index 168). The world was named
+/// from the game's own content, not guessed: its scenario's string library holds the mission's
+/// Ghost lines (Skywatch array station, the Hive Wizard "from the Moon"), and its first phase is
+/// `cosmo_m1_phase00_dome_a`. PRIVATE checksum `0x42FE77A5`, 22 bubbles (run
+/// `2026-10-14-world-act_cosmo_m1_dome_a-1`). Bubbles 0, 6, 7, 11, 12 and 20 are PUBLIC, so it
+/// must be served with start region 8 (bubble `dome_a`); see `GlobalActivityState::START_REGION`.
+/// Served so (run `2026-10-14-dw-domea4`), the Guardian spawns armed at the Skywatch array station.
+pub const ACT_COSMO_M1_DOME_A: KnownWorld = KnownWorld {
+    name: "act_cosmo_m1_dome_a",
+    scenario_tag: 0,
+    checksum: 0x42FE_77A5,
+    bubble_count: 22,
+    chosen: &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+};
+
 /// Every world whose scenario record has been captured.
-pub const KNOWN_WORLDS: &[KnownWorld] = &[PVP_MOONBASE, ORBIT, PVP_CITY_DEFENSE, ACT_COSMO_M0_HIGHWAY];
+pub const KNOWN_WORLDS: &[KnownWorld] =
+    &[PVP_MOONBASE, ORBIT, PVP_CITY_DEFENSE, ACT_COSMO_M0_HIGHWAY, ACT_COSMO_M1_DOME_A];
 
 /// The world an Activity Host publishes when nothing overrides it.
 ///

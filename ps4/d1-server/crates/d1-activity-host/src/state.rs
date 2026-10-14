@@ -142,6 +142,8 @@ pub struct ServedWorld {
     pub checksum: u32,
     pub bubble_count: u32,
     pub chosen: Vec<usize>,
+    /// The region (bubble index) the mission starts in, or `None` for region 0.
+    pub start_region: Option<u32>,
     pub team0: Vec<u8>,
     pub team_minus1: Vec<u8>,
 }
@@ -232,6 +234,8 @@ pub struct ActivityInstance {
     /// the activity index then in force, so one Activity Host serves whatever world the launched
     /// activity loads. See [`ServedWorld`].
     world_table: std::collections::HashMap<u16, ServedWorld>,
+    /// ⭐ The served start region (`GlobalActivityState::START_REGION`), with its name hash.
+    start_region: Option<(u32, u32)>,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -348,6 +352,7 @@ impl ActivityInstance {
             sensor_payload: None,
             sensor_team_frames: None,
             world_table: std::collections::HashMap::new(),
+            start_region: None,
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -609,6 +614,9 @@ impl ActivityInstance {
         // field, so order is load-bearing. An all-`0xFF` blob passes rung 33 and then UNREGISTERS
         // every slice-set region, which is rung 34's `error.sstm_slice_not_found`.
         let _ = s.set_bubble_chosen(&self.bubble_chosen);
+        if let Some((region, hash)) = self.start_region {
+            s.set_start_region(region, hash);
+        }
         AhPush::new(self.ah_id, AhMessage::GlobalActivityState(s))
     }
 
@@ -742,6 +750,12 @@ impl ActivityInstance {
                     self.activity_checksum = w.checksum;
                     self.bubble_count = w.bubble_count;
                     self.bubble_chosen = w.chosen;
+                    // The PAH region record must name the same region the client will wait on.
+                    self.start_region = w.start_region.map(|r| (r, 0x811C_9DC5));
+                    let region = w.start_region.unwrap_or(0);
+                    if let Some((_, peer, token)) = self.pah_region {
+                        self.pah_region = Some((region, peer, token));
+                    }
                     self.sensor_payload = Some(w.team_minus1.clone());
                     if let Some((_, _, set)) = self.sensor_team_frames.take() {
                         self.sensor_team_frames = Some((w.team0, w.team_minus1, set));
@@ -1068,6 +1082,14 @@ impl ActivityInstance {
     /// `sstm+0x3B0` to `-1` at the start of **every** slice-set transition, is re-scanned by
     /// `FUN_007775B0` at each transition without us having to re-send anything.
     /// `D1_AH_SLICE_REGION` / `D1_AH_SLICE_TOKEN` set it. ⇒ `historicaldocs/design/rung34-task7.md`.
+    /// Serve a start region (see [`ServedWorld::start_region`]); also moves the PAH region record.
+    pub fn set_start_region(&mut self, region: u32) {
+        self.start_region = Some((region, 0x811C_9DC5));
+        if let Some((_, peer, token)) = self.pah_region {
+            self.pah_region = Some((region, peer, token));
+        }
+    }
+
     pub fn set_pah_region(&mut self, region_id: u32, peer_index: usize, token: u8) {
         self.pah_region = Some((region_id, peer_index, token));
     }
@@ -1258,6 +1280,20 @@ mod tests {
         k.on_client_message(&join_request([0; 4]), now);
         assert_eq!(k.activity_index(), 416, "an unknown hash keeps the configured index");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ⭐ A world served with a start region publishes it at blob `+0x54` and moves the PAH region
+    /// record with it; a world without one leaves region 0.
+    #[test]
+    fn a_world_with_a_start_region_publishes_it() {
+        let (mut i, _) = instance();
+        i.set_pah_region(0, 0, 1);
+        let AhMessage::GlobalActivityState(s) = &i.publish_activity_state().message else { panic!() };
+        assert_eq!(s.start_region(), 0);
+        i.set_start_region(8);
+        let AhMessage::GlobalActivityState(s) = &i.publish_activity_state().message else { panic!() };
+        assert_eq!(s.start_region(), 8, "bubble 8 `dome_a`");
+        assert_eq!(i.pah_region(), Some((8, 0, 1)), "the PAH record names the same region");
     }
 
     /// ⭐⭐ A state refresh must not re-grant indices the client already holds: its apply ORs the
