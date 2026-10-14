@@ -765,6 +765,19 @@ fn main() -> anyhow::Result<()> {
                             i.set_sensor_team_frames(a, b, set);
                         }
                         i.set_world_table(world_table.clone());
+                        // ⭐ D1_AH_TIME_BASE_MS=<ms>|now: the world clock base at blob +0x520.
+                        if let Ok(v) = std::env::var("D1_AH_TIME_BASE_MS") {
+                            let ms = if v.trim() == "now" {
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map(|d| d.as_millis() as u64)
+                                    .unwrap_or(0)
+                            } else {
+                                v.trim().parse().unwrap_or(0)
+                            };
+                            tracing::info!("⭐ D1_AH_TIME_BASE_MS={v} - serving world clock base {ms} ms at blob +0x520");
+                            i.set_time_base_ms(ms);
+                        }
                         if let Some(s) = sensor_repeat_s {
                             i.set_sensor_repeat(std::time::Duration::from_secs(s));
                         }

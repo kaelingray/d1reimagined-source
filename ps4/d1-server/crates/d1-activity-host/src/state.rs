@@ -236,6 +236,8 @@ pub struct ActivityInstance {
     world_table: std::collections::HashMap<u16, ServedWorld>,
     /// ⭐ The served start region (`GlobalActivityState::START_REGION`), with its name hash.
     start_region: Option<(u32, u32)>,
+    /// ⭐ The served world clock base in ms (`GlobalActivityState::TIME_BASE_MS`).
+    time_base_ms: Option<u64>,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -353,6 +355,7 @@ impl ActivityInstance {
             sensor_team_frames: None,
             world_table: std::collections::HashMap::new(),
             start_region: None,
+            time_base_ms: None,
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -614,6 +617,9 @@ impl ActivityInstance {
         // field, so order is load-bearing. An all-`0xFF` blob passes rung 33 and then UNREGISTERS
         // every slice-set region, which is rung 34's `error.sstm_slice_not_found`.
         let _ = s.set_bubble_chosen(&self.bubble_chosen);
+        if let Some(ms) = self.time_base_ms {
+            s.set_time_base_ms(ms);
+        }
         if let Some((region, hash)) = self.start_region {
             s.set_start_region(region, hash);
         }
@@ -1082,6 +1088,11 @@ impl ActivityInstance {
     /// `sstm+0x3B0` to `-1` at the start of **every** slice-set transition, is re-scanned by
     /// `FUN_007775B0` at each transition without us having to re-send anything.
     /// `D1_AH_SLICE_REGION` / `D1_AH_SLICE_TOKEN` set it. ⇒ `historicaldocs/design/rung34-task7.md`.
+    /// Serve a world clock base in ms (see `GlobalActivityState::TIME_BASE_MS`).
+    pub fn set_time_base_ms(&mut self, ms: u64) {
+        self.time_base_ms = Some(ms);
+    }
+
     /// Serve a start region (see [`ServedWorld::start_region`]); also moves the PAH region record.
     pub fn set_start_region(&mut self, region: u32) {
         self.start_region = Some((region, 0x811C_9DC5));

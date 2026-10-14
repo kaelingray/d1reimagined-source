@@ -248,6 +248,10 @@ impl GlobalActivityState {
     /// The start region's name hash; `0x811C9DC5` (FNV-1 of "") is what the client itself passes
     /// when it has no name.
     pub const START_REGION_HASH: usize = 0x58;
+    /// The world CLOCK base, a `u64` of milliseconds at blob `+0x520`. 56578 `0x2A19D0` returns
+    /// `base + sim_ticks * 1000 / ticks_per_second`; `0x6E89E0(period)` turns that into a cycle
+    /// phase `fmod(clock / period, 1)` for content. Left 0, every served world's clock starts at 0.
+    pub const TIME_BASE_MS: usize = 0x520;
     /// ⭐⭐ The **bubble count**, a `u32` at blob `+0x10` (field `[4]` of `0x80800B8F`, `kind 0x5`
     /// = a 32-bit leaf). `FUN_002A0320` - the check `0x75A9E0` runs *immediately after*
     /// `FUN_00299100` passes - requires `*(int*)(blob+0x10) == *(long*)(scenario_record+0x48)`.
@@ -413,6 +417,11 @@ impl GlobalActivityState {
     ///
     /// ⚠ The correct value is `[U]`. `D1_AH_ACTIVITY_CHECKSUM` exists so a candidate can be tried
     /// per-poke (the AH hot-swaps) without a rebuild. Default `0` reproduces every run to date.
+    /// Set the world clock base (see [`Self::TIME_BASE_MS`]).
+    pub fn set_time_base_ms(&mut self, ms: u64) {
+        self.blob[Self::TIME_BASE_MS..Self::TIME_BASE_MS + 8].copy_from_slice(&ms.to_le_bytes());
+    }
+
     /// Set the start region (see [`Self::START_REGION`]).
     pub fn set_start_region(&mut self, region: u32, hash: u32) {
         self.blob[Self::START_REGION..Self::START_REGION + 4].copy_from_slice(&region.to_le_bytes());
