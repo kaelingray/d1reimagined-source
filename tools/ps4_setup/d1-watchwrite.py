@@ -197,7 +197,8 @@ def main():
                                 threads['_avs'] = threads.get('_avs', 0) + 1   # only logged faults count
                                 log(event='av', tid=tid, rip=hex(rip), rax=hex(c.u64(OFF_RAX)),
                                     rcx=hex(c.u64(0x80)), rdx=hex(c.u64(OFF_RDX)), rbx=hex(c.u64(0x90)),
-                                    rdi=hex(c.u64(OFF_RDI)), rsi=hex(c.u64(OFF_RSI)), stack_img=img)
+                                    rdi=hex(c.u64(OFF_RDI)), rsi=hex(c.u64(OFF_RSI)), stack_img=img,
+                                    stack_raw=[hex(q) for q in stack[:24]])
                     cont = DBG_EXCEPTION_NOT_HANDLED
             k32.ContinueDebugEvent(epid, tid, cont)
     finally:
