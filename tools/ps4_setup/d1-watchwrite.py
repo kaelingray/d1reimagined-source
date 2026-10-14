@@ -39,6 +39,7 @@ SINGLE_STEP, BREAKPOINT = 0x80000004, 0x80000003
 CONTEXT_DEBUG_CONTROL = 0x100013          # CONTEXT_AMD64 | CONTROL | INTEGER | DEBUG_REGISTERS
 OFF_FLAGS, OFF_DR0, OFF_DR6, OFF_DR7, OFF_RSP, OFF_RIP = 0x30, 0x48, 0x68, 0x70, 0x98, 0xF8
 OFF_EFLAGS, OFF_RAX, OFF_RBP, OFF_RDI = 0x44, 0x78, 0xA0, 0xB0
+OFF_RDX, OFF_RSI = 0x88, 0xA8
 
 
 class Ctx:
@@ -163,6 +164,7 @@ def main():
                             except OSError:
                                 dp, defn, dtype = 0, '', None
                             log(event='exec', tid=tid, rip_img=hex(rip - base), rax=hex(rax), al=rax & 0xFF,
+                                rdi=hex(rdi), rsi=hex(c.u64(OFF_RSI)), rdx=hex(c.u64(OFF_RDX)),
                                 defn=hex(dp), defn_head=defn, defn_type=dtype, stack_img=img)
                             ctypes.c_uint32.from_address(c.addr + OFF_EFLAGS).value |= 0x10000   # RF
                         else:
