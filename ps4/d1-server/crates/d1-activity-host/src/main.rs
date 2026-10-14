@@ -500,6 +500,7 @@ fn main() -> anyhow::Result<()> {
             // live watch on `record+0x1AC` confirms it. ⇒ design/activity-lifetime-state.md.
             let mut sensor_phase_file = None;
             let mut sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)> = None;
+            let mut world_table: std::collections::HashMap<u16, d1_activity_host::state::ServedWorld> = std::collections::HashMap::new();
             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
                 .ok()
                 .and_then(|s| s.trim().parse::<i8>().ok())
@@ -612,6 +613,57 @@ fn main() -> anyhow::Result<()> {
                             (Err(e), _) | (_, Err(e)) => tracing::error!("⛔ D1_AH_TEAM0_ACTIVITIES: {e}"),
                         }
                     }
+                    // ⭐ D1_AH_WORLD_TABLE=<file>: `activity_index world sensor_group sensor_file` per
+                    // line. Each world must be a known world (checksum, bubbles, chosen); its sensor
+                    // frame is built here for both spawn teams, and the instance swaps world at join.
+                    if let Ok(path) = std::env::var("D1_AH_WORLD_TABLE") {
+                        let text = std::fs::read_to_string(&path)
+                            .map_err(|e| anyhow::anyhow!("D1_AH_WORLD_TABLE {path}: {e}"))?;
+                        for line in text.lines().map(|l| l.split('#').next().unwrap_or("").trim()).filter(|l| !l.is_empty()) {
+                            let f: Vec<&str> = line.split_whitespace().collect();
+                            if f.len() != 4 {
+                                anyhow::bail!("D1_AH_WORLD_TABLE line {line:?}: want `index world sensor_group sensor_file`");
+                            }
+                            let index: u16 = f[0].parse()?;
+                            let Some(known) = d1_activity_host::worlds::lookup(f[1]) else {
+                                anyhow::bail!("D1_AH_WORLD_TABLE: world {:?} has no captured scenario record", f[1]);
+                            };
+                            let group = parse_u32(f[2].to_string())
+                                .ok_or_else(|| anyhow::anyhow!("D1_AH_WORLD_TABLE: bad sensor group {:?}", f[2]))?;
+                            let clients: Vec<d1_oracle::sensor::SensorClientRef> = std::fs::read_to_string(f[3])
+                                .map_err(|e| anyhow::anyhow!("D1_AH_WORLD_TABLE {}: {e}", f[3]))?
+                                .lines()
+                                .filter_map(d1_oracle::sensor::SensorClientRef::parse_line)
+                                .filter(|c| !(c.name_hash == group && c.name_i8 == name_i8 && c.name_sub == name_sub))
+                                .collect();
+                            let build = |team: i32| {
+                                let mut p = params.clone();
+                                p.name_hash = group;
+                                p.clients = clients.clone();
+                                for c in p.clients.iter_mut() {
+                                    if let Some((0x8080_22A5, img)) = c.a_value.as_mut() {
+                                        if img.len() >= 0x3C {
+                                            img[0x38..0x3C].copy_from_slice(&team.to_le_bytes());
+                                        }
+                                    }
+                                }
+                                d1_activity_host::codec::SchemaCodec::build_sensor(&p)
+                            };
+                            let (team0, team_minus1) = (build(0)?, build(-1)?);
+                            tracing::info!(
+                                "⭐ world table: index {index} -> {} ({} sensor clients, group {group:#010x})",
+                                known.name, clients.len()
+                            );
+                            world_table.insert(index, d1_activity_host::state::ServedWorld {
+                                name: known.name.to_string(),
+                                checksum: known.checksum,
+                                bubble_count: known.bubble_count,
+                                chosen: known.chosen.to_vec(),
+                                team0,
+                                team_minus1,
+                            });
+                        }
+                    }
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
                             tracing::info!(
@@ -706,6 +758,7 @@ fn main() -> anyhow::Result<()> {
                         if let Some((a, b, set)) = sensor_team_frames.clone() {
                             i.set_sensor_team_frames(a, b, set);
                         }
+                        i.set_world_table(world_table.clone());
                         if let Some(s) = sensor_repeat_s {
                             i.set_sensor_repeat(std::time::Duration::from_secs(s));
                         }

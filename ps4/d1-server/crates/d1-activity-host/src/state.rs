@@ -134,6 +134,18 @@ pub enum EvictionReason {
     ClientLeft,
 }
 
+/// One row of the per-activity world table: everything rung 33/34 and the spawn read that differs
+/// per world, with the udt-5 sensor frame prebuilt for both spawn teams.
+#[derive(Debug, Clone)]
+pub struct ServedWorld {
+    pub name: String,
+    pub checksum: u32,
+    pub bubble_count: u32,
+    pub chosen: Vec<usize>,
+    pub team0: Vec<u8>,
+    pub team_minus1: Vec<u8>,
+}
+
 /// One activity instance, authoritative over its own Activity State.
 #[derive(Debug)]
 pub struct ActivityInstance {
@@ -216,6 +228,10 @@ pub struct ActivityInstance {
     /// activity type: a Private Match picks team 0, a story mission leaves -1. Chosen at each join
     /// from the activity index then in force (after [`Self::activity_follow`]).
     sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)>,
+    /// ⭐ Per-activity WORLD: activity index -> the world served for it. Applied at each join from
+    /// the activity index then in force, so one Activity Host serves whatever world the launched
+    /// activity loads. See [`ServedWorld`].
+    world_table: std::collections::HashMap<u16, ServedWorld>,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -331,6 +347,7 @@ impl ActivityInstance {
             state_refreshes: 0,
             sensor_payload: None,
             sensor_team_frames: None,
+            world_table: std::collections::HashMap::new(),
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -432,6 +449,11 @@ impl ActivityInstance {
     /// [`crate::codec::SchemaCodec::build_sensor`]; the instance sends them once it is [`Live`].
     ///
     /// [`Live`]: InstanceState::Live
+    /// Arm the per-activity world table (see [`Self::world_table`]).
+    pub fn set_world_table(&mut self, table: std::collections::HashMap<u16, ServedWorld>) {
+        self.world_table = table;
+    }
+
     /// Arm the per-activity team choice (see [`Self::sensor_team_frames`]).
     pub fn set_sensor_team_frames(
         &mut self,
@@ -710,6 +732,20 @@ impl ActivityInstance {
                         "activity follow: no known launched activity; publishing the configured index {}",
                         self.activity_index
                     );
+                }
+                if let Some(w) = self.world_table.get(&self.activity_index).cloned() {
+                    tracing::info!(
+                        "⭐ world table: activity index {} -> world {:?} (checksum {:#010x}, {} bubble(s))",
+                        self.activity_index, w.name, w.checksum, w.bubble_count
+                    );
+                    self.activity_name = w.name;
+                    self.activity_checksum = w.checksum;
+                    self.bubble_count = w.bubble_count;
+                    self.bubble_chosen = w.chosen;
+                    self.sensor_payload = Some(w.team_minus1.clone());
+                    if let Some((_, _, set)) = self.sensor_team_frames.take() {
+                        self.sensor_team_frames = Some((w.team0, w.team_minus1, set));
+                    }
                 }
                 if let Some((t0, tm1, set)) = &self.sensor_team_frames {
                     let team0 = set.contains(&self.activity_index);
