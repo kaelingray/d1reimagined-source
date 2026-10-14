@@ -158,10 +158,13 @@ def main():
         # Check every prologue BEFORE touching anything: a refusal mid-way used to leave the earlier
         # hooks live with no state file to remove them (2026-10-13, the lifetime getter 0x10C500).
         origs = [prologue(p, base + va) for va, _ in TARGETS]
-        if len(TARGETS) * STUB > 0x1000:
-            sys.exit(f'too many targets for one stub page ({len(TARGETS)})')
+        # Up to 240 stubs fit the text-segment cave; the allocated fallback is one 0x1000 page.
+        if len(TARGETS) * STUB > CAVE_LEN:
+            sys.exit(f'too many targets for the stub cave ({len(TARGETS)})')
         vas = [va for va, _ in TARGETS]
-        page = cave_page(p, base) if len(TARGETS) * STUB <= CAVE_LEN else None
+        page = cave_page(p, base)
+        if page is None and len(TARGETS) * STUB > 0x1000:
+            sys.exit(f'cave unavailable and {len(TARGETS)} targets exceed one allocated page')
         page = page or alloc_near(p, base + min(vas), base + max(vas) + 0x20)
         print(f'stub page {page:#x} ({"text-segment cave" if page == base + CAVE_VA else "allocated"})')
         # Every displacement is checked before anything is written.
