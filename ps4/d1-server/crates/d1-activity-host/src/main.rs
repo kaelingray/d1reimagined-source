@@ -625,6 +625,39 @@ fn main() -> anyhow::Result<()> {
                 tracing::info!("udt-5 sensor repeat armed: every {s} s while Live");
             }
 
+            // ⭐ D1_AH_ACTIVITY_FOLLOW_FILE + D1_AH_ACTIVITY_TABLE: publish the activity the client
+            // launched (the responder writes its hash from the kind-4 matchmaking key) instead of a
+            // fixed index. The table is `index<TAB>hash` per row (`d1-activitytable.py`).
+            let activity_follow: Option<(std::path::PathBuf, std::collections::HashMap<u32, u16>)> =
+                match (
+                    std::env::var("D1_AH_ACTIVITY_FOLLOW_FILE").ok().filter(|s| !s.is_empty()),
+                    std::env::var("D1_AH_ACTIVITY_TABLE").ok().filter(|s| !s.is_empty()),
+                ) {
+                    (Some(file), Some(table)) => {
+                        let text = std::fs::read_to_string(&table)
+                            .map_err(|e| anyhow::anyhow!("D1_AH_ACTIVITY_TABLE {table}: {e}"))?;
+                        let mut map = std::collections::HashMap::new();
+                        for line in text.lines().filter(|l| !l.starts_with('#') && !l.starts_with("index")) {
+                            let mut f = line.split('\t');
+                            let (Some(i), Some(h)) = (f.next(), f.next()) else { continue };
+                            let h = h.trim();
+                            let hash = match h.strip_prefix("0x") {
+                                Some(x) => u32::from_str_radix(x, 16)?,
+                                None => h.parse::<u32>()?,
+                            };
+                            // First index wins: a hash listed twice keeps its lowest index.
+                            map.entry(hash).or_insert(i.trim().parse::<u16>()?);
+                        }
+                        tracing::info!(
+                            "⭐ activity follow armed: {} hashes from {table}, launched activity read from {file} on each join",
+                            map.len()
+                        );
+                        Some((std::path::PathBuf::from(file), map))
+                    }
+                    (None, None) => None,
+                    _ => anyhow::bail!("D1_AH_ACTIVITY_FOLLOW_FILE and D1_AH_ACTIVITY_TABLE go together"),
+                };
+
             let session_id = format!("d1ah-{ah_id:016x}");
             let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
             rt.block_on(serve(
@@ -633,6 +666,9 @@ fn main() -> anyhow::Result<()> {
                     let mut i = ActivityInstance::new(ah_id, session_id.clone(), Instant::now());
                     i.set_activity_name(activity.clone());
                     i.set_activity_index(activity_index);
+                    if let Some((file, map)) = activity_follow.clone() {
+                        i.set_activity_follow(file, map);
+                    }
                     i.set_activity_checksum(activity_checksum);
                     i.set_bubble_count(bubble_count);
                     i.set_bubble_chosen(bubble_chosen.clone());

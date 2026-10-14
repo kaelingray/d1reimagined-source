@@ -2225,6 +2225,7 @@ const KNOBS: &[(&str, &str, &str)] = &[
     ("D1_503_RAW", "<unset>", "exact 503 argument bitstream, hex"),
     ("D1_503_FIELDS", "<unset>", "503 field probe, value:bits pairs"),
     ("D1_205_RAW", "<unset>", "⭐ 205 body override - MUST agree with D1_503_RAW on the shared 0x80801941"),
+    ("D1_ACTIVITY_FOLLOW_FILE", "<unset>", "write each kind-4 matchmaking request's activity hash here (read by the Activity Host)"),
     ("D1_UNLOCK_FLAGS", "<unset>", "⭐ unlock-flag INDICES (<= 50) served on BOTH 503 and 205, decoded back before use"),
     ("D1_504_RAW", "<unset>", "504 login_character body override"),
     ("D1_701_RAW", "<unset>", "701 body override"),
@@ -4007,6 +4008,24 @@ async fn main() -> Result<()> {
                                                                                   req.version, req.request_kind, req.nonce,
                                                                                   req.search_slot, req.matchmaking_set_id,
                                                                                   req.advertisement_slot, req.matchmaking_key);
+                                                                            // ⭐ D1_ACTIVITY_FOLLOW_FILE: the kind-4 key names the
+                                                                            // activity the player LAUNCHED (Director -> LAUNCH sends it
+                                                                            // before the AH join). Hand its hash to the Activity Host,
+                                                                            // which maps it to the activity index it publishes.
+                                                                            if req.request_kind
+                                                                                == Some(d1_bap::matchmaking::MM_KIND_MATCHMAKING_CONFIGURATION)
+                                                                            {
+                                                                                if let (Ok(path), Some(key)) = (
+                                                                                    std::env::var("D1_ACTIVITY_FOLLOW_FILE"),
+                                                                                    req.matchmaking_key,
+                                                                                ) {
+                                                                                    match std::fs::write(&path, format!("{}\n", key.activity_hash)) {
+                                                                                        Ok(()) => warn!("      ⭐ activity follow: wrote launched activity hash {:#010x} to {path}",
+                                                                                                        key.activity_hash),
+                                                                                        Err(e) => warn!("      ⛔ activity follow: {path}: {e}"),
+                                                                                    }
+                                                                                }
+                                                                            }
                                                                             if req.request_kind
                                                                                 != Some(d1_bap::matchmaking::MM_KIND_MATCHMAKING_CONFIGURATION)
                                                                             {

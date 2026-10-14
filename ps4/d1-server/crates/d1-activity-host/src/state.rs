@@ -228,6 +228,10 @@ pub struct ActivityInstance {
     /// pre-built frame per allowed phase. An unreadable file or an unlisted phase falls back to
     /// [`Self::sensor_payload`]. Lets an operator step the lifetime phase during one live run.
     sensor_phase_file: Option<(std::path::PathBuf, std::collections::BTreeMap<i8, Vec<u8>>)>,
+    /// ⭐ Follow the activity the client launched: a file holding the activity HASH (written by
+    /// the responder from the kind-4 matchmaking key) and the build's activity table
+    /// (hash -> index). Re-read on every join, so one Activity Host serves whatever was launched.
+    activity_follow: Option<(std::path::PathBuf, std::collections::HashMap<u32, u16>)>,
 }
 
 impl ActivityInstance {
@@ -325,6 +329,7 @@ impl ActivityInstance {
             sensors_sent: 0,
             sensor_repeat: None,
             sensor_phase_file: None,
+            activity_follow: None,
             sensor_last_sent: None,
         }
     }
@@ -442,6 +447,24 @@ impl ActivityInstance {
 
     /// Choose the sensor frame per send from the phase named in `path` (see
     /// [`Self::sensor_phase_file`]). `frames` holds one finished frame per allowed phase.
+    /// Publish the activity index of the hash in `path`, looked up in `table`, on each join.
+    /// Falls back to [`Self::activity_index`] when the file is missing or the hash is unknown.
+    pub fn set_activity_follow(
+        &mut self,
+        path: std::path::PathBuf,
+        table: std::collections::HashMap<u32, u16>,
+    ) {
+        self.activity_follow = Some((path, table));
+    }
+
+    /// The `(hash, index)` the followed file names, if the table knows it.
+    fn followed_activity_index(&self) -> Option<(u32, u16)> {
+        let (path, table) = self.activity_follow.as_ref()?;
+        let text = std::fs::read_to_string(path).ok()?;
+        let hash: u32 = text.trim().parse().ok()?;
+        table.get(&hash).map(|&i| (hash, i))
+    }
+
     pub fn set_sensor_phase_file(
         &mut self,
         path: std::path::PathBuf,
@@ -657,6 +680,21 @@ impl ActivityInstance {
         match msg {
             // ── rung: wait 4 join_result ───────────────────────────────────────────────────────
             ClientMessage::JoinRequest { struct_image } => {
+                if let Some((hash, index)) = self.followed_activity_index() {
+                    if index != self.activity_index {
+                        tracing::info!(
+                            "⭐ activity follow: the client launched activity hash {hash:#010x} = index \
+                             {index}; publishing it instead of {}",
+                            self.activity_index
+                        );
+                    }
+                    self.activity_index = index;
+                } else if self.activity_follow.is_some() {
+                    tracing::warn!(
+                        "activity follow: no known launched activity; publishing the configured index {}",
+                        self.activity_index
+                    );
+                }
                 // ⭐ Echo the client's whole request struct: `join_result`'s descriptor field [0]
                 // IS `join_request` (tag 0x80800E98) embedded at +0x00, which is why the nonce and
                 // AH id live where they do. `accepted_echoing` takes the nonce from the image, so
@@ -1126,6 +1164,39 @@ mod tests {
         );
         let AhMessage::EntitySlotsAllocated(m) = &out[0].message else { panic!() };
         assert_eq!(m.count(), 0, "the client already holds all 12,288");
+    }
+
+    /// ⭐ Activity follow: the join publishes the index the followed hash names, re-read per join,
+    /// and an unknown hash (or no file) keeps the configured index.
+    #[test]
+    fn a_join_publishes_the_launched_activity_when_following() {
+        let dir = std::env::temp_dir().join(format!("d1ah-follow-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("launched.txt");
+        let table: std::collections::HashMap<u32, u16> =
+            [(0xFB5D_13A3u32, 410u16), (0x6D71_4C3A, 416)].into_iter().collect();
+
+        let (mut i, now) = instance();
+        i.set_activity_index(416);
+        i.set_activity_follow(file.clone(), table.clone());
+        let _ = std::fs::remove_file(&file);
+        i.on_client_message(&join_request([0; 4]), now);
+        assert_eq!(i.activity_index(), 416, "no file: the configured index stands");
+
+        std::fs::write(&file, format!("{}\n", 0xFB5D_13A3u32)).unwrap();
+        let (mut j, now) = instance();
+        j.set_activity_index(416);
+        j.set_activity_follow(file.clone(), table.clone());
+        j.on_client_message(&join_request([0; 4]), now);
+        assert_eq!(j.activity_index(), 410, "the launched Skirmish hash names index 410");
+
+        std::fs::write(&file, "12345\n").unwrap();
+        let (mut k, now) = instance();
+        k.set_activity_index(416);
+        k.set_activity_follow(file.clone(), table);
+        k.on_client_message(&join_request([0; 4]), now);
+        assert_eq!(k.activity_index(), 416, "an unknown hash keeps the configured index");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// ⭐⭐ A state refresh must not re-grant indices the client already holds: its apply ORs the
