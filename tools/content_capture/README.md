@@ -185,6 +185,15 @@ Earlier media packages can be referenced by identity in the events/context. No m
 decode check is claimed for a text-only report. Text is scanned again before transfer;
 empty payloads are rejected. Reports stay private and require downstream publication
 review. This text-only transfer exception cannot submit additional unreviewed footage.
+Reports may also include closed PNG originals explicitly inspected for private
+handoff, using repeatable `--reviewed-screenshot <path>` arguments. Each original
+is copied unchanged, decoded with FFmpeg, measured and pinned by size/SHA-256.
+Only the exact reviewed PNG manifest entries can use this transfer exception;
+unreviewed additions or replacement bytes remain blocked. Publication review
+and sensitive-information flags stay set. Screenshot inspection is not a video,
+audio, frame-rate or gameplay acceptance check. The suite passes 85 tests after
+the screenshot compatibility change, including altered-image rejection and
+preservation of the original unreviewed-video hold.
 Report metadata may supply `reporting_date` as `YYYY-MM-DD` for its destination date
 folder; original event instants stay in UTC. Before transfer the worker records NAS
 free space and required bytes. Insufficient capacity retains the durable package for

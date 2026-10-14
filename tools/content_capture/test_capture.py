@@ -155,6 +155,44 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(ready.parent.relative_to(self.nas).as_posix(), "incoming/test-machine-a/2026/10/06")
         self.assertEqual(json.loads((package / "metadata.json").read_text())["recorded_at"], "2026-10-05T23:20:00+00:00")
 
+    def test_report_transfers_only_pinned_reviewed_stills_without_publication_clearance(self):
+        report, screenshot = self.root / "report.md", self.root / "original.png"
+        report.write_text("Observed scene; normal gameplay remains incomplete.")
+        screenshot.write_bytes(b"\x89PNG\r\n\x1a\n\x80immutable inspected binary fixture")
+        with patch("capture.validate_screenshot", return_value={"decode": "PASS", "width": 1296, "height": 759}):
+            package = self.capture.package_report(report, [], self.metadata(), [screenshot])
+        result = self.capture.sync()[0]
+        self.assertEqual(result["status"], "SUBMITTED")
+        ready = Path(result["destination"])
+        self.assertEqual((ready / "screenshots/01.png").read_bytes(), screenshot.read_bytes())
+        meta = json.loads((ready / "metadata.json").read_text())
+        self.assertTrue(meta["contains_sensitive_information"] and meta["requires_manual_review"])
+        self.assertNotIn("full_decode", meta)
+        self.assertEqual(meta["reviewed_screenshots"][0]["width"], 1296)
+        self.assertEqual(Capture.verify(ready), Capture.verify(package))
+
+    def test_report_screenshot_review_does_not_survive_payload_replacement(self):
+        report, screenshot = self.root / "report.md", self.root / "original.png"
+        report.write_text("Observed scene.")
+        screenshot.write_bytes(b"the inspected original")
+        with patch("capture.validate_screenshot", return_value={"decode": "PASS", "width": 16, "height": 9}):
+            package = self.capture.package_report(report, [], self.metadata(), [screenshot])
+        (package / "screenshots/01.png").write_bytes(b"different uninspected image")
+        self.capture.make_hashes(package)
+        self.assertEqual(self.capture.sync()[0]["status"], "WAITING_FOR_NAS")
+        self.assertFalse(list(self.nas.rglob("*.ready")))
+
+    def test_report_cannot_inject_screenshot_clearance_or_accept_failed_decode(self):
+        report, screenshot = self.root / "report.md", self.root / "original.png"
+        report.write_text("Observed scene.")
+        screenshot.write_bytes(b"invalid image")
+        with self.assertRaises(ValueError):
+            self.capture.package_report(report, [], self.metadata(reviewed_screenshots=[]))
+        with patch("capture.validate_screenshot", side_effect=ValueError("invalid image")):
+            with self.assertRaises(ValueError):
+                self.capture.package_report(report, [], self.metadata(), [screenshot])
+        self.assertFalse(list(self.capture.outbox.glob("*.building")))
+
     def test_insufficient_nas_space_keeps_durable_source_and_retry(self):
         package = self.package()
         original = (package / "clip.mp4").read_bytes()
