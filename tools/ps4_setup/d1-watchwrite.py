@@ -99,6 +99,10 @@ def main():
     ap.add_argument('--read', action='append', default=[], help='absolute 8-aligned address: break on read or write (8 bytes)')
     ap.add_argument('--exec', action='append', default=[], help='eboot-relative address: execute breakpoint; logs rax/rbp/rdi and 16 bytes at [rbp-0x150]')
     ap.add_argument('--log-av', action='store_true', help='log access violations outside the guest image (still passed on)')
+    ap.add_argument('--av-lo', type=lambda v: int(v, 0), default=0, help='only log AVs with rip >= this')
+    ap.add_argument('--av-skip', type=lambda v: {int(x, 0) for x in v.split(',')}, default=set(), help='comma-separated RIPs never to log (routine faults)')
+    ap.add_argument('--av-in-image', action='store_true', help='also log AVs inside the guest image')
+    ap.add_argument('--av-hi', type=lambda v: int(v, 0), default=1 << 64, help='only log AVs with rip < this')
     a = ap.parse_args()
     p, base = wg['open_client']()
     addrs = [int(x, 16) for x in a.addr]
@@ -185,7 +189,7 @@ def main():
                         c = Ctx()
                         if c.get(threads[tid]):
                             rip, rsp = c.u64(OFF_RIP), c.u64(OFF_RSP)
-                            if not base <= rip < base + 0x18D8000:
+                            if (a.av_in_image or not base <= rip < base + 0x18D8000) and (a.av_lo <= rip < a.av_hi) and rip not in a.av_skip:
                                 try:
                                     stack = struct.unpack('<128Q', p.read(rsp, 1024))
                                 except OSError:

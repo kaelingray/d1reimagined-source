@@ -1,3 +1,47 @@
+diff --git a/src/core/cpu_patches.cpp b/src/core/cpu_patches.cpp
+index 7a360c6..c521317 100644
+--- a/src/core/cpu_patches.cpp
++++ b/src/core/cpu_patches.cpp
+@@ -2129,8 +2129,37 @@ RedZonePatchResult PatchRedZoneMemoryInstructions(u64, u64, std::span<const uint
+ // End Windows static guest red-zone protection
+ // ============================================================================
+ 
+-static bool PatchesAccessViolationHandler(void* context, void* /* fault_address */) {
+-    return TryPatchJit(Common::GetRip(context));
++static bool PatchesAccessViolationHandler(void* context, void* fault_address) {
++    void* rip = Common::GetRip(context);
++#if defined(_WIN32)
++    // D1: a guest jump into an unreadable page inside a module's range made the JIT patcher decode
++    // unreadable bytes and fault inside Zydis (build 56578, 14 Oct 2026, ~50% of world loads).
++    // Refuse to decode there, and say where the guest was.
++    MEMORY_BASIC_INFORMATION mbi{};
++    const bool readable =
++        VirtualQuery(rip, &mbi, sizeof(mbi)) == sizeof(mbi) && mbi.State == MEM_COMMIT &&
++        (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_READONLY |
++                        PAGE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_WRITECOPY)) != 0 &&
++        (mbi.Protect & PAGE_GUARD) == 0;
++    if (!readable) {
++        const auto* ctx = static_cast<const CONTEXT*>(context);
++        std::string stack;
++        const auto* sp = reinterpret_cast<const u64*>(ctx->Rsp);
++        MEMORY_BASIC_INFORMATION smbi{};
++        if (VirtualQuery(sp, &smbi, sizeof(smbi)) == sizeof(smbi) && smbi.State == MEM_COMMIT) {
++            for (int i = 0; i < 24; ++i) {
++                stack += fmt::format(" {:#x}", sp[i]);
++            }
++        }
++        LOG_CRITICAL(Core,
++                     "D1: guest executed an unreadable address rip={} fault={} rsp={:#x} "
++                     "rax={:#x} rcx={:#x} rdx={:#x} rdi={:#x} rsi={:#x} stack:{}",
++                     rip, fault_address, ctx->Rsp, ctx->Rax, ctx->Rcx, ctx->Rdx, ctx->Rdi,
++                     ctx->Rsi, stack);
++        return false;
++    }
++#endif
++    return TryPatchJit(rip);
+ }
+ 
+ static bool PatchesIllegalInstructionHandler(void* context) {
 diff --git a/src/core/libraries/network/net_util.cpp b/src/core/libraries/network/net_util.cpp
 index 0dda3c2..3e57026 100644
 --- a/src/core/libraries/network/net_util.cpp
