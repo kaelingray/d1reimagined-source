@@ -633,6 +633,16 @@ async fn bap_observer(addr: SocketAddr) {
 /// delivery; without that guard the second connection would re-push objects the client already has.
 static BAP_CONNECTIONS: AtomicU64 = AtomicU64::new(0);
 
+/// ⭐ The PRIMARY BAP connection: the newest one that sent `queuez_register` (0x79), i.e. the
+/// client's own investment connection. Only it receives the QueueZ family pushes.
+///
+/// ⛔ It used to be "connection 0". When the client's first connection is aborted during the secure
+/// hello (Windows `os error 10053`, intermittent on the lab host) or the client re-signs-in after a
+/// kick, the working connection is #1 or later, the family-4 baseline is never pushed, investment
+/// sign-in times out, and the player sees CHICKEN (`error.no_investment_connection`). Measured on
+/// 56578, 14 Oct: every boot with an early abort lacked the push, every boot without one had it.
+static PRIMARY_BAP_CONNECTION: AtomicU64 = AtomicU64::new(0);
+
 /// BAP id **6** - `client_to_activity_host_manager_request`, header class 1.
 ///
 /// ⚠ These six ids are written **decimal-first** because the decimal/hex collision is a standing
@@ -3022,6 +3032,12 @@ async fn main() -> Result<()> {
                                                                 }
                                                             }
                                                             let inner_type = inner.as_ref().ok().map(|i| i.msg_type);
+                                                            if inner_type == Some(d1_bap::TYPE_QUEUEZ_REGISTER_REQUEST) {
+                                                                let prev = PRIMARY_BAP_CONNECTION.swap(conn_index, Ordering::SeqCst);
+                                                                if prev != conn_index {
+                                                                    warn!("    ⭐ BAP connection #{conn_index} sent queuez_register - it is now the PRIMARY (was #{prev})");
+                                                                }
+                                                            }
                                                             // ⭐⭐ ENQUEUE FIRST, BEFORE ANY HANDLER RUNS.
                                                             //
                                                             // That ordering is the whole point: the FIFO records ARRIVAL
@@ -4375,7 +4391,7 @@ async fn main() -> Result<()> {
                                                             // baseline by then, i.e. the descriptor is at state 3.
                                                             let f4mode = family4_invalidate_mode();
                                                             if f4mode != Family4Invalidate::Off
-                                                                && conn_index == 0
+                                                                && conn_index == PRIMARY_BAP_CONNECTION.load(Ordering::SeqCst)
                                                                 && !family4_invalidated
                                                                 && inner_type == Some(d1_bap::TYPE_ECHO_REQUEST)
                                                             {
@@ -4429,7 +4445,7 @@ async fn main() -> Result<()> {
                                                             }
 
                                                             if want_push
-                                                                && conn_index == 0
+                                                                && conn_index == PRIMARY_BAP_CONNECTION.load(Ordering::SeqCst)
                                                                 && !pushed_character
                                                                 && inner_type == trigger
                                                             {
