@@ -7,13 +7,16 @@ param(
     [string]$SensorClients = 'F:\d1\d1preservation-main\cfw-staging\sensor-clients-pvp_moonbase-bundle7-team0.txt',
     # The served profile (completion flags live here).
     [string]$Profile = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578\profile-geared-385-director-c.bin',
+    # Unlock-flag indices on the 503/205 pair list (<= 50).
+    [string]$UnlockFlags = '98,308,419,440,834,2668,3391,5021,5998,6029,433,2539,2549,3558,3587',
     # Extra NAME=VALUE server variables appended after the served set.
     [string[]]$Extra = @()
 )
 # The fully served 56578 lab session: geared Guardian, Director flags served (profile completions +
 # D1_UNLOCK_FLAGS gates), and the Activity Host following the launched activity. No memory writes.
 # Called through `powershell -File`, an array arrives as one comma-joined string.
-if ($Extra.Count -eq 1 -and $Extra[0] -match ',') { $Extra = $Extra[0] -split ',' }
+# Split only at commas that start a new NAME=, so values may contain commas (e.g. bubble lists).
+if ($Extra.Count -eq 1 -and $Extra[0] -match ',') { $Extra = $Extra[0] -split ',(?=[A-Z0-9_]+=)' }
 $B = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578'
 $S = 'F:\d1\d1preservation-main\cfw-staging'
 $follow = "$S\$Name-launched-activity.txt"
@@ -26,7 +29,7 @@ $envs = @(
     "D1_ACTIVITY_FOLLOW_FILE=$follow", "D1_AH_ACTIVITY_FOLLOW_FILE=$follow",
     "D1_AH_ACTIVITY_TABLE=$B\activity-table.tsv",
     "D1_PROFILE_FILE=$Profile",
-    'D1_UNLOCK_FLAGS=98,308,419,440,834,2668,3391,5021,5998,6029,433,2539,2549,3558,3587',
+    "D1_UNLOCK_FLAGS=$UnlockFlags",
     "D1_INVENTORY=$B\inventory", 'D1_FAMILY42=1', 'D1_UNLOCKS=key'
 ) + $Extra
 & F:\d1\tools\Start-D1ContainedBoot.ps1 -Name $Name -LabIp 10.77.0.2 -Minutes $Minutes -OperatorInput -ActivityHost `

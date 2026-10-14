@@ -171,12 +171,12 @@ def main():
                             except OSError:
                                 dp, defn, dtype = 0, '', None
                             regs = dict(rax=rax, rbx=c.u64(OFF_RBX), rcx=c.u64(OFF_RCX), rdx=c.u64(OFF_RDX),
-                                        rsi=c.u64(OFF_RSI), rdi=rdi, rbp=rbp, rsp=rsp)
+                                        rsi=c.u64(OFF_RSI), rdi=rdi, rbp=rbp, rsp=rsp, **{f'r{n}': c.u64(0xB8 + (n - 8) * 8) for n in range(8, 16)})
                             peeks = {}
                             for expr in a.peek:
                                 try:
-                                    at = eval(expr, {'__builtins__': {}}, regs) & 0xFFFFFFFFFFFFFFFF
-                                    peeks[expr] = hex(p.u(at, 'I'))
+                                    at = eval(expr.rstrip('!'), {'__builtins__': {}}, regs) & 0xFFFFFFFFFFFFFFFF
+                                    peeks[expr] = hex(at) + ':' + p.read(at, 0x18).hex() if expr.endswith('!') else hex(p.u(at, 'I'))
                                 except Exception as e:
                                     peeks[expr] = f'unreadable ({e})'
                             log(event='exec', tid=tid, rip_img=hex(rip - base), rax=hex(rax), al=rax & 0xFF,
