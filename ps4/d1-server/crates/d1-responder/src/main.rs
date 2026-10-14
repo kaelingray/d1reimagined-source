@@ -2225,6 +2225,7 @@ const KNOBS: &[(&str, &str, &str)] = &[
     ("D1_503_RAW", "<unset>", "exact 503 argument bitstream, hex"),
     ("D1_503_FIELDS", "<unset>", "503 field probe, value:bits pairs"),
     ("D1_205_RAW", "<unset>", "⭐ 205 body override - MUST agree with D1_503_RAW on the shared 0x80801941"),
+    ("D1_UNLOCK_FLAGS", "<unset>", "⭐ unlock-flag INDICES (<= 50) served on BOTH 503 and 205, decoded back before use"),
     ("D1_504_RAW", "<unset>", "504 login_character body override"),
     ("D1_701_RAW", "<unset>", "701 body override"),
     ("D1_702_RAW", "<unset>", "702 body override"),
@@ -2322,6 +2323,9 @@ fn served_503_body() -> Vec<u8> {
         warn!("      503 RAW BODY override ({}B) - the ten-flag default is NOT in play", raw.len());
         return raw;
     }
+    if let Some((b503, _)) = unlock_flag_override() {
+        return splice_503_soid(b503, env_soid("D1_ACCOUNT_SOID", 0xD100_0000_0000_0001));
+    }
     // `D1_503_FIELDS="0:64,0xD1..:64"` - comma-separated `value:bits`, each emitted as
     // `present=1 || value`. Lets us bisect which fields the action graph needs without
     // hand-decoding the descriptor. Still a probe: it carries no `0x80801941`.
@@ -2353,7 +2357,54 @@ fn served_205_body() -> Vec<u8> {
         warn!("      205 RAW BODY override ({}B) - the ten-flag default is NOT in play", raw.len());
         return raw;
     }
+    if let Some((_, b205)) = unlock_flag_override() {
+        return b205;
+    }
     d1_bap::investment_205_unlocks_body().to_vec()
+}
+
+/// ⭐ `D1_UNLOCK_FLAGS=i,j,...` - serve THIS unlock-flag set (client master-table INDICES, value 2)
+/// on both 503 and 205, built by `d1_bap::unlock_flag_bodies` from the pinned count-0 pair.
+///
+/// This is how a kind-0 flag (no dense home - e.g. 56578's Director gates 2539/2549/3558/3587) is
+/// served at all: the sparse pair list is its only channel. Indices are build-specific; resolve
+/// them with `d1-flagtable.py`, never from a manifest `value` (the §2.2 drift).
+///
+/// ⛔ More than 50 is refused (container `0x80804717` is 50 x 4 B), and the bodies are decoded back
+/// before use: a body that reads back as anything other than exactly this list is not served.
+fn unlock_flag_override() -> Option<(Vec<u8>, Vec<u8>)> {
+    let spec = std::env::var("D1_UNLOCK_FLAGS").ok().filter(|v| !v.is_empty())?;
+    let indices: Vec<u16> = match spec.split(',').map(|s| s.trim().parse::<u16>()).collect() {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("      ⛔ D1_UNLOCK_FLAGS={spec}: {e} - serving the default flags instead");
+            return None;
+        }
+    };
+    let Some((b503, b205)) = d1_bap::unlock_flag_bodies(&indices) else {
+        warn!("      ⛔ D1_UNLOCK_FLAGS has {} flags; the container holds 50 - serving the default flags", indices.len());
+        return None;
+    };
+    let want: Vec<(u16, u8)> = indices.iter().map(|&i| (i, d1_bap::UNLOCK_FLAG_VALUE)).collect();
+    if d1_bap::unlock_flags_in_shared_tail(&b205[1..]).as_ref() != Some(&want)
+        || d1_bap::unlock_flags_in_shared_tail(&b503[21..]).as_ref() != Some(&want)
+    {
+        warn!("      ⛔ D1_UNLOCK_FLAGS bodies do not decode back to the requested list - serving the default flags");
+        return None;
+    }
+    warn!("      ⭐ D1_UNLOCK_FLAGS: serving {} unlock flags on 503+205: {indices:?}", indices.len());
+    Some((b503, b205))
+}
+
+/// The 503 body with `account_soid` at [`d1_bap::INV_503_ACCOUNT_SOID_BIT_OFFSET`], MSB-first.
+fn splice_503_soid(body: Vec<u8>, account_soid: u64) -> Vec<u8> {
+    let mut out = body;
+    for i in 0..64 {
+        let bit = d1_bap::INV_503_ACCOUNT_SOID_BIT_OFFSET + i;
+        let (byte, mask) = (bit / 8, 0x80u8 >> (bit % 8));
+        if account_soid >> (63 - i) & 1 == 1 { out[byte] |= mask } else { out[byte] &= !mask }
+    }
+    out
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════

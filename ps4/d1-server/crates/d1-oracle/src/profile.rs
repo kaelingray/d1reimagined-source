@@ -142,6 +142,15 @@ pub const OFF_ALL_CONTENT_OVERRIDE: usize = 0x6E4C;
 /// Written by the same flag because the two are one feature; `[I]` that they are separable.
 pub const OFF_ALL_CONTENT_OVERRIDE_ITEMS: usize = 0x6E4D;
 
+/// Field `[11]`, the dense **completion flags** - one byte per element, `2` = set. This is the
+/// home of unlock-flag storage kind 3: `0x28D000` reads a kind-3 flag at `profile + this + sub`
+/// (`vfunc[0x90]`), where `sub` is the flag's row `+6` in the master unlock table.
+pub const OFF_COMPLETIONS: usize = 0x52C0;
+/// 01.29's `0x80804C21` array length.
+pub const COMPLETION_SLOTS: usize = 2048;
+/// The value the unlock evaluator `0x28CFB0` compares with (`cmp byte [..], 2 / sete`).
+pub const COMPLETION_SET: u8 = 2;
+
 /// The offsets that differ between builds. The `OFF_*` constants above are 01.29's, with their
 /// derivations. [`offs`] picks this build's set by image hash, and [`controls`] checks the chosen
 /// set against [`derive_layout`].
@@ -154,6 +163,8 @@ pub struct Offs {
     pub off_stat_override_block_2: usize,
     pub off_all_content_override: usize,
     pub off_all_content_override_items: usize,
+    pub off_completions: usize,
+    pub completion_slots: usize,
 }
 
 pub const OFFS_0129: Offs = Offs {
@@ -164,6 +175,8 @@ pub const OFFS_0129: Offs = Offs {
     off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2,
     off_all_content_override: OFF_ALL_CONTENT_OVERRIDE,
     off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
+    off_completions: OFF_COMPLETIONS,
+    completion_slots: COMPLETION_SLOTS,
 };
 
 /// How far 56578 moved everything from body field `[12]` onward.
@@ -183,6 +196,10 @@ pub const OFFS_56578: Offs = Offs {
     off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2 + SHIFT_56578,
     off_all_content_override: OFF_ALL_CONTENT_OVERRIDE + SHIFT_56578,
     off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS + SHIFT_56578,
+    // Field [10] grew 0x100, so [11] starts 0x100 later; [11] itself is 2,560 elements
+    // (`0x8080165B`). `0x28D000` reads kind 3 at `+0x53C0 + sub` on this build.
+    off_completions: OFF_COMPLETIONS + 0x100,
+    completion_slots: 2560,
 };
 
 /// The offset set for an image, by its SHA-256.
@@ -310,6 +327,11 @@ pub struct ProfileSpec {
     /// evidence rung 33 ever produces about content gating. Turn it on to answer *"is content
     /// gating what is stopping us?"*, and turn it back off to keep the diagnostic.
     pub all_content: bool,
+    /// ⭐ Field `[11]` completion-flag subindices to set (unlock-flag storage kind 3). Each is the
+    /// `sub` of a kind-3 row in the master unlock table, NOT the flag's index - the index space and
+    /// the storage space differ. A kind-3 flag served here reaches the client's derived plane the
+    /// way a real account's completions did; it is how the Director's destination gates are served.
+    pub completions: Vec<u16>,
 }
 
 impl Default for ProfileSpec {
@@ -326,6 +348,7 @@ impl Default for ProfileSpec {
             item_slots: Vec::new(),
             empty_item_slots: true,
             all_content: false,
+            completions: Vec::new(),
         }
     }
 }
@@ -342,7 +365,7 @@ impl ProfileSpec {
 
     /// [`ProfileSpec::to_object`] at an explicit build's offsets. Needs no image.
     pub fn to_object_for(&self, o: Offs) -> Result<Vec<u8>> {
-        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = o;
+        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, off_completions, completion_slots, .. } = o;
         let too_many = |what: &str, got: usize, cap: usize| {
             Err(OracleError::Shape(format!(
                 "{got} {what} exceeds the schema's {cap} slots - the extra entries would land in \
@@ -399,6 +422,14 @@ impl ProfileSpec {
         if self.all_content {
             o[off_all_content_override] = 1;
             o[off_all_content_override_items] = 1;
+        }
+
+        for &sub in &self.completions {
+            if sub as usize >= completion_slots {
+                return Err(OracleError::Shape(format!(
+                    "completion subindex {sub} is past field [11]'s {completion_slots} elements")));
+            }
+            o[off_completions + sub as usize] = COMPLETION_SET;
         }
 
         if !self.stat_overrides.is_empty() {
@@ -472,7 +503,7 @@ pub fn build(oracle: &mut ObjectOracle, spec: &ProfileSpec) -> Result<BuiltProfi
 /// ⚠ `round_trip` already proves the whole struct survived; this exists so a *silently empty* spec
 /// (all defaults dropped, an empty vector) cannot pass as a populated profile.
 pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
-    let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = offs();
+    let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, off_completions, completion_slots, .. } = offs();
     let u32_at = |off: usize| -> u32 {
         u32::from_le_bytes(dec.object[off..off + 4].try_into().unwrap_or([0; 4]))
     };
@@ -514,6 +545,16 @@ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
             if got != EMPTY_INDEX {
                 return bad(format!("item slot {i} @+{at:#06x} is {got:#06x}, expected {EMPTY_INDEX:#06x}"));
             }
+        }
+    }
+    // Both directions: every requested completion reads 2 back, and nothing else in field [11] is
+    // set - a shifted offset would decode cleanly and set the wrong flags.
+    let want: std::collections::BTreeSet<usize> = spec.completions.iter().map(|&s| s as usize).collect();
+    for i in 0..completion_slots {
+        let got = dec.object[off_completions + i];
+        let expect = if want.contains(&i) { COMPLETION_SET } else { 0 };
+        if got != expect {
+            return bad(format!("completion [{i}] @+{:#06x} is {got}, expected {expect}", off_completions + i));
         }
     }
     for (i, soid) in spec.equipped.iter().enumerate() {
@@ -1134,6 +1175,24 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Completions land at the build's field-[11] base plus the subindex, as `2`, and nowhere else;
+    /// a subindex past the field is refused instead of spilling into field [12].
+    #[test]
+    fn completions_are_written_at_the_field_11_base_plus_sub() {
+        let spec = ProfileSpec { completions: vec![56, 62, 936], ..ProfileSpec::default() };
+        let plain = ProfileSpec::default().to_object_for(OFFS_56578).unwrap();
+        let o = spec.to_object_for(OFFS_56578).unwrap();
+        let diff: Vec<usize> = (0..o.len()).filter(|&i| o[i] != plain[i]).collect();
+        assert_eq!(diff, vec![0x53C0 + 56, 0x53C0 + 62, 0x53C0 + 936]);
+        assert!(diff.iter().all(|&i| o[i] == COMPLETION_SET));
+        // 01.29 keeps the documented `+0x52C0` base.
+        let o129 = spec.to_object_for(OFFS_0129).unwrap();
+        assert_eq!(o129[0x52C0 + 56], COMPLETION_SET);
+        let past = ProfileSpec { completions: vec![2560], ..ProfileSpec::default() };
+        assert!(past.to_object_for(OFFS_56578).is_err());
+        assert!(ProfileSpec { completions: vec![2559], ..ProfileSpec::default() }.to_object_for(OFFS_56578).is_ok());
+    }
 
     #[test]
     fn layout_is_derived_from_the_eboot_not_transcribed() {

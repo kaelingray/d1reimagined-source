@@ -369,6 +369,18 @@ enum ProfileCmd {
         /// on cannot tell you whether content gating was the blocker. Bisect with it off.
         #[arg(long)]
         all_content: bool,
+        /// ⭐ Field `[11]` completion subindices to set to 2 (unlock-flag storage kind 3),
+        /// comma-separated. Repeatable.
+        #[arg(long = "complete", value_delimiter = ',')]
+        complete: Vec<u16>,
+        /// Unlock-flag INDICES to serve as completions, comma-separated: each is looked up in
+        /// `--flag-table` and must be storage kind 3, whose `sub` is then set. A non-kind-3 index is
+        /// an error, not a skip - it has no home in this field.
+        #[arg(long = "complete-flags", value_delimiter = ',')]
+        complete_flags: Vec<u16>,
+        /// The master unlock table as TSV (`index hash kind sub`), e.g. from `d1-flagtable.py`.
+        #[arg(long, default_value = "capture-rig/builds/later-56578/unlock-flags.tsv")]
+        flag_table: String,
         /// Print the payload and the decode; write nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1028,7 +1040,8 @@ fn run_profile(cli: &Cli, cmd: &ProfileCmd) -> anyhow::Result<ExitCode> {
 
         ProfileCmd::Build {
             out, soid, identity, destination, light, light_index, stats, inventory, equip,
-            no_equip, progressions, phantom_item_slots, no_content_indices, all_content, dry_run,
+            no_equip, progressions, phantom_item_slots, no_content_indices, all_content, complete,
+            complete_flags, flag_table, dry_run,
         } => {
             let id: Vec<u8> = identity
                 .split(',')
@@ -1177,6 +1190,30 @@ fn run_profile(cli: &Cli, cmd: &ProfileCmd) -> anyhow::Result<ExitCode> {
                 item_slots,
                 empty_item_slots: !*phantom_item_slots,
                 all_content: *all_content,
+                completions: {
+                    let mut subs = complete.clone();
+                    if !complete_flags.is_empty() {
+                        let text = std::fs::read_to_string(flag_table)
+                            .map_err(|e| anyhow::anyhow!("--flag-table {flag_table}: {e}"))?;
+                        let mut rows = std::collections::HashMap::new();
+                        for line in text.lines().skip(1) {
+                            let f: Vec<&str> = line.split('\t').collect();
+                            if f.len() == 4 {
+                                rows.insert(f[0].parse::<u16>()?, (f[2].parse::<u8>()?, f[3].parse::<u16>()?));
+                            }
+                        }
+                        for i in complete_flags {
+                            match rows.get(i) {
+                                Some((3, sub)) => subs.push(*sub),
+                                Some((k, _)) => anyhow::bail!("unlock flag {i} is storage kind {k}, not 3 - it has no home in field [11]"),
+                                None => anyhow::bail!("unlock flag {i} is not in {flag_table}"),
+                            }
+                        }
+                    }
+                    subs.sort_unstable();
+                    subs.dedup();
+                    subs
+                },
             };
 
             let mut oracle = ObjectOracle::new(profile::TAG)?;
@@ -1193,8 +1230,9 @@ fn run_profile(cli: &Cli, cmd: &ProfileCmd) -> anyhow::Result<ExitCode> {
             } else {
                 println!("profile {:#010x}  {} B / {} bits  round trip: object IDENTICAL",
                          profile::TAG, b.payload.len(), b.bits);
-                println!("  equipped {} slot(s); {} stat override(s); {} progression(s)",
-                         spec.equipped.len(), spec.stat_overrides.len(), spec.progressions.len());
+                println!("  equipped {} slot(s); {} stat override(s); {} progression(s); {} completion flag(s)",
+                         spec.equipped.len(), spec.stat_overrides.len(), spec.progressions.len(),
+                         spec.completions.len());
                 println!("  ⭐ inventory slots NAMED: {} of {} (the array 0x1087660 walks); the rest {}",
                          spec.item_slots.len(), d1_oracle::profile::ITEM_SLOTS,
                          if spec.empty_item_slots { "0xFFFF = EMPTY" } else { "zero = 340 phantom items" });
