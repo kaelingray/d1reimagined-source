@@ -30,7 +30,8 @@ $envs = @(
     "D1_AH_ACTIVITY_TABLE=$B\activity-table.tsv",
     "D1_PROFILE_FILE=$Profile",
     "D1_UNLOCK_FLAGS=$UnlockFlags",
-    "D1_INVENTORY=$B\inventory", 'D1_FAMILY42=1', 'D1_UNLOCKS=key'
+    "D1_INVENTORY=$B\inventory", 'D1_FAMILY42=1', 'D1_UNLOCKS=key',
+    'D1_AH_TEAM0_ACTIVITIES=410,416', "D1_AH_WORLD_TABLE=$B\world-table.txt"
 ) + $Extra
 & F:\d1\tools\Start-D1ContainedBoot.ps1 -Name $Name -LabIp 10.77.0.2 -Minutes $Minutes -OperatorInput -ActivityHost `
     -Activity $World -ClientPatch F:\d1\d1preservation-main\patches\CUSA00219-56578-lab-orbit.xml `
