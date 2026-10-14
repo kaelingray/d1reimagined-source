@@ -25,4 +25,8 @@ Start-Sleep 6; & (Join-Path $PSScriptRoot 'd1-pad.ps1') -Keys NumPad2 | ForEach-
 if (-not (WaitFor "Entering state 'setup:orbit' for" 600)) { exit 2 }
 Start-Sleep 20
 python (Join-Path $PSScriptRoot 'd1-wincount.py') read | ForEach-Object { Say $_ }
+# Session 0 must be valid (state 4..10) before anyone pokes a launch: the world-controller state can
+# reach setup:orbit a moment before the session accessor does (14 Oct, 'session state 0 is outside 4..10').
+$sessEnd = (Get-Date).AddSeconds(60)
+while ((Get-Date) -lt $sessEnd) { python (Join-Path $PSScriptRoot 'd1-winguest.py') session *> $null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 2 }
 Say 'AT ORBIT'
