@@ -19,6 +19,9 @@ param(
 if ($Extra.Count -eq 1 -and $Extra[0] -match ',') { $Extra = $Extra[0] -split ',(?=[A-Z0-9_]+=)' }
 $B = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578'
 $S = 'F:\d1\d1preservation-main\cfw-staging'
+# The pad drivers search the emulator log; old-session lines ("Entering state 'setup:orbit'") must
+# not survive into this boot, or a driver presses keys while the client is still signing in.
+Remove-Item 'F:\d1\tools\shadPS4\0.19.0\user\log\shad_log.txt' -ErrorAction SilentlyContinue
 $follow = "$S\$Name-launched-activity.txt"
 Remove-Item $follow -ErrorAction SilentlyContinue
 $envs = @(
