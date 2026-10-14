@@ -175,6 +175,9 @@ def main():
                             peeks = {}
                             for expr in a.peek:
                                 try:
+                                    if expr.endswith('='):
+                                        peeks[expr] = hex(eval(expr[:-1], {'__builtins__': {}}, regs) & 0xFFFFFFFFFFFFFFFF)
+                                        continue
                                     at = eval(expr.rstrip('!'), {'__builtins__': {}}, regs) & 0xFFFFFFFFFFFFFFFF
                                     peeks[expr] = hex(at) + ':' + p.read(at, 0x18).hex() if expr.endswith('!') else hex(p.u(at, 'I'))
                                 except Exception as e:
