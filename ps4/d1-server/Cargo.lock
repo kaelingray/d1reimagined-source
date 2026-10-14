@@ -1108,6 +1108,7 @@ dependencies = [
  "anyhow",
  "clap",
  "d1-bap",
+ "d1-build",
  "d1-oracle",
  "tokio",
  "tracing",

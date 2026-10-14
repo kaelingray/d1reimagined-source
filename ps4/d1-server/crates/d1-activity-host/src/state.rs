@@ -55,7 +55,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::entity::EntitySlotAllocator;
+use crate::entity::{EntitySlotAllocator, EntitySlotMask};
 use crate::messages::{
     AhMessage, ClientMessage, GlobalActivityState, JoinResult, ReplicateMembership,
 };
@@ -782,11 +782,16 @@ impl ActivityInstance {
             // guard that stops the *join* from repeating them.
             ClientMessage::RequestStateRefresh { .. } => {
                 self.state_refreshes += 1;
+                // ⭐⭐ udt 0 goes back EMPTY. The client's apply is a DELTA, not a state:
+                // `0x1018800` ORs the mask into the inbox at `ac+0x5EA8`, and `0xBB57F0` →
+                // `0xB53BB0` ORs the inbox straight into each replication db's free-slot pool at
+                // `db+0x120B8` with no "already in use?" check. Re-sending `granted()` here
+                // re-freed every live slot, so the next allocation handed slot 0 out a second time
+                // (orbit entity at `0xE2A5B`, world entity at `0x227400`), and teardown faulted in
+                // `0xBC09AE` reading the record table at index -1 (run 2026-10-14-slots). An empty
+                // mask still decodes and still sets `ac+0x64AA`, which is all the gate wants.
                 let mut out = vec![
-                    AhPush::new(
-                        recipient,
-                        AhMessage::EntitySlotsAllocated(self.entities.granted().clone()),
-                    ),
+                    AhPush::new(recipient, AhMessage::EntitySlotsAllocated(EntitySlotMask::empty())),
                     self.publish_activity_state(),
                 ];
                 // The membership stays an ECHO. With no stored request there is nothing to echo
@@ -1121,6 +1126,21 @@ mod tests {
         );
         let AhMessage::EntitySlotsAllocated(m) = &out[0].message else { panic!() };
         assert_eq!(m.count(), 0, "the client already holds all 12,288");
+    }
+
+    /// ⭐⭐ A state refresh must not re-grant indices the client already holds: its apply ORs the
+    /// mask into the free-slot pool, so a re-grant frees live slots and the next allocation reuses
+    /// them (teardown crash at `0xBC09AE`, run 2026-10-14-slots).
+    #[test]
+    fn a_state_refresh_re_grants_no_entity_indices() {
+        let (mut i, now) = instance();
+        i.on_client_message(&join_request([0; 4]), now);
+        assert_eq!(i.entities().granted().count(), 12_288);
+        let out = i.on_client_message(&ClientMessage::from_struct_image(17, &[0u8; 8]).unwrap(), now);
+        let AhMessage::EntitySlotsAllocated(m) = &out[0].message else { panic!() };
+        assert_eq!(m.count(), 0, "the refresh carries an empty mask");
+        assert_eq!(m.to_struct_bytes().len(), 0x600, "but still a full 0x600 struct");
+        assert_eq!(i.entities().granted().count(), 12_288, "and the ledger is unchanged");
     }
 
     /// ⭐ The named regression from `protocol.rs`, at the level that would actually have committed
