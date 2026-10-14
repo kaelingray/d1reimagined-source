@@ -185,7 +185,6 @@ def main():
                     # --log-av: record access violations outside the guest image (the emulator's own
                     # handlers still get every one, first chance included - nothing is swallowed).
                     if a.log_av and exc == 0xC0000005 and tid in threads and threads.get('_avs', 0) < 50:
-                        threads['_avs'] = threads.get('_avs', 0) + 1
                         c = Ctx()
                         if c.get(threads[tid]):
                             rip, rsp = c.u64(OFF_RIP), c.u64(OFF_RSP)
@@ -195,7 +194,9 @@ def main():
                                 except OSError:
                                     stack = ()
                                 img = [hex(q - base) for q in stack if base <= q < base + 0x18D8000][:16]
+                                threads['_avs'] = threads.get('_avs', 0) + 1   # only logged faults count
                                 log(event='av', tid=tid, rip=hex(rip), rax=hex(c.u64(OFF_RAX)),
+                                    rcx=hex(c.u64(0x80)), rdx=hex(c.u64(OFF_RDX)), rbx=hex(c.u64(0x90)),
                                     rdi=hex(c.u64(OFF_RDI)), rsi=hex(c.u64(OFF_RSI)), stack_img=img)
                     cont = DBG_EXCEPTION_NOT_HANDLED
             k32.ContinueDebugEvent(epid, tid, cont)
