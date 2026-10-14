@@ -2171,6 +2171,7 @@ fn stage_loadout(loadout: &d1_loadout::Loadout, dir: &str) -> anyhow::Result<usi
 /// environment block at startup. If a knob is added below and not added here, that is the bug.
 const KNOBS: &[(&str, &str, &str)] = &[
     // ── ⭐ the correlation table (new, 2026-08-08) ────────────────────────────────────────────
+    ("D1_BAP_DUMP_DIR", "<unset>", "write every decrypted inbound BAP body, whole, to this directory"),
     ("D1_BAP_FIFO", "1", "⭐ correlation table ON. 0 = legacy immediate-write (reproduces the Weasel)"),
     ("D1_BAP_DEADLINE_MS", "2000", "⭐ R2: synthesise a 500 for a head older than this. [U] guess"),
     ("D1_BAP_TICK_MS", "250", "⭐ how often to check the deadline with no inbound frame"),
@@ -3009,6 +3010,17 @@ async fn main() -> Result<()> {
                                                             nonces.advance(d1_bap::Direction::ClientToServer);
                                                             let inner = d1_bap::parse_inner(&plain);
                                                             warn!("      SECURED ({}B): {} -> {:?}", plain.len(), hexdump(&plain, 512), inner);
+                                                            // D1_BAP_DUMP_DIR: every decrypted inbound body, whole, as
+                                                            // <arrival>-<type>-<seq>.bin. The log line above stops at 512 B.
+                                                            if let (Ok(dir), Ok(i)) = (std::env::var("D1_BAP_DUMP_DIR"), inner.as_ref()) {
+                                                                static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                                                                let k = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                                                let path = std::path::Path::new(&dir)
+                                                                    .join(format!("{k:05}-{:04x}-{}.bin", i.msg_type, i.sequence));
+                                                                if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, &plain)) {
+                                                                    warn!("      ⛔ D1_BAP_DUMP_DIR {}: {e}", path.display());
+                                                                }
+                                                            }
                                                             let inner_type = inner.as_ref().ok().map(|i| i.msg_type);
                                                             // ⭐⭐ ENQUEUE FIRST, BEFORE ANY HANDLER RUNS.
                                                             //
