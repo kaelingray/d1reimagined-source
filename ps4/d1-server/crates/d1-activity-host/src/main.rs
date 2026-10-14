@@ -58,6 +58,17 @@ enum Command {
     Ids,
 }
 
+/// The Elimination index for the selected build. 01.29's activity table has it at 407
+/// ([`ActivityInstance::DEFAULT_ACTIVITY_INDEX`]); build 56578's private-match band moved by
+/// +7..+9 (`ps4_investment_globals_0131_6` blocks 182/187), which puts Elimination at 416 and
+/// Salvage at 407.
+fn default_activity_index() -> u16 {
+    match d1_build::selected().id.as_str() {
+        "later-56578" => 416,
+        _ => ActivityInstance::DEFAULT_ACTIVITY_INDEX,
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -172,7 +183,7 @@ fn main() -> anyhow::Result<()> {
             let activity_index = std::env::var("D1_AH_ACTIVITY_INDEX")
                 .ok()
                 .and_then(|s| s.parse::<u16>().ok())
-                .unwrap_or(ActivityInstance::DEFAULT_ACTIVITY_INDEX);
+                .unwrap_or_else(default_activity_index);
             if activity_index == 0 {
                 tracing::warn!(
                     "⚠ D1_AH_ACTIVITY_INDEX WAS EXPLICITLY SET TO 0 at \
