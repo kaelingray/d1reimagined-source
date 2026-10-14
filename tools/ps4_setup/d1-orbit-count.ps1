@@ -16,7 +16,7 @@ function WaitFor([string]$pattern, [int]$seconds) {
             (Select-String -LiteralPath $shad -Pattern $pattern -Quiet)) { return $true }
         Start-Sleep -Seconds 2
     }
-    Say "TIMEOUT waiting for '$pattern'"; return $false
+    Say "TIMEOUT waiting for '$pattern'" | Write-Host; return $false
 }
 if (-not (WaitFor "Entering state 'bootflow:(start|intro_screen_display)'" 300)) { exit 2 }
 $env:D1_COUNT_ANY = '1'; $env:D1_COUNT_ADDRS = $Addrs
