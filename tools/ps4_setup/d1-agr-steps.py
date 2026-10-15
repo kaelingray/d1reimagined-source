@@ -82,11 +82,13 @@ def main():
     for name, text in files.items():
         open(os.path.join(a.out_dir, name), 'w').write(text)
     d = os.path.abspath(a.out_dir).replace('\\', '/')
+    # Each cinematic ends on the client's stop (891) or skip request (1726; the host decides), or
+    # after its length if the client never reports.
     steps = ('# A Guardian Rises (164): revival, first person, teleport 113 -> 112 (01.24 script order)\n'
-             f'164  0    {STORY_GROUP}  {d}/agr-step0.txt\n'
-             f'164  70   {STORY_GROUP}  {d}/agr-step1.txt\n'
-             f'164  115  {STORY_GROUP}  {d}/agr-step2.txt\n'
-             f'164  120  {STORY_GROUP}  {d}/agr-step3.txt  112\n')
+             f'164  0             {STORY_GROUP}  {d}/agr-step0.txt\n'
+             f'164  @891,1726|70  {STORY_GROUP}  {d}/agr-step1.txt\n'
+             f'164  @891,1726|45  {STORY_GROUP}  {d}/agr-step2.txt\n'
+             f'164  +5            {STORY_GROUP}  {d}/agr-step3.txt  112\n')
     open(os.path.join(a.out_dir, 'agr-steps.txt'), 'w').write(steps)
     print(f'wrote {len(files) + 1} files to {d}; objectives {sorted(objectives)}')
 
