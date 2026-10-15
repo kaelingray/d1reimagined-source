@@ -152,11 +152,12 @@ pub enum StepWhen {
     At(Duration),
     /// `+N`: N seconds after the previous step.
     AfterPrevious(Duration),
-    /// `@T|N`: when the client reports incident type `T` (udt 18), or N seconds after the
-    /// previous step if it never does. 56578: 2681 = a cinematic started, 891 = one stopped (also
-    /// when the player skips it). Incidents within [`ActivityInstance::INCIDENT_ECHO`] of the
-    /// previous step are the client echoing that step's own changes and do not count.
-    OnIncident { incident: u32, timeout: Duration },
+    /// `@T[,T2..]|N`: when the client reports one of the incident types (udt 18), or N seconds
+    /// after the previous step if it never does. 56578: 2681 = a cinematic started, 891 = one
+    /// stopped, 1726 = the player asked to skip it (the host decides; the client keeps playing).
+    /// Incidents within [`ActivityInstance::INCIDENT_ECHO`] of the previous step are the client
+    /// echoing that step's own changes and do not count. Up to four types.
+    OnIncident { incidents: [u32; 4], timeout: Duration },
 }
 
 impl StepWhen {
@@ -165,7 +166,11 @@ impl StepWhen {
         let secs = |t: &str| t.parse::<f32>().ok().filter(|v| *v >= 0.0).map(Duration::from_secs_f32);
         if let Some(rest) = s.strip_prefix('@') {
             let (t, n) = rest.split_once('|')?;
-            return Some(Self::OnIncident { incident: t.parse().ok()?, timeout: secs(n)? });
+            let mut incidents = [u32::MAX; 4];
+            for (k, v) in t.split(',').enumerate() {
+                *incidents.get_mut(k)? = v.trim().parse().ok()?;
+            }
+            return Some(Self::OnIncident { incidents, timeout: secs(n)? });
         }
         if let Some(rest) = s.strip_prefix('+') {
             return secs(rest).map(Self::AfterPrevious);
@@ -1222,15 +1227,14 @@ impl ActivityInstance {
         let due = match step.when {
             StepWhen::At(d) => elapsed >= d,
             StepWhen::AfterPrevious(d) => now.saturating_duration_since(prev) >= d,
-            StepWhen::OnIncident { incident, timeout } => {
-                let reported = self
-                    .incidents
-                    .iter()
-                    .any(|(t, at)| *t == incident && at.saturating_duration_since(prev) >= Self::INCIDENT_ECHO);
-                if reported {
-                    tracing::info!("⭐ mission step {i}: the client reported incident {incident}");
+            StepWhen::OnIncident { incidents, timeout } => {
+                let reported = self.incidents.iter().find(|(t, at)| {
+                    incidents.contains(t) && at.saturating_duration_since(prev) >= Self::INCIDENT_ECHO
+                });
+                if let Some((t, _)) = reported {
+                    tracing::info!("⭐ mission step {i}: the client reported incident {t}");
                 }
-                reported || now.saturating_duration_since(prev) >= timeout
+                reported.is_some() || now.saturating_duration_since(prev) >= timeout
             }
         };
         if !due {
@@ -1507,12 +1511,15 @@ mod tests {
     /// ⭐ An incident step fires on the client's report (not on its own echo), else on the timeout.
     #[test]
     fn an_incident_step_fires_on_the_report_or_the_timeout() {
-        assert_eq!(StepWhen::parse("@891|70"), Some(StepWhen::OnIncident { incident: 891, timeout: Duration::from_secs(70) }));
+        assert_eq!(
+            StepWhen::parse("@891,1726|70"),
+            Some(StepWhen::OnIncident { incidents: [891, 1726, u32::MAX, u32::MAX], timeout: Duration::from_secs(70) })
+        );
         assert_eq!(StepWhen::parse("+5"), Some(StepWhen::AfterPrevious(Duration::from_secs(5))));
         assert_eq!(StepWhen::parse("120"), Some(StepWhen::At(Duration::from_secs(120))));
         let (mut i, now) = instance();
         let step = |when, b: u8| MissionStep { when, team0: vec![b], team_minus1: vec![b], region: None };
-        let on891 = StepWhen::OnIncident { incident: 891, timeout: Duration::from_secs(70) };
+        let on891 = StepWhen::parse("@891|70").unwrap();
         let mut steps = std::collections::HashMap::new();
         steps.insert(i.activity_index(), vec![step(StepWhen::At(Duration::ZERO), 1), step(on891, 2), step(on891, 3)]);
         i.set_mission_steps(steps);
