@@ -237,8 +237,9 @@ impl GlobalActivityState {
     /// ⭐ The START REGION, a `u32` at blob `+0x54` (10 bits used), and its name hash at `+0x58`.
     /// 56578 `0x77FBF0` reads both from this blob and hands them to the slice-set transition
     /// `0x77FD50` (kind 2), which stores the region as PENDING (`sstm+0x138`). The region id is the
-    /// BUBBLE index, printed `PRVbb.bb` / `PUBbb.bb` (measured: 8 -> `PRV08.08`, which loads; 64 ->
-    /// `PRV64.64`, which names no slice set - the transition "completes" and the world stays black).
+    /// SLICE-SET id, `8 * bubble + n` for bubble `b`'s n-th slice set in the scenario's per-bubble
+    /// list (measured on A Guardian Rises: 113 = `cosmo_m0_phase00_highway_intro`, bubble 14's
+    /// second set, prints `PRV113.1` and plays the opening; 112 is the highway gameplay set).
     ///
     /// Left 0, every world starts in bubble 0. That is right for `act_cosmo_m0_highway`, but on
     /// `act_cosmo_m1_dome_a` (The Dark Within) bubble 0 is a PUBLIC patrol bubble and rung 34 stops

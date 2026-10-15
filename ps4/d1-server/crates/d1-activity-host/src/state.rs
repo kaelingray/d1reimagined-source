@@ -153,7 +153,7 @@ pub struct ServedWorld {
     pub checksum: u32,
     pub bubble_count: u32,
     pub chosen: Vec<usize>,
-    /// The region (bubble index) the mission starts in, or `None` for region 0.
+    /// The slice-set id (`8 * bubble + n`) the mission starts in, or `None` for 0.
     pub start_region: Option<u32>,
     pub team0: Vec<u8>,
     pub team_minus1: Vec<u8>,

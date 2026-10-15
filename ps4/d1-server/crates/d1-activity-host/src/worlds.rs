@@ -141,8 +141,11 @@ pub const ACT_COSMO_M0_HIGHWAY: KnownWorld = KnownWorld {
 /// Ghost lines (Skywatch array station, the Hive Wizard "from the Moon"), and its first phase is
 /// `cosmo_m1_phase00_dome_a`. PRIVATE checksum `0x42FE77A5`, 22 bubbles (run
 /// `2026-10-14-world-act_cosmo_m1_dome_a-1`). Bubbles 0, 6, 7, 11, 12 and 20 are PUBLIC, so it
-/// must be served with start region 8 (bubble `dome_a`); see `GlobalActivityState::START_REGION`.
-/// Served so (run `2026-10-14-dw-domea4`), the Guardian spawns armed at the Skywatch array station.
+/// cannot start in region 0 without a public session. Served with start region 8 (slice set 0 of
+/// bubble 1; see `GlobalActivityState::START_REGION`), the Guardian spawns armed at a Skywatch
+/// array station (run `2026-10-14-dw-domea4`). ⚠ That is a private stand-in: the mission's own
+/// opening lines are in the public Skywatch/Steppes space, and its first phase,
+/// `cosmo_m1_phase00_dome_a`, is bubble 8's set 64.
 pub const ACT_COSMO_M1_DOME_A: KnownWorld = KnownWorld {
     name: "act_cosmo_m1_dome_a",
     scenario_tag: 0,
