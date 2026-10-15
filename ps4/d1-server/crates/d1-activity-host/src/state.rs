@@ -134,6 +134,17 @@ pub enum EvictionReason {
     ClientLeft,
 }
 
+/// ⭐ One timed mission step (`D1_AH_MISSION_STEPS`): from `at` after the first sensor frame, serve
+/// these object states (prebuilt for both spawn teams) and, if set, move the player to `region`
+/// (the host teleport, carried by the next global-state publish).
+#[derive(Debug, Clone)]
+pub struct MissionStep {
+    pub at: Duration,
+    pub team0: Vec<u8>,
+    pub team_minus1: Vec<u8>,
+    pub region: Option<u32>,
+}
+
 /// One row of the per-activity world table: everything rung 33/34 and the spawn read that differs
 /// per world, with the udt-5 sensor frame prebuilt for both spawn teams.
 #[derive(Debug, Clone)]
@@ -238,6 +249,14 @@ pub struct ActivityInstance {
     start_region: Option<(u32, u32)>,
     /// ⭐ The served world clock base in ms (`GlobalActivityState::TIME_BASE_MS`).
     time_base_ms: Option<u64>,
+    /// ⭐ Timed mission steps per activity index, the clock start, and the step in force.
+    mission_steps: std::collections::HashMap<u16, Vec<MissionStep>>,
+    mission_t0: Option<Instant>,
+    mission_step: Option<usize>,
+    /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
+    slice_request: Option<(u8, u32, Instant)>,
+    /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
+    membership_dirty: bool,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -356,6 +375,11 @@ impl ActivityInstance {
             world_table: std::collections::HashMap::new(),
             start_region: None,
             time_base_ms: None,
+            mission_steps: std::collections::HashMap::new(),
+            mission_t0: None,
+            mission_step: None,
+            slice_request: None,
+            membership_dirty: false,
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -549,6 +573,9 @@ impl ActivityInstance {
         if !matches!(self.state, InstanceState::Live) || self.heartbeats == 0 {
             return None;
         }
+        if self.advance_mission(now) {
+            self.sensor_last_sent = None;
+        }
         match self.sensor_repeat {
             // Send-once mode (default): silent forever after the first frame.
             None => {
@@ -691,6 +718,11 @@ impl ActivityInstance {
         // the operator reads it; every re-publish after it logs at DEBUG, because a refresh every
         // few seconds repeating the same receipt turns the run log into noise and hides the
         // warnings. The condition is the join/refresh discriminator we already track.
+        if let Some((state, index, _)) = self.slice_request {
+            if let Err(e) = m.set_slice_request(state, index, 0x811C_9DC5) {
+                tracing::warn!("⚠ teleport request not written: {e}");
+            }
+        }
         match self.pah_region {
             Some((region, peer, token)) => match m.set_pah_region(region, peer, token) {
                 Ok(()) if first => tracing::info!(
@@ -1088,6 +1120,82 @@ impl ActivityInstance {
     /// `sstm+0x3B0` to `-1` at the start of **every** slice-set transition, is re-scanned by
     /// `FUN_007775B0` at each transition without us having to re-send anything.
     /// `D1_AH_SLICE_REGION` / `D1_AH_SLICE_TOKEN` set it. ⇒ `historicaldocs/design/rung34-task7.md`.
+    /// How long the teleport request stays in state 1 before it is finished with state 3, and how
+    /// long state 3 stays before the request is dropped. Fixed times stand in for the 01.24
+    /// stand-in's wait on the client's slice record (state 4, then current).
+    pub const TELEPORT_FINISH_AFTER: Duration = Duration::from_secs(20);
+    pub const TELEPORT_DROP_AFTER: Duration = Duration::from_secs(30);
+
+    /// ⭐ `replicate_membership` again when a teleport state changed: state 1 → 3 → dropped.
+    pub fn membership_due(&mut self, now: Instant) -> Option<AhPush> {
+        if let Some((state, index, at)) = self.slice_request {
+            let age = now.saturating_duration_since(at);
+            if state == 1 && age >= Self::TELEPORT_FINISH_AFTER {
+                self.slice_request = Some((3, index, at));
+                self.membership_dirty = true;
+            } else if state == 3 && age >= Self::TELEPORT_DROP_AFTER {
+                self.slice_request = None;
+                self.membership_dirty = true;
+            }
+        }
+        if !self.membership_dirty || !matches!(self.state, InstanceState::Live) {
+            return None;
+        }
+        let img = self.join_request_image.clone()?;
+        let m = self.build_membership(&img)?;
+        self.membership_dirty = false;
+        self.last_pushed = now;
+        tracing::info!(
+            "⭐ replicate_membership re-published: teleport request {:?}",
+            self.slice_request.map(|(s, i, _)| (s, i))
+        );
+        Some(AhPush::new(self.ah_id, AhMessage::ReplicateMembership(m)))
+    }
+
+    /// Arm the timed mission steps (see [`MissionStep`]).
+    pub fn set_mission_steps(&mut self, steps: std::collections::HashMap<u16, Vec<MissionStep>>) {
+        self.mission_steps = steps;
+    }
+
+    /// Move to the latest mission step that is due. Returns true when the step changed, so the
+    /// caller sends its state now instead of waiting for the repeat interval.
+    fn advance_mission(&mut self, now: Instant) -> bool {
+        let Some(steps) = self.mission_steps.get(&self.activity_index) else {
+            return false;
+        };
+        let t0 = *self.mission_t0.get_or_insert(now);
+        let elapsed = now.saturating_duration_since(t0);
+        let Some(i) = steps.iter().rposition(|s| s.at <= elapsed) else {
+            return false;
+        };
+        if self.mission_step == Some(i) {
+            return false;
+        }
+        let step = steps[i].clone();
+        let team0 = matches!(&self.sensor_team_frames, Some((_, _, set)) if set.contains(&self.activity_index));
+        self.sensor_payload = Some(if team0 { step.team0 } else { step.team_minus1 });
+        if let Some(r) = step.region {
+            // The host teleport: ask the group to move to slice set `r` and table its region.
+            self.set_start_region(r);
+            // Each transition advances the client's token (`t + 1`, skipping 0); the region record
+            // matches only with the token of THIS transition (run agr8: token 1 left the client
+            // "waiting for valid host-tabulated data" on PRV112.1).
+            if let Some((region, peer, token)) = self.pah_region {
+                self.pah_region = Some((region, peer, if token == u8::MAX { 1 } else { token + 1 }));
+            }
+            self.slice_request = Some((1, r, now));
+            self.membership_dirty = true;
+        }
+        tracing::info!(
+            "⭐ mission step {i} at +{:.0} s for activity index {}{}",
+            elapsed.as_secs_f32(),
+            self.activity_index,
+            step.region.map(|r| format!(", region {r}")).unwrap_or_default()
+        );
+        self.mission_step = Some(i);
+        true
+    }
+
     /// Serve a world clock base in ms (see `GlobalActivityState::TIME_BASE_MS`).
     pub fn set_time_base_ms(&mut self, ms: u64) {
         self.time_base_ms = Some(ms);
@@ -1305,6 +1413,55 @@ mod tests {
         let AhMessage::GlobalActivityState(s) = &i.publish_activity_state().message else { panic!() };
         assert_eq!(s.start_region(), 8, "bubble 8 `dome_a`");
         assert_eq!(i.pah_region(), Some((8, 0, 1)), "the PAH record names the same region");
+    }
+
+    /// ⭐ Mission steps fire in order on the sensor clock, and a region step moves the PAH record.
+    #[test]
+    fn mission_steps_switch_the_served_state_and_region() {
+        let (mut i, now) = instance();
+        i.set_pah_region(113, 0, 1);
+        let step = |at: u64, b: u8, region| MissionStep {
+            at: Duration::from_secs(at),
+            team0: vec![b],
+            team_minus1: vec![b],
+            region,
+        };
+        let mut steps = std::collections::HashMap::new();
+        steps.insert(i.activity_index(), vec![step(0, 1, None), step(70, 2, None), step(120, 3, Some(112))]);
+        i.set_mission_steps(steps);
+        assert!(i.advance_mission(now));
+        assert_eq!(i.sensor_payload.as_deref(), Some(&[1u8][..]));
+        assert!(!i.advance_mission(now + Duration::from_secs(10)), "no new step yet");
+        assert!(i.advance_mission(now + Duration::from_secs(71)));
+        assert_eq!(i.sensor_payload.as_deref(), Some(&[2u8][..]));
+        assert!(i.advance_mission(now + Duration::from_secs(130)));
+        assert_eq!(i.sensor_payload.as_deref(), Some(&[3u8][..]));
+        assert_eq!(i.pah_region(), Some((112, 0, 2)), "the teleport step moves the region");
+    }
+
+    /// ⭐ A teleport step asks (state 1), finishes (state 3) and drops the group slice-set request,
+    /// re-publishing the membership each time.
+    #[test]
+    fn a_teleport_step_runs_the_slice_request_handshake() {
+        let (mut i, now) = instance();
+        i.set_pah_region(113, 0, 1);
+        i.on_client_message(&join_request([0; 4]), now);
+        let mut steps = std::collections::HashMap::new();
+        steps.insert(
+            i.activity_index(),
+            vec![MissionStep { at: Duration::ZERO, team0: vec![1], team_minus1: vec![1], region: Some(112) }],
+        );
+        i.set_mission_steps(steps);
+        assert!(i.advance_mission(now));
+        let req = |p: Option<AhPush>| match p.map(|p| p.message) {
+            Some(AhMessage::ReplicateMembership(m)) => m.slice_request(),
+            _ => None,
+        };
+        assert_eq!(req(i.membership_due(now)), Some((1, 112)), "state 1 asks for 112");
+        assert!(i.membership_due(now + Duration::from_secs(5)).is_none(), "nothing new yet");
+        assert_eq!(req(i.membership_due(now + Duration::from_secs(21))), Some((3, 112)), "state 3 finishes");
+        assert_eq!(req(i.membership_due(now + Duration::from_secs(31))), Some((0, 0)), "then the request is dropped");
+        assert_eq!(i.pah_region(), Some((112, 0, 2)), "the teleport is the second transition");
     }
 
     /// ⭐⭐ A state refresh must not re-grant indices the client already holds: its apply ORs the

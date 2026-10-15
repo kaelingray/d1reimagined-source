@@ -501,6 +501,7 @@ fn main() -> anyhow::Result<()> {
             let mut sensor_phase_file = None;
             let mut sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)> = None;
             let mut world_table: std::collections::HashMap<u16, d1_activity_host::state::ServedWorld> = std::collections::HashMap::new();
+            let mut mission_steps: std::collections::HashMap<u16, Vec<d1_activity_host::state::MissionStep>> = std::collections::HashMap::new();
             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
                 .ok()
                 .and_then(|s| s.trim().parse::<i8>().ok())
@@ -670,6 +671,59 @@ fn main() -> anyhow::Result<()> {
                             });
                         }
                     }
+                    // ⭐ D1_AH_MISSION_STEPS=<file>: `activity_index seconds sensor_group sensor_file
+                    // [region]` per line. Each step's frame is prebuilt for both spawn teams.
+                    if let Ok(path) = std::env::var("D1_AH_MISSION_STEPS") {
+                        let text = std::fs::read_to_string(&path)
+                            .map_err(|e| anyhow::anyhow!("D1_AH_MISSION_STEPS {path}: {e}"))?;
+                        for line in text.lines().map(|l| l.split('#').next().unwrap_or("").trim()).filter(|l| !l.is_empty()) {
+                            let f: Vec<&str> = line.split_whitespace().collect();
+                            if f.len() != 4 && f.len() != 5 {
+                                anyhow::bail!("D1_AH_MISSION_STEPS line {line:?}: want `index seconds sensor_group sensor_file [region]`");
+                            }
+                            let index: u16 = f[0].parse()?;
+                            let at: f32 = f[1].parse()?;
+                            let group = parse_u32(f[2].to_string())
+                                .ok_or_else(|| anyhow::anyhow!("D1_AH_MISSION_STEPS: bad sensor group {:?}", f[2]))?;
+                            let region = match f.get(4) {
+                                Some(r) => Some(parse_u32(r.to_string())
+                                    .ok_or_else(|| anyhow::anyhow!("D1_AH_MISSION_STEPS: bad region {r:?}"))?),
+                                None => None,
+                            };
+                            let clients: Vec<d1_oracle::sensor::SensorClientRef> = std::fs::read_to_string(f[3])
+                                .map_err(|e| anyhow::anyhow!("D1_AH_MISSION_STEPS {}: {e}", f[3]))?
+                                .lines()
+                                .filter_map(d1_oracle::sensor::SensorClientRef::parse_line)
+                                .filter(|c| !(c.name_hash == group && c.name_i8 == name_i8 && c.name_sub == name_sub))
+                                .collect();
+                            let build = |team: i32| {
+                                let mut p = params.clone();
+                                p.name_hash = group;
+                                p.clients = clients.clone();
+                                for c in p.clients.iter_mut() {
+                                    if let Some((0x8080_22A5, img)) = c.a_value.as_mut() {
+                                        if img.len() >= 0x3C {
+                                            img[0x38..0x3C].copy_from_slice(&team.to_le_bytes());
+                                        }
+                                    }
+                                }
+                                d1_activity_host::codec::SchemaCodec::build_sensor(&p)
+                            };
+                            let (team0, team_minus1) = (build(0)?, build(-1)?);
+                            tracing::info!(
+                                "⭐ mission step: index {index} at +{at} s -> {} ({} sensor clients){}",
+                                f[3],
+                                clients.len(),
+                                region.map(|r| format!(", region {r}")).unwrap_or_default()
+                            );
+                            mission_steps.entry(index).or_default().push(d1_activity_host::state::MissionStep {
+                                at: std::time::Duration::from_secs_f32(at),
+                                team0,
+                                team_minus1,
+                                region,
+                            });
+                        }
+                    }
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
                             tracing::info!(
@@ -765,6 +819,7 @@ fn main() -> anyhow::Result<()> {
                             i.set_sensor_team_frames(a, b, set);
                         }
                         i.set_world_table(world_table.clone());
+                        i.set_mission_steps(mission_steps.clone());
                         // ⭐ D1_AH_TIME_BASE_MS=<ms>|now: the world clock base at blob +0x520.
                         if let Ok(v) = std::env::var("D1_AH_TIME_BASE_MS") {
                             let ms = if v.trim() == "now" {

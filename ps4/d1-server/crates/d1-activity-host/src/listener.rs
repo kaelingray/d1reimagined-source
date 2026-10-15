@@ -496,6 +496,12 @@ impl AhConnection {
             });
             events.extend(self.try_push(push));
         }
+        if let Some(push) = self.instance.membership_due(now) {
+            events.push(AhEvent::WantsToPush {
+                user_defined_type: push.message.user_defined_type(),
+            });
+            events.extend(self.try_push(push));
+        }
         let mut out = self.conv.drain(now);
         out.extend(self.pending_pushes.drain(..));
         let sealed = self.seal_all(out, &mut events);

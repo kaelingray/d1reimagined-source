@@ -747,6 +747,32 @@ impl ReplicateMembership {
     /// sstm+0x3B8, …)`) has **no token condition** - so once the region became CURRENT, 39 zeroed
     /// duplicates would each overwrite the good record and the last (empty) one would win. The
     /// terminator is not tidiness; it is the difference between one record and forty.
+    /// ⭐ The host's slice-set REQUEST for the whole group (the host teleport): group block
+    /// `+0x2E48` field `+0x21C8`, type `0x80800BF9` = {u3 state, {u8, i10 slice-set index, u32
+    /// name hash}}. Same offsets as 01.24, where it moved A Guardian Rises from the intro slice
+    /// set 113 to gameplay 112: state 1 asks, the client switches, state 3 finishes.
+    pub const GROUP_SLICE_REQUEST: usize = 0x2E48 + 0x21C8;
+
+    /// Write the group slice-set request (see [`Self::GROUP_SLICE_REQUEST`]).
+    pub fn set_slice_request(&mut self, state: u8, index: u32, name_hash: u32) -> Result<(), String> {
+        let o = Self::GROUP_SLICE_REQUEST;
+        if self.image.len() < o + 0x10 {
+            return Err(format!("membership image is {} bytes, too short for +0x{o:X}", self.image.len()));
+        }
+        self.image[o] = state;
+        self.image[o + 4] = 0;
+        self.image[o + 8..o + 12].copy_from_slice(&index.to_le_bytes());
+        self.image[o + 12..o + 16].copy_from_slice(&name_hash.to_le_bytes());
+        Ok(())
+    }
+
+    /// The group slice-set request as (state, index).
+    pub fn slice_request(&self) -> Option<(u8, u32)> {
+        let o = Self::GROUP_SLICE_REQUEST;
+        let b = self.image.get(o..o + 12)?;
+        Some((b[0], u32::from_le_bytes(b[8..12].try_into().ok()?)))
+    }
+
     pub fn set_pah_region(
         &mut self,
         region_id: u32,
