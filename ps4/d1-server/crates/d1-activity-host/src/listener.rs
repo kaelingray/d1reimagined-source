@@ -514,6 +514,12 @@ impl AhConnection {
     /// motivated this, and ten copies of one byte is not ten vectors. The first is the one worth
     /// keeping - it is the one sent from a known state.
     fn capture_once(&mut self, udt: u32, payload: &[u8]) -> Vec<AhEvent> {
+        // ⭐ udt 18 (incident) is the client's mission report: cinematic ended, player entered a
+        // trigger. Every one is kept, not only the first - a mission is driven by them.
+        if udt == 18 {
+            self.captured.insert(udt);
+            return vec![payload_event(udt, payload)];
+        }
         if self.captured.insert(udt) {
             vec![payload_event(udt, payload)]
         } else {

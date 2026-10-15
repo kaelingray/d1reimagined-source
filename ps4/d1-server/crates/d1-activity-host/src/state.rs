@@ -139,10 +139,39 @@ pub enum EvictionReason {
 /// (the host teleport, carried by the next global-state publish).
 #[derive(Debug, Clone)]
 pub struct MissionStep {
-    pub at: Duration,
+    pub when: StepWhen,
     pub team0: Vec<u8>,
     pub team_minus1: Vec<u8>,
     pub region: Option<u32>,
+}
+
+/// When a [`MissionStep`] fires. Steps fire in order, one after another.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StepWhen {
+    /// `N`: N seconds after the first sensor frame.
+    At(Duration),
+    /// `+N`: N seconds after the previous step.
+    AfterPrevious(Duration),
+    /// `@T|N`: when the client reports incident type `T` (udt 18), or N seconds after the
+    /// previous step if it never does. 56578: 2681 = a cinematic started, 891 = one stopped (also
+    /// when the player skips it). Incidents within [`ActivityInstance::INCIDENT_ECHO`] of the
+    /// previous step are the client echoing that step's own changes and do not count.
+    OnIncident { incident: u32, timeout: Duration },
+}
+
+impl StepWhen {
+    /// Parse `N`, `+N` or `@T|N` (seconds may be fractional).
+    pub fn parse(s: &str) -> Option<Self> {
+        let secs = |t: &str| t.parse::<f32>().ok().filter(|v| *v >= 0.0).map(Duration::from_secs_f32);
+        if let Some(rest) = s.strip_prefix('@') {
+            let (t, n) = rest.split_once('|')?;
+            return Some(Self::OnIncident { incident: t.parse().ok()?, timeout: secs(n)? });
+        }
+        if let Some(rest) = s.strip_prefix('+') {
+            return secs(rest).map(Self::AfterPrevious);
+        }
+        secs(s).map(Self::At)
+    }
 }
 
 /// One row of the per-activity world table: everything rung 33/34 and the spawn read that differs
@@ -253,6 +282,9 @@ pub struct ActivityInstance {
     mission_steps: std::collections::HashMap<u16, Vec<MissionStep>>,
     mission_t0: Option<Instant>,
     mission_step: Option<usize>,
+    /// When the step in force fired, and every incident type the client reported, with its time.
+    mission_step_at: Option<Instant>,
+    incidents: Vec<(u32, Instant)>,
     /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
     slice_request: Option<(u8, u32, Instant)>,
     /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
@@ -378,6 +410,8 @@ impl ActivityInstance {
             mission_steps: std::collections::HashMap::new(),
             mission_t0: None,
             mission_step: None,
+            mission_step_at: None,
+            incidents: Vec::new(),
             slice_request: None,
             membership_dirty: false,
             sensor_sent: false,
@@ -428,6 +462,18 @@ impl ActivityInstance {
     /// notifications with no reply, and inventing one would be the AH-layer equivalent of the
     /// Weasel.
     pub fn on_client_message(&mut self, msg: &ClientMessage, now: Instant) -> Vec<AhPush> {
+        // ⭐ udt 18 incidents: {u32 count, u32 types[count], ...}. Kept for incident-driven steps.
+        if let ClientMessage::Other { user_defined_type: 18, struct_image } = msg {
+            if let Some(n) = struct_image.get(0..4).map(|b| u32::from_le_bytes(b.try_into().unwrap())) {
+                for k in 0..n.min(8) as usize {
+                    if let Some(b) = struct_image.get(4 + 4 * k..8 + 4 * k) {
+                        let t = u32::from_le_bytes(b.try_into().unwrap());
+                        tracing::info!("incident {t} reported by the client");
+                        self.incidents.push((t, now));
+                    }
+                }
+            }
+        }
         let mut out = self.reply_to(msg, now);
         // ⭐⭐ THE HOST HEARTBEAT. If this turn produced nothing to say, and we have been silent
         // longer than [`Self::HOST_HEARTBEAT_MS`], say something anyway - because the client's
@@ -1123,6 +1169,9 @@ impl ActivityInstance {
     /// How long the teleport request stays in state 1 before it is finished with state 3, and how
     /// long state 3 stays before the request is dropped. Fixed times stand in for the 01.24
     /// stand-in's wait on the client's slice record (state 4, then current).
+    /// Incidents this soon after a step are the client echoing that step (a stop we sent comes
+    /// back as incident 891 within half a second) and do not fire the next step.
+    pub const INCIDENT_ECHO: Duration = Duration::from_secs(2);
     pub const TELEPORT_FINISH_AFTER: Duration = Duration::from_secs(20);
     pub const TELEPORT_DROP_AFTER: Duration = Duration::from_secs(30);
 
@@ -1165,13 +1214,28 @@ impl ActivityInstance {
         };
         let t0 = *self.mission_t0.get_or_insert(now);
         let elapsed = now.saturating_duration_since(t0);
-        let Some(i) = steps.iter().rposition(|s| s.at <= elapsed) else {
+        let i = self.mission_step.map_or(0, |s| s + 1);
+        let Some(step) = steps.get(i).cloned() else {
             return false;
         };
-        if self.mission_step == Some(i) {
+        let prev = self.mission_step_at.unwrap_or(t0);
+        let due = match step.when {
+            StepWhen::At(d) => elapsed >= d,
+            StepWhen::AfterPrevious(d) => now.saturating_duration_since(prev) >= d,
+            StepWhen::OnIncident { incident, timeout } => {
+                let reported = self
+                    .incidents
+                    .iter()
+                    .any(|(t, at)| *t == incident && at.saturating_duration_since(prev) >= Self::INCIDENT_ECHO);
+                if reported {
+                    tracing::info!("⭐ mission step {i}: the client reported incident {incident}");
+                }
+                reported || now.saturating_duration_since(prev) >= timeout
+            }
+        };
+        if !due {
             return false;
         }
-        let step = steps[i].clone();
         let team0 = matches!(&self.sensor_team_frames, Some((_, _, set)) if set.contains(&self.activity_index));
         self.sensor_payload = Some(if team0 { step.team0 } else { step.team_minus1 });
         if let Some(r) = step.region {
@@ -1193,6 +1257,7 @@ impl ActivityInstance {
             step.region.map(|r| format!(", region {r}")).unwrap_or_default()
         );
         self.mission_step = Some(i);
+        self.mission_step_at = Some(now);
         true
     }
 
@@ -1421,7 +1486,7 @@ mod tests {
         let (mut i, now) = instance();
         i.set_pah_region(113, 0, 1);
         let step = |at: u64, b: u8, region| MissionStep {
-            at: Duration::from_secs(at),
+            when: StepWhen::At(Duration::from_secs(at)),
             team0: vec![b],
             team_minus1: vec![b],
             region,
@@ -1439,6 +1504,35 @@ mod tests {
         assert_eq!(i.pah_region(), Some((112, 0, 2)), "the teleport step moves the region");
     }
 
+    /// ⭐ An incident step fires on the client's report (not on its own echo), else on the timeout.
+    #[test]
+    fn an_incident_step_fires_on_the_report_or_the_timeout() {
+        assert_eq!(StepWhen::parse("@891|70"), Some(StepWhen::OnIncident { incident: 891, timeout: Duration::from_secs(70) }));
+        assert_eq!(StepWhen::parse("+5"), Some(StepWhen::AfterPrevious(Duration::from_secs(5))));
+        assert_eq!(StepWhen::parse("120"), Some(StepWhen::At(Duration::from_secs(120))));
+        let (mut i, now) = instance();
+        let step = |when, b: u8| MissionStep { when, team0: vec![b], team_minus1: vec![b], region: None };
+        let on891 = StepWhen::OnIncident { incident: 891, timeout: Duration::from_secs(70) };
+        let mut steps = std::collections::HashMap::new();
+        steps.insert(i.activity_index(), vec![step(StepWhen::At(Duration::ZERO), 1), step(on891, 2), step(on891, 3)]);
+        i.set_mission_steps(steps);
+        assert!(i.advance_mission(now));
+        let incident = |t: u32| {
+            let mut img = vec![0u8; 0x2CC];
+            img[0..4].copy_from_slice(&1u32.to_le_bytes());
+            img[4..8].copy_from_slice(&t.to_le_bytes());
+            ClientMessage::Other { user_defined_type: 18, struct_image: img }
+        };
+        i.on_client_message(&incident(891), now + Duration::from_millis(500));
+        assert!(!i.advance_mission(now + Duration::from_secs(1)), "an echo of the step does not count");
+        i.on_client_message(&incident(891), now + Duration::from_secs(20));
+        assert!(i.advance_mission(now + Duration::from_secs(20)), "the skip/end report fires step 1");
+        assert_eq!(i.sensor_payload.as_deref(), Some(&[2u8][..]));
+        assert!(!i.advance_mission(now + Duration::from_secs(30)));
+        assert!(i.advance_mission(now + Duration::from_secs(91)), "no report: the timeout fires step 2");
+        assert_eq!(i.sensor_payload.as_deref(), Some(&[3u8][..]));
+    }
+
     /// ⭐ A teleport step asks (state 1), finishes (state 3) and drops the group slice-set request,
     /// re-publishing the membership each time.
     #[test]
@@ -1449,7 +1543,7 @@ mod tests {
         let mut steps = std::collections::HashMap::new();
         steps.insert(
             i.activity_index(),
-            vec![MissionStep { at: Duration::ZERO, team0: vec![1], team_minus1: vec![1], region: Some(112) }],
+            vec![MissionStep { when: StepWhen::At(Duration::ZERO), team0: vec![1], team_minus1: vec![1], region: Some(112) }],
         );
         i.set_mission_steps(steps);
         assert!(i.advance_mission(now));

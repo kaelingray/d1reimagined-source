@@ -671,8 +671,9 @@ fn main() -> anyhow::Result<()> {
                             });
                         }
                     }
-                    // ⭐ D1_AH_MISSION_STEPS=<file>: `activity_index seconds sensor_group sensor_file
-                    // [region]` per line. Each step's frame is prebuilt for both spawn teams.
+                    // ⭐ D1_AH_MISSION_STEPS=<file>: `activity_index when sensor_group sensor_file
+                    // [region]` per line, `when` = N | +N | @T|N (see `StepWhen`). Each step's frame
+                    // is prebuilt for both spawn teams.
                     if let Ok(path) = std::env::var("D1_AH_MISSION_STEPS") {
                         let text = std::fs::read_to_string(&path)
                             .map_err(|e| anyhow::anyhow!("D1_AH_MISSION_STEPS {path}: {e}"))?;
@@ -682,7 +683,8 @@ fn main() -> anyhow::Result<()> {
                                 anyhow::bail!("D1_AH_MISSION_STEPS line {line:?}: want `index seconds sensor_group sensor_file [region]`");
                             }
                             let index: u16 = f[0].parse()?;
-                            let at: f32 = f[1].parse()?;
+                            let when = d1_activity_host::state::StepWhen::parse(f[1])
+                                .ok_or_else(|| anyhow::anyhow!("D1_AH_MISSION_STEPS: bad step time {:?} (want N, +N or @T|N)", f[1]))?;
                             let group = parse_u32(f[2].to_string())
                                 .ok_or_else(|| anyhow::anyhow!("D1_AH_MISSION_STEPS: bad sensor group {:?}", f[2]))?;
                             let region = match f.get(4) {
@@ -711,13 +713,13 @@ fn main() -> anyhow::Result<()> {
                             };
                             let (team0, team_minus1) = (build(0)?, build(-1)?);
                             tracing::info!(
-                                "⭐ mission step: index {index} at +{at} s -> {} ({} sensor clients){}",
+                                "⭐ mission step: index {index} {when:?} -> {} ({} sensor clients){}",
                                 f[3],
                                 clients.len(),
                                 region.map(|r| format!(", region {r}")).unwrap_or_default()
                             );
                             mission_steps.entry(index).or_default().push(d1_activity_host::state::MissionStep {
-                                at: std::time::Duration::from_secs_f32(at),
+                                when,
                                 team0,
                                 team_minus1,
                                 region,
