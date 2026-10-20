@@ -1,0 +1,124 @@
+diff --git a/ps4/d1-server/crates/d1-activity-host/src/main.rs b/ps4/d1-server/crates/d1-activity-host/src/main.rs
+index 7955588..9d90cd4 100644
+--- a/ps4/d1-server/crates/d1-activity-host/src/main.rs
++++ b/ps4/d1-server/crates/d1-activity-host/src/main.rs
+@@ -487,6 +487,7 @@ fn main() -> anyhow::Result<()> {
+             // phase (`record+0x1AC`) the player-spawn gate reads. Off unless `D1_AH_SENSOR_PHASE`
+             // is set - this is `synthetic-minimal` and its post-pass dispatch is `[U]` until the
+             // live watch on `record+0x1AC` confirms it. ⇒ design/activity-lifetime-state.md.
++            let mut sensor_phase_file = None;
+             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
+                 .ok()
+                 .and_then(|s| s.trim().parse::<i8>().ok())
+@@ -551,6 +552,29 @@ fn main() -> anyhow::Result<()> {
+                         tail,
+                         clients,
+                     };
++                    // `D1_AH_SENSOR_PHASE_FILE` + `D1_AH_SENSOR_PHASES=3,4,5`: one frame per listed
++                    // phase, chosen per send from the file's content (state.rs).
++                    if let (Ok(path), Ok(list)) = (
++                        std::env::var("D1_AH_SENSOR_PHASE_FILE"),
++                        std::env::var("D1_AH_SENSOR_PHASES"),
++                    ) {
++                        let mut frames = std::collections::BTreeMap::new();
++                        for p in list.split(',').filter_map(|s| s.trim().parse::<i8>().ok()) {
++                            let mut each = params.clone();
++                            each.phase = p;
++                            match d1_activity_host::codec::SchemaCodec::build_sensor(&each) {
++                                Ok(b) => {
++                                    frames.insert(p, b);
++                                }
++                                Err(e) => tracing::error!("⛔ sensor frame for phase {p}: {e}"),
++                            }
++                        }
++                        tracing::info!(
++                            "udt-5 sensor phase file {path}: frames for phases {:?}",
++                            frames.keys().collect::<Vec<_>>()
++                        );
++                        sensor_phase_file = Some((std::path::PathBuf::from(path), frames));
++                    }
+                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
+                         Ok(bytes) => {
+                             tracing::info!(
+@@ -609,6 +633,9 @@ fn main() -> anyhow::Result<()> {
+                         if let Some(s) = sensor_repeat_s {
+                             i.set_sensor_repeat(std::time::Duration::from_secs(s));
+                         }
++                        if let Some((path, frames)) = sensor_phase_file.clone() {
++                            i.set_sensor_phase_file(path, frames);
++                        }
+                     }
+                     i.set_host_heartbeat(std::time::Duration::from_millis(heartbeat_ms));
+                     i
+diff --git a/ps4/d1-server/crates/d1-activity-host/src/state.rs b/ps4/d1-server/crates/d1-activity-host/src/state.rs
+index 891ceb8..0af82ef 100644
+--- a/ps4/d1-server/crates/d1-activity-host/src/state.rs
++++ b/ps4/d1-server/crates/d1-activity-host/src/state.rs
+@@ -224,6 +224,10 @@ pub struct ActivityInstance {
+     sensor_repeat: Option<Duration>,
+     /// When the sensor frame last went out (repeat mode pacing).
+     sensor_last_sent: Option<Instant>,
++    /// `D1_AH_SENSOR_PHASE_FILE`: a file naming the phase to send, re-read on every send, and one
++    /// pre-built frame per allowed phase. An unreadable file or an unlisted phase falls back to
++    /// [`Self::sensor_payload`]. Lets an operator step the lifetime phase during one live run.
++    sensor_phase_file: Option<(std::path::PathBuf, std::collections::BTreeMap<i8, Vec<u8>>)>,
+ }
+ 
+ impl ActivityInstance {
+@@ -320,6 +324,7 @@ impl ActivityInstance {
+             sensor_sent: false,
+             sensors_sent: 0,
+             sensor_repeat: None,
++            sensor_phase_file: None,
+             sensor_last_sent: None,
+         }
+     }
+@@ -435,6 +440,28 @@ impl ActivityInstance {
+         self.sensor_repeat = Some(every);
+     }
+ 
++    /// Choose the sensor frame per send from the phase named in `path` (see
++    /// [`Self::sensor_phase_file`]). `frames` holds one finished frame per allowed phase.
++    pub fn set_sensor_phase_file(
++        &mut self,
++        path: std::path::PathBuf,
++        frames: std::collections::BTreeMap<i8, Vec<u8>>,
++    ) {
++        self.sensor_phase_file = Some((path, frames));
++    }
++
++    fn current_sensor_payload(&self) -> Option<(Vec<u8>, Option<i8>)> {
++        if let Some((path, frames)) = &self.sensor_phase_file {
++            let phase = std::fs::read_to_string(path)
++                .ok()
++                .and_then(|s| s.trim().parse::<i8>().ok());
++            if let Some(bytes) = phase.and_then(|p| frames.get(&p)) {
++                return Some((bytes.clone(), phase));
++            }
++        }
++        self.sensor_payload.clone().map(|b| (b, None))
++    }
++
+     /// ⭐⭐ The udt-5 `sensor_auth_update`, sent **once** after the instance reaches [`Live`]
+     /// (or on an interval, in [`Self::set_sensor_repeat`] mode).
+     ///
+@@ -469,14 +496,17 @@ impl ActivityInstance {
+                 }
+             }
+         }
+-        let payload = self.sensor_payload.clone()?;
++        let (payload, phase) = self.current_sensor_payload()?;
+         self.sensor_sent = true;
+         self.sensor_last_sent = Some(now);
+         self.sensors_sent += 1;
+         self.last_pushed = now;
+         // Visible send accounting: RADV-12 (2026-08-11) could not tell whether the repeat sends
+         // were happening at all - the arming was logged, the sends were not.
+-        tracing::info!("udt-5 sensor_auth_update send #{}", self.sensors_sent);
++        match phase {
++            Some(p) => tracing::info!("udt-5 sensor_auth_update send #{} (phase file: {p})", self.sensors_sent),
++            None => tracing::info!("udt-5 sensor_auth_update send #{}", self.sensors_sent),
++        }
+         Some(AhPush::new(self.ah_id, AhMessage::SensorAuthUpdate { payload }))
+     }
+ 

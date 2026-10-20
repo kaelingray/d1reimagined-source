@@ -1,0 +1,429 @@
+diff --git a/src/core/cpu_patches.cpp b/src/core/cpu_patches.cpp
+index 7a360c6..c521317 100644
+--- a/src/core/cpu_patches.cpp
++++ b/src/core/cpu_patches.cpp
+@@ -2129,8 +2129,37 @@ RedZonePatchResult PatchRedZoneMemoryInstructions(u64, u64, std::span<const uint
+ // End Windows static guest red-zone protection
+ // ============================================================================
+ 
+-static bool PatchesAccessViolationHandler(void* context, void* /* fault_address */) {
+-    return TryPatchJit(Common::GetRip(context));
++static bool PatchesAccessViolationHandler(void* context, void* fault_address) {
++    void* rip = Common::GetRip(context);
++#if defined(_WIN32)
++    // D1: a guest jump into an unreadable page inside a module's range made the JIT patcher decode
++    // unreadable bytes and fault inside Zydis (build 56578, 14 Oct 2026, ~50% of world loads).
++    // Refuse to decode there, and say where the guest was.
++    MEMORY_BASIC_INFORMATION mbi{};
++    const bool readable =
++        VirtualQuery(rip, &mbi, sizeof(mbi)) == sizeof(mbi) && mbi.State == MEM_COMMIT &&
++        (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_READONLY |
++                        PAGE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_WRITECOPY)) != 0 &&
++        (mbi.Protect & PAGE_GUARD) == 0;
++    if (!readable) {
++        const auto* ctx = static_cast<const CONTEXT*>(context);
++        std::string stack;
++        const auto* sp = reinterpret_cast<const u64*>(ctx->Rsp);
++        MEMORY_BASIC_INFORMATION smbi{};
++        if (VirtualQuery(sp, &smbi, sizeof(smbi)) == sizeof(smbi) && smbi.State == MEM_COMMIT) {
++            for (int i = 0; i < 24; ++i) {
++                stack += fmt::format(" {:#x}", sp[i]);
++            }
++        }
++        LOG_CRITICAL(Core,
++                     "D1: guest executed an unreadable address rip={} fault={} rsp={:#x} "
++                     "rax={:#x} rcx={:#x} rdx={:#x} rdi={:#x} rsi={:#x} stack:{}",
++                     rip, fault_address, ctx->Rsp, ctx->Rax, ctx->Rcx, ctx->Rdx, ctx->Rdi,
++                     ctx->Rsi, stack);
++        return false;
++    }
++#endif
++    return TryPatchJit(rip);
+ }
+ 
+ static bool PatchesIllegalInstructionHandler(void* context) {
+diff --git a/src/core/libraries/network/net_util.cpp b/src/core/libraries/network/net_util.cpp
+index 0dda3c2..3e57026 100644
+--- a/src/core/libraries/network/net_util.cpp
++++ b/src/core/libraries/network/net_util.cpp
+@@ -35,6 +35,7 @@ typedef int net_socket;
+ #include <memory>
+ #include <mutex>
+ #include <vector>
++#include <cstdlib>
+ #include <string.h>
+ #include "common/assert.h"
+ #include "common/logging/log.h"
+@@ -346,10 +347,50 @@ u32 NetUtilInternal::GetNatType() const {
+     return nat_type;
+ }
+ 
++// D1-PRESERVATION FORK-LOCAL CHANGE - NOT AN UPSTREAM FIX.
++// The stock probe connect()s a TCP socket to 1.1.1.1:80 and reads getsockname(). Under a contained
++// lab (no route off the box, or an emulator firewall block) that real handshake fails and the guest
++// is told 127.0.0.1, which Destiny rejects as a transport. Instead:
++//   1. D1_GUEST_IP, if set, names the guest address explicitly. It is used only if it is an
++//      address of this machine (a UDP socket can bind to it).
++//   2. Otherwise a UDP route probe: connect() on a datagram socket only selects the route and the
++//      source address. It sends no packet and cannot block.
++static bool IsLocalIpv4(const char* text, in_addr* out) {
++    if (inet_pton(AF_INET, text, out) != 1 || out->s_addr == htonl(INADDR_LOOPBACK)) {
++        return false;
++    }
++    auto probe = socket(AF_INET, SOCK_DGRAM, 0);
++    if (probe == -1) {
++        return false;
++    }
++    sockaddr_in local{};
++    local.sin_family = AF_INET;
++    local.sin_addr = *out;
++    const bool bound = bind(probe, (sockaddr*)&local, sizeof(local)) == 0;
++#ifdef _WIN32
++    closesocket(probe);
++#else
++    ::close(probe);
++#endif
++    return bound;
++}
++
+ bool NetUtilInternal::RetrieveIp() {
+     std::scoped_lock lock{m_mutex};
+ 
+-    auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
++    if (const char* guest = std::getenv("D1_GUEST_IP"); guest && *guest) {
++        in_addr addr{};
++        if (IsLocalIpv4(guest, &addr)) {
++            char text[INET_ADDRSTRLEN];
++            inet_ntop(AF_INET, &addr, text, INET_ADDRSTRLEN);
++            ip = text;
++            LOG_INFO(Lib_Net, "local ip {} (D1_GUEST_IP)", ip);
++            return true;
++        }
++        LOG_ERROR(Lib_Net, "D1_GUEST_IP={} is not an address of this machine; ignored", guest);
++    }
++
++    auto sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+     if (sockfd == -1) {
+         return false;
+     }
+diff --git a/src/core/libraries/network/netctl.cpp b/src/core/libraries/network/netctl.cpp
+index f0bd459..cb6ca57 100644
+--- a/src/core/libraries/network/netctl.cpp
++++ b/src/core/libraries/network/netctl.cpp
+@@ -184,14 +184,15 @@ int PS4_SYSV_ABI sceNetCtlGetInfo(int code, OrbisNetCtlInfo* info) {
+                                                              : ORBIS_NET_CTL_LINK_DISCONNECTED;
+         break;
+     case ORBIS_NET_CTL_INFO_IP_ADDRESS: {
+-        strcpy(info->ip_address,
+-               "127.0.0.1"); // placeholder in case ip retrieval failed
+-        auto success = netinfo->RetrieveIp();
+-        if (success) {
+-            strncpy(info->ip_address, netinfo->GetIp().data(), sizeof(info->ip_address));
+-        } else {
++        // D1-PRESERVATION FORK-LOCAL CHANGE: on failure report NOT_AVAIL with an empty address
++        // instead of a fabricated 127.0.0.1 with success, so the guest takes its own error path.
++        memset(info->ip_address, 0, sizeof(info->ip_address));
++        if (!netinfo->RetrieveIp()) {
+             LOG_WARNING(Lib_NetCtl, "local ip: failed to retrieve");
++            return ORBIS_NET_CTL_ERROR_NOT_AVAIL;
+         }
++        strncpy(info->ip_address, netinfo->GetIp().data(), sizeof(info->ip_address) - 1);
++        LOG_INFO(Lib_NetCtl, "local ip: {}", info->ip_address);
+         break;
+     }
+     case ORBIS_NET_CTL_INFO_NETMASK: {
+diff --git a/src/core/libraries/network/posix_sockets.cpp b/src/core/libraries/network/posix_sockets.cpp
+index f1d8030..1674f16 100644
+--- a/src/core/libraries/network/posix_sockets.cpp
++++ b/src/core/libraries/network/posix_sockets.cpp
+@@ -1,6 +1,8 @@
+ // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <algorithm>
++#include <cstring>
+ #include <vector>
+ #include <common/assert.h>
+ #include "common/error.h"
+@@ -227,61 +229,41 @@ int PosixSocket::SendMessage(const OrbisNetMsghdr* msg, int flags) {
+     std::scoped_lock lock{m_mutex};
+ 
+ #ifdef _WIN32
+-    int totalSent = 0;
+-    bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
+-    bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
+-
+-    // stream socket with multiple buffers
+-    bool use_wsamsg =
+-        (socket_type == ORBIS_NET_SOCK_STREAM || socket_type == ORBIS_NET_SOCK_STREAM_P2P) &&
+-        msg->msg_iovlen > 1;
+-
++    // D1: gather the iovecs into one buffer and send() it. The previous code reinterpreted
++    // OrbisNetMsghdr as a WSAMSG - whose WSABUF is {len, buf} where an iovec is {base, len} - and
++    // called WSASendMsg, which Windows does not support on TCP. A multi-buffer send on a stream
++    // socket therefore "sent" 0 bytes forever, and Destiny's network_send job spun until its hitch
++    // detector halted the client.
++    const bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
++    const bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
++    std::vector<char> gathered;
+     for (int i = 0; i < msg->msg_iovlen; ++i) {
+-        char* buf = (char*)msg->msg_iov[i].iov_base;
+-        size_t remaining = msg->msg_iov[i].iov_len;
+-
+-        while (remaining > 0) {
+-            if (dontWait) {
+-                int ready = socket_is_ready(sock, false);
+-                if (ready <= 0)
+-                    return ready;
+-            }
+-
+-            int sent = 0;
+-            if (use_wsamsg) {
+-                // only call WSASendMsg if we have multiple buffers
+-                LPFN_WSASENDMSG wsasendmsg = nullptr;
+-                GUID guid = WSAID_WSASENDMSG;
+-                DWORD bytes = 0;
+-                if (WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid),
+-                             &wsasendmsg, sizeof(wsasendmsg), &bytes, nullptr, nullptr) != 0) {
+-                    // fallback to send()
+-                    sent = ::send(sock, buf, remaining, 0);
+-                } else {
+-                    DWORD bytesSent = 0;
+-                    int res = wsasendmsg(
+-                        sock, reinterpret_cast<LPWSAMSG>(const_cast<OrbisNetMsghdr*>(msg)), 0,
+-                        &bytesSent, nullptr, nullptr);
+-                    if (res == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                    sent = bytesSent;
+-                }
+-            } else {
+-                sent = ::send(sock, buf, remaining, 0);
+-                if (sent == SOCKET_ERROR)
+-                    return ConvertReturnErrorCode(WSAGetLastError());
+-            }
+-
+-            totalSent += sent;
+-            remaining -= sent;
+-            buf += sent;
+-
+-            if (!waitAll)
+-                break;
+-        }
++        const char* base = static_cast<const char*>(msg->msg_iov[i].iov_base);
++        gathered.insert(gathered.end(), base, base + msg->msg_iov[i].iov_len);
+     }
+-
+-    return totalSent;
++    sockaddr to{};
++    const bool addressed = msg->msg_name != nullptr && msg->msg_namelen != 0;
++    if (addressed) {
++        convertOrbisNetSockaddrToPosix(static_cast<const OrbisNetSockaddr*>(msg->msg_name), &to);
++    }
++    size_t totalSent = 0;
++    do {
++        if (dontWait) {
++            int ready = socket_is_ready(sock, false);
++            if (ready <= 0)
++                return totalSent > 0 ? static_cast<int>(totalSent) : ready;
++        }
++        const int len = static_cast<int>(gathered.size() - totalSent);
++        const int sent = addressed ? ::sendto(sock, gathered.data() + totalSent, len, 0, &to,
++                                              static_cast<int>(sizeof(to)))
++                                   : ::send(sock, gathered.data() + totalSent, len, 0);
++        if (sent == SOCKET_ERROR)
++            return totalSent > 0 ? static_cast<int>(totalSent)
++                                 : ConvertReturnErrorCode(SOCKET_ERROR) /* maps WSAGetLastError() itself; passing the positive WSA code returned it as a byte count (CHICKEN/CENTIPEDE) */;
++        totalSent += static_cast<size_t>(sent);
++    } while (waitAll && totalSent < gathered.size());
++
++    return static_cast<int>(totalSent);
+ 
+ #else
+     int native_flags = convertOrbisFlagsToPosix(socket_type, flags);
+@@ -316,65 +298,43 @@ int PosixSocket::ReceiveMessage(OrbisNetMsghdr* msg, int flags) {
+     std::scoped_lock lock{receive_mutex};
+ 
+ #ifdef _WIN32
+-    int totalReceived = 0;
+-    bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
+-    bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
+-
+-    // stream socket with multiple buffers
+-    bool use_wsarecvmsg =
+-        (socket_type == ORBIS_NET_SOCK_STREAM || socket_type == ORBIS_NET_SOCK_STREAM_P2P) &&
+-        msg->msg_iovlen > 1;
+-
+-    for (int i = 0; i < msg->msg_iovlen; ++i) {
+-        char* buf = (char*)msg->msg_iov[i].iov_base;
+-        size_t remaining = msg->msg_iov[i].iov_len;
+-
+-        while (remaining > 0) {
+-            // emulate DONTWAIT
+-            if (dontWait) {
+-                int ready = socket_is_ready(sock, true);
+-                if (ready <= 0)
+-                    return ready; // returns ORBIS_NET_ERROR_EWOULDBLOCK or error
++    // D1: recv() into one buffer and scatter it over the iovecs (see SendMessage for why the
++    // WSARecvMsg path cannot work on a stream socket).
++    const bool waitAll = (flags & ORBIS_NET_MSG_WAITALL) != 0;
++    const bool dontWait = (flags & ORBIS_NET_MSG_DONTWAIT) != 0;
++    size_t capacity = 0;
++    for (int i = 0; i < msg->msg_iovlen; ++i)
++        capacity += msg->msg_iov[i].iov_len;
++    std::vector<char> buffer(capacity);
++    size_t totalReceived = 0;
++    do {
++        if (dontWait) {
++            int ready = socket_is_ready(sock, true);
++            if (ready <= 0) {
++                if (totalReceived > 0)
++                    break;
++                return ready; // ORBIS_NET_ERROR_EWOULDBLOCK or error
+             }
+-
+-            int received = 0;
+-            if (use_wsarecvmsg) {
+-                // only call WSARecvMsg if multiple buffers + stream
+-                LPFN_WSARECVMSG wsarecvmsg = nullptr;
+-                GUID guid = WSAID_WSARECVMSG;
+-                DWORD bytes = 0;
+-                if (WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid),
+-                             &wsarecvmsg, sizeof(wsarecvmsg), &bytes, nullptr, nullptr) != 0) {
+-                    // fallback to recv()
+-                    received = ::recv(sock, buf, remaining, 0);
+-                    if (received == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                } else {
+-                    DWORD bytesReceived = 0;
+-                    int res = wsarecvmsg(sock, reinterpret_cast<LPWSAMSG>(msg), &bytesReceived,
+-                                         nullptr, nullptr);
+-                    if (res == SOCKET_ERROR)
+-                        return ConvertReturnErrorCode(WSAGetLastError());
+-                    received = bytesReceived;
+-                }
+-            } else {
+-                // fallback to recv() for UDP or single-buffer
+-                received = ::recv(sock, buf, remaining, 0);
+-                if (received == SOCKET_ERROR)
+-                    return ConvertReturnErrorCode(WSAGetLastError());
+-            }
+-
+-            totalReceived += received;
+-            remaining -= received;
+-            buf += received;
+-
+-            // stop after first receive if WAITALL is not set
+-            if (!waitAll)
++        }
++        const int received = ::recv(sock, buffer.data() + totalReceived,
++                                    static_cast<int>(capacity - totalReceived), 0);
++        if (received == SOCKET_ERROR) {
++            if (totalReceived > 0)
+                 break;
++            return ConvertReturnErrorCode(SOCKET_ERROR) /* maps WSAGetLastError() itself; passing the positive WSA code returned it as a byte count (CHICKEN/CENTIPEDE) */;
+         }
++        if (received == 0)
++            break; // orderly shutdown
++        totalReceived += static_cast<size_t>(received);
++    } while (waitAll && totalReceived < capacity);
++
++    size_t offset = 0;
++    for (int i = 0; i < msg->msg_iovlen && offset < totalReceived; ++i) {
++        const size_t n = std::min<size_t>(msg->msg_iov[i].iov_len, totalReceived - offset);
++        std::memcpy(msg->msg_iov[i].iov_base, buffer.data() + offset, n);
++        offset += n;
+     }
+-
+-    return totalReceived;
++    return static_cast<int>(totalReceived);
+ 
+ #else
+     int native_flags = convertOrbisFlagsToPosix(socket_type, flags);
+diff --git a/src/core/libraries/np/np_handler.cpp b/src/core/libraries/np/np_handler.cpp
+index 99fe06b..3af6abd 100644
+--- a/src/core/libraries/np/np_handler.cpp
++++ b/src/core/libraries/np/np_handler.cpp
+@@ -107,7 +107,17 @@ void NpHandler::Initialize() {
+ 
+     {
+         const auto [host, port] = ParseServerAddress();
+-        const ShadNet::ProbeInfo probe = ShadNet::ProbeServer(host, port);
++        // D1 fork: retry the probe. A single 3 s window lost the ServerInfo handshake on some
++        // boots under load (BUFFALO), although the local server sends it on accept. Up to five
++        // attempts of SHAD_PROBE_TIMEOUT_MS each; a real version mismatch or protocol error is
++        // not retried.
++        ShadNet::ProbeInfo probe = ShadNet::ProbeServer(host, port);
++        for (int attempt = 2; attempt <= 5 && probe.result == ShadNet::ProbeResult::Unreachable;
++             ++attempt) {
++            LOG_WARNING(NpHandler, "shadNet probe of {}:{} failed; retrying ({}/5)", host, port,
++                        attempt);
++            probe = ShadNet::ProbeServer(host, port);
++        }
+         if (probe.result != ShadNet::ProbeResult::Ok) {
+             EmulatorSettings.SetShadNetSessionDisabled(true);
+             switch (probe.result) {
+diff --git a/src/shader_recompiler/frontend/translate/vector_alu.cpp b/src/shader_recompiler/frontend/translate/vector_alu.cpp
+index 434bf0a..db6b529 100644
+--- a/src/shader_recompiler/frontend/translate/vector_alu.cpp
++++ b/src/shader_recompiler/frontend/translate/vector_alu.cpp
+@@ -1334,6 +1334,12 @@ void Translator::V_CMP_CLASS_F32(const GcnInst& inst) {
+             value = ir.FPIsInf(src0);
+         } else if ((class_mask & IR::FloatClassFunc::Negative) == IR::FloatClassFunc::Negative) {
+             value = ir.FPLessThanEqual(src0, ir.Imm32(-0.f));
++        } else if (class_mask == IR::FloatClassFunc::QuietNan ||
++                   class_mask == IR::FloatClassFunc::SignalingNan) {
++            // D1-PRESERVATION FORK-LOCAL CHANGE: Destiny build 56578 tests QuietNan (0x2) alone.
++            // SPIR-V cannot tell quiet from signaling NaNs, and GPU arithmetic only produces quiet
++            // ones, so a single-kind NaN test is approximated as IsNan.
++            value = ir.FPIsNan(src0);
+         } else {
+             UNREACHABLE_MSG("Unsupported float class mask: {:#x}", static_cast<u32>(class_mask));
+         }
+diff --git a/src/shadnet/server_probe.cpp b/src/shadnet/server_probe.cpp
+index f616b47..53f45cc 100644
+--- a/src/shadnet/server_probe.cpp
++++ b/src/shadnet/server_probe.cpp
+@@ -136,6 +136,9 @@ ProbeInfo ProbeServer(const std::string& host, u16 port, u32 timeout_ms) {
+         SHAD_CLOSE(sock);
+         LOG_WARNING(ShadNet, "probe: {}:{} reachable but no ServerInfo header received", host,
+                     port);
++        // D1 fork: a header that did not arrive in time is a timeout, not a malformed handshake;
++        // report it as Unreachable so the caller's retry applies.
++        info.result = ProbeResult::Unreachable;
+         return info;
+     }
+     if (static_cast<PacketType>(hdr[0]) != PacketType::ServerInfo) {
+diff --git a/src/shadnet/server_probe.h b/src/shadnet/server_probe.h
+index 2035535..e667102 100644
+--- a/src/shadnet/server_probe.h
++++ b/src/shadnet/server_probe.h
+@@ -9,7 +9,7 @@
+ namespace ShadNet {
+ 
+ // Default timeout for the startup reachability probe.
+-static constexpr u32 SHAD_PROBE_TIMEOUT_MS = 3000;
++static constexpr u32 SHAD_PROBE_TIMEOUT_MS = 10000; // D1 fork: was 3000 (BUFFALO under boot load)
+ 
+ enum class ProbeResult {
+     Ok,              // reachable and protocol version matches SHAD_PROTOCOL_VERSION
+diff --git a/src/video_core/texture_cache/texture_cache.cpp b/src/video_core/texture_cache/texture_cache.cpp
+index 2d18c10..0a55bba 100644
+--- a/src/video_core/texture_cache/texture_cache.cpp
++++ b/src/video_core/texture_cache/texture_cache.cpp
+@@ -323,6 +323,16 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
+             return {merged_image_id, -1, -1};
+         }
+ 
++        // D1-PRESERVATION FORK-LOCAL CHANGE: the same address reused for an image of a different
++        // TYPE with a larger footprint (Destiny 56578 loading pvp_moonbase: same format, tile mode
++        // and resources, 16x the size). Treat it like the tile-mode reuse above instead of aborting.
++        if (image_info.type != cache_image.info.type) {
++            if (safe_to_delete) {
++                FreeImage(cache_image_id);
++            }
++            return {merged_image_id, -1, -1};
++        }
++
+         // Enhanced debug logging for unreachable case
+         // Calculate expected size based on format and dimensions
+         u64 expected_size =

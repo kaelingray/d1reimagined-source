@@ -1,0 +1,526 @@
+# Renderer checkpoint — 2026-10-07
+
+The combined character, outdoor and mission graphics repair remains **Known
+Broken / unaccepted**. The preceding [October 6 checkpoint](checkpoint-2026-10-06-renderer.md)
+and [handoff](HANDOFF-2026-10-06.md) retain the original event dates and build results.
+
+## Late October 6 evidence: JOIN158
+
+JOIN158 uses the attachment-layout build
+`55efc9072019124be3e880ca8c881339d057390c47d3bf77c799ccb6de920259`
+with the guarded depth-only candidate enabled. The 01.24 Titan/world-113 fixture
+completes its 500-second post-match interval and seven later input/screenshot
+phases. The final native log reaches **12:02.875802**, with no queue-use,
+query-scope or device-loss entries. The verified core validation layer reports
+**two** `VUID-vkResetDescriptorPool-descriptorPool-00313` callbacks at
+**3:39.734023** and **3:40.279613**. Bounded conformance therefore fails.
+
+The fragment binding sample contains 400 records, including 12 eligible
+zero-local depth/stencil draws using the guarded END/NOP program. None has changed
+parse bytes or the known float prefix. No live malformed fragment programs occur
+in the sampled interval; cached rejection messages are a separate observation.
+This establishes candidate selection, not original hardware behavior or fidelity.
+
+The lifetime trace is armed after the two errors. It reaches its 262,144-record
+cap, but neither failing command buffer has a pre-error submission record. The
+errors cannot be attributed to a submission/completion ordering from that trace.
+
+Inspected final outdoor images alternate normal shading and black/green corruption.
+The message-of-the-day dialog remains visible through character and inventory
+input phases. Those phases do not establish a character screen, equipment view,
+movement or mission progress. All owned processes close; original title/watch
+bytes, XInput and inactive diagnostic controls are restored without cleanup errors.
+
+## October 7 allocator repair
+
+The [descriptor allocation cache increment](rpcs3-descriptor-allocation-cache.md)
+repairs cached handles surviving a pool switch. Actual-source CPU fixtures pass
+**20/20**, against **five failures** in the original implementation. The existing
+retirement checks pass **23/23**. Source causality for the native failure is
+unproved; current graphics tables use a single layout per pool.
+
+The full incremental MSVC x64 Release build passes. The scoped patch reproduces
+the exact changed source in an isolated fixture. Executable SHA-256:
+`4706856a73901b1555d03af7a4f1f854b4a2950fbded89d9f51b140ec71f94a5`.
+It is deployed after the previous native client closes, with a byte-verified backup
+of `55efc907`. Original title/watch bytes remain intact. JOIN160 tests this
+increment with core validation, the depth candidate enabled and descriptor tracing
+off. Its completed result is recorded below.
+
+## JOIN160: native failure reproduced on the cache increment
+
+The full 500-second post-match fixture and eleven input/capture phases complete.
+The core layer is verified live and immediately before shutdown. The final native
+log reaches **12:37.486264**, with one
+`VUID-vkResetDescriptorPool-descriptorPool-00313` callback at **3:17.903782**.
+Queue-use, query-scope and device-loss counts remain zero. **Bounded conformance
+fails.** The cache repair therefore has not resolved the observed native fault.
+Descriptor tracing is off, so this run cannot correlate the failing command
+buffer with its earlier submission or completion.
+
+The game loads the configured keyboard pad, but posted inputs do not establish
+consumed actions. Inspected native screenshots and sampled footage show loading,
+an urgent-message dialog, contacting-server text and a **Rhinoceros reconnect
+warning while the owned services are still running**. They do not establish
+character, inventory, outdoor traversal or mission acceptance. A matching
+`activity:in_world` label in memory does not override those visible results.
+Original title/watch bytes, XInput and inactive controls are restored, all owned
+processes close and shared RPCN is preserved without cleanup errors.
+
+All **22 indexed originals** remain present with SHA-256 matching their indexing
+receipts after rolling-buffer expiration. One earlier startup segment remains
+unindexed with a full-decode/no-usable-duration failure; its original is preserved.
+The last two untouched segments fully decode: **30.09 and 31.21 seconds**,
+**1280×720**, game audio, rounded average/base rates **26.95/30 and 22.89/30 fps**.
+These are media properties, not measured gameplay performance. Private sampled
+frames contain native path overlays; no clean release or continuous fidelity
+claim is made.
+
+## JOIN161: incomplete selection comparison
+
+The [bounded descriptor fault trace](rpcs3-descriptor-lifetime-ring.md) retains
+recent lifetime records in memory and dumps only when a descriptor-reset callback
+occurs. Its 20 concurrent-ring checks and 10 decoder tests pass; allocation and
+retirement regression audits remain 20/20 and 23/23. The Release build passes and
+is deployed at idle with a verified backup. Executable SHA-256:
+`ef67aa5cf3c015de130cef958f1abfe345bd92a74964e2c20515e35e238f7645`.
+JOIN161 is configured for the same 500-second Titan/world-113 fixture, the guarded
+depth candidate and core validation, with text tracing off and the ring armed.
+It instead remains at character selection and never receives a matchmaking
+reply. The core layer is verified live. Screenshots time out and posted cursor/
+Cross retries do not establish consumed actions. Disabling the ring at the safe
+menu checkpoint does not restore observed progress nearly two minutes later;
+the hang's cause remains unproved. No reset callback or frozen dump is obtained.
+
+The existing runner prints its seven-minute matchmaking timeout but then enters
+the post-match sampling loop anyway. That failure path now closes the exact owned
+stack and throws before post-match sampling. The already loaded JOIN161 script
+still uses the earlier behavior, so its unmatched run is explicitly stopped at
+character selection. Cleanup verifies all owned processes closed, original title/
+watch bytes, XInput, inactive controls and shared RPCN, with no errors. Its fixture
+is **incomplete**, not passing conformance. This instrumentation is not a renderer
+repair or a passing graphics claim.
+
+The reused cleanup path passes **20 isolated shutdown checks** with real sleeping
+child processes, including client-before-backend ordering, stale-identity rejection,
+unrelated-process preservation and repeated-stop evidence retention. PowerShell
+syntax passes. Those checks verify cleanup, not the missing-match branch in a
+new native run or the underlying character-selection hang.
+
+## JOIN159: unobstructed inspection on the preceding build
+
+JOIN159 still uses **55efc907**, so it does **not** test the cache increment. It
+completes the same 500-second post-match interval and nine later input phases.
+Core validation is verified live and at the final snapshot. Its final native log
+reaches **14:06.829486** with no validation IDs, queue/query/descriptor-reset
+callbacks or device-loss entries. This is bounded passing conformance, not a
+repair of the preceding intermittent failures.
+
+Descriptor tracing starts 120 seconds after the exact client launches and covers
+the earlier failure window. It reaches its cap without reproducing an error.
+Trace overhead and run-to-run variation prevent treating that absence as causality.
+
+800-ms Cross inputs clear the urgent and message-of-the-day dialogs. Start opens
+the character screen, R1 opens inventory, L1 returns to character and Start
+returns to the outdoor scene. The returned Titan has normal proportions and
+armour shading in the inspected view; five armour icons, Ghost and subclass are
+visible. The inventory materials listing is empty in the sampled view. Initial
+character loading, level/light zero, weapon-slot spinners and tutorial overlays
+remain. A posted movement input is followed by a changed camera view, but these
+snapshots do not accept traversal, combat, mission objectives or completion.
+
+The inspected final world frames have normal shading. That does not overturn
+JOIN158's corrupted frames or establish sustained combined graphics acceptance.
+Cleanup restores original title/watch bytes, XInput and inactive controls, closes
+all owned processes and preserves shared RPCN without errors.
+
+## Evidence retention
+
+The earlier worker removes successfully indexed native originals, while its
+rolling copies can expire. It now retains untouched finalized originals until
+an archive policy is agreed. Rolling preview copies remain bounded. The capture
+suite passes **82 tests**, including source preservation after buffer expiration
+and unchanged retry/idempotence behavior. The observer is restarted at idle.
+
+A byte-identical copy of JOIN159's last native segment is preserved privately
+before buffer rotation. Its original path was already removed by the preceding
+worker. SHA-256 matches the earlier indexing proof; full decoding passes. It
+contains **26.37 seconds**, game audio and **1280×720** video. FFmpeg reports
+rounded average/base rates of **17.24 / 30 fps**; these are stream properties,
+not a gameplay performance measurement. Sampled frames show the character,
+inventory transition and world return. Account text and native path overlays
+make it private diagnostic material. No editing, publication or new daily handoff
+is performed; October 6's delivered package remains immutable.
+
+## JOIN162: trace-off fault and outdoor corruption reproduced
+
+The same `ef67aa5c` diagnostic executable starts with the ring disabled. Core
+validation is verified live and before shutdown; the guarded depth candidate
+remains enabled. Stored-character selection and matchmaking now progress, unlike
+JOIN161. That observation does not establish the selection stall's cause.
+
+The 500-second post-match fixture and eleven later input/capture phases complete.
+The final native log reaches **12:32.372609**, with one reset-00313 callback at
+**8:11.023332** and zero queue-use/query-scope/device-loss entries. **Bounded
+conformance fails.** The later callback also shows why testing only the earlier
+three-minute failure window would miss this occurrence. Neither text tracing nor
+the memory ring is armed, so there is no submission/completion correlation.
+
+All eleven phase screenshots are inspected. The first three show loading; later
+frames show the urgent-message dialog over outdoor scenery alternating normal
+shading and black/green corruption. Character, equipment and traversal inputs are
+obstructed and do not establish those actions. The combined rendering fix remains
+**Known Broken**; a memory label still does not establish mission progress.
+
+Cleanup at **08:52:52 UTC** verifies original title/watch bytes, XInput, inactive
+controls, all owned processes closed, shared RPCN preserved and no errors.
+All **23 indexed originals** remain present with their recorded SHA-256; one
+startup segment remains unindexed with a decode failure and its original retained.
+The penultimate original fully decodes: **30.14 seconds**, **1280×720**, game audio,
+rounded average/base rates **9.42/30 fps**. The last original fails full decoding.
+The recorder has already produced a recovered fragment copy, explicitly reporting
+**118,084 discarded tail bytes**. That existing derivative is preserved unchanged,
+hash-verified and fully decoded: **23.43 seconds**, **1280×720**, game audio,
+rounded average/base rates **8.9/30 fps**. Original bytes remain untouched. Stream
+rates do not establish gameplay performance; private sampled footage includes
+native path overlays and further corrupted outdoor frames.
+
+The next controlled comparison keeps the ring off during selection and arms it
+only after this run's matchmaking reply, exact client identity and core layer are
+verified. It retains the same baseline interval and eleven phases, then adds late
+dialog dismissal/body/world checks because JOIN162's early Cross presses occurred
+during loading. Those extra phases are separately identified; their result and a
+captured lifetime fault remain unproved until the run completes.
+
+## JOIN163: stalled rendering, no captured reset fault
+
+JOIN163 keeps the ring off through character selection and arms it after verified
+matchmaking at **08:57:44 UTC**. Core validation is verified at arming and before
+shutdown. The 500-second sampling interval completes, but rendering stops making
+useful progress and the final screenshot command fails. There is no reset
+callback or frozen ring dump through native **12:15.839029**, and no queue/query
+or device-loss entry. This stalled interval is **not passing conformance or
+graphics acceptance**. None of the twenty intended later phases completes.
+
+A private host dump is captured after the sampling interval, before owned
+shutdown. Offline unwinding uses the matching executable/PDB and local image
+unwind tables. At that instant the RSX thread yields in the FIFO-empty branch;
+the Vulkan driver worker waits for its wake event. This does not identify why
+the guest stops supplying frames or establish the trace as the stall's cause.
+Dump capture can perturb timing and provides one host snapshot, not a continuous
+comparison. Cleanup restores the original configuration and closes all owned
+processes without errors. All dump/log/media inputs remain private.
+
+All **11 indexed originals** remain present with their recorded hashes; **13
+unindexed sources** retain their recorded decode/duration failures and original
+bytes. The last two indexed sources fully decode (**30.25/30.19 seconds**, 1280×720,
+game audio). Four sampled frames show an urgent dialog over dark scenery followed
+by black loading views. They provide no accepted body, equipment or mission result.
+
+The runner had ignored the failed native PowerShell screenshot child's exit
+status and printed `done`; its caller then marked the baseline completed before
+the later visual step failed. [Checked child execution](../scripts/Final124RunHelpers.ps1)
+now propagates input/screenshot failures, and the join runner cleans up exact
+owned processes before rethrowing. Failed final capture cannot reach `done`.
+[Fourteen isolated checks](../scripts/Test-Final124JoinCapture.ps1) pass, including
+actual first/final failure paths through the join runner with harmless sleeping
+children and a mock service. All **20 existing shutdown checks** pass. These
+test process boundaries and ownership, not native gameplay or renderer repair.
+
+The next trace comparison retains a four-minute OFF interval after matchmaking
+before arming. It records any reset callbacks preceding that arm separately;
+they cannot be attributed to later retained events. The new failure gate also
+requires successful native captures before fixture completion.
+
+## JOIN164: outdoor corruption without a reset callback
+
+The same `ef67aa5c` build keeps the ring off through boot and for four minutes
+after matchmaking, then arms at **09:37:27 UTC** with exact ownership and the core
+layer verified. Its pre-arm snapshot has no descriptor-reset callback. The
+500-second interval, final native screenshot and all twenty later input/capture
+phases complete. Core validation is verified before shutdown. The final native
+log reaches **13:20.013137**, with zero validation IDs, queue/query/reset callbacks
+or device-loss entries. There is no frozen ring dump.
+
+All twenty phase screenshots are inspected. The first fifteen show loading;
+the last five show the urgent dialog over outdoor scenery alternating normal
+shading and black/green corruption. Posted character/equipment/traversal inputs
+remain obstructed. **Combined graphics acceptance fails.** The clean API log
+does not establish a shading repair or resolve earlier intermittent resets.
+No invalid-source or malformed-fragment-store entries appear in this interval,
+so those particular logged failures are also absent while corruption is visible.
+
+One guest debugger snapshot at **09:43:41 UTC** records 22 PPU PCs/LRs and short
+stack chains, with the main thread sampled in the known timed-wait syscall.
+It pauses/resumes the guest; the last two interaction phases are diagnostically
+perturbed. Fresh native captures follow at 09:43:46 and 09:43:52. The bad outdoor
+frame at **09:43:34** precedes the pause. This snapshot supplies no SPU context
+and cannot diagnose JOIN163's earlier stalled producer. Cleanup at **09:44:07 UTC**
+verifies all owned processes closed, original title/watch bytes, XInput, inactive
+controls, shared RPCN preserved and no errors.
+
+All **24 indexed originals** remain present with matching hashes; one unindexed
+startup source retains its decode failure and original bytes. The penultimate
+original fully decodes: **30.14 seconds**, 1280×720, game audio, reported average/base
+rates **12.38/30 fps**. The last raw original fails full decoding. Its existing
+recovered derivative is preserved unchanged and fully decodes: **34.7 seconds**,
+1280×720, game audio, reported rates **10.59/30 fps**, **141,473 discarded tail bytes**.
+These are media properties, not gameplay performance measurements. Four inspected
+video samples show loading and further corrupted outdoor frames. All inputs stay
+private; no media editing, publication or duplicate daily handoff is performed.
+
+The next investigation captures command/resource evidence for the shading fault
+while preserving SPU colour reads and the combined character/world requirements.
+The [native RSX capture marker](rpcs3-native-rsx-capture.md) uses RPCS3's existing
+one-frame capture path. Its scoped patch reproduces the modified source with
+normalized line endings and the incremental x64 Release verification exits zero.
+Native capture/replay remains unverified until the next experiment completes.
+
+## JOIN165: visible character and unresolved mission return
+
+The capture-marker build `714e432f` completes its 600-second post-match interval,
+successful final native screenshot and twenty later comparison phases. The ring
+and text trace stay off from boot; the guarded depth candidate remains enabled.
+The core validation layer is verified live and before shutdown. The pre-stop
+native log reaches **19:05.151916**, with zero validation IDs, queue/query/reset
+callbacks and device-loss entries. This is a completed bounded API comparison,
+not sustained whole-game conformance or fidelity acceptance.
+
+Every phase screenshot is inspected. Views include black loading, the opening
+mission cinematic, character icons with the body loading, an empty quest menu,
+and finally a visible Titan with armour and a rifle. The attempted inventory
+phase does not show an inventory tab. Cinematic samples include broad white bloom
+and very dark views; no original-hardware comparison establishes their accuracy.
+The final model image and a later repeated character image have normal sampled
+proportions, while weapon icons remain loading. They do not prove equipping,
+inventory persistence, traversable gameplay or mission completion.
+
+After the twenty comparison phases, an additional Circle input dismisses the
+character menu. Native images then show loading and **Contacting Destiny Servers**.
+A later Return input opens a rendered character view again. Three activity-host
+connection resets occur before shutdown, **263.694, 267.658 and 261.085 seconds**
+after the respective client-in-world notification. The first two precede the
+comparison inputs. Their cause is unproved; a clean renderer API log cannot
+establish backend stability. Eight incident messages decode without malformed
+records, containing IDs 734 and 2120; those IDs alone do not identify the fault.
+
+The four-minute diagnostic checkpoint ends before the marker is armed. **No RSX
+capture is requested or saved, and parse/replay remains NOT RUN.** The bounded
+shutdown succeeds at **12:57:14 UTC**: all owned processes closed, original
+title/watch bytes restored, XInput, inactive controls, shared RPCN preserved,
+no cleanup errors. This unsuccessful capture attempt is retained explicitly.
+
+All **28 indexed originals** remain present with matching hashes; five unindexed
+sources retain their recorded failures and original bytes. The penultimate raw
+source fully decodes: **33.79 seconds**, 1280×720, game audio, reported average/base
+rates **29.89/30 fps**. The final raw source fails decoding. Its already generated
+recovered derivative is copied unchanged and fully decodes: **101.87 seconds**,
+1280×720, game audio, reported **27.41/30 fps**, **103,709 discarded tail bytes**.
+These rates are media properties. Five sampled video frames are inspected,
+including a later character view; original recording timestamps are preserved
+separately from filenames and media offsets. No original or final video is edited.
+
+The follow-up keeps the same build/fixture and 600-second baseline, leaves the
+urgent dialog untouched, and allows a bounded ten-minute inspected-capture
+checkpoint. It omits the twenty menu phases to seek outdoor command/resource
+evidence independently of their transitions. This changes the diagnostic scope;
+it is not an equivalent combined graphics acceptance test.
+
+## JOIN166: native capture and bounded UI replay
+
+The same `714e432f` build completes a 600-second baseline with core validation
+verified. Its pre-stop log reaches **21:19.808203**, with no validation IDs,
+queue/query/reset callbacks or device-loss entries. The diagnostic checkpoint
+shows outdoor cinematic scenery behind the urgent dialog, followed by the
+inactivity return-to-Orbit dialog. It makes no character/equipment or mission
+acceptance claim. A stale screenshot request is rejected before arming; a fresh
+inspected inactivity-dialog image precedes the one successful request.
+
+At **13:23:25 UTC**, native capture saves 495,990 bytes and pauses as expected.
+The successful log line and private hash receipt establish saving. Gzip and
+serialized-prefix/reference checks pass. This is a UI/control capture, **not**
+the black/green outdoor fault. Normal owned cleanup completes at **13:23:28 UTC**,
+preserving the original title/watch, XInput, inactive controls and shared RPCN.
+
+Native replay first fails allocating its context at the null guest address.
+Excluding that address allows execution, but replay presents an untouched
+back buffer and both inspected images are black. A second replay-only repair
+matches the final local colour-A offset/pitch to a registered display buffer.
+Both subsequent inspected frames reproduce the recorded inactivity dialog.
+The [capture/replay record](rpcs3-native-rsx-capture.md) links the two isolated
+patches, source reproduction and successful Release builds. Core validation
+is verified; global configuration is restored after every owned replay.
+One intervening startup attempt produces no current log and is not accepted.
+No live-game shading, descriptor lifetime or mission behavior is changed.
+
+All **40 indexed untouched originals** retain matching hashes; one unindexed
+source retains its recorded failure and original bytes. The last two raw clips
+fully decode: **30.19 and 9.03 seconds**, 1280×720 with game audio, reported
+average/base rates **29.95/30 and 25.56/30 fps**. These are recording properties,
+not game-performance measurements. Four inspected video samples show the
+inactivity dialog and the expected pause. No recovery, editing or publication
+is performed. Next: obtain an inspected outdoor-fault capture before inactivity
+or menu transitions obscure it, then assess comparable replay while preserving
+the combined character/outdoor/mission acceptance criteria.
+
+## JOIN167: short-run observer cancellation
+
+The `cc73a62d` live-game run finishes its 180-second sampling interval and saves
+the final screenshot. An earlier inspected image shows outdoor cinematic scenery
+behind the urgent message; the final image and three inspected video samples
+show loading. No RSX capture request is armed.
+
+The client is already closed when the diagnostic checkpoint begins at
+**13:57:07 UTC**. The outer fixture flag is true because its sampling command
+returned, but the inner sign-in summary records **completed=false** and
+**keptStack=false**. These flags describe different scopes; this is not an
+accepted capture or native conformance experiment.
+
+The join waits only sixty seconds for its background observer, then forcibly
+removes the job. A short join finishes before that observer's eight-minute
+`ContinueAfterBap` interval. Cancelling it runs its failure cleanup and closes
+the owned debugger/client/services. The debugger socket error and recorder
+trailer failure occur during that cleanup; they are not evidence of a renderer
+crash. All owned processes close and the original configuration/input/controls
+are restored at **13:57:08 UTC**.
+
+The runner now asks the observer to return successfully after the logged
+user-profile reply, retaining the exact owned stack. The eight-minute sign-in
+budget and title-window input remain available until that reply. The join also
+requires the observer job to be Completed, receives its errors and verifies the
+exact client before reporting success. Ordinary full-duration observations keep
+their previous behavior unless the new option is supplied.
+
+The actual run-wrapper fixture passes **173 checks**, including a late profile
+reply, return before a sixty-second observation deadline, retained ownership,
+missing-reply continuation, delayed windows and failure cleanup. The actual
+join-wrapper fixture passes **19 checks**, including failed screenshot exits and
+a successful short join that retains its exact children/proxy until explicit
+owned shutdown. These are isolated process tests; native handoff verification
+is pending the follow-up.
+
+All thirteen indexed raw recordings retain matching hashes, and one unindexed
+failure retains its original. The last two raw clips fully decode, **33.3 and
+2.39 seconds**, 1280×720 with audio; reported average/base rates are **26.9/30
+and 29.73/30 fps**, not gameplay measurements. Three private QA samples show
+loading. No original is repaired or edited, and no capture or graphics success
+is inferred from them.
+
+## JOIN168: native observer handoff verified, capture scope differs
+
+The repaired observer returns after one logged user-profile reply at
+**14:12:53 UTC**, recording **completed=true**, **keptStack=true** and
+**returnedAfterUserProfileReply=true**. The exact client remains alive with
+core validation loaded at the capture checkpoint after the **60-second**
+sampling interval. This verifies the short-join ownership repair; it is not
+a repeat of the longer 500/600-second renderer comparisons.
+
+The inspected final baseline image shows outdoor cinematic scenery behind
+the urgent maintenance message. Cross dismisses it at **14:15:35 UTC**;
+the next image shows loading, followed by unobstructed outdoor scenery
+with rusted cars, trees and distant structures at **14:16:14 UTC**.
+No traversal, character/equipment change or completed mission is demonstrated.
+
+An explicitly armed native capture succeeds at **14:16:39 UTC**, saves
+**2,524,052 bytes** and pauses as designed. Its gzip decode and serialized
+resource-prefix checks pass: one tile state, 246 memory mappings, 197 data
+blocks, one display state and 11,812 commands. The register tail is initially
+left opaque; the subsequent native parser reaches rendered replay output.
+
+Both actually inspected replay images show loading UI, rather than the
+earlier outdoor screenshot. The requested next frame can differ from the
+inspected reference. Neither matching outdoor replay nor reproduction of
+the black/green fault is accepted, and this difference does not by itself
+identify a replay defect. Core validation is verified in both native runs;
+their bounded logs contain no validation IDs or device loss. Existing texture
+alias warnings remain observations, not an established cause.
+
+The live stack closes at **14:16:44 UTC**, preserving the original title/watch,
+XInput, inactive controls and shared RPCN. The owned replay closes at
+**14:18:17 UTC** and restores the original global configuration. Both cleanup
+receipts have no errors. Native captures remain private; the new recording
+clips subsequently receive full-decode/visual inspection. All eleven indexed
+originals hash-match, and one unindexed failure remains preserved. The last two
+raw clips fully decode, 30.22/6.4 seconds, 1280×720 with audio. Inspected samples
+confirm loading before the capture marker, consistent with the replay, rather
+than an established replay scene-substitution defect. Matching outdoor/fault
+capture and combined character/world/mission acceptance remain open.
+
+## JOIN169–171: native transition diagnosis
+
+JOIN169 dismisses the urgent dialog but its guarded route stops at **15:10:15 UTC**
+without reaching idle112 or sending walking input. Two requested transitions are
+followed by activity-host reconnects. Its late session timeline cannot establish
+the pre-timeout cause and used the wrong context-handle field. JOIN170 closes its
+owned checkpoint without a probe attached; no timeout diagnosis is claimed.
+
+The [corrected read-only session probe](session-transition-probe-0124.md) starts
+automatically in JOIN171 before the request. Its five focused checks pass, and
+1,372 native samples resolve the actual active context without lookup/recheck
+failures. The second pending machine remains2 while slice112 is loaded/inactive.
+Native engine and host sent copies contain112, but no type21 reaches the proxy
+after the request. The first pending machine remains0; no session37/38 is observed.
+A late screenshot fails, and two separate native clock reads are unchanged.
+These observations narrow the next transport/stall investigation; they are not
+a repaired mission or graphics result. Owned cleanup completes **17:42:18 UTC**
+with original configuration/watch/input/controls restored and no errors.
+
+JOIN172 verifies the [filtered function-entry trace](ppu-watch-filters.md) for
+subtype 21 in the native client. Twelve calls each reach wrapper, queue and
+serializer; 1,175 session samples have no lookup/recheck failures. The clock
+advances during the loaded/inactive 112 phase, followed by a live reconnect.
+No type 21 arrives on the original connection after the request; the actual
+serializer return and enqueue outcome remain unknown. This differs from
+JOIN171's frozen clock and does not establish a shared cause. The owned stack
+closes at 18:20:11 UTC and restores its settings. Forty-four actual-source filter
+checks and the final parser-guard Release build pass; the full native join tests
+the earlier supported r5/r6 build. See the session note for timestamps, original
+media checks and the remaining acceptance requirements.
+
+JOIN173 verifies caller predicates and actual shared return helpers in the
+`c5bc7f57` native build; **52** actual-source CPU checks and its Release build pass.
+The unchanged fixture records1,052 session samples without lookup/recheck
+failures. The observed transition message passes readiness gates and both outer
+layers return1, but the original host receives no state message after requesting
+112. The direct branch reports success regardless of later queue consumption.
+The next check follows allocation and consumption of its serialized record,
+rather than accepting the outer return as delivery.
+
+The first attempt contains244 samples of loaded/inactive112; both attempts
+total432, with no idle112. The clock advances and the original connection resets
+before reconnecting. Owned cleanup finishes19:08:36UTC with original settings
+restored and no errors. Core validation is verified; the bounded log has no
+validation IDs/device loss/fatal entries. Eighteen indexed original recordings
+retain matching hashes, seven unindexed failures are preserved, and the last two
+fully decode39.24/20.82seconds. Inspected samples show loading/contacting-server
+UI. This remains diagnostic progress; combined graphics, mission control and
+whole-game acceptance are still open. See the session note for the exact call,
+clock, connection and media scope.
+
+JOIN174 follows the direct path in the same native build. For both requested
+transitions, the initialized47-byte record's allocation and consumer observations
+have identical24-byte prefixes; successful allocation and consumer entry are now
+verified. Host receipt still fails. Correct runtime selection maps kind17 to
+codec8 and packet factory3, narrowing the next trace to BAP header encoding and
+forwarding. Its1,017 session samples have no lookup/recheck failures, but no idle112
+or Guardian control. The exact owned stack closes19:40:51UTC with settings restored
+and no errors. Twenty indexed originals hash-match, three failed sources remain
+preserved, and the last two raw clips fully decode30.33/16.5seconds. Actual samples
+show loading. Native API cleanliness remains distinct from graphics/playability.
+
+JOIN175/176 turn the stalled transition into a tested backend repair. The original
+run exposes long waits around flushed console output while the proxy trails the
+client's packet counter. Suppressing only repeated type15/00 console lines retains
+all binary/event captures and handlers; `--verbose-wire` restores them. The same
+renderer/fixture then completes113→112 on the original connection. Actual type21
+receipt, teleport finish/group-clear and1,397 idle112 samples establish the scoped
+repair. Eight encrypted socket/session tests and the broader88-test suite pass;
+one earlier timing-sensitive failure is recorded before isolation/repeat PASS.
+
+JOIN176 closes20:31:22UTC with the original settings restored and no cleanup errors.
+Core validation remains active and its bounded log has no validation IDs, device
+loss or fatal entries. Inspected final footage still has the urgent dialog over
+outdoor scenery. Renderer behavior is unchanged; combined graphics and visible
+Guardian control are still unaccepted. See the session note for exact test,
+timestamp, filter-scope and media limitations. Next: repeat the repaired transition
+with owned dialog dismissal and visible control before progressing to the Wall.

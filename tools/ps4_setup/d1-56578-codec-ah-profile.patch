@@ -1,0 +1,1167 @@
+From dba749cd0d5f584b7a02e0388134c1c009fec5f1 Mon Sep 17 00:00:00 2001
+From: p3n1cillin <lcmcclellan12@gmail.com>
+Date: Tue, 13 Oct 2026 12:56:00 +0100
+Subject: [PATCH] Measure build 56578's codec, Activity-Host and profile
+ addresses
+
+d1-oracle now selects the RSAT codec, message codec, registry global and
+Activity-Host call-site table by image hash, as it already did for the
+Oodle and harness imports. On 56578 the object and message controls,
+all 34 Activity-Host controls (including the captured join_request
+reproduced byte for byte), the sensor, roster, character, inventory and
+profile controls, and every pinned vector pass.
+
+The 56578 profile is 0x300 bytes larger from body field 12 onward: the
+completion-flag array grew from 2,048 to 2,560 elements under a new tag.
+The profile offsets are now per build. Stubbed memcpy/memset refuse
+impossible lengths instead of aborting the process.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../crates/d1-activity-host/src/codec.rs      |  27 ++-
+ .../crates/d1-oracle/src/activity_host.rs     | 138 +++++++++++--
+ ps4/d1-server/crates/d1-oracle/src/codec.rs   | 171 ++++++++++++++++
+ ps4/d1-server/crates/d1-oracle/src/harness.rs |  25 ++-
+ ps4/d1-server/crates/d1-oracle/src/lib.rs     |   1 +
+ ps4/d1-server/crates/d1-oracle/src/message.rs |   6 +-
+ ps4/d1-server/crates/d1-oracle/src/object.rs  |  51 ++---
+ ps4/d1-server/crates/d1-oracle/src/profile.rs | 188 +++++++++++++-----
+ .../crates/d1-oracle/src/registry.rs          |   3 +-
+ ps4/d1-server/crates/d1-oracle/src/schema.rs  |  16 +-
+ 10 files changed, 526 insertions(+), 100 deletions(-)
+ create mode 100644 ps4/d1-server/crates/d1-oracle/src/codec.rs
+
+diff --git a/ps4/d1-server/crates/d1-activity-host/src/codec.rs b/ps4/d1-server/crates/d1-activity-host/src/codec.rs
+index ba405fc..be05653 100644
+--- a/ps4/d1-server/crates/d1-activity-host/src/codec.rs
++++ b/ps4/d1-server/crates/d1-activity-host/src/codec.rs
+@@ -71,8 +71,9 @@ use std::sync::{Mutex, OnceLock};
+ use crate::messages::AhMessage;
+ use crate::AhError;
+ 
+-/// The descriptor globals the client's own call sites name. Kept as constants so an error message
+-/// can print the address to inspect, exactly as before.
++/// The descriptor globals the client's own call sites name **in 01.29** (the reference build).
++/// [`descriptor_global`] follows the selected build; 56578's rows are
++/// [`d1_oracle::activity_host::CALL_SITES_56578`].
+ pub const DESCRIPTOR_GLOBAL_JOIN_REQUEST: u64 = 0x0190_22F0;
+ /// See [`DESCRIPTOR_GLOBAL_JOIN_REQUEST`].
+ pub const DESCRIPTOR_GLOBAL_JOIN_RESULT: u64 = 0x0190_22F8;
+@@ -80,7 +81,8 @@ pub const DESCRIPTOR_GLOBAL_JOIN_RESULT: u64 = 0x0190_22F8;
+ pub const DESCRIPTOR_GLOBAL_ENTITY_SLOTS: u64 = 0x0190_2310;
+ /// See [`DESCRIPTOR_GLOBAL_JOIN_REQUEST`].
+ pub const DESCRIPTOR_GLOBAL_GLOBAL_STATE: u64 = 0x0190_2380;
+-/// The client-side decoder every AH receive handler funnels through.
++/// The client-side decoder every AH receive handler funnels through (01.29; the oracle calls the
++/// selected build's, see [`d1_oracle::codec`]).
+ pub const SCHEMA_DECODE_FN: u64 = d1_oracle::activity_host::DECODE_FN;
+ /// The client-side encoder `activity_client_send_message` funnels through.
+ pub const SCHEMA_ENCODE_FN: u64 = d1_oracle::activity_host::ENCODE_FN;
+@@ -92,7 +94,7 @@ pub const TAG_JOIN_RESULT: u32 = 0x8080_0A58;
+ 
+ /// Which descriptor global a udt is decoded through, where we have read the call site.
+ pub fn descriptor_global(user_defined_type: u32) -> u64 {
+-    d1_oracle::activity_host::CALL_SITES
++    d1_oracle::activity_host::call_sites()
+         .iter()
+         .find(|(u, _, _)| *u == user_defined_type)
+         .map(|(_, g, _)| *g)
+@@ -495,10 +497,19 @@ mod tests {
+     fn the_pinned_tags_equal_the_derived_ones() {
+         assert_eq!(d1_oracle::activity_host::tag_for_udt(3).unwrap(), TAG_JOIN_REQUEST);
+         assert_eq!(d1_oracle::activity_host::tag_for_udt(4).unwrap(), TAG_JOIN_RESULT);
+-        assert_eq!(descriptor_global(3), DESCRIPTOR_GLOBAL_JOIN_REQUEST);
+-        assert_eq!(descriptor_global(4), DESCRIPTOR_GLOBAL_JOIN_RESULT);
+-        assert_eq!(descriptor_global(0), DESCRIPTOR_GLOBAL_ENTITY_SLOTS);
+-        assert_eq!(descriptor_global(1), DESCRIPTOR_GLOBAL_GLOBAL_STATE);
++        // The DESCRIPTOR_GLOBAL_* pins are 01.29's; `descriptor_global` follows the selected build.
++        let row_0129 = |udt: u32| {
++            d1_oracle::activity_host::CALL_SITES.iter().find(|(u, _, _)| *u == udt).map(|r| r.1)
++        };
++        assert_eq!(row_0129(3), Some(DESCRIPTOR_GLOBAL_JOIN_REQUEST));
++        assert_eq!(row_0129(4), Some(DESCRIPTOR_GLOBAL_JOIN_RESULT));
++        assert_eq!(row_0129(0), Some(DESCRIPTOR_GLOBAL_ENTITY_SLOTS));
++        assert_eq!(row_0129(1), Some(DESCRIPTOR_GLOBAL_GLOBAL_STATE));
++        let selected = d1_oracle::activity_host::call_sites();
++        for udt in [3, 4, 0, 1] {
++            let want = selected.iter().find(|(u, _, _)| *u == udt).map(|r| r.1);
++            assert_eq!(Some(descriptor_global(udt)), want, "udt {udt}");
++        }
+         // An id with no row reads 0, which is what makes the error message honest.
+         assert_eq!(descriptor_global(42), 0);
+     }
+diff --git a/ps4/d1-server/crates/d1-oracle/src/activity_host.rs b/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
+index bc1f098..6cca485 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/activity_host.rs
+@@ -209,9 +209,76 @@ pub const RAW_SEND: &[(u32, u64, &str)] = &[
+     (15, 0x0029_8C40, "FUN_00298C40 - the keepalive, ONE uninitialised byte"),
+ ];
+ 
+-/// Is this udt sent with the raw arm of `FUN_00299310`? See [`RAW_SEND`].
++/// ⭐ Build 56578's [`CALL_SITES`], read on 2026-10-13 from the 56578 image alone.
++///
++/// Each row was read mechanically at a call site, not by offsetting the 01.29 globals:
++/// * the 28 callers of `activity_client_send_message` (`0x299D10`), where `edx` is the udt, the
++///   descriptor comes from `lea rax,[rip+G]; mov rax,[rax]; mov ecx,[rax]`, and `r9d` is the size;
++/// * the 12 callers of the AH decode wrapper (`0x2A4AC0`), where the descriptor is in `edi`;
++/// * udt 11 from the replicated decode `0x2C9AE0` at `0x29D1D5`, with the descriptor in `ecx`;
++/// * udt 21 from the replicated encode `0x2C9D20` at `0x29D6A4`, with the descriptor in `rdx`.
++///
++/// Every udt in the 01.29 table is present with the same role, and every global moved by the
++/// same `+0x18090`. Every size the client states is unchanged **except udt 37**
++/// `send_client_heartbeat`, which grew from `0xB1E0` to **`0xB750`**. udt 21's `0x220` is still
++/// stated by the snapshot `memcpy(ac+0x6748, ac+0x6968, 0x220)` at `0x299420`. The sizes remain
++/// the control, as in 01.29: [`derive`] reaches the schema record by an unrelated route, and
++/// [`controls`] compares the two.
++pub const CALL_SITES_56578: &[(u32, u64, Option<usize>)] = &[
++    (0, 0x0191_A3A0, Some(0x600)),
++    (1, 0x0191_A410, None),
++    (4, 0x0191_A388, Some(0x1A8)),
++    (11, 0x0191_A308, Some(0x5038)),
++    (3, 0x0191_A380, Some(0x100)),
++    (12, 0x0191_A370, Some(0x330)),
++    (13, 0x0191_A378, Some(0x010)),
++    (17, 0x0191_A428, Some(0x008)),
++    (18, 0x0191_A360, Some(0x2CC)),
++    (19, 0x0191_A398, Some(0x004)),
++    (20, 0x0191_A3A8, Some(0x600)),
++    (22, 0x0191_A2F8, Some(0x028)),
++    (25, 0x0191_A3B0, Some(0x608)),
++    (26, 0x0191_A3D0, Some(0x604)),
++    (28, 0x0191_A3E8, Some(0x004)),
++    (30, 0x0191_A3F8, Some(0x608)),
++    (31, 0x0191_A400, Some(0x604)),
++    (32, 0x0191_A430, Some(0x604)),
++    (33, 0x0191_A448, Some(0x210)),
++    (35, 0x0191_A438, Some(0x008)),
++    (36, 0x0191_A420, Some(0x004)),
++    (37, 0x0191_A440, Some(0xB750)),
++    (41, 0x0191_A408, Some(0x004)),
++    (44, 0x0191_A460, Some(0x284)),
++    (45, 0x0191_A468, Some(0x170)),
++    (46, 0x0191_A450, Some(0x00C)),
++    (47, 0x0191_A470, Some(0x024)),
++    (48, 0x0191_A478, Some(0x004)),
++    (14, 0x0191_A390, Some(0x014)),
++    (21, 0x0191_A300, Some(0x220)),
++];
++
++/// Build 56578's [`RAW_SEND`]. The same three udts pass descriptor `0xFFFFFFFF` to `0x299D10`, with
++/// the same sizes (udt 15 sends 1 byte, udt 8 sends `0x9D8`).
++pub const RAW_SEND_56578: &[(u32, u64, &str)] = &[
++    (6, 0x0029_9CB0, "c_activity_client::vfunc[4] - sensor_sense_update"),
++    (8, 0x0029_A0D0, "FUN_0029A0D0 - request_activity_host, 0x9D8 bytes"),
++    (15, 0x0029_9640, "FUN_00299640 - the keepalive, ONE uninitialised byte"),
++];
++
++/// The selected build's codec set. Panics with the reason when the image has none: every caller
++/// below is meaningless without one.
++fn addrs() -> &'static crate::codec::CodecAddrs {
++    crate::codec::selected().unwrap_or_else(|e| panic!("{e}"))
++}
++
++/// The selected build's call-site rows ([`CALL_SITES`] on 01.29, [`CALL_SITES_56578`] on 56578).
++pub fn call_sites() -> &'static [(u32, u64, Option<usize>)] {
++    addrs().ah_call_sites
++}
++
++/// Is this udt sent with the raw arm of `activity_client_send_message`? See [`RAW_SEND`].
+ pub fn is_raw_send(user_defined_type: u32) -> Option<(u64, &'static str)> {
+-    RAW_SEND.iter().find(|(u, _, _)| *u == user_defined_type).map(|(_, a, w)| (*a, *w))
++    addrs().ah_raw_send.iter().find(|(u, _, _)| *u == user_defined_type).map(|(_, a, w)| (*a, *w))
+ }
+ 
+ /// ⭐ Descriptor field kind **0x22** - a *dynamic flags* bitset, and the one field kind this oracle
+@@ -251,12 +318,18 @@ pub fn dynamic_flags_reason(tag: u32) -> Result<Option<String>> {
+     if !dynamic_flags_tags()?.contains(&tag) {
+         return Ok(None);
+     }
++    let a = addrs();
++    let grow = a.dynamic_flags_grow_fn;
++    let fault = match a.dynamic_flags_fault_rip {
++        Some(rip) => format!("{rip:#x} faults READ_UNMAPPED"),
++        None => "the first index read faults READ_UNMAPPED".to_string(),
++    };
+     Ok(Some(format!(
+         "has a field of kind {FIELD_KIND_DYNAMIC_FLAGS:#04x} - a DYNAMIC FLAGS bitset. Its backing \
+-         array is allocated by {DYNAMIC_FLAGS_GROW_FN:#x} out of the game's \"dynamic flags\" pool \
+-         (FUN_000B0550 over DAT_01ABCB80/DAT_01ABCB90/DAT_02666D18), which only exists in a live \
+-         process; in a statically mapped image the pool returns a pointer into nothing and \
+-         {DYNAMIC_FLAGS_FAULT_RIP:#x} faults READ_UNMAPPED. ⇒ a HARNESS limitation with a named \
++         array is allocated by {grow:#x} out of the game's \"dynamic flags\" pool \
++         (01.29: FUN_000B0550 over DAT_01ABCB80/DAT_01ABCB90/DAT_02666D18), which only exists in a \
++         live process; in a statically mapped image the pool returns a pointer into nothing and \
++         {fault}. ⇒ a HARNESS limitation with a named \
+          cause, not an unknown wire format - and inert, because every udt in this class is \
+          client→AH with no client-side handler."
+     )))
+@@ -400,7 +473,15 @@ pub fn derive(
+ 
+ /// Derive every row of [`CALL_SITES`].
+ pub fn derive_all(image: &Image, index: &Index) -> Result<Vec<AhSchema>> {
+-    CALL_SITES
++    let sites = crate::codec::codec_for(&image.sha256())
++        .ok_or_else(|| {
++            OracleError::Eboot(format!(
++                "no Activity-Host call-site table for image sha256 {}",
++                image.sha256()
++            ))
++        })?
++        .ah_call_sites;
++    sites
+         .iter()
+         .map(|(udt, g, size)| derive(image, index, *udt, *g, *size))
+         .collect()
+@@ -1263,8 +1344,8 @@ pub fn controls() -> Result<Vec<Control>> {
+ 
+     c.push(check(
+         "every CALL_SITES row derives a schema tag",
+-        all.len() == CALL_SITES.len(),
+-        format!("{} of {} rows", all.len(), CALL_SITES.len()),
++        all.len() == addrs().ah_call_sites.len(),
++        format!("{} of {} rows", all.len(), addrs().ah_call_sites.len()),
+     ));
+ 
+     let mismatched: Vec<String> = all
+@@ -1491,7 +1572,7 @@ pub fn controls() -> Result<Vec<Control>> {
+     // reading it as dense over the sorted AH→client list is what produced the retracted claim.
+     let dispatch = (0..17)
+         .map(|i| {
+-            let e = 0x18F_84A0 + i * 16;
++            let e = addrs().ah_rx_dispatch + i * 16;
+             Ok((image.u32(e)?, image.u64(e + 8)?))
+         })
+         .collect::<std::result::Result<Vec<_>, d1_eboot::image::ImageError>>()
+@@ -1621,7 +1702,7 @@ pub fn controls() -> Result<Vec<Control>> {
+         format!(
+             "FUN_00298C40 passes descriptor 0xFFFFFFFF and sets the raw flag; udt 2 is the \
+              discriminating negative - {} raw-send rows",
+-            RAW_SEND.len()
++            addrs().ah_raw_send.len()
+         ),
+     ));
+ 
+@@ -1669,8 +1750,9 @@ pub fn controls() -> Result<Vec<Control>> {
+             && codec.struct_size(1).is_ok(),
+         format!(
+             "derived {df:?} from field kind {FIELD_KIND_DYNAMIC_FLAGS:#04x}; the fault is \
+-             {DYNAMIC_FLAGS_FAULT_RIP:#x} one instruction after {DYNAMIC_FLAGS_GROW_FN:#x}; udt 1 \
+-             is the positive control on the same call"
++             {:?} after {:#x}; udt 1 is the positive control on the same call",
++            addrs().dynamic_flags_fault_rip,
++            addrs().dynamic_flags_grow_fn
+         ),
+     ));
+ 
+@@ -1736,6 +1818,36 @@ mod tests {
+         assert_eq!(reloc.get(&(0x18F_84A0 + 7 * 16 + 8)), Some(&0x29_CDE0));
+     }
+ 
++    /// Build 56578: the same 17 stored types in the same order, at `CODEC_56578.ah_rx_dispatch`, and
++    /// the handlers agree with [`CALL_SITES_56578`] by an independent route. udt 0/1/4 point at
++    /// the AH decode functions whose descriptor globals those rows hold, and udt 11's handler
++    /// opens with a call to the replicated-decode caller. Skips when the 56578 image is absent.
++    #[test]
++    fn the_56578_rx_dispatch_table_agrees_with_its_call_site_rows() {
++        let Some(b) = d1_build::builds().ok().and_then(|b| b.all.iter().find(|x| x.id == "later-56578"))
++        else {
++            return;
++        };
++        if !b.eboot_path().exists() {
++            return;
++        }
++        let image = Image::open(b.eboot_path()).unwrap();
++        let t = crate::codec::codec_for(&image.sha256()).unwrap().ah_rx_dispatch;
++        assert_eq!(t, 0x191_0480);
++        let types: Vec<u32> = (0..17).map(|i| image.u32(t + i * 16).unwrap()).collect();
++        assert_eq!(types, [0, 1, 2, 4, 11, 10, 5, 7, 18, 23, 24, 27, 29, 38, 39, 42, 43]);
++        let reloc = reloc::by_slot(&image).unwrap();
++        let handler = |i: u64| *reloc.get(&(t + i * 16 + 8)).unwrap();
++        assert_eq!(handler(0), 0x101_8800, "udt 0 -> decode with *0x191A3A0");
++        assert_eq!(handler(1), 0x101_8990, "udt 1 -> decode with *0x191A410");
++        assert_eq!(handler(3), 0x101_8E30, "udt 4 -> decode with *0x191A388");
++        assert_eq!(handler(4), 0x29_D950, "udt 11 replicate_membership");
++        assert_eq!(handler(7), 0x29_D7E0, "udt 7 sensor_message");
++        for (udt, g) in [(0u32, 0x191_A3A0u64), (1, 0x191_A410), (4, 0x191_A388), (11, 0x191_A308)] {
++            assert!(CALL_SITES_56578.iter().any(|(u, x, _)| *u == udt && *x == g), "udt {udt}");
++        }
++    }
++
+     /// A solo membership is an **echo**: every non-zero byte in it either came from the client's
+     /// own join_request or is a counter/bit the client's own code reads.
+     #[test]
+diff --git a/ps4/d1-server/crates/d1-oracle/src/codec.rs b/ps4/d1-server/crates/d1-oracle/src/codec.rs
+new file mode 100644
+index 0000000..9d43f7e
+--- /dev/null
++++ b/ps4/d1-server/crates/d1-oracle/src/codec.rs
+@@ -0,0 +1,171 @@
++// SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++//! The RSAT codec's game addresses, **per executable build**.
++//!
++//! The `pub const`s in [`crate::object`], [`crate::message`], [`crate::schema`],
++//! [`crate::registry`] and [`crate::activity_host`] are the 01.29 reference values and keep their
++//! derivation notes. The oracles do not call them directly: they call through the
++//! [`CodecAddrs`] chosen by the image's SHA-256, and an image with no measured set is refused.
++//! Reusing 01.29 numbers on another build would call into the middle of unrelated functions.
++//!
++//! # How the 56578 set was measured (static, 2026-10-13)
++//!
++//! Every value was re-found from structure, not by offsetting the 01.29 numbers. The 01.29 ELF is
++//! not on disk, so each identification uses only the 56578 image and the 01.29 notes.
++//!
++//! * **Bitstream primitives:** these are at the **same** addresses as 01.29, and each body matches
++//!   its documented behaviour. The ctor stores `buf`, `buf+len` and `len`. begin-write sets
++//!   alignment at `+0x14` and mode 1. begin-read sets mode 3, end sets mode 5. The spill writes
++//!   `+0x24/+0x28/+0x30`, and read-bit returns `bs[0x28] >> 63`.
++//!   `WRITE_ONE_BIT` is `c_network_channel_simulation_gatekeeper` vtable slot 5 (RTTI, vtable
++//!   `0x196B170`) = `0xAF1650`. Its body is byte-for-byte the 01.29 listing, including the tail
++//!   call to the spill at `0x733A0`.
++//! * **Object codec:** the only `call` that follows a begin-read in more than one caller and is
++//!   not a bitstream primitive is `0x2C9A90`; the begin-write counterpart is `0x2C9A80`. Both are
++//!   `call inner; mov al,1; ret` wrappers, as in 01.29, and they sit `+0xA90` from 01.29's.
++//!   The replicated wrapper `0x2C9AE0` takes the tag in `ecx` and opens with the `tag_slot`
++//!   arithmetic.
++//! * **RSAT memset allowance:** the three documented bitset sites, each shifted by `+0xA90`, are
++//!   the zeroing memset in the encode inner `0x2C8F82`, `bitset_set_all`'s `0xFF` fill at
++//!   `0x2C76D5`, and the replicated wrapper's large-bitset arm returning to `0x2C9BD8`. Each has
++//!   the same `cmp rdx,0x21` or `test dil,3` guard. The window ends at **`0x2C9E20`**, the
++//!   prologue after the encode counterpart `0x2C9D20`, and not at a blind `+0xA90`. `0x2C9E20`
++//!   memsets a 0x100-byte stack buffer that is not a bitset, and the allowance must not cover it.
++//! * **Message codec:** the only callers of the object encoder and decoder in the message
++//!   module are `0x261E90` and `0x262260`. The encoder takes
++//!   `(handle, 1, out, capacity, out_len)`. It calls the manager getter `0x25CBD0` (a
++//!   `lea; mov; ret` singleton read) and then `vfunc[0x4D0]`, and reads the definition's
++//!   `+0x14`/`+0x18` tags. The decoder reads 16 bits and passes them to `0x2800E0`. That function
++//!   walks the manager's definitions through `vfunc[0x4D0]` and returns `0xFFFF` on a miss: id → index.
++//! * **Registry global:** the decoder has exactly three rip-references to `0x1A238A0`, which
++//!   matches the three inlined walks in 01.29. The walk at `0x262559` is the construction
++//!   contract in [`crate::registry`] instruction for instruction: `tag_slot × 0x40`, `+0x10`
++//!   base, `+0x30` entry size, `+0x34` mask and `tag & 0x1FFF`.
++//! * **Activity Host:** the decode and encode wrappers are the functions that bracket the object
++//!   codec with ctor/begin/end, at `0x2A4AC0` and `0x2A4B70`. The encode wrapper still hands the
++//!   bitstream `0x1DF00`. Its one caller is `activity_client_send_message`, `0x299D10`, which
++//!   still tests bit 0 of the seventh argument for the raw arm.
++//!   [`crate::activity_host::CALL_SITES_56578`] says how its rows were read.
++//! * **AH receive dispatch table:** it is the only `.data` run with the 01.29 shape, `{type, pad,
++//!   fnptr}` with type 4, 11, 10 and 7 at indices 3, 4, 5 and 7, and it is at `0x1910480`. All 17
++//!   stored types are in 01.29's order. Its handlers, read through relocations, confirm the
++//!   call-site rows independently. udt 0, 1 and 4 point at the decode functions whose descriptor
++//!   globals those rows hold (`0x1018800`, `0x1018990`, `0x1018E30`). udt 11's handler
++//!   `0x29D950` first calls `0x29D130`, the replicated-decode caller, and udt 7 is
++//!   `sensor_message` at `0x29D7E0`.
++
++/// One build's codec address set.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct CodecAddrs {
++    pub bs_ctor: u64,
++    pub bs_begin_write: u64,
++    pub bs_begin_read: u64,
++    pub bs_flush: u64,
++    pub bs_end: u64,
++    pub write_bits_spill: u64,
++    pub write_one_bit: u64,
++    pub read_bit: u64,
++    pub encode_obj: u64,
++    pub decode_obj: u64,
++    pub decode_obj_replicated: u64,
++    /// `[lo, hi)`: where a direct `call memset` may clear a stack bitset. See [`crate::object`].
++    pub codec_lo: u64,
++    pub codec_hi: u64,
++    pub msg_encoder: u64,
++    pub msg_decoder: u64,
++    pub get_manager: u64,
++    pub id_to_index: u64,
++    pub registry_global: u64,
++    pub ah_decode_fn: u64,
++    pub ah_encode_fn: u64,
++    pub ah_send_message_fn: u64,
++    pub ah_call_sites: &'static [(u32, u64, Option<usize>)],
++    pub ah_raw_send: &'static [(u32, u64, &'static str)],
++    /// The AH receive dispatch table, `{i32 type; i32 pad; fnptr}` × 17. See [`crate::activity_host`].
++    pub ah_rx_dispatch: u64,
++    /// Where the dynamic-flags decode faults in a static harness. `None` until it has been observed
++    /// on this build: the refusal text then names the grow function only.
++    pub dynamic_flags_fault_rip: Option<u64>,
++    pub dynamic_flags_grow_fn: u64,
++}
++
++pub const CODEC_0129: CodecAddrs = CodecAddrs {
++    bs_ctor: crate::object::BS_CTOR,
++    bs_begin_write: crate::object::BS_BEGIN_WRITE,
++    bs_begin_read: crate::object::BS_BEGIN_READ,
++    bs_flush: crate::object::BS_FLUSH,
++    bs_end: crate::object::BS_END,
++    write_bits_spill: crate::object::WRITE_BITS_SPILL,
++    write_one_bit: crate::object::WRITE_ONE_BIT,
++    read_bit: crate::object::READ_BIT,
++    encode_obj: crate::object::ENCODE_OBJ,
++    decode_obj: crate::object::DECODE_OBJ,
++    decode_obj_replicated: crate::object::DECODE_OBJ_REPLICATED,
++    codec_lo: crate::object::CODEC_LO,
++    codec_hi: crate::object::CODEC_HI,
++    msg_encoder: crate::message::ENCODER,
++    msg_decoder: crate::message::DECODER,
++    get_manager: crate::schema::GET_MANAGER,
++    id_to_index: crate::schema::ID_TO_INDEX,
++    registry_global: crate::registry::REGISTRY_GLOBAL,
++    ah_decode_fn: crate::activity_host::DECODE_FN,
++    ah_encode_fn: crate::activity_host::ENCODE_FN,
++    ah_send_message_fn: crate::activity_host::SEND_MESSAGE_FN,
++    ah_call_sites: crate::activity_host::CALL_SITES,
++    ah_raw_send: crate::activity_host::RAW_SEND,
++    ah_rx_dispatch: 0x18F_84A0,
++    dynamic_flags_fault_rip: Some(crate::activity_host::DYNAMIC_FLAGS_FAULT_RIP),
++    dynamic_flags_grow_fn: crate::activity_host::DYNAMIC_FLAGS_GROW_FN,
++};
++
++/// Build 56578 (01.33). Measured as described in the module docs.
++pub const CODEC_56578: CodecAddrs = CodecAddrs {
++    bs_ctor: 0x7_2240,
++    bs_begin_write: 0x7_23B0,
++    bs_begin_read: 0x7_2400,
++    bs_flush: 0x7_2560,
++    bs_end: 0x7_2650,
++    write_bits_spill: 0x7_33A0,
++    write_one_bit: 0xAF_1650,
++    read_bit: 0x7_3430,
++    encode_obj: 0x2C_9A80,
++    decode_obj: 0x2C_9A90,
++    decode_obj_replicated: 0x2C_9AE0,
++    codec_lo: 0x2C_6A90,
++    codec_hi: 0x2C_9E20,
++    msg_encoder: 0x26_1E90,
++    msg_decoder: 0x26_2260,
++    get_manager: 0x25_CBD0,
++    id_to_index: 0x28_00E0,
++    registry_global: 0x1A2_38A0,
++    ah_decode_fn: 0x2A_4AC0,
++    ah_encode_fn: 0x2A_4B70,
++    ah_send_message_fn: 0x29_9D10,
++    ah_call_sites: crate::activity_host::CALL_SITES_56578,
++    ah_raw_send: crate::activity_host::RAW_SEND_56578,
++    ah_rx_dispatch: 0x191_0480,
++    dynamic_flags_fault_rip: None,
++    dynamic_flags_grow_fn: 0x2C_7630,
++};
++
++/// The codec set for an image, by its SHA-256. `None` = no measured set: refuse to run.
++pub fn codec_for(sha256: &str) -> Option<&'static CodecAddrs> {
++    match sha256 {
++        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(&CODEC_0129),
++        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(&CODEC_56578),
++        _ => None,
++    }
++}
++
++/// The set for the selected build's image. Errors name the image when there is no set.
++pub fn selected() -> crate::error::Result<&'static CodecAddrs> {
++    let image = d1_eboot::image::Image::open_default()
++        .map_err(|e| crate::error::OracleError::Eboot(e.to_string()))?;
++    codec_for(&image.sha256()).ok_or_else(|| {
++        crate::error::OracleError::Eboot(format!(
++            "no codec address set for image sha256 {} - the codecs would be called at the wrong \
++             addresses",
++            image.sha256()
++        ))
++    })
++}
+diff --git a/ps4/d1-server/crates/d1-oracle/src/harness.rs b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+index cd4f1f9..bf04cb1 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/harness.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/harness.rs
+@@ -39,6 +39,9 @@ pub const STACK: u64 = 0x400_0000;
+ pub const STACK_SIZE: u64 = 0x20_0000;
+ pub const HEAP: u64 = 0x500_0000;
+ pub const HEAP_SIZE: u64 = 0x100_0000;
++/// The largest length a stubbed `memcpy`/`memset`/`alloc_aligned` will act on. Every guest buffer
++/// is in the image, the stack or the heap, so a longer request means the call's arguments are wrong.
++pub const MAX_GUEST_LEN: u64 = 0x1000_0000;
+ /// The return trampoline. `call()` pushes this and stops when RIP reaches it.
+ pub const STOP: u64 = 0x7ff_f000;
+ pub const CANARY_PTR: u64 = 0x7ff_e000;
+@@ -541,6 +544,21 @@ fn dispatch(
+     stub: Stub,
+ ) -> std::result::Result<(), String> {
+     let e = |e: unicorn_engine::uc_error| format!("{e:?}");
++    // ⚠ FAIL CLOSED on a length no guest buffer can have. A wrong call target or unpopulated
++    // scaffolding shows up here as a garbage length; allocating it host-side aborted the whole
++    // process ("capacity overflow") instead of reporting where the guest went wrong.
++    let bounded = |uc: &mut Unicorn<'_, ()>, what: &str, n: u64| -> std::result::Result<usize, String> {
++        if n <= MAX_GUEST_LEN {
++            return Ok(n as usize);
++        }
++        let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
++        let mut b = [0u8; 8];
++        uc.mem_read(rsp, &mut b).map_err(e)?;
++        Err(format!(
++            "{what} with length {n:#x} (return address {:#x}) - no guest buffer is that large; the              caller's arguments are not what this stub was told they are",
++            u64::from_le_bytes(b)
++        ))
++    };
+     match stub {
+         Stub::Stop => {
+             uc.emu_stop().map_err(e)?;
+@@ -567,13 +585,15 @@ fn dispatch(
+                 s.guest_allocs += 1;
+                 s.alloc(n, a).map_err(|x| x.to_string())?
+             };
+-            uc.mem_write(p, &vec![0u8; n.max(1) as usize]).map_err(e)?;
++            let len = bounded(uc, "alloc_aligned", n)?.max(1);
++            uc.mem_write(p, &vec![0u8; len]).map_err(e)?;
+             do_ret(uc, p).map_err(e)?;
+         }
+         Stub::MemCopy => {
+             let dst = uc.reg_read(RegisterX86::RDI).map_err(e)?;
+             let src = uc.reg_read(RegisterX86::RSI).map_err(e)?;
+-            let n = uc.reg_read(RegisterX86::RDX).map_err(e)? as usize;
++            let n = uc.reg_read(RegisterX86::RDX).map_err(e)?;
++            let n = bounded(uc, "memcpy/memmove", n)?;
+             let buf = uc.mem_read_as_vec(src, n).map_err(e)?;
+             uc.mem_write(dst, &buf).map_err(e)?;
+             do_ret(uc, dst).map_err(e)?;
+@@ -582,6 +602,7 @@ fn dispatch(
+             let dst = uc.reg_read(RegisterX86::RDI).map_err(e)?;
+             let val = (uc.reg_read(RegisterX86::RSI).map_err(e)? & 0xFF) as u8;
+             let n = uc.reg_read(RegisterX86::RDX).map_err(e)?;
++            bounded(uc, "memset", n)?;
+             if dst < STACK + STACK_SIZE && dst + n > STACK {
+                 let rsp = uc.reg_read(RegisterX86::RSP).map_err(e)?;
+                 let mut b = [0u8; 8];
+diff --git a/ps4/d1-server/crates/d1-oracle/src/lib.rs b/ps4/d1-server/crates/d1-oracle/src/lib.rs
+index e571644..547cd17 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/lib.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/lib.rs
+@@ -64,6 +64,7 @@ pub mod activity_host;
+ pub mod activity_modes;
+ pub mod art_arrangement;
+ pub mod character;
++pub mod codec;
+ pub mod control;
+ pub mod error;
+ pub mod harness;
+diff --git a/ps4/d1-server/crates/d1-oracle/src/message.rs b/ps4/d1-server/crates/d1-oracle/src/message.rs
+index 036ec8a..9ed19a3 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/message.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/message.rs
+@@ -82,9 +82,9 @@ impl MessageOracle {
+     pub fn encode(&mut self, handle: u64, capacity: u64) -> Result<Vec<u8>> {
+         let out = self.s.h.alloc(capacity)?;
+         let out_len = self.s.h.alloc(8)?;
+-        let rc = (self.s.h.call(ENCODER, &[handle, 1, out, capacity, out_len])? & 0xFF) as u8;
++        let rc = (self.s.h.call(self.s.c.msg_encoder, &[handle, 1, out, capacity, out_len])? & 0xFF) as u8;
+         if rc != 1 {
+-            return Err(OracleError::CodecReturned { func: ENCODER, rc });
++            return Err(OracleError::CodecReturned { func: self.s.c.msg_encoder, rc });
+         }
+         let n = self.s.h.read_u32(out_len)? as usize;
+         self.s.h.read(out, n)
+@@ -98,7 +98,7 @@ impl MessageOracle {
+         let rc = (self
+             .s
+             .h
+-            .call(DECODER, &[inp, wire.len() as u64, 1, out, capacity, dsz])?
++            .call(self.s.c.msg_decoder, &[inp, wire.len() as u64, 1, out, capacity, dsz])?
+             & 0xFF) as u8;
+         let objp = self.s.h.read_u64(out + 8)?; // ⚠ the handle's object pointer, not `out`
+         let object =
+diff --git a/ps4/d1-server/crates/d1-oracle/src/object.rs b/ps4/d1-server/crates/d1-oracle/src/object.rs
+index 1652953..40f4eed 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/object.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/object.rs
+@@ -124,8 +124,7 @@ pub const BS_SIZE: u64 = 0x100;
+ /// character vector leaves `+0x24 = 97`. (`+0x20` is 64-bit prefetch accounting, not a position.)
+ pub const BS_BITPOS: u64 = 0x24;
+ 
+-const MEMSET: u64 = harness::IMP_MEMSET;
+-const CODEC_LO: u64 = 0x2C_6000;
++pub const CODEC_LO: u64 = 0x2C_6000;
+ /// ⚠ **Widened from `0x2C9100` to `0x2C9400` on 2026-08-09**, when [`DECODE_OBJ_REPLICATED`] was
+ /// wired up and faulted with `memset would clobber the STACK … return=0x2C9148`.
+ ///
+@@ -137,7 +136,7 @@ const CODEC_LO: u64 = 0x2C_6000;
+ /// ⚠ This is a *guard* being relaxed, so state what still holds: the allowance is still only for
+ /// **direct `call memset` sites found by a byte scan inside this window**, not for the window
+ /// itself - an unpopulated pointer reaching `memset` from anywhere else still faults.
+-const CODEC_HI: u64 = 0x2C_9400;
++pub const CODEC_HI: u64 = 0x2C_9400;
+ 
+ /// One decoded server object, with everything a caller needs to assert **shape**.
+ ///
+@@ -218,11 +217,15 @@ impl ObjectOracle {
+     /// Construct without running the control. **Only** the control itself may call this.
+     pub(crate) fn new_unchecked(tag: u32) -> Result<Self> {
+         let mut s = SchemaHarness::new(tag, 1, 0)?;
+-        let sites = harness::direct_call_sites(&s.image, MEMSET, CODEC_LO, CODEC_HI)?;
++        let memset = harness::addrs_for(&s.image.sha256())
++            .ok_or_else(|| OracleError::Eboot("no harness address set for this image".into()))?
++            .memset;
++        let (lo, hi) = (s.c.codec_lo, s.c.codec_hi);
++        let sites = harness::direct_call_sites(&s.image, memset, lo, hi)?;
+         if sites.is_empty() {
+             return Err(OracleError::Eboot(format!(
+-                "no direct `call {MEMSET:#x}` sites in {CODEC_LO:#x}..{CODEC_HI:#x} - the byte scan \
+-                 is broken, and without a positive control an empty result is not evidence"
++                "no direct `call {memset:#x}` sites in {lo:#x}..{hi:#x} - the byte scan is broken, \
++                 and without a positive control an empty result is not evidence"
+             )));
+         }
+         s.h.allow_stack_memset_from(sites);
+@@ -274,7 +277,7 @@ impl ObjectOracle {
+     fn bitstream(&mut self, buf: u64, len: u64) -> Result<u64> {
+         let bs = self.s.h.alloc(BS_SIZE)?;
+         self.s.h.write_u32(bs + 0x14, 1)?; // alignment 1, as 0x56B646
+-        self.s.h.call(BS_CTOR, &[bs, buf, len])?;
++        self.s.h.call(self.s.c.bs_ctor, &[bs, buf, len])?;
+         Ok(bs)
+     }
+ 
+@@ -289,12 +292,12 @@ impl ObjectOracle {
+         let buf = self.s.h.alloc(payload.len().max(16) as u64)?;
+         self.s.h.write(buf, payload)?;
+         let bs = self.bitstream(buf, payload.len() as u64)?;
+-        self.s.h.call(BS_BEGIN_READ, &[bs])?;
+-        let rc = (self.s.h.call(DECODE_OBJ, &[u64::from(self.s.tag), bs, obj, obj, 1])? & 0xFF) as u8;
++        self.s.h.call(self.s.c.bs_begin_read, &[bs])?;
++        let rc = (self.s.h.call(self.s.c.decode_obj, &[u64::from(self.s.tag), bs, obj, obj, 1])? & 0xFF) as u8;
+         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
+-        self.s.h.call(BS_END, &[bs])?;
++        self.s.h.call(self.s.c.bs_end, &[bs])?;
+         if rc != 1 {
+-            return Err(OracleError::CodecReturned { func: DECODE_OBJ, rc });
++            return Err(OracleError::CodecReturned { func: self.s.c.decode_obj, rc });
+         }
+         let available = payload.len() * 8;
+         if bits as usize > available {
+@@ -309,17 +312,17 @@ impl ObjectOracle {
+         let obj = self.s.make_object(object)?;
+         let buf = self.s.h.alloc(capacity)?;
+         let bs = self.bitstream(buf, capacity)?;
+-        self.s.h.call(BS_BEGIN_WRITE, &[bs, 1])?;
+-        let rc = (self.s.h.call(ENCODE_OBJ, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
++        self.s.h.call(self.s.c.bs_begin_write, &[bs, 1])?;
++        let rc = (self.s.h.call(self.s.c.encode_obj, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
+         if rc != 1 {
+-            return Err(OracleError::CodecReturned { func: ENCODE_OBJ, rc });
++            return Err(OracleError::CodecReturned { func: self.s.c.encode_obj, rc });
+         }
+         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
+         // ⚠ 0x72560 takes an OUT param in rsi (`mov [rsi], ecx` at 0x7263E). Omitting it leaves a
+         // stale rsi and the flush stores through it - which surfaces as WRITE_UNMAPPED from a
+         // function that looks argument-less.
+         let scratch = self.s.h.alloc(8)?;
+-        self.s.h.call(BS_FLUSH, &[bs, scratch])?;
++        self.s.h.call(self.s.c.bs_flush, &[bs, scratch])?;
+         let nbytes = ((bits as usize) + 7) / 8;
+         Ok(Encoded { tag: self.s.tag, bits, payload: self.s.h.read(buf, nbytes)? })
+     }
+@@ -355,19 +358,19 @@ impl ObjectOracle {
+         let obj = self.s.make_object(object)?;
+         let buf = self.s.h.alloc(capacity)?;
+         let bs = self.bitstream(buf, capacity)?;
+-        self.s.h.call(BS_BEGIN_WRITE, &[bs, 1])?;
++        self.s.h.call(self.s.c.bs_begin_write, &[bs, 1])?;
+         // The presence bit: "field 0 changed". A full-state replication says yes.
+         // `WRITE_ONE_BIT` takes it from `src + 8`.
+         let src = self.s.h.alloc(16)?;
+         self.s.h.write(src, &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])?;
+-        self.s.h.call(WRITE_ONE_BIT, &[src, 0, bs])?;
+-        let rc = (self.s.h.call(ENCODE_OBJ, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
++        self.s.h.call(self.s.c.write_one_bit, &[src, 0, bs])?;
++        let rc = (self.s.h.call(self.s.c.encode_obj, &[u64::from(self.s.tag), obj, bs, 1])? & 0xFF) as u8;
+         if rc != 1 {
+-            return Err(OracleError::CodecReturned { func: ENCODE_OBJ, rc });
++            return Err(OracleError::CodecReturned { func: self.s.c.encode_obj, rc });
+         }
+         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
+         let scratch = self.s.h.alloc(8)?;
+-        self.s.h.call(BS_FLUSH, &[bs, scratch])?;
++        self.s.h.call(self.s.c.bs_flush, &[bs, scratch])?;
+         let nbytes = (bits as usize).div_ceil(8);
+         Ok(Encoded { tag: self.s.tag, bits, payload: self.s.h.read(buf, nbytes)? })
+     }
+@@ -404,16 +407,16 @@ impl ObjectOracle {
+         let buf = self.s.h.alloc(payload.len().max(16) as u64)?;
+         self.s.h.write(buf, payload)?;
+         let bs = self.bitstream(buf, payload.len() as u64)?;
+-        self.s.h.call(BS_BEGIN_READ, &[bs])?;
++        self.s.h.call(self.s.c.bs_begin_read, &[bs])?;
+         let rc = (self
+             .s
+             .h
+-            .call(DECODE_OBJ_REPLICATED, &[bs, obj, size_ptr, u64::from(self.s.tag), 1])?
++            .call(self.s.c.decode_obj_replicated, &[bs, obj, size_ptr, u64::from(self.s.tag), 1])?
+             & 0xFF) as u8;
+         let bits = self.s.h.read_u32(bs + BS_BITPOS)?;
+-        self.s.h.call(BS_END, &[bs])?;
++        self.s.h.call(self.s.c.bs_end, &[bs])?;
+         if rc != 1 {
+-            return Err(OracleError::CodecReturned { func: DECODE_OBJ_REPLICATED, rc });
++            return Err(OracleError::CodecReturned { func: self.s.c.decode_obj_replicated, rc });
+         }
+         let available = payload.len() * 8;
+         if bits as usize > available {
+diff --git a/ps4/d1-server/crates/d1-oracle/src/profile.rs b/ps4/d1-server/crates/d1-oracle/src/profile.rs
+index 50bbd5c..bf504c7 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/profile.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/profile.rs
+@@ -142,6 +142,71 @@ pub const OFF_ALL_CONTENT_OVERRIDE: usize = 0x6E4C;
+ /// Written by the same flag because the two are one feature; `[I]` that they are separable.
+ pub const OFF_ALL_CONTENT_OVERRIDE_ITEMS: usize = 0x6E4D;
+ 
++/// The offsets that differ between builds. The `OFF_*` constants above are 01.29's, with their
++/// derivations. [`offs`] picks this build's set by image hash, and [`controls`] checks the chosen
++/// set against [`derive_layout`].
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct Offs {
++    pub struct_size: usize,
++    pub off_stat_block: usize,
++    pub off_stat_override_present: usize,
++    pub off_stat_override: usize,
++    pub off_stat_override_block_2: usize,
++    pub off_all_content_override: usize,
++    pub off_all_content_override_items: usize,
++}
++
++pub const OFFS_0129: Offs = Offs {
++    struct_size: STRUCT_SIZE,
++    off_stat_block: OFF_STAT_BLOCK,
++    off_stat_override_present: OFF_STAT_OVERRIDE_PRESENT,
++    off_stat_override: OFF_STAT_OVERRIDE,
++    off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2,
++    off_all_content_override: OFF_ALL_CONTENT_OVERRIDE,
++    off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
++};
++
++/// How far 56578 moved everything from body field `[12]` onward.
++///
++/// Field `[10]` `0x80801701` grew `0x100` (5,168 → 5,424 B). Field `[11]`, the dense completion
++/// flags, grew `0x200`: 01.29 `0x80804C21` (2,048 elements) is replaced by `0x8080165B` (2,560
++/// elements of the same `kind 0x103` 2-bit leaf), and `0x80804C21` no longer exists in 56578.
++/// Fields `[0]`..`[9]` (identity, customization, item slots, equipment, progressions) are unchanged.
++pub const SHIFT_56578: usize = 0x300;
++
++/// Build 56578 (01.33). Struct `0x7378` = 29,560 B.
++pub const OFFS_56578: Offs = Offs {
++    struct_size: 29_560,
++    off_stat_block: OFF_STAT_BLOCK + SHIFT_56578,
++    off_stat_override_present: OFF_STAT_OVERRIDE_PRESENT + SHIFT_56578,
++    off_stat_override: OFF_STAT_OVERRIDE + SHIFT_56578,
++    off_stat_override_block_2: OFF_STAT_OVERRIDE_BLOCK_2 + SHIFT_56578,
++    off_all_content_override: OFF_ALL_CONTENT_OVERRIDE + SHIFT_56578,
++    off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS + SHIFT_56578,
++};
++
++/// The offset set for an image, by its SHA-256.
++pub fn offs_for(sha256: &str) -> Option<Offs> {
++    match sha256 {
++        "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954" => Some(OFFS_0129),
++        "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833" => Some(OFFS_56578),
++        _ => None,
++    }
++}
++
++/// The selected build's offsets. Panics when the image has no measured set: a profile built at
++/// another build's offsets decodes into the wrong fields with no error.
++pub fn offs() -> Offs {
++    static O: std::sync::OnceLock<std::result::Result<Offs, String>> = std::sync::OnceLock::new();
++    O.get_or_init(|| {
++        let image = Image::open_default().map_err(|e| e.to_string())?;
++        offs_for(&image.sha256())
++            .ok_or_else(|| format!("no profile offset set for image sha256 {}", image.sha256()))
++    })
++    .clone()
++    .unwrap_or_else(|e| panic!("{e}"))
++}
++
+ /// ⭐ The Light stat index is **0**. `THE-EMPTY-PROFILE.md` §4: `0x281F50` replayed on
+ /// `runs/snapshots/orbit-all.snap` returns `rax & 0xFF == 0x00`, with `0x276220` → `0x28` = the
+ /// level cap 40 as the positive control and `0x281F70` → `0x01` as the discriminator.
+@@ -266,11 +331,18 @@ impl Default for ProfileSpec {
+ }
+ 
+ impl ProfileSpec {
+-    /// Lay the spec out as the decoded 28,792-byte C struct.
++    /// Lay the spec out as the decoded C struct of the selected build (28,792 B on 01.29, 29,560 B
++    /// on 56578).
+     ///
+     /// This never touches the wire - [`build`] hands the result to the client's own encoder, which
+     /// is the only thing allowed to turn it into bytes.
+     pub fn to_object(&self) -> Result<Vec<u8>> {
++        self.to_object_for(offs())
++    }
++
++    /// [`ProfileSpec::to_object`] at an explicit build's offsets. Needs no image.
++    pub fn to_object_for(&self, o: Offs) -> Result<Vec<u8>> {
++        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = o;
+         let too_many = |what: &str, got: usize, cap: usize| {
+             Err(OracleError::Shape(format!(
+                 "{got} {what} exceeds the schema's {cap} slots - the extra entries would land in \
+@@ -290,7 +362,7 @@ impl ProfileSpec {
+             return too_many("inventory slots", self.item_slots.len(), ITEM_SLOTS);
+         }
+ 
+-        let mut o = vec![0u8; STRUCT_SIZE];
++        let mut o = vec![0u8; struct_size];
+         o[OFF_SOID..OFF_SOID + 8].copy_from_slice(&self.soid.to_le_bytes());
+         o[OFF_IDENTITY..OFF_IDENTITY + 3].copy_from_slice(&self.identity);
+         o[OFF_LAST_ORBITED_DESTINATION..OFF_LAST_ORBITED_DESTINATION + 4]
+@@ -325,14 +397,14 @@ impl ProfileSpec {
+         }
+ 
+         if self.all_content {
+-            o[OFF_ALL_CONTENT_OVERRIDE] = 1;
+-            o[OFF_ALL_CONTENT_OVERRIDE_ITEMS] = 1;
++            o[off_all_content_override] = 1;
++            o[off_all_content_override_items] = 1;
+         }
+ 
+         if !self.stat_overrides.is_empty() {
+-            o[OFF_STAT_OVERRIDE_PRESENT] = 1;
++            o[off_stat_override_present] = 1;
+             for (i, (key, value)) in self.stat_overrides.iter().enumerate() {
+-                let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
++                let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
+                 o[at] = *key;
+                 o[at + 4..at + 8].copy_from_slice(&value.to_le_bytes());
+             }
+@@ -342,6 +414,7 @@ impl ProfileSpec {
+ 
+     /// The `(offset, value)` pairs this spec *claims* it wrote, as qwords, for the round-trip check.
+     fn claimed_qwords(&self) -> Vec<(usize, &'static str)> {
++        let Offs { off_stat_override_present, off_stat_override, off_all_content_override, .. } = offs();
+         let mut v = vec![(OFF_SOID, "SOID"), (OFF_IDENTITY, "identity {race,gender,class}")];
+         // +0x28 shares a qword with +0x2C; it is asserted as a u32 by `verify`, not here.
+         if !self.equipped.is_empty() {
+@@ -351,11 +424,11 @@ impl ProfileSpec {
+             v.push((OFF_PROGRESSIONS, "progression[0]"));
+         }
+         if !self.stat_overrides.is_empty() {
+-            v.push((OFF_STAT_OVERRIDE_PRESENT & !7, "stat-override present flag"));
+-            v.push((OFF_STAT_OVERRIDE, "stat-override[0] {index,value}"));
++            v.push((off_stat_override_present & !7, "stat-override present flag"));
++            v.push((off_stat_override, "stat-override[0] {index,value}"));
+         }
+         if self.all_content {
+-            v.push((OFF_ALL_CONTENT_OVERRIDE & !7, "all-content override bools"));
++            v.push((off_all_content_override & !7, "all-content override bools"));
+         }
+         v
+     }
+@@ -399,13 +472,14 @@ pub fn build(oracle: &mut ObjectOracle, spec: &ProfileSpec) -> Result<BuiltProfi
+ /// ⚠ `round_trip` already proves the whole struct survived; this exists so a *silently empty* spec
+ /// (all defaults dropped, an empty vector) cannot pass as a populated profile.
+ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
++    let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = offs();
+     let u32_at = |off: usize| -> u32 {
+         u32::from_le_bytes(dec.object[off..off + 4].try_into().unwrap_or([0; 4]))
+     };
+     let bad = |m: String| Err(OracleError::Shape(m));
+ 
+-    if dec.object.len() != STRUCT_SIZE {
+-        return bad(format!("decoded {} bytes, expected {STRUCT_SIZE}", dec.object.len()));
++    if dec.object.len() != struct_size {
++        return bad(format!("decoded {} bytes, expected {struct_size}", dec.object.len()));
+     }
+     if dec.qword(OFF_SOID) != spec.soid {
+         return bad(format!("+{OFF_SOID:#06x} SOID is {:#x}, expected {:#x}", dec.qword(OFF_SOID), spec.soid));
+@@ -461,15 +535,15 @@ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
+                  {{progress {}, index {:#06x}}}", u32_at(at), p.progress, p.index));
+         }
+     }
+-    let present = dec.object[OFF_STAT_OVERRIDE_PRESENT];
++    let present = dec.object[off_stat_override_present];
+     let want_present = u8::from(!spec.stat_overrides.is_empty());
+     if present != want_present {
+         return bad(format!(
+-            "+{OFF_STAT_OVERRIDE_PRESENT:#06x} override-present is {present}, expected {want_present} \
++            "+{off_stat_override_present:#06x} override-present is {present}, expected {want_present} \
+              - without it 0x265EF0 skips the table entirely and sums over gear"));
+     }
+     for (i, (key, value)) in spec.stat_overrides.iter().enumerate() {
+-        let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
++        let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
+         if dec.object[at] != *key || u32_at(at + 4) != *value {
+             return bad(format!(
+                 "stat override[{i}] @+{at:#06x} is {{index {}, value {}}}, expected {{index {key}, \
+@@ -480,8 +554,8 @@ pub fn verify(spec: &ProfileSpec, dec: &Decoded) -> Result<()> {
+     // field would still decode, and would still look like a populated profile.
+     let want = u8::from(spec.all_content);
+     for (off, what) in [
+-        (OFF_ALL_CONTENT_OVERRIDE, "all-content override"),
+-        (OFF_ALL_CONTENT_OVERRIDE_ITEMS, "all-content override (items)"),
++        (off_all_content_override, "all-content override"),
++        (off_all_content_override_items, "all-content override (items)"),
+     ] {
+         if dec.object[off] != want {
+             return bad(format!(
+@@ -661,10 +735,10 @@ pub fn derive_layout(image: &Image, idx: &Index) -> Result<Layout> {
+     })
+ }
+ 
+-/// The layout this module's constants declare - what [`derive_layout`] must reproduce.
+-pub fn declared_layout() -> Layout {
++/// The layout this module declares for one build - what [`derive_layout`] must reproduce.
++pub fn declared_layout_for(o: Offs) -> Layout {
+     Layout {
+-        struct_size: STRUCT_SIZE as u32,
++        struct_size: o.struct_size as u32,
+         soid: OFF_SOID,
+         identity: OFF_IDENTITY,
+         customization: OFF_CUSTOMIZATION,
+@@ -688,19 +762,24 @@ pub fn declared_layout() -> Layout {
+             count: PROGRESSION_SLOTS as u32,
+             elem_size: PROGRESSION_STRIDE as u32,
+         },
+-        stat_block: OFF_STAT_BLOCK,
+-        stat_override_present: OFF_STAT_OVERRIDE_PRESENT,
++        stat_block: o.off_stat_block,
++        stat_override_present: o.off_stat_override_present,
+         stat_overrides: ArrayShape {
+             tag: 0x8080_4768,
+-            base: OFF_STAT_OVERRIDE,
++            base: o.off_stat_override,
+             count: STAT_OVERRIDE_SLOTS as u32,
+             elem_size: STAT_OVERRIDE_STRIDE as u32,
+         },
+-        all_content_override: OFF_ALL_CONTENT_OVERRIDE,
+-        all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
++        all_content_override: o.off_all_content_override,
++        all_content_override_items: o.off_all_content_override_items,
+     }
+ }
+ 
++/// The layout this module declares for the selected build.
++pub fn declared_layout() -> Layout {
++    declared_layout_for(offs())
++}
++
+ // ─────────────────────────────────────────────────────────────────────────────────────────────────
+ // Inventory
+ // ─────────────────────────────────────────────────────────────────────────────────────────────────
+@@ -814,6 +893,7 @@ fn no(name: &'static str, detail: impl Into<String>) -> Control {
+ /// | `built-profile` | the shipped spec round-trips and `verify` accepts it |
+ /// | `strictly-more-than-baseline` | ⭐ a *monotonicity* check: the new profile's non-zero set must be a strict superset of the baseline's. Catches a rewrite that quietly drops the SOID or the destination |
+ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
++    let Offs { off_stat_override_present, off_stat_override_block_2, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, .. } = offs();
+     let mut out = Vec::new();
+ 
+     // 1. Layout, re-derived.
+@@ -845,35 +925,35 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
+ 
+     // 2. The stat-override array base, positive: all 7 entries at +0x6CE0.
+     let mut o = base.to_object()?;
+-    o[OFF_STAT_OVERRIDE_PRESENT] = 1;
++    o[off_stat_override_present] = 1;
+     for i in 0..STAT_OVERRIDE_SLOTS {
+-        let at = OFF_STAT_OVERRIDE + i * STAT_OVERRIDE_STRIDE;
++        let at = off_stat_override + i * STAT_OVERRIDE_STRIDE;
+         o[at] = i as u8;
+         o[at + 4..at + 8].copy_from_slice(&(100u32 * (i as u32 + 1)).to_le_bytes());
+     }
+     out.push(match oracle.round_trip(&o, 0x9000) {
+         Ok(_) => ok("stat-array-full", format!(
+-            "{STAT_OVERRIDE_SLOTS} entries at +{OFF_STAT_OVERRIDE:#x} round-trip IDENTICAL")),
++            "{STAT_OVERRIDE_SLOTS} entries at +{off_stat_override:#x} round-trip IDENTICAL")),
+         Err(e) => no("stat-array-full", e.to_string()),
+     });
+ 
+     // 3. ⭐ The SAME array, based eight bytes later - the reading two live documents publish.
+     //    It MUST be refused, at +0x6D18, which is the second override block's `present` bool.
+     let mut o = base.to_object()?;
+-    o[OFF_STAT_OVERRIDE_PRESENT] = 1;
++    o[off_stat_override_present] = 1;
+     for i in 0..STAT_OVERRIDE_SLOTS {
+-        let at = OFF_STAT_OVERRIDE + 8 + i * STAT_OVERRIDE_STRIDE;
++        let at = off_stat_override + 8 + i * STAT_OVERRIDE_STRIDE;
+         o[at] = i as u8;
+         o[at + 4..at + 8].copy_from_slice(&(100u32 * (i as u32 + 1)).to_le_bytes());
+     }
+     out.push(match oracle.round_trip(&o, 0x9000) {
+-        Err(OracleError::Shape(m)) if m.contains(&format!("+{OFF_STAT_OVERRIDE_BLOCK_2:#x}:")) => ok(
++        Err(OracleError::Shape(m)) if m.contains(&format!("+{off_stat_override_block_2:#x}:")) => ok(
+             "stat-array-base-NEGATIVE",
+-            format!("+{:#x} correctly REFUSED - {m}", OFF_STAT_OVERRIDE + 8)),
++            format!("+{:#x} correctly REFUSED - {m}", off_stat_override + 8)),
+         Ok(_) => no("stat-array-base-NEGATIVE", format!(
+             "a 7-entry array at +{:#x} round-tripped. It must not: the 7th entry lands on \
+-             +{OFF_STAT_OVERRIDE_BLOCK_2:#x}, the SECOND override block's present bool. Either the \
+-             schema moved or this control no longer tests anything.", OFF_STAT_OVERRIDE + 8)),
++             +{off_stat_override_block_2:#x}, the SECOND override block's present bool. Either the \
++             schema moved or this control no longer tests anything.", off_stat_override + 8)),
+         Err(e) => no("stat-array-base-NEGATIVE", format!("refused, but not where expected: {e}")),
+     });
+ 
+@@ -916,7 +996,7 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
+                     let nz = d.nonzero_offsets();
+                     out.push(if nz == vec![OFF_SOID, OFF_LAST_ORBITED_DESTINATION] {
+                         ok("baseline-is-empty", format!(
+-                            "{} decodes to EXACTLY 2 non-zero qwords of {STRUCT_SIZE}: +0x00 SOID \
++                            "{} decodes to EXACTLY 2 non-zero qwords of {struct_size}: +0x00 SOID \
+                              {:#018x}, +0x28 destination {:#010x}",
+                             p.display(), d.qword(OFF_SOID), d.qword(OFF_LAST_ORBITED_DESTINATION) as u32))
+                     } else {
+@@ -961,24 +1041,24 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
+     // Negative: the *neighbouring* byte +0x6E4E is NOT a field - if it ever round-trips, fields [7]
+     // and [8] have moved and the offsets above are naming something else.
+     let mut o = base.to_object()?;
+-    o[OFF_ALL_CONTENT_OVERRIDE] = 1;
+-    o[OFF_ALL_CONTENT_OVERRIDE_ITEMS] = 1;
++    o[off_all_content_override] = 1;
++    o[off_all_content_override_items] = 1;
+     out.push(match oracle.round_trip(&o, 0x9000) {
+         Ok((_, d))
+-            if d.object[OFF_ALL_CONTENT_OVERRIDE] == 1
+-                && d.object[OFF_ALL_CONTENT_OVERRIDE_ITEMS] == 1 =>
++            if d.object[off_all_content_override] == 1
++                && d.object[off_all_content_override_items] == 1 =>
+         {
+             ok("all-content-override", format!(
+-                "+{OFF_ALL_CONTENT_OVERRIDE:#x}/+{OFF_ALL_CONTENT_OVERRIDE_ITEMS:#x} survive the \
++                "+{off_all_content_override:#x}/+{off_all_content_override_items:#x} survive the \
+                  codec - 0x808018BB fields [7]/[8], the bools 28 investment predicates read"))
+         }
+         Ok((_, d)) => no("all-content-override", format!(
+             "wrote 1/1, decoded {}/{}",
+-            d.object[OFF_ALL_CONTENT_OVERRIDE], d.object[OFF_ALL_CONTENT_OVERRIDE_ITEMS])),
++            d.object[off_all_content_override], d.object[off_all_content_override_items])),
+         Err(e) => no("all-content-override", e.to_string()),
+     });
+ 
+-    let neighbour = OFF_ALL_CONTENT_OVERRIDE_ITEMS + 1; // +0x6E4E - between [8] and [9] @+0x180
++    let neighbour = off_all_content_override_items + 1; // +0x6E4E - between [8] and [9] @+0x180
+     let mut o = base.to_object()?;
+     o[neighbour] = 1;
+     out.push(match oracle.round_trip(&o, 0x9000) {
+@@ -987,7 +1067,7 @@ pub fn controls(baseline: Option<&Path>) -> Result<Vec<Control>> {
+             format!("+{neighbour:#x} is correctly NOT a field - {m}")),
+         Ok(_) => no("all-content-override-NEGATIVE", format!(
+             "+{neighbour:#x} round-tripped. 0x808018BB's bools are not where this module says they \
+-             are, so +{OFF_ALL_CONTENT_OVERRIDE:#x} is naming the wrong field.")),
++             are, so +{off_all_content_override:#x} is naming the wrong field.")),
+         Err(e) => no("all-content-override-NEGATIVE", format!("refused, but not where expected: {e}")),
+     });
+ 
+@@ -1059,7 +1139,23 @@ mod tests {
+     fn layout_is_derived_from_the_eboot_not_transcribed() {
+         let image = Image::open_reference().expect("pinned eboot");
+         let idx = descriptors::index(&image).expect("descriptor index");
+-        assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout());
++        assert_eq!(derive_layout(&image, &idx).expect("walk"), declared_layout_for(OFFS_0129));
++    }
++
++    /// Build 56578's profile moved `+0x300` from field `[12]` on; the walk must agree. Skips when the
++    /// 56578 image is absent.
++    #[test]
++    fn the_56578_layout_is_derived_from_its_eboot() {
++        let Some(b) = d1_build::builds().ok().and_then(|b| b.all.iter().find(|x| x.id == "later-56578"))
++        else {
++            return;
++        };
++        if !b.eboot_path().exists() {
++            return;
++        }
++        let image = Image::open(b.eboot_path()).unwrap();
++        let idx = descriptors::index(&image).unwrap();
++        assert_eq!(derive_layout(&image, &idx).unwrap(), declared_layout_for(OFFS_56578));
+     }
+ 
+     #[test]
+@@ -1068,7 +1164,7 @@ mod tests {
+             stat_overrides: (0..8).map(|i| (i as u8, 1)).collect(),
+             ..Default::default()
+         };
+-        assert!(matches!(spec.to_object(), Err(OracleError::Shape(_))));
++        assert!(matches!(spec.to_object_for(OFFS_0129), Err(OracleError::Shape(_))));
+     }
+ 
+     #[test]
+@@ -1078,11 +1174,11 @@ mod tests {
+             empty_item_slots: false,
+             ..Default::default()
+         }
+-        .to_object()
++        .to_object_for(OFFS_0129)
+         .unwrap();
+         assert_eq!(u64::from_le_bytes(o[0..8].try_into().unwrap()), DEFAULT_SOID);
+         assert_eq!(u32::from_le_bytes(o[0x28..0x2c].try_into().unwrap()), DESTINATION_OLD_RUSSIA);
+-        assert_eq!(o[OFF_STAT_OVERRIDE_PRESENT], 0);
++        assert_eq!(o[OFFS_0129.off_stat_override_present], 0);
+     }
+ 
+     /// The whole control set, so `cargo test` and `d1-oracle profile controls` cannot drift.
+diff --git a/ps4/d1-server/crates/d1-oracle/src/registry.rs b/ps4/d1-server/crates/d1-oracle/src/registry.rs
+index 673bd65..2a75b92 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/registry.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/registry.rs
+@@ -95,6 +95,7 @@ pub fn build(
+     image: &Image,
+     idx: &Index,
+     root: u32,
++    registry_global: u64,
+ ) -> Result<BTreeSet<u32>> {
+     let tags = closure(image, idx, root);
+     if tags.is_empty() {
+@@ -136,6 +137,6 @@ pub fn build(
+ 
+     let holder = h.alloc(8)?;
+     h.write_u64(holder, registry)?;
+-    h.write_u64(REGISTRY_GLOBAL, holder)?;
++    h.write_u64(registry_global, holder)?;
+     Ok(tags)
+ }
+diff --git a/ps4/d1-server/crates/d1-oracle/src/schema.rs b/ps4/d1-server/crates/d1-oracle/src/schema.rs
+index b58427a..42a91f5 100644
+--- a/ps4/d1-server/crates/d1-oracle/src/schema.rs
++++ b/ps4/d1-server/crates/d1-oracle/src/schema.rs
+@@ -26,6 +26,8 @@ pub const ID_TO_INDEX: u64 = 0x27_FDD0;
+ 
+ pub struct SchemaHarness {
+     pub image: Image,
++    /// This image's codec addresses ([`crate::codec`]). Every codec call goes through these.
++    pub c: &'static crate::codec::CodecAddrs,
+     pub index: Index,
+     pub h: Harness,
+     pub tag: u32,
+@@ -55,6 +57,13 @@ impl SchemaHarness {
+         let index = descriptors::index(&image).map_err(|e| OracleError::Eboot(e.to_string()))?;
+         let d = index.get(tag).ok_or(OracleError::UnknownTag(tag))?;
+         let struct_size = d.struct_size as usize;
++        let c = crate::codec::codec_for(&image.sha256()).ok_or_else(|| {
++            OracleError::Eboot(format!(
++                "no codec address set for image sha256 {} - the codecs would be called at the \
++                 wrong addresses",
++                image.sha256()
++            ))
++        })?;
+         let mut h = Harness::new(&image)?;
+ 
+         let definition = h.alloc(0x80)?;
+@@ -67,11 +76,11 @@ impl SchemaHarness {
+         let manager = h.alloc(0x40)?;
+         h.write_u64(manager, vt)?;
+ 
+-        h.stub(GET_MANAGER, Stub::Return(manager));
++        h.stub(c.get_manager, Stub::Return(manager));
+         h.stub(STUB_ACCESSOR, Stub::Return(definition));
+-        h.stub(ID_TO_INDEX, Stub::Return(0));
++        h.stub(c.id_to_index, Stub::Return(0));
+ 
+-        registry::build(&mut h, &image, &index, tag)?;
++        registry::build(&mut h, &image, &index, tag, c.registry_global)?;
+ 
+         // ⭐ Everything allocated from here on is one call's scratch. Nothing after this line may
+         // allocate scaffolding that outlives a call - `begin_call` releases it.
+@@ -79,6 +88,7 @@ impl SchemaHarness {
+ 
+         Ok(Self {
+             image,
++            c,
+             index,
+             h,
+             tag,
+-- 
+2.55.0.windows.5
+

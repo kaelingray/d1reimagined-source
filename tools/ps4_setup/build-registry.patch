@@ -1,0 +1,1000 @@
+diff --git a/capture-rig/builds.json b/capture-rig/builds.json
+new file mode 100644
+index 0000000..855cf50
+--- /dev/null
++++ b/capture-rig/builds.json
+@@ -0,0 +1,47 @@
++{
++  "schema": 1,
++  "comment": "Executable builds this project can target. D1_BUILD selects one; otherwise `default`. The `reference` build is the one every address in design/, the probe-site catalogues and the fixed BAP tables was measured against. A build with addresses_valid=false has no re-derived addresses yet: tools that use fixed game addresses must refuse it, never reuse the reference's.",
++  "default": "later-56578",
++  "reference": "01.29",
++  "builds": {
++    "01.29": {
++      "app_version": "01.29",
++      "build_label": "52553.16.09.28.1551.evil",
++      "title_id": "CUSA00219",
++      "game_dir": "dumps/patch-01.29-CUSA00219",
++      "packages": "dumps/patch-01.29-CUSA00219/packages",
++      "eboot": "dumps/patch-01.29-CUSA00219/eboot.bin",
++      "eboot_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
++      "eboot_bytes": 29148264,
++      "launch": "dumps/patch-01.29-CUSA00219/eboot.bin",
++      "launch_sha256": "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954",
++      "launch_bytes": 29148264,
++      "manifest": "capture-rig/manifests/full_en.bin",
++      "manifest_sha256": "0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be",
++      "manifest_bytes": 52797,
++      "diag_patch": "patches/CUSA00219-lab-manifest-T1.xml",
++      "addresses_valid": true
++    },
++    "later-56578": {
++      "app_version": null,
++      "package_version": "01.33",
++      "package_version_source": "repack sce_sys/param.sfo VERSION=01.33 (APP_VER=01.00 is the repack's) and every sce_sys/changeinfo app_ver=01.33; the executable has not yet reported its own version",
++      "build_label": "56578.17.04.12.1251.evil",
++      "title_id": "CUSA00219",
++      "game_dir": "dumps/later-56578-CUSA00219/CUSA00219",
++      "packages": "dumps/later-56578-CUSA00219/CUSA00219/packages",
++      "eboot": "dumps/later-56578-CUSA00219/eboot.elf",
++      "eboot_sha256": "672f03411c0503dfbcda804cbb9fb27cdd9a8d73a8bcb71bf0c4f688073b0833",
++      "eboot_bytes": 29249016,
++      "launch": "dumps/later-56578-CUSA00219/CUSA00219/eboot.bin",
++      "launch_sha256": "ebee5df27aca00057f223b96edab461917e1a7e837b4017b7d6d84b0ae7a2a02",
++      "launch_bytes": 29276248,
++      "manifest": "capture-rig/manifests/later-56578/full_en.bin",
++      "manifest_sha256": "50f2b13866773d7143f65218c3205179147406ac3d32d50c536028d9de515bb0",
++      "manifest_bytes": 71003,
++      "manifest_note": "d1-pkg default policy (all generations, neutral + en): 1,392 packages, above the 1,325-descriptor cap measured on the 01.29 client; this client's cap is not yet measured",
++      "diag_patch": null,
++      "addresses_valid": false
++    }
++  }
++}
+diff --git a/capture-rig/d1build.py b/capture-rig/d1build.py
+new file mode 100644
+index 0000000..16bed6f
+--- /dev/null
++++ b/capture-rig/d1build.py
+@@ -0,0 +1,79 @@
++#!/usr/bin/env python3
++# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
++# SPDX-License-Identifier: GPL-2.0-or-later
++"""The executable-build registry, ``capture-rig/builds.json`` (Python side of ``d1-build``).
++
++``$D1_BUILD`` selects a build, otherwise the registry ``default``. The ``reference`` build (01.29)
++is the one every fixed address in ``design/`` and the probe-site catalogues was measured against;
++a build whose ``addresses_valid`` is false has none yet, and address-bearing tools must refuse it.
++
++    python3 capture-rig/d1build.py shell     # export lines for bash launchers
++    python3 capture-rig/d1build.py show      # the selected entry as JSON
++"""
++import json
++import os
++import shlex
++import sys
++from pathlib import Path
++
++HERE = Path(__file__).resolve().parent
++REGISTRY = Path(os.environ.get("D1_BUILDS") or HERE / "builds.json")
++REPO = REGISTRY.resolve().parent.parent
++
++
++def load(build_id=None):
++    doc = json.loads(REGISTRY.read_text(encoding="utf-8"))
++    if doc.get("schema") != 1:
++        raise SystemExit(f"build registry schema {doc.get('schema')} is not 1")
++    want = build_id or os.environ.get("D1_BUILD") or doc["default"]
++    if want not in doc["builds"]:
++        raise SystemExit(f"unknown build {want!r} (D1_BUILD); registry has: {', '.join(doc['builds'])}")
++    entry = dict(doc["builds"][want], id=want, reference=doc["reference"])
++    entry["is_reference"] = want == doc["reference"]
++    return entry
++
++
++def selected():
++    return load()
++
++
++def path(entry, key):
++    """Absolute path for a registry-relative field, or None when the field is unset."""
++    rel = entry.get(key)
++    return None if rel is None else REPO / rel
++
++
++def shell_exports(entry):
++    rows = {
++        "D1_BUILD_ID": entry["id"],
++        "D1_BUILD_LABEL": entry["build_label"],
++        "D1_BUILD_ADDRESSES_VALID": "1" if entry["addresses_valid"] else "0",
++        "D1_BUILD_GAME_DIR": path(entry, "game_dir"),
++        "D1_BUILD_EBOOT": path(entry, "eboot"),
++        "D1_BUILD_EBOOT_SHA256": entry["eboot_sha256"],
++        "D1_BUILD_EBOOT_BYTES": entry["eboot_bytes"],
++        "D1_BUILD_LAUNCH": path(entry, "launch"),
++        "D1_BUILD_LAUNCH_SHA256": entry["launch_sha256"],
++        "D1_BUILD_LAUNCH_BYTES": entry["launch_bytes"],
++        "D1_BUILD_MANIFEST": path(entry, "manifest"),
++        "D1_BUILD_MANIFEST_SHA256": entry.get("manifest_sha256") or "",
++        "D1_BUILD_MANIFEST_BYTES": entry.get("manifest_bytes") or "",
++        "D1_BUILD_PATCH": path(entry, "diag_patch") or "",
++    }
++    return "\n".join(f"export {k}={shlex.quote(str(v))}" for k, v in rows.items())
++
++
++def main(argv):
++    cmd = argv[1] if len(argv) > 1 else "show"
++    build_id = argv[2] if len(argv) > 2 else None
++    entry = load(build_id)
++    if cmd == "shell":
++        print(shell_exports(entry))
++    elif cmd == "show":
++        print(json.dumps(entry, indent=2))
++    else:
++        raise SystemExit("usage: d1build.py [show|shell] [build-id]")
++
++
++if __name__ == "__main__":
++    main(sys.argv)
+diff --git a/capture-rig/diagnostic-catalogue.py b/capture-rig/diagnostic-catalogue.py
+index 27a030d..e01b4b6 100755
+--- a/capture-rig/diagnostic-catalogue.py
++++ b/capture-rig/diagnostic-catalogue.py
+@@ -82,12 +82,23 @@ try:
+ except ImportError:  # pragma: no cover
+     sys.exit("capstone is required:  pip install capstone")
+ 
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++import d1build  # noqa: E402  (capture-rig/builds.json; D1_BUILD selects)
++
+ REPO = Path(__file__).resolve().parent.parent
+-EBOOT = REPO / "dumps" / "patch-01.29-CUSA00219" / "eboot.bin"
++BUILD = d1build.selected()
++EBOOT = d1build.path(BUILD, "eboot")
++# The census controls below were measured on the 01.29 reference, whose ELF hash this is. On any
++# other build they are expected to fail until re-derived, and outputs go to a per-build directory
++# so the reference catalogue in design/ is never overwritten by another build's scan.
+ EBOOT_SHA256 = "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954"
+ RUNS = REPO / "runs"
+-OUT_MD = REPO / "design" / "diagnostic-catalogue.md"
+-OUT_TSV = REPO / "capture-rig" / "diagnostic-catalogue.tsv"
++if BUILD["is_reference"]:
++    OUT_MD = REPO / "design" / "diagnostic-catalogue.md"
++    OUT_TSV = REPO / "capture-rig" / "diagnostic-catalogue.tsv"
++else:
++    OUT_MD = REPO / "capture-rig" / "derived" / BUILD["id"] / "diagnostic-catalogue.md"
++    OUT_TSV = REPO / "capture-rig" / "derived" / BUILD["id"] / "diagnostic-catalogue.tsv"
+ 
+ PROLOGUE = b"\x55\x48\x89\xe5"
+ 
+@@ -718,7 +729,8 @@ def controls(img: Image, scan: Scan, rows: list[Row], rtti: list[Row],
+     def c(name: str, ok: bool, detail: str = "") -> None:
+         out.append((name, bool(ok), detail))
+ 
+-    c("build identity (sha256) == pinned 01.29 eboot", img.sha256 == EBOOT_SHA256, img.sha256)
++    c("build identity (sha256) == 01.29 reference the census was measured on",
++      img.sha256 == EBOOT_SHA256, f"{img.sha256} ({BUILD['id']})")
+ 
+     # -- the decoder, against guest-diagnostics.md §3's independently-derived census -------
+     c("`call 0xe4da0` sites == 1632 (guest-diagnostics.md §3)",
+@@ -1123,6 +1135,7 @@ def main() -> int:
+         print(f"wrote {args.json}", file=sys.stderr)
+ 
+     if args.write:
++        OUT_TSV.parent.mkdir(parents=True, exist_ok=True)
+         written = write_tsv(OUT_TSV, rows, thresholds, img.sha256)
+         # ⭐ READ THE GUARD BACK, in the same breath as the write: a guard that is never parsed
+         # is decoration.  ⚠ The axis tested is "does the provenance line ROUND-TRIP", NOT "is the
+diff --git a/capture-rig/probe-guards.py b/capture-rig/probe-guards.py
+index af9bce6..7b0cd2e 100755
+--- a/capture-rig/probe-guards.py
++++ b/capture-rig/probe-guards.py
+@@ -47,6 +47,9 @@ import re
+ import subprocess
+ import sys
+ 
++sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
++import d1build  # noqa: E402  (capture-rig/builds.json; D1_BUILD selects)
++
+ REPO = pathlib.Path(__file__).resolve().parent.parent
+ D1_EBOOT = REPO / "d1-server" / "target" / "release" / "d1-eboot"
+ TRACER_SOURCE = pathlib.Path(
+@@ -253,8 +256,9 @@ def main() -> int:
+     parser.add_argument(
+         "--eboot",
+         type=pathlib.Path,
+-        default=REPO / "dumps" / "patch-01.29-CUSA00219" / "eboot.bin",
+-        help="image the guards are derived from; its sha256 is stamped into the catalog",
++        default=d1build.path(d1build.selected(), "eboot"),
++        help="image the guards are derived from (default: the selected build, D1_BUILD); "
++        "its sha256 is stamped into the catalog",
+     )
+     args = parser.parse_args()
+ 
+diff --git a/capture-rig/run-boot.sh b/capture-rig/run-boot.sh
+index edd4de0..484d685 100755
+--- a/capture-rig/run-boot.sh
++++ b/capture-rig/run-boot.sh
+@@ -38,12 +38,18 @@ if [[ "$D1_LAUNCH_MODE" != native ]]; then
+     export OPERATOR_PAD=1 PRESS=0 D1_ACTIVITY_HOST=0
+ fi
+ 
++# ── The selected executable build (capture-rig/builds.json; D1_BUILD selects, default = registry) ──
++# Every identity gate below reads these. Fixed addresses (patches, probe sites) belong to ONE build:
++# a build with D1_BUILD_ADDRESSES_VALID=0 has none re-derived and gets no client patch by default.
++eval "$(python3 "$REPO/capture-rig/d1build.py" shell)"
++echo "build:    $D1_BUILD_ID ($D1_BUILD_LABEL) addresses_valid=$D1_BUILD_ADDRESSES_VALID"
++
+ # ── The pinned environment ────────────────────────────────────────────────────────────────────────
+ # Each line is a gate that is already passed.  Removing one re-closes that gate.
+ 
+ # The content manifest.  Without it the responder serves a 2-byte body and the client halts at
+ # bap_signin with `failed to load bootstrap_patchable`.  Requires the unsigned-manifest lab patch.
+-export D1_MANIFEST_FILE="${D1_MANIFEST_FILE:-$REPO/capture-rig/manifests/full_en.bin}"
++export D1_MANIFEST_FILE="${D1_MANIFEST_FILE:-$D1_BUILD_MANIFEST}"
+ 
+ # The investment message-206 (`fetch_family`) RESPONSE BODY.
+ #
+@@ -281,12 +287,13 @@ mkdir -p "$RUN_OUT"
+ export D1_ACCOUNT_TRACE_OUT="${D1_ACCOUNT_TRACE_OUT:-$RUN_OUT/account-trace.bin}"
+ 
+ # The patch.  Default is the lab baseline: diagnostics T=1 + unsigned manifest, no experiment.
+-export DIAG_PATCH="${DIAG_PATCH:-${PATCH_ARG:-$REPO/patches/CUSA00219-lab-manifest-T1.xml}}"
++export DIAG_PATCH="${DIAG_PATCH:-${PATCH_ARG:-$D1_BUILD_PATCH}}"
++[[ -n "$DIAG_PATCH" ]] || { echo "REFUSING: build $D1_BUILD_ID has no client patch of its own (patches are address-specific); pass one explicitly" >&2; exit 2; }
+ [[ -n "$PATCH_ARG" ]] && DIAG_PATCH="$(cd "$(dirname "$PATCH_ARG")" && pwd)/$(basename "$PATCH_ARG")"
+ 
+ # ⚠ ABSOLUTE path required: run-signon-experiment.sh `cd`s into the emulator directory before exec,
+ # so a relative game path becomes "Game ID or file path not found" and the run dies in 2 seconds.
+-GAME="${GAME:-$REPO/dumps/patch-01.29-CUSA00219/eboot.bin}"
++GAME="${GAME:-$D1_BUILD_LAUNCH}"
+ [[ "$GAME" = /* ]] || { echo "GAME must be an absolute path" >&2; exit 1; }
+ 
+ # Input ownership. TWO MODES, and picking the wrong one wastes a boot.
+@@ -354,13 +361,13 @@ if [[ "${OPERATOR_PAD:-0}" != "1" ]]; then
+ fi
+ [[ $fail -eq 0 ]] || exit 1
+ if [[ "$D1_LAUNCH_MODE" != plan ]]; then
+-    [[ "$(stat -c%s "$D1_MANIFEST_FILE")" == 52797 && "$(sha256sum "$D1_MANIFEST_FILE" | cut -d' ' -f1)" == 0c5bba3c63e9b68021b536513639cfc8896ec736950323e4ab06c5d7ed0770be ]] || {
+-        echo "REFUSING: manifest does not match exact 01.29 English pin" >&2; exit 2;
++    [[ -n "$D1_BUILD_MANIFEST_SHA256" && "$(stat -c%s "$D1_MANIFEST_FILE")" == "$D1_BUILD_MANIFEST_BYTES" && "$(sha256sum "$D1_MANIFEST_FILE" | cut -d' ' -f1)" == "$D1_BUILD_MANIFEST_SHA256" ]] || {
++        echo "REFUSING: manifest does not match the recorded $D1_BUILD_ID English pin" >&2; exit 2;
+     }
+ fi
+ if [[ "$D1_LAUNCH_MODE" == native ]]; then
+-    [[ "$(stat -c%s "$GAME")" == 29148264 && "$(sha256sum "$GAME" | cut -d' ' -f1)" == 7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954 ]] || {
+-        echo "REFUSING: executable does not match exact CUSA00219 01.29" >&2; exit 2;
++    [[ "$(stat -c%s "$GAME")" == "$D1_BUILD_LAUNCH_BYTES" && "$(sha256sum "$GAME" | cut -d' ' -f1)" == "$D1_BUILD_LAUNCH_SHA256" ]] || {
++        echo "REFUSING: executable does not match build $D1_BUILD_ID" >&2; exit 2;
+     }
+ fi
+ 
+diff --git a/d1-server/Cargo.toml b/d1-server/Cargo.toml
+index 3253c46..1bd2e75 100644
+--- a/d1-server/Cargo.toml
++++ b/d1-server/Cargo.toml
+@@ -4,6 +4,7 @@ members = [
+     "crates/d1",
+     "crates/d1-activity-host",
+     "crates/d1-bap",
++    "crates/d1-build",
+     "crates/d1-eboot",
+     "crates/d1-forge",
+     "crates/d1-harness",
+diff --git a/d1-server/crates/d1-bap/src/main.rs b/d1-server/crates/d1-bap/src/main.rs
+index cfec2c6..db28383 100644
+--- a/d1-server/crates/d1-bap/src/main.rs
++++ b/d1-server/crates/d1-bap/src/main.rs
+@@ -19,7 +19,7 @@ use std::process::ExitCode;
+ 
+ use d1_bap::derive::{self, Reader, Thunk};
+ use d1_eboot::descriptors;
+-use d1_eboot::image::PINNED_EBOOT;
++use d1_eboot::image::default_eboot;
+ 
+ const USAGE: &str = "\
+ d1-bap - derivation and controls for the BAP tables (d1-bap/src/tables.rs)
+@@ -51,7 +51,7 @@ fn parse_args() -> Result<Args, String> {
+     }
+     let mut args = Args {
+         cmd,
+-        eboot: PINNED_EBOOT.to_string(),
++        eboot: default_eboot(),
+         defs: derive::PINNED_DEFS.to_string(),
+         tsv: None,
+     };
+diff --git a/d1-server/crates/d1-build/Cargo.toml b/d1-server/crates/d1-build/Cargo.toml
+new file mode 100644
+index 0000000..ddd04c8
+--- /dev/null
++++ b/d1-server/crates/d1-build/Cargo.toml
+@@ -0,0 +1,17 @@
++# SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
++# SPDX-License-Identifier: GPL-2.0-or-later
++[package]
++name = "d1-build"
++description = "The executable-build registry (capture-rig/builds.json): which owned build a tool targets, and its identity pins"
++version.workspace = true
++edition.workspace = true
++license.workspace = true
++publish.workspace = true
++
++[dependencies]
++serde.workspace = true             # MIT OR Apache-2.0
++serde_json.workspace = true        # MIT OR Apache-2.0
++
++[lib]
++name = "d1_build"
++path = "src/lib.rs"
+diff --git a/d1-server/crates/d1-build/src/lib.rs b/d1-server/crates/d1-build/src/lib.rs
+new file mode 100644
+index 0000000..5c93ed9
+--- /dev/null
++++ b/d1-server/crates/d1-build/src/lib.rs
+@@ -0,0 +1,239 @@
++// SPDX-FileCopyrightText: Copyright 2026 Destiny 1 Preservation Project
++// SPDX-License-Identifier: GPL-2.0-or-later
++//! The executable-build registry: `capture-rig/builds.json`.
++//!
++//! One place that says which owned executable a tool targets. `$D1_BUILD` selects an entry;
++//! otherwise the registry's `default`. The registry's `reference` build is the one every fixed
++//! address in `design/`, the probe-site catalogues and the BAP tables was measured against.
++//!
++//! ⚠ A build whose `addresses_valid` is false has no re-derived addresses. Anything that uses a
++//! fixed game address must check [`Build::addresses_valid`] (or compare the image hash with the
++//! catalogue's own derivation hash) and refuse, never fall back to the reference's numbers.
++//!
++//! `$D1_BUILDS` overrides the registry path (tests, alternate checkouts). Relative paths inside
++//! the registry are relative to the repository root, which is the registry's grandparent.
++
++use std::collections::BTreeMap;
++use std::fmt;
++use std::path::{Path, PathBuf};
++use std::sync::OnceLock;
++
++use serde::Deserialize;
++
++/// The registry beside the source tree.
++pub const DEFAULT_REGISTRY: &str =
++    concat!(env!("CARGO_MANIFEST_DIR"), "/../../../capture-rig/builds.json");
++
++#[derive(Debug, Clone, Deserialize)]
++pub struct Build {
++    #[serde(skip)]
++    pub id: String,
++    #[serde(skip)]
++    pub root: PathBuf,
++    /// The game's own `APP_VER`, once observed. `None` until the build reports it.
++    pub app_version: Option<String>,
++    pub build_label: String,
++    pub title_id: String,
++    pub game_dir: String,
++    pub packages: String,
++    /// The plain ELF static tools read.
++    pub eboot: String,
++    pub eboot_sha256: String,
++    pub eboot_bytes: u64,
++    /// The file the emulator is launched with (may be the SELF wrapper of `eboot`).
++    pub launch: String,
++    pub launch_sha256: String,
++    pub launch_bytes: u64,
++    pub manifest: String,
++    /// `None` until the manifest for this build has been generated and recorded.
++    pub manifest_sha256: Option<String>,
++    pub manifest_bytes: Option<u64>,
++    /// A client patch written for this build, if any. Patches are address-specific.
++    pub diag_patch: Option<String>,
++    pub addresses_valid: bool,
++}
++
++#[derive(Debug, Deserialize)]
++struct Registry {
++    schema: u32,
++    default: String,
++    reference: String,
++    builds: BTreeMap<String, Build>,
++}
++
++#[derive(Debug)]
++pub enum Error {
++    Io(PathBuf, std::io::Error),
++    Parse(PathBuf, serde_json::Error),
++    Schema(u32),
++    Unknown { id: String, known: Vec<String> },
++}
++
++impl fmt::Display for Error {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        match self {
++            Self::Io(p, e) => write!(f, "build registry {}: {e}", p.display()),
++            Self::Parse(p, e) => write!(f, "build registry {}: {e}", p.display()),
++            Self::Schema(s) => write!(f, "build registry schema {s} is not 1"),
++            Self::Unknown { id, known } => {
++                write!(f, "unknown build `{id}` (D1_BUILD); registry has: {}", known.join(", "))
++            }
++        }
++    }
++}
++
++impl std::error::Error for Error {}
++
++impl Build {
++    /// Resolve a registry-relative path against the repository root.
++    pub fn path(&self, rel: &str) -> PathBuf {
++        self.root.join(rel)
++    }
++    pub fn eboot_path(&self) -> PathBuf {
++        self.path(&self.eboot)
++    }
++    pub fn launch_path(&self) -> PathBuf {
++        self.path(&self.launch)
++    }
++    pub fn packages_path(&self) -> PathBuf {
++        self.path(&self.packages)
++    }
++    pub fn manifest_path(&self) -> PathBuf {
++        self.path(&self.manifest)
++    }
++}
++
++/// A loaded registry: every build, plus which one is selected and which is the reference.
++#[derive(Debug)]
++pub struct Builds {
++    pub selected: Build,
++    pub reference: Build,
++    pub all: Vec<Build>,
++}
++
++/// Load `registry`, selecting `want` (or the registry default).
++pub fn load(registry: &Path, want: Option<&str>) -> Result<Builds, Error> {
++    let text = std::fs::read_to_string(registry).map_err(|e| Error::Io(registry.into(), e))?;
++    let reg: Registry =
++        serde_json::from_str(&text).map_err(|e| Error::Parse(registry.into(), e))?;
++    if reg.schema != 1 {
++        return Err(Error::Schema(reg.schema));
++    }
++    let root = registry
++        .parent()
++        .and_then(Path::parent)
++        .map(Path::to_path_buf)
++        .unwrap_or_default();
++    let all: Vec<Build> = reg
++        .builds
++        .into_iter()
++        .map(|(id, mut b)| {
++            b.id = id;
++            b.root = root.clone();
++            b
++        })
++        .collect();
++    let find = |id: &str| {
++        all.iter().find(|b| b.id == id).cloned().ok_or_else(|| Error::Unknown {
++            id: id.to_string(),
++            known: all.iter().map(|b| b.id.clone()).collect(),
++        })
++    };
++    let selected = find(want.unwrap_or(&reg.default))?;
++    let reference = find(&reg.reference)?;
++    Ok(Builds { selected, reference, all })
++}
++
++fn registry_path() -> PathBuf {
++    std::env::var_os("D1_BUILDS").map(PathBuf::from).unwrap_or_else(|| DEFAULT_REGISTRY.into())
++}
++
++static LOADED: OnceLock<Result<Builds, String>> = OnceLock::new();
++
++/// The process-wide registry, honouring `$D1_BUILDS` and `$D1_BUILD`.
++pub fn builds() -> Result<&'static Builds, String> {
++    LOADED
++        .get_or_init(|| {
++            let want = std::env::var("D1_BUILD").ok().filter(|s| !s.is_empty());
++            load(&registry_path(), want.as_deref()).map_err(|e| e.to_string())
++        })
++        .as_ref()
++        .map_err(Clone::clone)
++}
++
++/// The selected build. Panics with the registry error: a tool with no build identity must not run.
++pub fn selected() -> &'static Build {
++    &builds().unwrap_or_else(|e| panic!("{e}")).selected
++}
++
++/// The address reference build (01.29).
++pub fn reference() -> &'static Build {
++    &builds().unwrap_or_else(|e| panic!("{e}")).reference
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn fixture(dir: &Path) -> PathBuf {
++        let rig = dir.join("capture-rig");
++        std::fs::create_dir_all(&rig).unwrap();
++        let entry = |label: &str, valid: bool| {
++            format!(
++                r#"{{"app_version":null,"build_label":"{label}","title_id":"T","game_dir":"g",
++                "packages":"g/packages","eboot":"g/e.elf","eboot_sha256":"aa","eboot_bytes":1,
++                "launch":"g/eboot.bin","launch_sha256":"bb","launch_bytes":2,"manifest":"m.bin",
++                "manifest_sha256":null,"manifest_bytes":null,"diag_patch":null,
++                "addresses_valid":{valid}}}"#
++            )
++        };
++        let text = format!(
++            r#"{{"schema":1,"default":"new","reference":"old","builds":{{"old":{},"new":{}}}}}"#,
++            entry("1.old", true),
++            entry("2.new", false)
++        );
++        let p = rig.join("builds.json");
++        std::fs::write(&p, text).unwrap();
++        p
++    }
++
++    fn scratch(name: &str) -> PathBuf {
++        let d = std::env::temp_dir().join(format!("d1-build-{name}-{}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&d);
++        d
++    }
++
++    #[test]
++    fn default_selection_reference_and_root_relative_paths() {
++        let d = scratch("default");
++        let b = load(&fixture(&d), None).unwrap();
++        assert_eq!(b.selected.id, "new");
++        assert!(!b.selected.addresses_valid);
++        assert_eq!(b.reference.id, "old");
++        assert!(b.reference.addresses_valid);
++        assert_eq!(b.selected.eboot_path(), d.join("g/e.elf"));
++        assert_eq!(b.selected.manifest_sha256, None);
++        std::fs::remove_dir_all(&d).unwrap();
++    }
++
++    #[test]
++    fn explicit_selection_and_unknown_build_is_refused() {
++        let d = scratch("explicit");
++        let p = fixture(&d);
++        assert_eq!(load(&p, Some("old")).unwrap().selected.build_label, "1.old");
++        let e = load(&p, Some("01.33")).unwrap_err().to_string();
++        assert!(e.contains("unknown build `01.33`") && e.contains("new"), "{e}");
++        std::fs::remove_dir_all(&d).unwrap();
++    }
++
++    #[test]
++    fn the_checked_in_registry_parses_and_keeps_the_reference_pin() {
++        let b = load(Path::new(DEFAULT_REGISTRY), Some("01.29")).unwrap();
++        assert_eq!(
++            b.reference.eboot_sha256,
++            "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954"
++        );
++        assert!(b.reference.addresses_valid);
++        assert!(b.all.iter().all(|x| x.eboot_sha256.len() == 64 && x.launch_sha256.len() == 64));
++    }
++}
+diff --git a/d1-server/crates/d1-eboot/Cargo.toml b/d1-server/crates/d1-eboot/Cargo.toml
+index ec73d2d..33cee8b 100644
+--- a/d1-server/crates/d1-eboot/Cargo.toml
++++ b/d1-server/crates/d1-eboot/Cargo.toml
+@@ -9,6 +9,7 @@ license.workspace = true
+ publish.workspace = true
+ 
+ [dependencies]
++d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
+ # Licences checked (CLAUDE.md non-negotiable: nothing incompatible with GPL-2.0-or-later,
+ # and nothing sourced from AGPL-3.0 or unlicensed prior art).
+ anyhow.workspace = true            # MIT OR Apache-2.0
+diff --git a/d1-server/crates/d1-eboot/src/image.rs b/d1-server/crates/d1-eboot/src/image.rs
+index 0d32524..9ba5c13 100644
+--- a/d1-server/crates/d1-eboot/src/image.rs
++++ b/d1-server/crates/d1-eboot/src/image.rs
+@@ -44,17 +44,33 @@ pub const PF_X: u32 = 1;
+ /// `push rbp; mov rbp,rsp` - the only start a disassembly may be anchored on (ATLAS §4.5).
+ pub const PROLOGUE: [u8; 4] = [0x55, 0x48, 0x89, 0xE5];
+ 
+-/// The pinned build this project analyses. Everything in `design/` is measured against it.
++/// The 01.29 **reference** build. Everything in `design/` is measured against it, and every
++/// fixed address in this workspace is an address in this image. Which build a tool actually
++/// opens is [`default_eboot`] (`$D1_EBOOT`, else the `capture-rig/builds.json` selection).
+ pub const PINNED_EBOOT: &str =
+     concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/eboot.bin");
+ 
+-/// SHA-256 of the pinned 01.29 eboot - the build-identity gate (ATLAS Layer 1).
++/// SHA-256 of the 01.29 reference eboot - the address-reference identity (ATLAS Layer 1).
+ /// Re-derived here from the file, and cross-checked against
+ /// `dumps/patch-01.29-CUSA00219/MANIFEST.sha256` line 1650 (`eboot.bin  29148264`).
+ pub const PINNED_EBOOT_SHA256: &str =
+     "7271fcb926401df8defb126cb8eb2b247134138b81e401bbacb2ab60791b7954";
+ pub const PINNED_EBOOT_LEN: usize = 29_148_264;
+ 
++/// The image a tool opens when not told otherwise: `$D1_EBOOT`, else the selected build's ELF.
++pub fn default_eboot() -> String {
++    std::env::var("D1_EBOOT")
++        .unwrap_or_else(|_| d1_build::selected().eboot_path().to_string_lossy().into_owned())
++}
++
++/// Whether `sha256` is an image whose fixed addresses have been derived (today: the reference).
++/// Address-bearing code must refuse any other image rather than read a neighbour's bytes.
++pub fn addresses_apply(sha256: &str) -> bool {
++    d1_build::builds()
++        .map(|b| b.all.iter().any(|x| x.addresses_valid && x.eboot_sha256 == sha256))
++        .unwrap_or(sha256 == PINNED_EBOOT_SHA256)
++}
++
+ #[derive(Debug)]
+ pub enum ImageError {
+     NotElf64Le,
+diff --git a/d1-server/crates/d1-eboot/src/main.rs b/d1-server/crates/d1-eboot/src/main.rs
+index 213d3a1..45cf12c 100644
+--- a/d1-server/crates/d1-eboot/src/main.rs
++++ b/d1-server/crates/d1-eboot/src/main.rs
+@@ -48,7 +48,7 @@ use d1_eboot::disasm::{self, Anchor};
+ use d1_eboot::dynsym;
+ use d1_eboot::fieldxref;
+ use d1_eboot::functions;
+-use d1_eboot::image::{Image, PINNED_EBOOT, PINNED_EBOOT_SHA256};
++use d1_eboot::image::{addresses_apply, default_eboot, Image, PINNED_EBOOT_SHA256};
+ use d1_eboot::ladder;
+ use d1_eboot::nametab;
+ use d1_eboot::reloc;
+@@ -69,7 +69,7 @@ fn parse_int(s: &str) -> std::result::Result<u64, String> {
+ #[derive(Parser)]
+ #[command(name = "d1-eboot", about = "Static analysis of the Destiny 1 PS4 eboot", version)]
+ struct Cli {
+-    /// Image to analyse. Defaults to $D1_EBOOT, else the pinned 01.29 eboot.
++    /// Image to analyse. Defaults to $D1_EBOOT, else the selected build (capture-rig/builds.json, $D1_BUILD).
+     #[arg(long, global = true)]
+     eboot: Option<String>,
+     /// Machine-readable output.
+@@ -322,8 +322,7 @@ fn run() -> Result<ExitCode> {
+     let path = cli
+         .eboot
+         .clone()
+-        .or_else(|| std::env::var("D1_EBOOT").ok())
+-        .unwrap_or_else(|| PINNED_EBOOT.to_string());
++        .unwrap_or_else(default_eboot);
+     let image = Image::open(&path).with_context(|| format!("opening {path}"))?;
+ 
+     match &cli.cmd {
+@@ -1429,10 +1428,20 @@ fn cmd_controls(image: &Image, json: bool) -> Result<ExitCode> {
+     let mut rows: Vec<(String, bool, String)> = Vec::new();
+ 
+     let sha = image.sha256();
++    let known = d1_build::builds()
++        .ok()
++        .and_then(|b| b.all.iter().find(|x| x.eboot_sha256 == sha).map(|x| x.id.clone()));
+     rows.push((
+-        "build identity (sha256)".into(),
+-        sha == PINNED_EBOOT_SHA256,
+-        sha.clone(),
++        "build identity (sha256) is a registered build".into(),
++        known.is_some(),
++        format!("{sha} = {}", known.as_deref().unwrap_or("UNREGISTERED")),
++    ));
++    // Every row below is a historical constant of the 01.29 reference. On any other build they
++    // are expected to fail until re-derived; this row says so up front instead of 20 red rows.
++    rows.push((
++        "fixed addresses apply to this image (reference, or re-derived)".into(),
++        addresses_apply(&sha),
++        if sha == PINNED_EBOOT_SHA256 { "01.29 reference".into() } else { "not re-derived".into() },
+     ));
+ 
+     let t = reloc::tables(image)?;
+diff --git a/d1-server/crates/d1-harness/Cargo.toml b/d1-server/crates/d1-harness/Cargo.toml
+index 425cef4..6ab7d97 100644
+--- a/d1-server/crates/d1-harness/Cargo.toml
++++ b/d1-server/crates/d1-harness/Cargo.toml
+@@ -15,6 +15,7 @@ name = "d1-harness"
+ path = "src/main.rs"
+ 
+ [dependencies]
++d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
+ anyhow.workspace = true
+ clap.workspace = true
+ serde.workspace = true
+diff --git a/d1-server/crates/d1-harness/src/controls.rs b/d1-server/crates/d1-harness/src/controls.rs
+index 33a7cc4..f665697 100644
+--- a/d1-server/crates/d1-harness/src/controls.rs
++++ b/d1-server/crates/d1-harness/src/controls.rs
+@@ -207,7 +207,12 @@ fn run_boot_defaults() -> Option<BTreeMap<String, String>> {
+     Some(
+         shell_defaults(&text)
+             .into_iter()
+-            .map(|(k, v)| (k, v.replace("${REPO}", &repo).replace("$REPO", &repo)))
++            .map(|(k, v)| {
++                // The build registry's exports (`d1build.py shell`) are expanded the same way.
++                let manifest = format!("{repo}/{}", d1_build::selected().manifest);
++                let v = v.replace("${D1_BUILD_MANIFEST}", &manifest).replace("$D1_BUILD_MANIFEST", &manifest);
++                (k, v.replace("${REPO}", &repo).replace("$REPO", &repo))
++            })
+             .collect(),
+     )
+ }
+diff --git a/d1-server/crates/d1-harness/src/layout.rs b/d1-server/crates/d1-harness/src/layout.rs
+index e470e19..a406d1c 100644
+--- a/d1-server/crates/d1-harness/src/layout.rs
++++ b/d1-server/crates/d1-harness/src/layout.rs
+@@ -456,14 +456,20 @@ impl Default for Options {
+             root: format!("{repo}/runs"),
+             emulator_bin: concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../shadPS4-d1trace/build-d1trace/shadps4").into(),
+             emulator_cwd: concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../shadPS4-main").into(),
+-            game: format!("{repo}/dumps/patch-01.29-CUSA00219/eboot.bin"),
+-            patch: format!("{repo}/patches/CUSA00219-lab-manifest-T1.xml"),
++            game: format!("{repo}/{}", d1_build::selected().launch),
++            patch: build_patch(&repo),
+             anchor_a: true,
+             repo,
+         }
+     }
+ }
+ 
++/// The selected build's client patch (`capture-rig/builds.json`). Patches are address-specific:
++/// a build with no patch of its own gets an empty path, never the reference build's patch.
++pub fn build_patch(repo: &str) -> String {
++    d1_build::selected().diag_patch.as_ref().map(|p| format!("{repo}/{p}")).unwrap_or_default()
++}
++
+ /// Repo root: `$D1_REPO` if set, else derived from this crate's compile-time location.
+ pub fn default_repo() -> String {
+     if let Ok(p) = std::env::var("D1_REPO") {
+@@ -485,7 +491,7 @@ pub fn build(opts: &Options) -> Layout {
+     let run_id = format!("p2p-{}", token(seed, "run", 12));
+     let base = format!("{}/{}", opts.root, run_id);
+ 
+-    let manifest = format!("{}/capture-rig/manifests/full_en.bin", opts.repo);
++    let manifest = format!("{}/{}", opts.repo, d1_build::selected().manifest);
+     let profile = format!("{}/capture-rig/profiles/profile-old-russia.bin", opts.repo);
+     let responder = format!("{}/d1-server/target/release/d1-responder", opts.repo);
+     let shadnet = format!("{}/d1-server/target/release/shadnet-server", opts.repo);
+@@ -716,16 +722,13 @@ pub fn build(opts: &Options) -> Layout {
+                 format!("{proot}/config/tls.key"),
+             ],
+         );
+-        argv.insert(
+-            "emulator".into(),
+-            vec![
+-                opts.emulator_bin.clone(),
+-                "-p".into(),
+-                opts.patch.clone(),
+-                "-g".into(),
+-                opts.game.clone(),
+-            ],
+-        );
++        // No `-p` at all when the selected build has no patch of its own (see `build_patch`).
++        let mut emulator = vec![opts.emulator_bin.clone()];
++        if !opts.patch.is_empty() {
++            emulator.extend(["-p".into(), opts.patch.clone()]);
++        }
++        emulator.extend(["-g".into(), opts.game.clone()]);
++        argv.insert("emulator".into(), emulator);
+         // 2026-08-11: the pad is `d1-harness pad run` (the Rust port of
+         // `capture-rig/virtual-pad.py`), which grew `--vendor/--product` precisely for this
+         // seam - the Python hardcodes one identity, so two of it are one device to SDL.
+diff --git a/d1-server/crates/d1-harness/src/main.rs b/d1-server/crates/d1-harness/src/main.rs
+index cf1e0ed..69a033f 100644
+--- a/d1-server/crates/d1-harness/src/main.rs
++++ b/d1-server/crates/d1-harness/src/main.rs
+@@ -198,8 +198,8 @@ fn options(a: &LayoutArgs) -> Options {
+     if let Some(r) = &a.repo {
+         o.repo = r.clone();
+         o.root = format!("{r}/runs");
+-        o.game = format!("{r}/dumps/patch-01.29-CUSA00219/eboot.bin");
+-        o.patch = format!("{r}/patches/CUSA00219-lab-manifest-T1.xml");
++        o.game = format!("{r}/{}", d1_build::selected().launch);
++        o.patch = d1_harness::layout::build_patch(r);
+     }
+     if let Some(r) = &a.root {
+         o.root = r.clone();
+diff --git a/d1-server/crates/d1-oracle/Cargo.toml b/d1-server/crates/d1-oracle/Cargo.toml
+index 7396605..685fdf6 100644
+--- a/d1-server/crates/d1-oracle/Cargo.toml
++++ b/d1-server/crates/d1-oracle/Cargo.toml
+@@ -9,6 +9,7 @@ license.workspace = true
+ publish.workspace = true
+ 
+ [dependencies]
++d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
+ # ── LICENCE AUDIT (CLAUDE.md non-negotiable) ─────────────────────────────────────────────────────
+ # `unicorn-engine` 2.1.5 and `unicorn-engine-sys` 2.1.5 are **GPL-2.0** (crates.io metadata and the
+ # vendored `COPYING`).  It bundles QEMU (GPL-2.0) and `glib_compat` (LGPL-2.1, `COPYING.LGPL2`).
+diff --git a/d1-server/crates/d1-oracle/src/oodle.rs b/d1-server/crates/d1-oracle/src/oodle.rs
+index bd7a15d..4465b99 100644
+--- a/d1-server/crates/d1-oracle/src/oodle.rs
++++ b/d1-server/crates/d1-oracle/src/oodle.rs
+@@ -81,9 +81,12 @@ const IO_SPAN: u64 = 0x10_0000;
+ pub const PINNED_PKGDIR: &str =
+     concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/packages");
+ 
+-/// The default package directory: `$D1_PKGDIR`, else [`PINNED_PKGDIR`].
++/// The default package directory: `$D1_PKGDIR`, else the selected build's packages
++/// (`capture-rig/builds.json`). [`PINNED_PKGDIR`] remains the 01.29 reference estate.
+ pub fn default_pkgdir() -> PathBuf {
+-    std::env::var_os("D1_PKGDIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(PINNED_PKGDIR))
++    std::env::var_os("D1_PKGDIR")
++        .map(PathBuf::from)
++        .unwrap_or_else(|| d1_build::selected().packages_path())
+ }
+ 
+ /// One decode's result. `consumed != stored.len()` is a **failure**, surfaced rather than truncated.
+diff --git a/d1-server/crates/d1-pkg/Cargo.toml b/d1-server/crates/d1-pkg/Cargo.toml
+index 952cb77..a71c9ac 100644
+--- a/d1-server/crates/d1-pkg/Cargo.toml
++++ b/d1-server/crates/d1-pkg/Cargo.toml
+@@ -11,6 +11,7 @@ name = "d1-pkg"
+ path = "src/bin/d1-pkg.rs"
+ 
+ [dependencies]
++d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
+ anyhow.workspace = true
+ clap.workspace = true
+ serde.workspace = true
+diff --git a/d1-server/crates/d1-pkg/src/bin/d1-pkg.rs b/d1-server/crates/d1-pkg/src/bin/d1-pkg.rs
+index 8ae379a..4eed5da 100644
+--- a/d1-server/crates/d1-pkg/src/bin/d1-pkg.rs
++++ b/d1-server/crates/d1-pkg/src/bin/d1-pkg.rs
+@@ -13,20 +13,15 @@ use std::io::Write;
+ use std::path::PathBuf;
+ use std::process::ExitCode;
+ 
+-const DEFAULT_DIR: &str =
+-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../../dumps/patch-01.29-CUSA00219/packages");
+-
+-/// The served manifest, for the W2.4 byte-compare. Untracked (it is derived from retail content),
+-/// so its absence is expected on a clone and the control says so rather than passing quietly.
+-const SERVED_MANIFEST: &str =
+-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../../capture-rig/manifests/full_en.bin");
++// Defaults come from the build registry (`capture-rig/builds.json`, `$D1_BUILD`). The pinned
++// controls are goldens of the 01.29 reference estate: run them with `D1_BUILD=01.29`.
+ 
+ #[derive(Parser)]
+ #[command(name = "d1-pkg", about = "Destiny 1 PS4 .pkg container reader (read-only)")]
+ struct Cli {
+-    /// Directory holding the package estate.
+-    #[arg(long, global = true, default_value = DEFAULT_DIR)]
+-    dir: PathBuf,
++    /// Directory holding the package estate (default: the selected build's packages).
++    #[arg(long, global = true)]
++    dir: Option<PathBuf>,
+     #[command(subcommand)]
+     cmd: Cmd,
+ }
+@@ -127,9 +122,11 @@ enum Cmd {
+ 
+     /// Pinned controls. **Exit 2 means the output of this tool may not be cited.**
+     Controls {
+-        /// The served manifest to byte-compare against.
+-        #[arg(long, default_value = SERVED_MANIFEST)]
+-        served: PathBuf,
++        /// The served manifest to byte-compare against (default: the selected build's).
++        /// Untracked (it is derived from retail content), so its absence is expected on a clone
++        /// and the control says so rather than passing quietly.
++        #[arg(long)]
++        served: Option<PathBuf>,
+         #[arg(long)]
+         json: bool,
+     },
+@@ -137,9 +134,10 @@ enum Cmd {
+ 
+ fn main() -> Result<ExitCode> {
+     let cli = Cli::parse();
++    let dir = cli.dir.clone().unwrap_or_else(|| d1_build::selected().packages_path());
+     match cli.cmd {
+         Cmd::Info { pkg } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let p = find(&est, &pkg)?;
+             let h = &p.header;
+             println!("{}", p.name);
+@@ -155,7 +153,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::Blocks { pkg, compressed_only, json } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let p = find(&est, &pkg)?;
+             let mut rows = Vec::new();
+             for b in p.blocks() {
+@@ -181,7 +179,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::Entries { pkg, block, json } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let p = find(&est, &pkg)?;
+             let list: Vec<Entry> = p
+                 .entries()
+@@ -200,7 +198,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::ExtractBlock { pkg, index, out } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let p = find(&est, &pkg)?;
+             let b = p.block(index).context("block index out of range")?;
+             let data = est.read_block_stored(p, &b)?;
+@@ -214,7 +212,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::VerifyPlain { pkg, index, plain, min_agree, json } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let p = find(&est, &pkg)?;
+             let data = std::fs::read(&plain).with_context(|| format!("reading {}", plain.display()))?;
+             let checks = check_self_lengths(p, index, &data);
+@@ -260,7 +258,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::Verify { blocks } => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let (mut ok, mut bad) = (0usize, 0usize);
+             let (mut bok, mut bbad) = (0usize, 0usize);
+             for p in &est.packages {
+@@ -295,7 +293,7 @@ fn main() -> Result<ExitCode> {
+         }
+ 
+         Cmd::Stats => {
+-            let est = Estate::load(&cli.dir)?;
++            let est = Estate::load(&dir)?;
+             let (mut nb, mut nc, mut ne, mut ns) = (0usize, 0usize, 0usize, 0usize);
+             let (mut raw_max, mut comp_max) = (0u32, 0u32);
+             for p in &est.packages {
+@@ -350,7 +348,7 @@ fn main() -> Result<ExitCode> {
+             let sel = Select { policy, only, lang };
+             // dry-run reports the selection without the cap, because nothing is written and so
+             // nothing can be handed to a client.
+-            let built = manifest::build(&cli.dir, &sel, &guid, &config_guid, allow_overflow || dry_run)?;
++            let built = manifest::build(&dir, &sel, &guid, &config_guid, allow_overflow || dry_run)?;
+ 
+             if verbose {
+                 for r in &built.rows {
+@@ -395,7 +393,8 @@ fn main() -> Result<ExitCode> {
+             // An unreadable estate is not an error to bubble up: it means the controls could not
+             // run, which is exactly what exit 2 is for. Bubbling it out as exit 1 would let a
+             // caller that only checks `!= 2` treat an unverified tool as verified.
+-            let mut rows = manifest::controls(&cli.dir, Some(&served)).unwrap_or_else(|e| {
++            let served = served.unwrap_or_else(|| d1_build::selected().manifest_path());
++            let mut rows = manifest::controls(&dir, Some(&served)).unwrap_or_else(|e| {
+                 vec![manifest::ControlRow {
+                     name: "estate readable".into(),
+                     passed: false,
+diff --git a/d1-server/crates/d1/Cargo.toml b/d1-server/crates/d1/Cargo.toml
+index c3bf7f2..de36519 100644
+--- a/d1-server/crates/d1/Cargo.toml
++++ b/d1-server/crates/d1/Cargo.toml
+@@ -11,6 +11,7 @@ name = "d1"
+ path = "src/main.rs"
+ 
+ [dependencies]
++d1-build = { path = "../d1-build" } # GPL-2.0-or-later, this workspace (build registry)
+ d1-run = { path = "../d1-run" }
+ # The native probe-record decoder (the one Rust description of the 232-byte tracer record) lives
+ # in d1-trace, which depends on d1-run - so the CLI, above both, is where the two are wired
+diff --git a/d1-server/crates/d1/src/crash.rs b/d1-server/crates/d1/src/crash.rs
+index db98725..d878988 100644
+--- a/d1-server/crates/d1/src/crash.rs
++++ b/d1-server/crates/d1/src/crash.rs
+@@ -56,8 +56,6 @@ pub const TEXT_HI: u64 = 0x1900000;
+ pub const MAX_BACK: usize = 0x6000;
+ /// How far forward from the prologue the string scan disassembles.
+ pub const SCAN_SPAN: usize = 0x900;
+-/// Where the eboot lives, relative to the repository root.
+-pub const EBOOT_REL: &str = "dumps/patch-01.29-CUSA00219/eboot.bin";
+ 
+ /// One symbolized frame.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -117,13 +115,13 @@ pub fn load_eboot_from(path: &Path) -> Result<Vec<u8>, String> {
+     Ok(data)
+ }
+ 
+-/// Locate and load the pinned eboot via repo-root discovery.
++/// Locate and load the selected build's eboot (`capture-rig/builds.json`, `$D1_BUILD`).
+ pub fn load_eboot() -> Result<Vec<u8>, String> {
+     let root = find_repo_root().ok_or(
+         "could not locate the repository root (a directory holding both capture-rig/ and runs/); \
+          set D1_REPO",
+     )?;
+-    load_eboot_from(&root.join(EBOOT_REL))
++    load_eboot_from(&root.join(&d1_build::selected().eboot))
+ }
+ 
+ /// Load the eboot only if some address actually needs it (the prototype loaded lazily, so a

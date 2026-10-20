@@ -1,0 +1,57 @@
+diff --git a/src/video_core/texture_cache/texture_cache.cpp b/src/video_core/texture_cache/texture_cache.cpp
+index 2d18c10..f2c8f07 100644
+--- a/src/video_core/texture_cache/texture_cache.cpp
++++ b/src/video_core/texture_cache/texture_cache.cpp
+@@ -323,6 +323,16 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
+             return {merged_image_id, -1, -1};
+         }
+ 
++        // D1-PRESERVATION FORK-LOCAL CHANGE: the same address reused for an image of a different
++        // TYPE with a larger footprint (Destiny 56578 loading pvp_moonbase: same format, tile mode
++        // and resources, 16x the size). Treat it like the tile-mode reuse above instead of aborting.
++        if (image_info.type != cache_image.info.type) {
++            if (safe_to_delete) {
++                FreeImage(cache_image_id);
++            }
++            return {merged_image_id, -1, -1};
++        }
++
+         // Enhanced debug logging for unreachable case
+         // Calculate expected size based on format and dimensions
+         u64 expected_size =
+@@ -561,10 +571,31 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
+             // Cannot reuse this image as we need the exact requested format.
+             image_id = {};
+         } else if (image_resolved.info.resources < info.resources) {
+-            // The image was clearly picked up wrong.
+-            FreeImage(image_id);
+-            image_id = {};
+-            LOG_WARNING(Render_Vulkan, "Image overlap resolve failed");
++            // D1 FORK-LOCAL CHANGE: a view asking for MORE layers/levels of the same image (Destiny
++            // 56578 grows 32-layer arrays one layer at a time, ~10k times per session) used to free
++            // the cached image and re-create it from guest memory, discarding everything the GPU
++            // had written into it. Expand it instead, as ResolveOverlap does, so the old layers
++            // are copied into the new image.
++            if (image_resolved.info.type == info.type &&
++                image_resolved.info.pixel_format == info.pixel_format &&
++                image_resolved.info.size == info.size) {
++                image_id = ExpandImage(info, image_id);
++            } else {
++                // The image was clearly picked up wrong.
++                LOG_WARNING(Render_Vulkan,
++                            "Image overlap resolve failed: cached type {} fmt {} {}x{}x{} L{} M{}"
++                            " -> wanted type {} fmt {} {}x{}x{} L{} M{} @ {:#x}",
++                            static_cast<u32>(image_resolved.info.type),
++                            static_cast<u32>(image_resolved.info.pixel_format),
++                            image_resolved.info.size.width, image_resolved.info.size.height,
++                            image_resolved.info.size.depth, image_resolved.info.resources.layers,
++                            image_resolved.info.resources.levels, static_cast<u32>(info.type),
++                            static_cast<u32>(info.pixel_format), info.size.width,
++                            info.size.height, info.size.depth, info.resources.layers,
++                            info.resources.levels, info.guest_address);
++                FreeImage(image_id);
++                image_id = {};
++            }
+         }
+     }
+     // Create and register a new image

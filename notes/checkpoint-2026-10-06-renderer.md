@@ -1,0 +1,353 @@
+# Renderer continuation — 2026-10-06
+
+The [idle pool repair](rpcs3-descriptor-pool-retirement.md) closes a concrete lifetime
+gap: frame age alone could destroy descriptor pools with GPU work or owner-capturing
+reset callbacks outstanding. The actual-source CPU comparison fails 13 of 23 checks
+before the repair and passes all 23 afterward. The full Release build exits zero,
+with existing conversion/linker/post-build warnings. Deployed SHA-256 is
+`b5eba7b0da6984c03bd739b37b1661d2e38275502f50db3a845a0dd411813660`;
+the previous executable and exact scoped source baseline are retained privately.
+
+JOIN138 terminates during launcher ownership verification before a usable renderer
+test. Its manifest records failure while the retained launch handle reports no exit
+at that instant. The stack's owned processes are subsequently verified absent.
+This does not establish a graphics regression; the reason for that transient identity
+failure remains unproven. The uniquely named JOIN139 retry launches successfully.
+
+JOIN139 runs with privately scoped core/GPU-assisted/safe-mode validation and
+native recording enabled. A marker-location error leaves the guarded depth candidate
+and media probe **disabled**: the markers were written beside the executable, but
+the source polls the `d1/` control subdirectory. This differs from JOIN137 and
+invalidates a matching-fixture comparison. The validation
+DLL is verified in the exact client process. Boot includes cache compilation, so
+absolute native runtimes are not comparable as a performance claim. At **4:52** it
+repeats the persistent-stream dimension/component report, including an image-sampling
+instruction paired with unsigned texel-buffer resource metadata. Idle reclamation
+continues, reaching **148** released tables before the final sampled interval.
+
+The process then exits abruptly. Windows Application Error event 1000 matches the
+owned PID, **exact creation FILETIME**, and executable path. It identifies exception
+`0xc0000005` in `VkLayer_khronos_validation.dll`, offset `0x320514`, at **06:46:26 UTC**.
+The native log has no fatal/device-loss record for this exit. This is a host validation
+DLL access violation, not an observed Vulkan device-loss result. The final native log,
+structured Windows event, module receipt and launcher diagnostics are retained privately.
+Owned services/proxy/launcher are closed before the next control.
+
+## Shader metadata ambiguity in the validator
+
+The [SDK-series post-processing source](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/vulkan-sdk-1.4.341.0/layers/gpuav/instrumentation/post_process_descriptor_indexing.cpp)
+gets the pipeline associated with an instrumented shader ID, then searches every
+stage's resource-variable map for a module-local variable ID and accepts the first
+match. That lookup does not restrict the match to the originating shader module.
+Different stages can therefore supply different resources under the same numeric ID.
+
+`scripts/vulkan_validation_stage_lookup_audit.py` extracts that actual lookup branch
+into C++ mocks. Four checks reproduce two cross-stage counterexamples and confirm
+distinct-ID and unmatched-ID controls. A fragment image access can receive vertex
+buffer metadata, including its set/type; reversing stage order produces the converse.
+This makes the reported persistent-stream mismatch an **unreliable originating-defect
+diagnosis** until the actual shader and descriptors are correlated. The counterexample
+does not establish that every native report is false, identify the validation DLL
+crash site, or explain the independently observed uninstrumented GPU write faults.
+The installed layer is not patched, and no game shader is rewritten to match its report.
+
+## Automatic capture and durability
+
+Known native exception statuses now trigger a separate failure observation through
+the retained process handle, including exits with no native fatal line. Ordinary exits
+and forced-termination codes are excluded; intentional stop markers still take precedence.
+Failed exit queries do not imply that the process ended.
+
+Run-associated capability changes atomically retain their capture intents in project
+state. Queue publication merges by event ID before acknowledging the intent. A busy
+queue, failed acknowledgement or restart can no longer discard a newly deduplicated
+failure. Selective acknowledgement preserves newer observations, and build changes
+preserve older queued intents with their original build. All **44 capture tests** pass.
+The last two exercise a real retained Windows process handle with a controlled
+exception-status exit, and a failed exit query that must preserve the live reader
+and recorder. The controlled status fixture does not cause or diagnose a native crash.
+
+The identity-matched JOIN139 Windows record is fed back to that automatic pipeline,
+which selects existing source segments, packages them and verifies NAS delivery.
+The ninth package contains **60.42 seconds** of game/audio context and two frames,
+labelled **Known Broken / BEFORE**, with the validation-DLL exception explicitly
+separated from GPU-device loss. All seven NAS files and six payload sizes/SHA-256
+hashes are independently verified. Original media remains local.
+
+The last complete source segment ends **28.4 seconds before** the Windows exception;
+the active segment did not provide accepted finished media. These are pre-crash
+preparing-screen views, not footage of the crash itself or a repaired character.
+Metadata records the actual window and truncated post-event coverage. Recovering
+the final native segment after an abrupt host crash remains capture follow-up work.
+
+## JOIN140: default candidate-off native control
+
+JOIN140 uses the same deployed renderer with the validation DLL absent, title debug
+output restored and normal capture active. The depth candidate and media probe are
+also **off**, due to the same misplaced markers. No `D1MEDIA` lines appear; the
+marker-path source audit establishes why. Retain that configuration difference when
+comparing earlier candidate-enabled runs. The misplaced inactive markers are renamed
+after cleanup; neither directory contains an active experimental marker.
+
+The last native memory sample is **17:09**: **2,123** program additions, **9,699**
+descriptor-set first initializations and **9,625** idle-table releases. There are zero
+device-loss or malformed-program entries. The only final fatal line is the GDB socket
+at **17:08** during ordered debugger teardown; it is not a GPU failure. The pre-stop
+15:36 snapshot has zero fatal entries. Thus recording and reclamation operate through
+this bounded run, without establishing the repair as the cause of its longer survival.
+
+Visible frames show the revival/world background and local urgent/MOTD dialogs,
+interspersed with loading. Dismissing a dialog does not yield accepted body or equipment
+views in this run. The client returns to engine state 0 and displays the outdoor scene,
+then re-enters state 6. A read-only snapshot at **07:04:50 UTC** finds current slice -1,
+target 112, 112 loaded but no active/loading slice, and an empty engine world-state
+group copy. This is consistent with the known slice-transition handshake problem;
+an in-world bootflow label does not establish a settled Guardian.
+
+All exact owned client/service/proxy/launcher identities are closed. XInput and the
+byte-identical title configuration are restored; normal capture is healthy and idle,
+with nine delivered packages and no queued work or errors. The deployed renderer
+remains the tested build. Complete mission/body/menu visual acceptance, Ghost
+illumination and combat remain unverified.
+
+Next: repeat the recording-enabled comparison with the candidate marker in the actual
+`d1/` control directory and verify its activation before interpreting results. Then
+correlate the loaded-but-inactive slice transition with the host group/version exchange,
+and obtain stable outdoor, character/equipment and indoor appearance samples. Keep
+validator ambiguity, CPU lifetime contracts and native pixel acceptance distinct.
+
+## JOIN141–143: device loss and slice-handoff isolation
+
+JOIN141 places controls in the correct `d1/` directory and verifies the media probe
+with native lines, including `recording=1`. At **4:09.139203** it reports device loss
+on an SPU thread, with a write hint in **0x0–0xfff** and six instruction-pointer hints.
+The last memory sample has 550 descriptor-set initializations and 348 idle releases.
+The 400 binding diagnostics contain no synthetic bind: the candidate is armed,
+but its execution is not established by this trace. Do not call this a completed
+candidate-on pixel comparison. Ordered cleanup closes all owned processes and
+restores XInput with no active experimental controls.
+
+JOIN142 uses default controls with recording enabled. Its read-only timeline captures
+slice 112 loaded but inactive after the host request, followed by a dropped connection
+and rejoin. It has no GPU fault before ordered shutdown. The
+[world-heartbeat repair](rpcs3-world-heartbeat.md) changes the seconds-only default
+to resend the owned state with unchanged version; numeric diagnostic subtypes remain
+explicit. All affected CPU checks pass. JOIN143 preserves the request but repeats
+the loaded/inactive handoff twice, followed by live connection drops about two minutes
+after each request. A bounded non-unique trace proves that the request and engine
+ticks still run in the stalled state. No target-112 report reaches the host.
+
+The 16:12 pre-stop log has zero fatal/device-loss/malformed entries, 2,125 program
+additions, 9,560 descriptor-set initializations and 9,487 idle releases. All owned
+processes are closed, the original PPU watch file and XInput are restored, and title
+configuration hashes match. Capture is healthy and idle with nine NAS packages.
+The renderer executable remains unchanged and the depth candidate stays disabled.
+JOIN144 observes the verified 01.24 publication chain at compiled function entries
+during the initial join, then reports RSX device loss at 3:27.678568, before the
+mission teleport. The write hint again spans 0x0–0xfff. It supplies no failed-handoff
+trace. Its exactly owned stack is closed and original controls/input are restored.
+
+The [recording-fragment repair](rpcs3-recording-fragments.md) retains complete MOV/MP4
+fragments after an interrupted writer and recovers only validated prefixes in private
+buffer copies. Twelve actual-block C++ checks and all 58 capture checks pass; killed
+synthetic writers recover 120 clean video frames and audio, while the previous
+format recovers none. The native Release build succeeds. JOIN145 deliberately
+interrupts the owned recorder before its trailer and recovers 688 clean video frames,
+23.83 seconds with audio, while preserving the unfinished original. Import verification,
+timestamps and retry deduplication are fixed. A corrected 84.25-second package with
+three distinct source segments is automatically delivered; seven files and six payload
+hashes/sizes are verified. The earlier duplicate-segment package is preserved as
+superseded. Ten ready packages are now delivered and the normal worker is healthy,
+idle and drained. GPU and character/mission acceptance remain open.
+
+JOIN146 repeats bounded function-entry publication tracing on the rebuilt recorder
+executable. It reaches active 113, verifies an open activity-context publication gate
+and the corresponding client report, then loses the device at **3:38.689770** on an
+SPU thread. The queried fault is again a write in **0x0–0xfff**, without an instruction
+pointer. The fault precedes the mission handoff and cannot establish its missing link.
+All owned test processes close, the original watch hash and title configuration match
+after cleanup, and XInput is restored. The automatic capture worker is healthy and
+idle with ten ready NAS packages and no pending work. Return to the GPU fault before
+attempting another handoff acceptance; keep context handles distinct from slice indices.
+
+## JOIN147: checkpoint activation and stalled-handoff publication
+
+The [GPU checkpoint increment](rpcs3-gpu-checkpoints.md) brackets command buffers,
+graphics batches and compute dispatches with bounded opaque markers. It is opt-in,
+queries only after device loss and retains no raw GPU handles in automatic content
+metadata. Nineteen checks of the actual C++ code and all **63 capture tests** pass;
+the private Release build and scoped patch reproduction also pass.
+
+JOIN147 verifies the extension and active instrumentation while normal game/audio
+recording runs. The **13:26** pre-stop snapshot contains no fatal/device-loss entry
+or checkpoint report. Native query execution remains unverified; this is not evidence
+of fixed flicker or character distortion. Both slice-112 handoffs still stall.
+The [publication trace](rpcs3-world-heartbeat.md) now follows changed client records
+through the sender and encoder, while the proxy receives no corresponding target
+report. Subtype-specific transport tracing is the next missing observation.
+
+All owned test processes close. The original watch file and title configuration
+hashes match, XInput is restored, experimental controls are inactive and shared RPCN
+remains running. Capture is healthy, idle and drained with the 500GB NAS connected.
+Ten prior ready packages remain delivered; this run creates no duplicate milestone
+for unchanged capabilities. The checkpoint event's native/NAS acceptance awaits a
+recognized returned marker. Continue transport diagnosis and GPU/visual acceptance.
+
+## JOIN148–149: native checkpoint queries and retained compute context
+
+JOIN148 loses the device at **3:50.961315**, before the mission handoff. The real
+checkpoint query returns two queue-0 stages pointing to a buffer-end marker with
+graphics binding zero. Automatic detection creates an Experimental event and delivers
+**60.42 seconds** of native game/audio context to the configured 500 GB share. Seven
+files and six payload hashes/sizes are independently verified; eleven ready packages
+are present. Coverage ends 3.45 seconds before event detection and is explicitly
+truncated. Inspected frames are preparing/message UI, not repaired body/mission proof.
+
+The [readback-context increment](rpcs3-gpu-checkpoints.md) now retains both pipeline
+bindings, recording counts and the latest DMA readback details in the bounded
+registry. Thirty checks of actual C++ diagnostics pass, the full Release build succeeds,
+and the five-file scoped patch reproduces compiled sources after newline normalization.
+JOIN149 verifies the new path, then loses the device at **3:54.671530** on an SPU
+fence wait. Returned end markers retain a compute binding, two dispatches and one
+byte-swapped readback. Its recorded destination span fits the buffer allocation.
+This accepts the additional diagnostics, not a rendering fix or faulting-kernel claim.
+
+Both tests close their exactly owned stacks. Watch bytes and title configuration
+hashes match, XInput is restored, experimental controls are inactive and shared RPCN
+is preserved. Capture is healthy, idle and drained. All **70 capture tests** pass,
+including normalized DMA operation privacy, importer importance compatibility and
+text-only report transfer through the existing outbox. No new event is fabricated
+for the unchanged checkpoint capability. Next: correlate the retained compute kernel
+and descriptor resources, then demonstrate the repair in stable body/equipment,
+outdoor and mission views. The slice-handoff trace remains a separate open task.
+
+## JOIN150 onward: validation identifies concrete API errors
+
+The [Vulkan conformance work](rpcs3-vulkan-conformance.md) uses core validation
+without requesting GPU-assisted shader instrumentation. JOIN150 reports a query
+scope mismatch and concurrent presentation/submission on the same queue, then
+loses the GPU at **3:09.410591**. The queue repair serializes both host operations
+and checks failed submission results before marking the fence flushed. All
+**48 actual-code CPU checks pass**, compared with 15 baseline failures. The full
+Release build succeeds. JOIN151 reaches **11:55.154100** with no concurrent queue
+callback or device-loss entry; this is bounded acceptance of queue serialization.
+
+Query and overall rendering acceptance remain separate. The query increment
+reuses the existing matching outside-pass path for every driver. All **29 CPU
+checks pass**, compared with seven baseline failures, and its Release build
+succeeds. JOIN152 reaches **14:52.575180** with zero query-scope, render-pass query
+closure, queue-use or device-loss callbacks. This accepts that bounded query repair.
+
+Validation also observes descriptor-pool reset while command buffers are pending
+and depth/stencil feedback-layout mismatches. A subsequent GC prefix change
+prevents selection under a reader lock from being invalidated during lock upgrade.
+All **14 CPU checks pass**, compared with three baseline failures. Its Release
+build passes. JOIN153 completes the same fixture and remains running afterward;
+the final trace reaches **2:41:22.713699** without queue/query or device-loss entries,
+but two descriptor-reset callbacks and feedback/draw-layout errors remain. The
+GC repair does not fix that observed failure. Its final inspected screenshot is a
+black loading view, so the elapsed lifetime does not establish playable progress.
+All four native tests are exactly closed and restore original watch/title bytes,
+XInput and inactive controls. Full character/mission rendering remains open.
+
+The capture worker exits during JOIN152 after a status-lock timeout also breaks
+error reporting. Status now preserves pending fields and retries without stopping
+the observer. All **73 capture tests pass**; the corrected live worker survives a
+six-second held status locks both idle and during recording, then resumes fresh
+telemetry. The earlier coverage gap is recorded honestly. JOIN153 subsequently has
+63 decoded/hash-verified native segments through 15:24:24 UTC before its recorder
+exits separately; later recording coverage is unproved. The observer remains alive
+and returns to idle after test cleanup. Previously delivered NAS packages remain
+immutable.
+
+## Pending fence work now retains its resources
+
+The [fence completion increment](rpcs3-vulkan-conformance.md) prevents unsuccessful
+waits from notifying collection or resetting a pending command buffer. Frame and
+DMA cleanup also require confirmed completion; DMA wait failures retain the fence
+through the existing collector. All **71 actual-code CPU checks pass**, compared
+with 51 baseline failures. Full Release build and scoped three-file reproduction
+pass. JOIN154 completes the same native fixture at **11:22.537209** without queue,
+query or device-loss entries, but two descriptor resets and layout errors remain.
+No unsuccessful command-buffer wait is observed, so this does not identify their
+native cause or establish a character/flicker repair. Automatic cleanup restores
+original settings and XInput. The native recorder's missing-source exit persists.
+
+## Descriptor trace and inspected capture properties
+
+The opt-in descriptor timeline links submission order, fence completion and actual
+cleanup scope assignment. Seventeen checks of the actual C++ helpers pass; queue,
+GC and fence audits retain 48/14/71 passing checks. Full Release build and scoped
+six-file reproduction pass. JOIN155 completes at 11:21.772973 with no validation
+IDs or device loss, but trace coverage ends at its 262,144-record cap at 3:43.081868.
+No failing pool is correlated. Its inspected final frame shows visibly distorted
+outdoor scenery behind the urgent message; full-body and mission acceptance are
+still absent. Automatic exact-owner cleanup and settings restoration pass.
+
+Timestamped recorder/input diagnostics preserve normal boolean results. The
+missing-source failure does not reproduce in JOIN155. At 18:39 UTC, 20 of 22 native
+receipts have decode/hash acceptance; an initial unusable segment and a permission
+failure remain unverified and queued for retry. Rotation gaps are explicit.
+New validated media metadata records inspected dimensions and distinct rounded
+average/base rates. The actual final source reports 1280x720, about 9 fps average
+and 30 fps base, with audio and full decode PASS. All 77 capture tests pass. The
+tested observer is deployed at idle and remains asynchronous. Earlier NAS packages
+stay immutable. Next: reproduce descriptor errors with tracing disabled, then arm
+later to preserve the trace budget for the failure; continue recorder source-state
+and character/mission rendering work without claiming either is repaired.
+
+
+## JOIN156 and renamed-repository handoff
+
+JOIN156 repeats the 500-second post-match fixture on the earlier executable with
+descriptor tracing disabled and the core validation DLL verified. Its final native
+log reaches 11:56.782564 with no validation IDs, queue/query/descriptor-reset or
+device-loss entries. Four later input/screenshot phases are completed, but inspected
+images are black loading views, one with the contacting-servers banner. Successful
+key posts and an in-world label do not establish a settled scene or body/menu proof.
+Exact-owner cleanup restores original title/watch bytes, XInput and inactive controls.
+The normal capture observer remains healthy, idle and drained.
+
+An attachment-layout cache/binding candidate now passes 31 actual-source CPU checks
+against 15 original-flow failures. Full Release build and scoped one-file patch
+reproduction pass; it is built but not deployed and native/visual acceptance is NOT
+RUN. The tested runtime remains unchanged. Both GitHub repositories are renamed,
+origins updated and private visibility retained. Six READMEs now distinguish working,
+partial and unverified behavior. Read the [current handoff](HANDOFF-2026-10-06.md)
+for hashes, validation scope and the next controlled deployment. Current source
+launchers accept both new and legacy companion checkout names. No graphics or
+complete-preservation acceptance is implied by this handoff.
+
+## JOIN157: candidate conformance passes; visible corruption remains
+
+After idle backup/deployment, the attachment-layout candidate completes the same
+500-second post-match fixture with core validation and descriptor tracing off.
+The final log reaches **11:48.007191**, with no validation IDs, queue/query or
+descriptor-reset callbacks, or device loss. The native layer is verified. This
+supports the bounded conformance comparison; JOIN156 also had no errors, so it
+does not isolate a native causal repair.
+
+Inspected outdoor images alternate between normal shading and black/green
+corruption. A dismiss input advances an urgent warning to a second startup
+dialog. The following phases remain behind that dialog and establish no accepted
+character or movement views. Malformed fragment-program messages are present;
+their relation to the corruption requires investigation. The user's combined
+flicker/character/mission fix remains **KNOWN BROKEN / unaccepted**.
+
+Exact-owner cleanup closes the complete stack and restores original title/watch
+bytes, XInput and inactive controls without errors. The deployed executable is
+`55efc9072019124be3e880ca8c881339d057390c47d3bf77c799ccb6de920259`;
+the previous tested executable has a verified backup.
+
+The [recorder controller](rpcs3-recorder-controller.md) now keeps timed-out sources
+pending and avoids further blind toggles. Eleven actual-function writer-lock
+checks and all 81 capture tests pass. JOIN157 verifies the missing-source guard,
+but still supplies no indexed footage from its start attempt. Background shortcut
+constraints need a native control path. The observer remains healthy and idle.
+
+At the owner's request, obsolete Xbox emulator scripts/patches and research have
+been removed from the source tree, while PS3 results and their updated links remain.
+The local cleanup removes 106 retired targets / 49,964 files / 87,344,341,166 logical
+bytes. Current runtime, title/watch files, 01.24 EBOOT and companion hash manifest
+match their pre-cleanup hashes. Existing RPCS3 compatibility folder names remain.
+Backend and script regressions pass 167 and 145 tests respectively.
