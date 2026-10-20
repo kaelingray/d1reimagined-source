@@ -1,0 +1,242 @@
+[
+  {
+    "record": "0x70a8e600",
+    "group": "0x992bb471",
+    "kind": 6,
+    "index": 1,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x8080254d",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e648",
+    "group": "0x992bb471",
+    "kind": 6,
+    "index": 2,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x8080254d",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e690",
+    "group": "0x992bb471",
+    "kind": 4,
+    "index": 0,
+    "bubble": 14,
+    "awaiting_baseline": 0,
+    "state_a": "0x808007d9",
+    "state_b": "0x80800387"
+  },
+  {
+    "record": "0x70a8e6d8",
+    "group": "0x4786c0e0",
+    "kind": 15,
+    "index": 0,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808008d0",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e720",
+    "group": "0x4786c0e0",
+    "kind": 34,
+    "index": 1,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808004a4",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e768",
+    "group": "0x4786c0e0",
+    "kind": 17,
+    "index": 2,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x80800725",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e7b0",
+    "group": "0x4786c0e0",
+    "kind": 16,
+    "index": 3,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808008a3",
+    "state_b": null
+  },
+  {
+    "record": "0x70a8e7f8",
+    "group": "0x4786c0e0",
+    "kind": 39,
+    "index": 4,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x80802aef",
+    "state_b": "0x80802b18"
+  },
+  {
+    "record": "0x70a8e840",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 5,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e888",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 6,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e8d0",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 7,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e918",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 8,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e960",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 9,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e9a8",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 10,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8e9f0",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 11,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8ea38",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 12,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8ea80",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 13,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8eac8",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 14,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8eb10",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 15,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8eb58",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 16,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8eba0",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 17,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8ebe8",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 18,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8ec30",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 19,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  },
+  {
+    "record": "0x70a8ec78",
+    "group": "0x4786c0e0",
+    "kind": 12,
+    "index": 20,
+    "bubble": -1,
+    "awaiting_baseline": 0,
+    "state_a": "0x808022a5",
+    "state_b": "0x80802c30"
+  }
+]

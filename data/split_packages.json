@@ -1,0 +1,100 @@
+{
+  "chunk_size_bytes": 67108864,
+  "packages": [
+    {
+      "filename": "ps3_cosmo_activities_activity_025c_0.pkg",
+      "size": 124229632,
+      "sha256": "9845e58d48c197dbf63ccbab79cba956af7a46459d0b5a0f8d7169595a871ae4",
+      "parts": [
+        {
+          "path": "packages/ps3_cosmo_activities_activity_025c_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "aedddd5a10e31b5970cbeb702d088d7fd7436ca84332959e2fd52294c27f5a28"
+        },
+        {
+          "path": "packages/ps3_cosmo_activities_activity_025c_0.pkg.part001",
+          "size": 57120768,
+          "sha256": "ccdfc38d77b979c42a86782f7e5abb2d22fd8f281d41fc459b62aef1f43f6b77"
+        }
+      ]
+    },
+    {
+      "filename": "ps3_cosmo_destination_0274_0.pkg",
+      "size": 154312704,
+      "sha256": "4fcc4fe321809057f702c68e328aaf96ed4d6d95aa5e8132692be190dadc13dc",
+      "parts": [
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "606b1f69eccfde2bf1d5632c36b413970e87d312a9bfd1984dd1930454647e89"
+        },
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part001",
+          "size": 67108864,
+          "sha256": "3a8b2d708f2c84553c6c3ed6e07ecdb5423f6148c243f933c6e29fcef89b7442"
+        },
+        {
+          "path": "packages/ps3_cosmo_destination_0274_0.pkg.part002",
+          "size": 20094976,
+          "sha256": "3438887685cdf90702ea18c3876d21931f21d0b0bea8d823661ded04d5c37219"
+        }
+      ]
+    },
+    {
+      "filename": "ps3_gear_player_0104_0.pkg",
+      "size": 123914240,
+      "sha256": "b4cc926d9e75ae54bc092c5898d892158f81aad1cdf1efc39882425f7a2f0c07",
+      "parts": [
+        {
+          "path": "packages/ps3_gear_player_0104_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "07e18499017e098123419dc19bd5eda16d8a107c82f4edf23c77a368aec5f6dd"
+        },
+        {
+          "path": "packages/ps3_gear_player_0104_0.pkg.part001",
+          "size": 56805376,
+          "sha256": "974d1fd0af6bcff7188f92b3ad75094f044e35718bcc1451fe3e231aa4ba0315"
+        }
+      ]
+    },
+    {
+      "filename": "ps3_city_tower_ambient_act_0247_en_0.pkg",
+      "size": 129366016,
+      "sha256": "1a89726d012896aa68626a6e3c72f6703ab641270d952ea54a0876a56186d57f",
+      "parts": [
+        {
+          "path": "packages/ps3_city_tower_ambient_act_0247_en_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "c08a551d1f19667e18f0e60a07a2f3d41bab89406028af7b6f1ddb5fa0ceec6b"
+        },
+        {
+          "path": "packages/ps3_city_tower_ambient_act_0247_en_0.pkg.part001",
+          "size": 62257152,
+          "sha256": "79797938feeedaee27b88d61ae521754f1a3cc14120e71febe77de7c1f5ad583"
+        }
+      ]
+    },
+    {
+      "filename": "ps3_city_tower_destination_0250_0.pkg",
+      "size": 141479936,
+      "sha256": "5fd822aa34eedb4b53ac146af9be9a293cca538b9d1a5cff57db02cdbc3cbff8",
+      "parts": [
+        {
+          "path": "packages/ps3_city_tower_destination_0250_0.pkg.part000",
+          "size": 67108864,
+          "sha256": "e5ac9c5d964948a14a462dba597f33491091218d1da9979c9ed447a26d8b3880"
+        },
+        {
+          "path": "packages/ps3_city_tower_destination_0250_0.pkg.part001",
+          "size": 67108864,
+          "sha256": "c6408d521ff1ad31a802be8630b7d8ec5a5b53ce0c004e287649dc6378b5a546"
+        },
+        {
+          "path": "packages/ps3_city_tower_destination_0250_0.pkg.part002",
+          "size": 7262208,
+          "sha256": "cc93629af64949061f637a67fb97270b852acb5099f06145bdc4aa1e736f84dd"
+        }
+      ]
+    }
+  ]
+}

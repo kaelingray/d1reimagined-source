@@ -1,0 +1,17 @@
+/eboot/* -text -diff
+/logs/* -text -diff
+/packages/* -text -diff
+/schema/* -text -diff
+/ps3_updates/* -text -diff
+/ps3_updates/EXPORT_VALIDATION.md text diff eol=lf
+/ps3_updates/package_inventory_01.24.json text diff eol=lf
+/ps3_updates/services_01.24.json text diff eol=lf
+/ps3_updates/*/USRDIR/* -text -diff
+/oo2core_3_win64.dll -text -diff
+/SHA256SUMS.txt text eol=lf
+/package_names.txt text eol=lf
+/split_packages.json text eol=lf
+/reassemble_packages.py text eol=lf
+/README.md text eol=lf
+/.gitignore text eol=lf
+/.gitattributes text eol=lf

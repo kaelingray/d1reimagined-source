@@ -1,0 +1,7058 @@
+{
+  "0x80802c30": {
+    "size": 80,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873600,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882009,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873862,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 72,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 76,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800646": {
+    "size": 48,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 7,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 8,
+        "extra": 0
+      },
+      {
+        "off": 9,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 3,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889050,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080419a": {
+    "size": 36,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889477,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804345": {
+    "size": 32,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 28,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802619": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 5,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 6,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800540": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 9,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 10,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 11,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802b18": {
+    "size": 68,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155892297,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804e49": {
+    "size": 68,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155891864,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804c98": {
+    "size": 64,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 5,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 6,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 8,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 36,
+        "bit": 9,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 10,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 44,
+        "bit": 11,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 12,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 52,
+        "bit": 13,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 56,
+        "bit": 14,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 60,
+        "bit": 15,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802aef": {
+    "size": 712,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155891548,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 644,
+        "bit": 32,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155892297,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804b5c": {
+    "size": 644,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155892344,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804e78": {
+    "size": 640,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 2,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 60,
+        "bit": 3,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 80,
+        "bit": 4,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 100,
+        "bit": 5,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 120,
+        "bit": 6,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 140,
+        "bit": 7,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 160,
+        "bit": 8,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 180,
+        "bit": 9,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 200,
+        "bit": 10,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 220,
+        "bit": 11,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 240,
+        "bit": 12,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 260,
+        "bit": 13,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 280,
+        "bit": 14,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 300,
+        "bit": 15,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 320,
+        "bit": 16,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 340,
+        "bit": 17,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 360,
+        "bit": 18,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 380,
+        "bit": 19,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 400,
+        "bit": 20,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 420,
+        "bit": 21,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 440,
+        "bit": 22,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 460,
+        "bit": 23,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 480,
+        "bit": 24,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 500,
+        "bit": 25,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 520,
+        "bit": 26,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 540,
+        "bit": 27,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 560,
+        "bit": 28,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 580,
+        "bit": 29,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 600,
+        "bit": 30,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 620,
+        "bit": 31,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155882338,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802762": {
+    "size": 20,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 1,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 255,
+        "min": 4294967295,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 17,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802a1b": {
+    "size": 720,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 3,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 2,
+        "kind": 2,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 3,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155874995,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 44,
+        "bit": 4,
+        "kind": 3,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 5,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 52,
+        "bit": 6,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 56,
+        "bit": 7,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 8,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155892643,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 704,
+        "bit": 9,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 708,
+        "bit": 10,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 712,
+        "bit": 11,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 716,
+        "bit": 12,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804fa3": {
+    "size": 640,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 128,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 192,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 256,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 320,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 384,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 448,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 512,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 576,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882812,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080293c": {
+    "size": 64,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 1,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 13,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 128,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808004b1": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 6,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800ab3": {
+    "size": 28,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x808029a1": {
+    "size": 44,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 7,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 8,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155895569,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 36,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80805b11": {
+    "size": 28,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155895568,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80805b10": {
+    "size": 24,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882886,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882886,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882886,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80802986": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080254d": {
+    "size": 212,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 9,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 3,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155891747,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 156,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155891674,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 208,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804bda": {
+    "size": 52,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155892292,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804e44": {
+    "size": 48,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804c23": {
+    "size": 132,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155891983,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804d0f": {
+    "size": 128,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 56,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 72,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 80,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 88,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 96,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 104,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 112,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 120,
+        "bit": 0,
+        "kind": 35,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808022a5": {
+    "size": 80,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873600,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155882009,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873862,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 72,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 76,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808008d0": {
+    "size": 13424,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155888908,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12816,
+        "bit": 817,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889190,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 13268,
+        "bit": 930,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889204,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 13368,
+        "bit": 955,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889365,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 13404,
+        "bit": 962,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 13408,
+        "bit": 963,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873627,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080055b": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 10,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 64,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808042d5": {
+    "size": 36,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889113,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808041d9": {
+    "size": 32,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874714,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 3,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874714,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080099a": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 35,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 2,
+        "kind": 3,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 3,
+        "width": 6,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804234": {
+    "size": 100,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889676,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080440c": {
+    "size": 96,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 20,
+        "bit": 5,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 24,
+        "bit": 6,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 32,
+        "bit": 8,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 36,
+        "bit": 9,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 40,
+        "bit": 10,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 44,
+        "bit": 11,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 48,
+        "bit": 12,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 52,
+        "bit": 13,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 56,
+        "bit": 14,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 60,
+        "bit": 15,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 64,
+        "bit": 16,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 68,
+        "bit": 17,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 72,
+        "bit": 18,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 76,
+        "bit": 19,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 80,
+        "bit": 20,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 84,
+        "bit": 21,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 88,
+        "bit": 22,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 92,
+        "bit": 23,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x80804226": {
+    "size": 452,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889355,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808042cb": {
+    "size": 448,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 56,
+        "bit": 14,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 112,
+        "bit": 28,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 168,
+        "bit": 42,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 224,
+        "bit": 56,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 280,
+        "bit": 70,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 336,
+        "bit": 84,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 392,
+        "bit": 98,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874466,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808008a2": {
+    "size": 56,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 3,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 3,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889418,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080430a": {
+    "size": 52,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888926,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080411e": {
+    "size": 48,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 20,
+        "bit": 5,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 24,
+        "bit": 6,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 32,
+        "bit": 8,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 36,
+        "bit": 9,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 40,
+        "bit": 10,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 44,
+        "bit": 11,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x8080410c": {
+    "size": 12816,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889527,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804377": {
+    "size": 12800,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 800,
+        "bit": 51,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1600,
+        "bit": 102,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2400,
+        "bit": 153,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 3200,
+        "bit": 204,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4000,
+        "bit": 255,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4800,
+        "bit": 306,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 5600,
+        "bit": 357,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 6400,
+        "bit": 408,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 7200,
+        "bit": 459,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8000,
+        "bit": 510,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8800,
+        "bit": 561,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 9600,
+        "bit": 612,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 10400,
+        "bit": 663,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 11200,
+        "bit": 714,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12000,
+        "bit": 765,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874016,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808006e0": {
+    "size": 800,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 35,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155888791,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 208,
+        "bit": 50,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155888855,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808040d7": {
+    "size": 592,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889405,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808042fd": {
+    "size": 576,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 144,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 288,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 432,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804097": {
+    "size": 196,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889414,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804306": {
+    "size": 192,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 20,
+        "bit": 5,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 24,
+        "bit": 6,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 32,
+        "bit": 8,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 36,
+        "bit": 9,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 40,
+        "bit": 10,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 44,
+        "bit": 11,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 48,
+        "bit": 12,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 52,
+        "bit": 13,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 56,
+        "bit": 14,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 60,
+        "bit": 15,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 64,
+        "bit": 16,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 68,
+        "bit": 17,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 72,
+        "bit": 18,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 76,
+        "bit": 19,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 80,
+        "bit": 20,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 84,
+        "bit": 21,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 88,
+        "bit": 22,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 92,
+        "bit": 23,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 96,
+        "bit": 24,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 100,
+        "bit": 25,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 104,
+        "bit": 26,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 108,
+        "bit": 27,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 112,
+        "bit": 28,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 116,
+        "bit": 29,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 120,
+        "bit": 30,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 124,
+        "bit": 31,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 128,
+        "bit": 32,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 132,
+        "bit": 33,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 136,
+        "bit": 34,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 140,
+        "bit": 35,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 144,
+        "bit": 36,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 148,
+        "bit": 37,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 152,
+        "bit": 38,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 156,
+        "bit": 39,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 160,
+        "bit": 40,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 164,
+        "bit": 41,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 168,
+        "bit": 42,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 172,
+        "bit": 43,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 176,
+        "bit": 44,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 180,
+        "bit": 45,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 184,
+        "bit": 46,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 188,
+        "bit": 47,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x808008a3": {
+    "size": 2464,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 1,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155893565,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2432,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 2436,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 2440,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 2444,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2448,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x8080533d": {
+    "size": 2416,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155893291,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080522b": {
+    "size": 2400,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 96,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 144,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 192,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 240,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 288,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 336,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 384,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 432,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 480,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 528,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 576,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 624,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 672,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 720,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 768,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 816,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 864,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 912,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 960,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1008,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1056,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1104,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1152,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1200,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1248,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1296,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1344,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1392,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1440,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1488,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1536,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1584,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1632,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1680,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1728,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1776,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1824,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1872,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1920,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1968,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2016,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2064,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2112,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2160,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2208,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2256,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2304,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2352,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155875607,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800d17": {
+    "size": 48,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800868": {
+    "size": 2280,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 5,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 6,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155874358,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 144,
+        "bit": 2,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873554,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2208,
+        "bit": 35,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155874217,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808007a9": {
+    "size": 72,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889238,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 68,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804256": {
+    "size": 68,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889288,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804288": {
+    "size": 64,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 56,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800512": {
+    "size": 2064,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889520,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804370": {
+    "size": 2056,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889218,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804242": {
+    "size": 2048,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 1,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 128,
+        "bit": 2,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 192,
+        "bit": 3,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 256,
+        "bit": 4,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 320,
+        "bit": 5,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 384,
+        "bit": 6,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 448,
+        "bit": 7,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 512,
+        "bit": 8,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 576,
+        "bit": 9,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 640,
+        "bit": 10,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 704,
+        "bit": 11,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 768,
+        "bit": 12,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 832,
+        "bit": 13,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 896,
+        "bit": 14,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 960,
+        "bit": 15,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1024,
+        "bit": 16,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1088,
+        "bit": 17,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1152,
+        "bit": 18,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1216,
+        "bit": 19,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1280,
+        "bit": 20,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1344,
+        "bit": 21,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1408,
+        "bit": 22,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1472,
+        "bit": 23,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1536,
+        "bit": 24,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1600,
+        "bit": 25,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1664,
+        "bit": 26,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1728,
+        "bit": 27,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1792,
+        "bit": 28,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1856,
+        "bit": 29,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1920,
+        "bit": 30,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1984,
+        "bit": 31,
+        "kind": 38,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800836": {
+    "size": 132,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 7,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 5,
+        "bit": 0,
+        "kind": 7,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889868,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 36,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 44,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 48,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888869,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808040e5": {
+    "size": 84,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889498,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080435a": {
+    "size": 80,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874190,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874190,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874190,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 60,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874190,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080078e": {
+    "size": 20,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889468,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080433c": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 11,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 32
+      }
+    ]
+  },
+  "0x808044cc": {
+    "size": 28,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889961,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804529": {
+    "size": 24,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808007d9": {
+    "size": 224,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888919,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804117": {
+    "size": 208,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888979,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80804153": {
+    "size": 192,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 128,
+        "bit": 0,
+        "kind": 34,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800725": {
+    "size": 36,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874995,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 28,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080071e": {
+    "size": 96,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 2,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889868,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 44,
+        "bit": 3,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155895673,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 64,
+        "bit": 4,
+        "kind": 3,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 68,
+        "bit": 5,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 72,
+        "bit": 6,
+        "kind": 9,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 76,
+        "bit": 7,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 80,
+        "bit": 8,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 84,
+        "bit": 9,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 88,
+        "bit": 10,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 5,
+        "extra": 0
+      },
+      {
+        "off": 92,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 93,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80805b79": {
+    "size": 20,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155895721,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80805ba9": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 2,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 6,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 10,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      },
+      {
+        "off": 14,
+        "bit": 0,
+        "kind": 4,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 32768,
+        "width": 16,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808006eb": {
+    "size": 12,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873457,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808005d9": {
+    "size": 52,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157627904,
+        "extra": 9
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873162,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 36,
+        "bit": 8,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 40,
+        "bit": 9,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1065353216,
+        "extra": 4
+      },
+      {
+        "off": 44,
+        "bit": 10,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1065353216,
+        "extra": 4
+      },
+      {
+        "off": 48,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 49,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080038a": {
+    "size": 16,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808005c3": {
+    "size": 12,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800556": {
+    "size": 48,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155873592,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 1,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155888941,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080412d": {
+    "size": 36,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889454,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080432e": {
+    "size": 32,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873185,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873185,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873185,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155873185,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808003a1": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800538": {
+    "size": 12,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808004a4": {
+    "size": 32,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 1,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 2,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 2,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155874995,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800463": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800387": {
+    "size": 240,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888864,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 32,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155888919,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808040e0": {
+    "size": 8,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 9,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  },
+  "0x80800357": {
+    "size": 156,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 31,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 5,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 6,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 3,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 1,
+        "width": 3,
+        "extra": 0
+      },
+      {
+        "off": 21,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 22,
+        "bit": 0,
+        "kind": 2,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 5,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889234,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      },
+      {
+        "off": 60,
+        "bit": 6,
+        "kind": 1,
+        "opt": 1,
+        "nested": 2155889567,
+        "arr": 0,
+        "min": 0,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x8080439f": {
+    "size": 96,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 4,
+        "bit": 1,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 8,
+        "bit": 2,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 12,
+        "bit": 3,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 16,
+        "bit": 4,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 20,
+        "bit": 5,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 24,
+        "bit": 6,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 28,
+        "bit": 7,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 32,
+        "bit": 8,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 36,
+        "bit": 9,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 40,
+        "bit": 10,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 44,
+        "bit": 11,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 48,
+        "bit": 12,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 52,
+        "bit": 13,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 56,
+        "bit": 14,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 60,
+        "bit": 15,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 64,
+        "bit": 16,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 68,
+        "bit": 17,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 72,
+        "bit": 18,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 76,
+        "bit": 19,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 80,
+        "bit": 20,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 84,
+        "bit": 21,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 88,
+        "bit": 22,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      },
+      {
+        "off": 92,
+        "bit": 23,
+        "kind": 11,
+        "opt": 1,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 1157562368,
+        "extra": 7
+      }
+    ]
+  },
+  "0x80804252": {
+    "size": 36,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 0,
+        "min": 0,
+        "width": 4,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 1,
+        "opt": 0,
+        "nested": 2155889370,
+        "arr": 1,
+        "min": 16777216,
+        "width": 0,
+        "extra": 0
+      }
+    ]
+  },
+  "0x808042da": {
+    "size": 32,
+    "fields": [
+      {
+        "off": 0,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 4,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 8,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 12,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 16,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 20,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 24,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      },
+      {
+        "off": 28,
+        "bit": 0,
+        "kind": 5,
+        "opt": 0,
+        "nested": 4294967295,
+        "arr": 128,
+        "min": 2147483648,
+        "width": 32,
+        "extra": 0
+      }
+    ]
+  }
+}
