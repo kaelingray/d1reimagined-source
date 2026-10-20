@@ -15,6 +15,6 @@ license and corresponding modified source if redistributed; no such executable
 is distributed here. Public-only synthetic fixtures and opt-in native golden
 tests are documented in `ps4/README.md`.
 
-Python dependencies are obtained separately through requirements.txt and retain their own licences. No third-party game asset, executable, firmware, key, recording or source archive is included. Destiny and related names and content belong to their respective rights holders. The source licence grants no rights to those materials.
+Python dependencies are obtained separately through requirements.txt and retain their own licences. The consolidated data/ snapshot includes extracted Destiny executables and selected package assets, plus the historical oo2core_3_win64.dll binary and logs. Their original ownership and applicable terms remain separate from the project source licence. Firmware, private keys and account databases are not included. Destiny and related names and content belong to their respective rights holders. The source licence grants no rights to those materials.
 
 Project-authored patch modifications are published as scoped changes on 12 October 2026. Their upstream context remains attributed to its original contributors; the source publication does not claim upstream authorship.

@@ -9,8 +9,9 @@ import bap_server as bap
 
 def final124_schema_path():
     parent = Path(__file__).resolve().parents[2]
-    paths = [parent / name / "ps3_updates" / "types_01.24.json"
-             for name in ("d1reimagined-data", "d1xenia-data")]
+    paths = [Path(__file__).resolve().parents[1] / "data" / "ps3_updates" / "types_01.24.json"]
+    paths += [parent / name / "ps3_updates" / "types_01.24.json"
+              for name in ("d1reimagined-data", "d1xenia-data")]
     return next((path for path in paths if path.exists()), paths[0])
 
 

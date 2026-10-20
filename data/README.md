@@ -1,3 +1,5 @@
+> Imported into the public `d1reimagined-source/data/` directory on 20 October 2026 at the owner's request. The text below is the original dated snapshot documentation; references to private visibility and separate repositories describe its former arrangement. Current layout and provenance: [repository consolidation](../docs/REPOSITORY-CONSOLIDATION.md). Payload files and checksums are unchanged.
+
 # D1 Reimagined — private research data
 
 Private companion data for [d1reimagined](https://github.com/p3n1cillin/d1reimagined).

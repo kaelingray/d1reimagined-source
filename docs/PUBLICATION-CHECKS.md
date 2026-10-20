@@ -27,3 +27,7 @@ whitespace is preserved rather than reformatted across pinned upstream files.
 The public update adds a fresh source snapshot with ordinary commits. It does
 not import private Git history or source data from `d1reimagined-data`. Private
 history, working files and production evidence remain outside the public tree.
+
+## Subsequent consolidation — 20 October 2026
+
+The source-only scope above records the 12 October publication. The owner subsequently requested a single public repository including both private histories and their data. See [REPOSITORY-CONSOLIDATION.md](REPOSITORY-CONSOLIDATION.md) for the current layout and verification.

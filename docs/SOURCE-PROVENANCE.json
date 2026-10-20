@@ -1,15 +1,26 @@
 {
-  "date": "2026-10-12",
-  "private_project_commit": "85f1d7397151f6fd2f2f2e49da2e634b34759308",
-  "ps4_source": "User-supplied d1preservation-main source snapshot plus documented local fixes",
-  "files": 344,
-  "history_imported": false,
-  "game_inputs_included": false,
-  "exclusions": [
-    "game/firmware binaries",
-    "native derived fixtures and catalogues",
-    "captures and raw logs",
-    "private machine status and operator instructions",
-    "build output and third-party tool installations"
-  ]
+  "date": "2026-10-20",
+  "canonical_repository": "p3n1cillin/d1reimagined-source",
+  "source_public_head": "37d49305ae70fafacae60dc57b1be7a9ded8b96b",
+  "legacy_source_head": "512c659de0db2ff2673c6b1dee87cad975b83301",
+  "legacy_preserved_branch": "8c9995e5efda953f97a87e6674eed0fa2fe8e23a",
+  "data_head": "512c9e436c2c80cd2d88e5bc2be2dd02f00c4ca4",
+  "history_imported": true,
+  "data_directory": "data/",
+  "conflict_policy": "Keep existing public source for overlapping files; preserve original variants in imported history.",
+  "historical_source_publication": {
+    "date": "2026-10-12",
+    "private_project_commit": "85f1d7397151f6fd2f2f2e49da2e634b34759308",
+    "ps4_source": "User-supplied d1preservation-main source snapshot plus documented local fixes",
+    "files": 344,
+    "history_imported": false,
+    "game_inputs_included": false,
+    "exclusions": [
+      "game/firmware binaries",
+      "native derived fixtures and catalogues",
+      "captures and raw logs",
+      "private machine status and operator instructions",
+      "build output and third-party tool installations"
+    ]
+  }
 }

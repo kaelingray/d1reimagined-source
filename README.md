@@ -1,6 +1,6 @@
 # D1 Reimagined
 
-Experimental, independent Destiny 1 preservation research and original local service implementation. **The complete game is not playable.** This source-only release includes local service stand-ins, protocol experiments, mission rules, diagnostic tools, scoped emulator patches and regression tests.
+Experimental, independent Destiny 1 preservation research and original local service implementation. **The complete game is not playable.** This consolidated repository includes local service stand-ins, protocol experiments, mission rules, diagnostic tools, scoped emulator patches and regression tests.
 
 Project website: https://d1reimagined.com
 Community Discord: https://d1reimagined.com/discord (questions, ideas and contributor discussion)
@@ -17,7 +17,7 @@ PS4 executable remains missing, and there is no accepted native PS4 boot here.
 Native stability, rendering, combat, progression, complete activities and
 multiplayer remain incomplete.
 
-This is a source publication, not a game distribution or a ready-to-play installer. Game assets, firmware, executables, cryptographic materials, account data, private runtime inputs and captures are not included. Supply only inputs you are authorised to use. No public service, console, account or third-party system is a testing target.
+This is a research repository, not a ready-to-play installer. The `data/` directory contains the historical PS3 research snapshot, including extracted executables, selected package assets, schemas and logs. It is not a complete game installation. Firmware, account databases, private keys and current runtime captures are not included. Use only inputs you are authorised to use. No public service, console, account or third-party system is a testing target.
 
 ## Layout
 
@@ -32,6 +32,8 @@ This is a source publication, not a game distribution or a ready-to-play install
 | `tests/` | Additional regression cases |
 | `ps4/` | Active Rust preservation services, tools, research docs and canonical harness |
 | `docs/` | Current contributor checkpoint and publication provenance |
+| `notes/` | Imported PS3/PS4 research journals and historical evidence |
+| `data/` | Imported PS3 executables, package parts, schemas, logs and checksum manifest |
 
 ## Development
 
@@ -47,9 +49,9 @@ python -m venv .venv
 
 Some checks require additional privately supplied source or runtime inputs. Missing inputs, skips and blocked native acceptance must remain explicit. The publication audit checks source integrity and syntax; it does not certify that the game is playable or that every runtime integration can be reproduced from this checkout alone.
 
-The retired global-process punch-sweep launcher is excluded. Use the current owned-run wrapper; never stop unrelated emulator or service processes. Private historical journals and raw evidence are not source dependencies and are not distributed.
+The retired global-process punch-sweep launcher is retained only as `notes/Invoke-Final124PunchSweep.retired.ps1` for historical reference. Use the current owned-run wrapper; never stop unrelated emulator or service processes. Historical research journals and selected evidence are retained in `notes/` and `data/`; current machine state stays in ignored local directories.
 
-Set `D1_LOCAL`, `D1_RPCS3`, `D1_USRDIR` and `D1_DATA_REPO` to your own private locations. The default ignored `local/` directory is for private inputs and generated state. Individual PS4 helpers expose path parameters; use their help and explicitly select your own installation rather than assuming example locations exist. Do not run native launch or input tools without inspecting their scope and effective containment. A Linux namespace does not contain a Windows process.
+Set `D1_LOCAL`, `D1_RPCS3` and `D1_USRDIR` to your own runtime locations. Launch helpers use this checkout's `data/` by default; set `D1_DATA_REPO` only to select a different data directory. The default ignored `local/` directory is for private inputs and generated state. Individual PS4 helpers expose path parameters; use their help and explicitly select your own installation rather than assuming example locations exist. Do not run native launch or input tools without inspecting their scope and effective containment. A Linux namespace does not contain a Windows process.
 
 ## Contributing
 
@@ -57,6 +59,10 @@ See CONTRIBUTING.md for small, reproducible changes and SECURITY.md for private 
 
 ## Licence and third-party rights
 
-Original project source is offered under GPL-2.0-only unless a file carries a different existing licence notice, including GPL-2.0-or-later annotations. See LICENSE and THIRD_PARTY_NOTICES.md. Preserve upstream copyright and licence notices when applying patches. Source licensing does not cover Destiny assets, executables, firmware, trademarks or external software not included here.
+Original project source is offered under GPL-2.0-only unless a file carries a different existing licence notice, including GPL-2.0-or-later annotations. See LICENSE and THIRD_PARTY_NOTICES.md. Preserve upstream copyright and licence notices when applying patches. Source licensing does not cover Destiny assets, executables, firmware, trademarks or third-party binaries. Imported `data/` payloads retain their original ownership and are not relicensed by the project source licence.
 
 D1 Reimagined is not affiliated with or endorsed by Bungie, Sony Interactive Entertainment, or RPCS3. Destiny and associated names and assets belong to their respective rights holders. There is no warranty, compatibility promise, legal immunity or announced playable release.
+
+## Repository consolidation — 20 October 2026
+
+`d1reimagined-source` is the canonical public repository. It incorporates the former `d1reimagined` source/research history and `d1reimagined-data` snapshot/history. No separate companion repository is required. See [the migration record](docs/REPOSITORY-CONSOLIDATION.md) for preserved refs, layout and verification. Statements about separate private repositories in dated research records describe the original layout.

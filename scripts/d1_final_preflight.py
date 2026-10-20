@@ -176,7 +176,7 @@ def check_runtime(rpcs3_dir, game_usrdir, ppu_hash, inventory, disc_names, local
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--data-root", type=Path, required=True, help="d1reimagined-data checkout")
+    ap.add_argument("--data-root", type=Path, required=True, help="research data directory (data/ in the consolidated checkout)")
     ap.add_argument("--rpcs3-dir", type=Path, help="01.24 RPCS3 copy to inspect")
     ap.add_argument("--game-usrdir", type=Path, help="disc PS3_GAME/USRDIR folder")
     ap.add_argument("--ppu-hash", help="override the calculated 01.24 PPU hash")

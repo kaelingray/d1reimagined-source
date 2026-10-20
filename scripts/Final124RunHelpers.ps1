@@ -3,6 +3,8 @@
 
 function Get-D1DefaultDataRepo {
     param([Parameter(Mandatory)][string]$Repository)
+    $bundled = Join-Path $Repository 'data'
+    if (Test-Path -LiteralPath $bundled -PathType Container) { return $bundled }
     $parent = Split-Path $Repository -Parent
     $current = Join-Path $parent 'd1reimagined-data'
     $legacy = Join-Path $parent 'd1xenia-data'
