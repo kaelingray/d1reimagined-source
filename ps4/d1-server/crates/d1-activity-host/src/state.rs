@@ -158,12 +158,20 @@ pub enum StepWhen {
     /// Incidents within [`ActivityInstance::INCIDENT_ECHO`] of the previous step are the client
     /// echoing that step's own changes and do not count. Up to four types.
     OnIncident { incidents: [u32; 4], timeout: Duration },
+    /// `%S|N`: when the client reports slice set S as CURRENT (udt 21), or N seconds after the
+    /// previous step. A walk into another bubble (a z-leg) switches on the client's own; this is
+    /// the 01.24 mission's `{"on": {"type": 21, "slice_set": 24}}` (The Breach).
+    OnSlice { slice: u32, timeout: Duration },
 }
 
 impl StepWhen {
-    /// Parse `N`, `+N` or `@T|N` (seconds may be fractional).
+    /// Parse `N`, `+N`, `@T|N` or `%S|N` (seconds may be fractional).
     pub fn parse(s: &str) -> Option<Self> {
         let secs = |t: &str| t.parse::<f32>().ok().filter(|v| *v >= 0.0).map(Duration::from_secs_f32);
+        if let Some(rest) = s.strip_prefix('%') {
+            let (slice, n) = rest.split_once('|')?;
+            return Some(Self::OnSlice { slice: slice.trim().parse().ok()?, timeout: secs(n)? });
+        }
         if let Some(rest) = s.strip_prefix('@') {
             let (t, n) = rest.split_once('|')?;
             let mut incidents = [u32::MAX; 4];
@@ -290,10 +298,17 @@ pub struct ActivityInstance {
     /// When the step in force fired, and every incident type the client reported, with its time.
     mission_step_at: Option<Instant>,
     incidents: Vec<(u32, Instant)>,
+    /// The slice set the client last reported as current (udt 21), for [`StepWhen::OnSlice`].
+    current_slice: Option<u32>,
     /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
     slice_request: Option<(u8, u32, Instant)>,
     /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
     membership_dirty: bool,
+    /// ⭐ The membership update number at image `+0x00` (the client's `MEM-%d`). The client's
+    /// slice-set transition manager (56578 `0x778D60`) re-reads the PAH-tabulated region record
+    /// only when this differs from the last one it processed (`sstm+0x3B0`), so every changed
+    /// re-publish advances it. Join and udt-17 refresh re-send the same number.
+    membership_update: u32,
     /// Set once the sensor frame has gone out, so it is sent exactly once per instance
     /// (send-once mode; see [`Self::set_sensor_repeat`] for the repeating mode).
     sensor_sent: bool,
@@ -417,8 +432,10 @@ impl ActivityInstance {
             mission_step: None,
             mission_step_at: None,
             incidents: Vec::new(),
+            current_slice: None,
             slice_request: None,
             membership_dirty: false,
+            membership_update: 1,
             sensor_sent: false,
             sensors_sent: 0,
             sensor_repeat: None,
@@ -467,6 +484,15 @@ impl ActivityInstance {
     /// notifications with no reply, and inventing one would be the AH-layer equivalent of the
     /// Weasel.
     pub fn on_client_message(&mut self, msg: &ClientMessage, now: Instant) -> Vec<AhPush> {
+        // ⭐ udt 21: the client's slice-set record (struct `0x80800D9F` at `+0xB8`: current
+        // `{10-bit index, hash, ..}` at `+0xB8`, TARGET at `+0x158`). When the client walks into
+        // another bubble it targets that slice set and waits for "valid host-tabulated data": the
+        // region record must name the target with the token of this new transition (each client
+        // transition advances it by one; measured 1 initial, 2 teleport, 3 walking into The Breach).
+        if let ClientMessage::ClientAuthoritativeDataUpdate { struct_image } = msg {
+            self.track_current_slice(struct_image);
+            self.follow_slice_target(struct_image);
+        }
         // ⭐ udt 18 incidents: {u32 count, u32 types[count], ...}. Kept for incident-driven steps.
         if let ClientMessage::Other { user_defined_type: 18, struct_image } = msg {
             if let Some(n) = struct_image.get(0..4).map(|b| u32::from_le_bytes(b.try_into().unwrap())) {
@@ -734,6 +760,7 @@ impl ActivityInstance {
     fn build_membership(&self, join_request_image: &[u8]) -> Option<ReplicateMembership> {
         let mut m = ReplicateMembership::solo(join_request_image).ok()?;
         let first = !self.published_membership;
+        m.image[..4].copy_from_slice(&self.membership_update.to_le_bytes());
 
         // ── field 1 of 2 that is OURS: acknowledge the peer-session host ──────────────────────
         //
@@ -1196,12 +1223,15 @@ impl ActivityInstance {
             return None;
         }
         let img = self.join_request_image.clone()?;
+        self.membership_update = self.membership_update.wrapping_add(1).max(1);
         let m = self.build_membership(&img)?;
         self.membership_dirty = false;
         self.last_pushed = now;
         tracing::info!(
-            "⭐ replicate_membership re-published: teleport request {:?}",
-            self.slice_request.map(|(s, i, _)| (s, i))
+            "⭐ replicate_membership re-published as update {}: teleport request {:?}, region record {:?}",
+            self.membership_update,
+            self.slice_request.map(|(s, i, _)| (s, i)),
+            self.pah_region
         );
         Some(AhPush::new(self.ah_id, AhMessage::ReplicateMembership(m)))
     }
@@ -1227,6 +1257,13 @@ impl ActivityInstance {
         let due = match step.when {
             StepWhen::At(d) => elapsed >= d,
             StepWhen::AfterPrevious(d) => now.saturating_duration_since(prev) >= d,
+            StepWhen::OnSlice { slice, timeout } => {
+                let here = self.current_slice == Some(slice);
+                if here {
+                    tracing::info!("⭐ mission step {i}: the client is in slice set {slice}");
+                }
+                here || now.saturating_duration_since(prev) >= timeout
+            }
             StepWhen::OnIncident { incidents, timeout } => {
                 let reported = self.incidents.iter().find(|(t, at)| {
                     incidents.contains(t) && at.saturating_duration_since(prev) >= Self::INCIDENT_ECHO
@@ -1268,6 +1305,49 @@ impl ActivityInstance {
     /// Serve a world clock base in ms (see `GlobalActivityState::TIME_BASE_MS`).
     pub fn set_time_base_ms(&mut self, ms: u64) {
         self.time_base_ms = Some(ms);
+    }
+
+    /// Record the client's current slice set from udt 21 (`+0xB8` = {10-bit index, name hash}).
+    /// The update is a delta: the record is present only when its hash is (not 0 / FNV basis).
+    fn track_current_slice(&mut self, image: &[u8]) {
+        let u = |o: usize| image.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+        let (Some(index), Some(hash)) = (u(0xB8), u(0xBC)) else { return };
+        let index = index & 0x3FF;
+        if matches!(hash, 0 | 0x811C_9DC5) || index == 0x3FF || self.current_slice == Some(index) {
+            return;
+        }
+        tracing::info!("⭐ client is now in slice set {index} (hash {hash:#010x}, was {:?})", self.current_slice);
+        self.current_slice = Some(index);
+    }
+
+    /// Move the region record to the slice set the client targets (see [`Self::on_client_message`]).
+    /// Returns true when it moved.
+    fn follow_slice_target(&mut self, image: &[u8]) -> bool {
+        const CURRENT: usize = 0xB8;
+        const TARGET: usize = 0xB8 + 0xA0;
+        let index = |o: usize| image.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()) & 0x3FF);
+        let (Some(current), Some(target)) = (index(CURRENT), index(TARGET)) else {
+            return false;
+        };
+        // udt 21 is a replicated DELTA: absent fields decode as 0. A target is real only when its
+        // record is present, i.e. it names a bubble (hash at +4 not 0 / FNV basis) - run
+        // agr-breach read a stray "target 0" and spent the token the client wanted for 24.
+        let target_hash = image.get(TARGET + 4..TARGET + 8).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+        if matches!(target_hash, None | Some(0) | Some(0x811C_9DC5)) || target == 0x3FF || target == current {
+            return false;
+        }
+        match self.pah_region {
+            Some((region, peer, token)) if region != target => {
+                let next = if token == u8::MAX { 1 } else { token + 1 };
+                self.pah_region = Some((target, peer, next));
+                self.membership_dirty = true;
+                tracing::info!(
+                    "⭐ client targets slice set {target} (current {current}): region record {region} -> {target}, token {token} -> {next}"
+                );
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Serve a start region (see [`ServedWorld::start_region`]); also moves the PAH region record.
@@ -1506,6 +1586,64 @@ mod tests {
         assert!(i.advance_mission(now + Duration::from_secs(130)));
         assert_eq!(i.sensor_payload.as_deref(), Some(&[3u8][..]));
         assert_eq!(i.pah_region(), Some((112, 0, 2)), "the teleport step moves the region");
+    }
+
+    /// ⭐ A client walking into another bubble gets the region record for its target, once.
+    #[test]
+    fn the_region_record_follows_the_clients_slice_target() {
+        let (mut i, now) = instance();
+        i.set_pah_region(112, 0, 2);
+        let mut img = vec![0u8; 0x220];
+        img[0xB8..0xBC].copy_from_slice(&112u32.to_le_bytes());
+        img[0x158..0x15C].copy_from_slice(&24u32.to_le_bytes());
+        let stray = ClientMessage::ClientAuthoritativeDataUpdate { struct_image: img.clone() };
+        i.on_client_message(&stray, now);
+        assert_eq!(i.pah_region(), Some((112, 0, 2)), "a target without its bubble hash is a delta artefact");
+        img[0x15C..0x160].copy_from_slice(&0x4415_15C2u32.to_le_bytes());
+        let msg = ClientMessage::ClientAuthoritativeDataUpdate { struct_image: img.clone() };
+        i.on_client_message(&msg, now);
+        assert_eq!(i.pah_region(), Some((24, 0, 3)), "target 24 with the next token");
+        i.on_client_message(&msg, now);
+        assert_eq!(i.pah_region(), Some((24, 0, 3)), "the same target does not advance the token again");
+    }
+
+    /// ⭐ A changed membership carries the next update number, or the client never re-reads the
+    /// region record (`0x778D60` skips an update number it already processed).
+    #[test]
+    fn a_changed_membership_advances_the_update_number() {
+        let (mut i, now) = instance();
+        let out = i.on_client_message(&join_request([1, 2, 3, 4]), now);
+        let number = |m: &ReplicateMembership| u32::from_le_bytes(m.image[..4].try_into().unwrap());
+        let joined = out
+            .iter()
+            .find_map(|p| match &p.message { AhMessage::ReplicateMembership(m) => Some(number(m)), _ => None })
+            .expect("the join publishes a membership");
+        assert_eq!(joined, 1);
+        i.set_pah_region(112, 0, 2);
+        let mut img = vec![0u8; 0x220];
+        img[0xB8..0xBC].copy_from_slice(&112u32.to_le_bytes());
+        img[0x158..0x15C].copy_from_slice(&24u32.to_le_bytes());
+        img[0x15C..0x160].copy_from_slice(&0x4415_15C2u32.to_le_bytes());
+        i.on_client_message(&ClientMessage::ClientAuthoritativeDataUpdate { struct_image: img }, now);
+        let AhMessage::ReplicateMembership(m) = i.membership_due(now).expect("re-published").message else {
+            panic!("expected a membership")
+        };
+        assert_eq!(number(&m), 2, "the next update number");
+        assert_eq!(m.pah_region_id(), 24);
+    }
+
+    /// ⭐ A slice step fires when the client reports that slice set as current.
+    #[test]
+    fn a_slice_step_fires_when_the_client_is_in_that_slice_set() {
+        assert_eq!(StepWhen::parse("%24|900"), Some(StepWhen::OnSlice { slice: 24, timeout: Duration::from_secs(900) }));
+        let (mut i, now) = instance();
+        let mut img = vec![0u8; 0x220];
+        img[0xB8..0xBC].copy_from_slice(&24u32.to_le_bytes());
+        i.on_client_message(&ClientMessage::ClientAuthoritativeDataUpdate { struct_image: img.clone() }, now);
+        assert_eq!(i.current_slice, None, "a current record without its hash is a delta artefact");
+        img[0xBC..0xC0].copy_from_slice(&0x4415_15C2u32.to_le_bytes());
+        i.on_client_message(&ClientMessage::ClientAuthoritativeDataUpdate { struct_image: img }, now);
+        assert_eq!(i.current_slice, Some(24));
     }
 
     /// ⭐ An incident step fires on the client's report (not on its own echo), else on the timeout.

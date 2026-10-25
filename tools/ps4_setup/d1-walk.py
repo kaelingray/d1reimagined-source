@@ -96,24 +96,36 @@ def main():
     ap.add_argument('--out')
     ap.add_argument('--tracked')
     ap.add_argument('--route')
-    ap.add_argument('--tolerance', type=float, default=2.5)
+    ap.add_argument("--tolerance", type=float, default=2.5)
+    ap.add_argument("--radius", type=float, default=25)
     ap.add_argument('--max-seconds', type=float, default=600)
     a = ap.parse_args()
     c = Client()
     if a.scan:
         centre = [float(v) for v in a.scan.split(',')]
-        addrs = c.scan(centre, 25)
-        print(len(addrs), 'candidates')
-        for moved, keys in ((True, ['Hold:W:1500']), (False, []), (True, ['Hold:S:1500']), (False, [])):
-            before = keep(c, addrs, moved)
-            if keys:
-                pad(*keys)
-            else:
-                time.sleep(2)
-            addrs = filter_step(c, before, moved)
-            print(('moved' if moved else 'still'), len(addrs))
+        # A rough centre finds few copies; a second pass centred on the first fix finds the rest
+        # (run agr-breach4: 1 tracked, then 253 around that fix).
+        for attempt in range(2):
+            addrs = c.scan(centre, a.radius)
+            print(len(addrs), 'candidates')
+            # Forward, still, side-step, still: a side-step still moves the player when backing up is blocked.
+            for moved, keys in ((True, ['Hold:W:1500']), (False, []), (True, ['Hold:A:1500']), (False, [])):
+                before = keep(c, addrs, moved)
+                if keys:
+                    pad(*keys)
+                else:
+                    time.sleep(2)
+                addrs = filter_step(c, before, moved)
+                print(('moved' if moved else 'still'), len(addrs))
+            # Keep only triples near the scan area: transient buffers can pass the movement tests.
+            addrs = [x for x in addrs if (t := c.triple(x)) and all(math.isfinite(v) for v in t)
+                     and math.dist(t[:2], centre[:2]) < a.radius + 40]
+            here = position(c, addrs)
+            print(len(addrs), 'tracked; position', here)
+            if len(addrs) >= 100 or not here:
+                break
+            centre = list(here)
         json.dump(addrs, open(a.out, 'w'))
-        print('position', position(c, addrs))
         return
     tracked = json.load(open(a.tracked))
     route = json.load(open(a.route))

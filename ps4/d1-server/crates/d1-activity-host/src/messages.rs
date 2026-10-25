@@ -610,7 +610,9 @@ impl GlobalActivityState {
 /// field at member `+0x28`. So we echo both shared structures.
 ///
 /// The other non-zero bytes are fields the client's own code reads back:
-/// * `MEMBER_COUNT` `+0x00` - what `0x29C730` prints as `MEM-%d`, set to 1;
+/// * `MEMBER_COUNT` `+0x00` - what `0x29C730` prints as `MEM-%d`: the membership UPDATE NUMBER
+///   (56578 `0x778D60` logs it as "membership update '%d'" and re-reads the PAH region record
+///   only when it changes). 1 at the join, advanced on every changed re-publish;
 /// * `SIMULATION_OCCUPANCY_MASK` `+0x5028` bit 0 - the bit `FUN_00BA0B10` tests before copying
 ///   member 0's machine id into the simulation-machine cache;
 /// * `OCCUPANCY_MASK` `+0x502C` bit 0 - the bit `FUN_0029FE70` tests when it looks for our slot.
