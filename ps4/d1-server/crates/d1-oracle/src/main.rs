@@ -632,6 +632,7 @@ fn run_sensor(_cli: &Cli, cmd: &SensorCmd) -> anyhow::Result<ExitCode> {
                 phase: *phase,
                 tail,
                 clients: Vec::new(),
+                authority: None,
             };
             let payload = m.encode()?;
             println!(

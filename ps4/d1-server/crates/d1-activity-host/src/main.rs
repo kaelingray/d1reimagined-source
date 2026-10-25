@@ -565,6 +565,15 @@ fn main() -> anyhow::Result<()> {
                         phase,
                         tail,
                         clients,
+                        // ⭐ D1_AH_SENSOR_AUTHORITY=<machine>[,<seq>]: every authority block to
+                        // that machine (see `SensorAuthority`). Unset = no authority table.
+                        authority: std::env::var("D1_AH_SENSOR_AUTHORITY").ok().and_then(|v| {
+                            let mut it = v.split(',').map(|s| s.trim().parse::<u32>().ok());
+                            let machine = it.next()??;
+                            let seq = it.next().flatten().unwrap_or(1);
+                            tracing::info!("⭐ D1_AH_SENSOR_AUTHORITY: all 65 authority blocks to machine {machine}, seq {seq}");
+                            Some(d1_oracle::sensor::SensorAuthority::all_to(machine as u8, seq as u16))
+                        }),
                     };
                     // `D1_AH_SENSOR_PHASE_FILE` + `D1_AH_SENSOR_PHASES=3,4,5`: one frame per listed
                     // phase, chosen per send from the file's content (state.rs).

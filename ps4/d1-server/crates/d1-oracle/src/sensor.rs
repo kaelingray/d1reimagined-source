@@ -75,6 +75,11 @@ use crate::object::ObjectOracle;
 pub const TAG_SENSOR_VALUE: u32 = 0x8080_08A3;
 /// Schema tag of the `{hash, i8, i16}` globals name reference.
 pub const TAG_NAME_REF: u32 = 0x8080_04B1;
+/// The sensor AUTHORITY table, decoded by `0x2A1C40` into `world+0xA88` when `has_sensor_block`
+/// is set (56578: the schema pointer at `0x191A310`, filled at load).
+pub const TAG_AUTHORITY: u32 = 0x8080_0CF7;
+/// Entries in the authority table: 65 blocks of 12 bytes after a `u32`.
+pub const AUTHORITY_BLOCKS: usize = 65;
 
 /// The setter's `memcpy` width, and thus the value image size. `mov edx,0x504` @0x11DEEB.
 pub const VALUE_IMAGE_LEN: usize = 0x504;
@@ -110,6 +115,39 @@ pub struct SensorPhaseUpdate {
     /// The world's OTHER pending sensor entity clients, each sent as a fresh, value-less entry.
     /// Empty reproduces the audited single-entry frame. See [`SensorClientRef`].
     pub clients: Vec<SensorClientRef>,
+    /// ⭐ The authority table (`has_sensor_block = 1`). `None` keeps the audited frame.
+    pub authority: Option<SensorAuthority>,
+}
+
+/// ⭐ The sensor authority table: which machine simulates each of the 65 authority blocks.
+///
+/// 56578 `0x2A1C40` reads `has_sensor_block`; when set, a 65-bit changed mask (block 0 first),
+/// then this struct (tag `0x80800CF7`, 784 bytes: `u32`, then 65 × `{peer {u8 @+1}, u16 seq @+8,
+/// bool applied @+0xA}`) through the client's own codec, copied to `world+0xA88`. `0x2A1AB0`
+/// applies each changed entry: a new `seq` opens a transfer (`0x240A60`), `applied` completes it
+/// (`0x240AC0`, the game interface's authority hook). With the table all zero no machine simulates
+/// mission objects: the objective handler `0x40A8D0` then never computes "this objective is mine".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SensorAuthority {
+    /// Bit `i` set = entry `i` changed (65 bits used).
+    pub changed: u128,
+    /// The 784-byte struct image.
+    pub image: Vec<u8>,
+}
+
+impl SensorAuthority {
+    /// Every block to `machine` (the 6-bit machine id the client calls local, e.g. 14), with
+    /// sequence `seq`, applied.
+    pub fn all_to(machine: u8, seq: u16) -> Self {
+        let mut image = vec![0u8; 4 + 12 * AUTHORITY_BLOCKS];
+        for i in 0..AUTHORITY_BLOCKS {
+            let e = 4 + 12 * i;
+            image[e + 1] = machine;
+            image[e + 8..e + 10].copy_from_slice(&seq.to_le_bytes());
+            image[e + 0xA] = 1;
+        }
+        Self { changed: (1u128 << AUTHORITY_BLOCKS) - 1, image }
+    }
 }
 
 /// One pending sensor entity client the frame must deliver for the walker terminator to accept it.
@@ -237,7 +275,19 @@ impl SensorPhaseUpdate {
         let (value_bits, value_pay) = self.value_bits()?;
         let mut w = BitWriter::default();
         w.put(u64::from(self.gen), 8);
-        w.put(0, 1); // has_sensor_block = 0
+        match &self.authority {
+            None => w.put(0, 1), // has_sensor_block = 0
+            Some(a) => {
+                w.put(1, 1); // has_sensor_block
+                for i in 0..AUTHORITY_BLOCKS {
+                    w.put(((a.changed >> i) & 1) as u64, 1);
+                }
+                // `0x2A1C40` decodes it with the REPLICATED decoder `0x2C9AE0` (presence bit, then
+                // the object), not the plain one the walker's A values use behind their own bits.
+                let e = ObjectOracle::new(TAG_AUTHORITY)?.encode_replicated(&a.image, 0x1_0000)?;
+                w.raw(&e.payload, e.bits as usize);
+            }
+        }
         w.put(0, 32); // stamp
         w.put(1, 1); // init
         w.put(1, 1); // has_entry
@@ -375,6 +425,20 @@ const AUDIT_P3: &str = "0000000000785b595ee46000c00000557417fffffff811c9dc57ffff
 /// The audited phase-3 + tail-fix payload (`record+0x674 = 0`, `record+0x678 = 0xC2DACAF7`).
 const AUDIT_TF: &str = "0000000000785b595ee46000c00000557417fffffff811c9dc57fffffff020000000001c2dacaf7000000003fffffffc08e4ee2807fff811c9dc50";
 
+#[cfg(test)]
+mod authority_tests {
+    #[test]
+    fn all_to_fills_every_block_and_marks_them_changed() {
+        let a = super::SensorAuthority::all_to(14, 1);
+        assert_eq!(a.image.len(), 784);
+        assert_eq!(a.changed.count_ones(), 65);
+        for i in 0..65 {
+            let e = 4 + 12 * i;
+            assert_eq!((a.image[e + 1], a.image[e + 8], a.image[e + 0xA]), (14, 1, 1));
+        }
+    }
+}
+
 fn audit(phase: i8, tail: Option<(u32, u32)>) -> SensorPhaseUpdate {
     SensorPhaseUpdate {
         gen: 0,
@@ -384,6 +448,7 @@ fn audit(phase: i8, tail: Option<(u32, u32)>) -> SensorPhaseUpdate {
         phase,
         tail,
         clients: Vec::new(),
+        authority: None,
     }
 }
 
