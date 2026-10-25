@@ -124,10 +124,26 @@ def main():
     t_end = time.time() + a.max_seconds
     i = min(range(len(route)), key=lambda k: math.dist(route[k][:2], here[:2]))
     stuck = 0
+    best, since_best = None, 0
     while i < len(route) and time.time() < t_end:
         target = route[i]
-        if math.dist(here[:2], target[:2]) < a.tolerance:
+        d = math.dist(here[:2], target[:2])
+        if d < a.tolerance:
             i += 1
+            best, since_best = None, 0
+            continue
+        # No progress toward this waypoint for a while (a railing, a car): back off, side-step
+        # and take the next waypoint instead.
+        if best is None or d < best - 0.5:
+            best, since_best = d, 0
+        else:
+            since_best += 1
+        if since_best >= 8:
+            pad('Hold:S:600', 'Hold:A:500' if (i % 2) else 'Hold:D:500', 'NumPad2')
+            i = min(i + 1, len(route) - 1)
+            best, since_best, heading = None, 0, None
+            here = position(c, tracked, here) or here
+            print(f'skip to wp {i}')
             continue
         want = math.atan2(target[1] - here[1], target[0] - here[0])
         if heading is not None:
