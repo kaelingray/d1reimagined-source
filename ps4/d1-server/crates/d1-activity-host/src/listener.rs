@@ -39,7 +39,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use d1_bap::conversation::{BapConversation, EnqueueOutcome};
 use d1_bap::{ChannelNonces, Direction, SealKeys, SessionMaterial};
@@ -104,6 +104,53 @@ pub enum AhEvent {
 /// not bury the run log.
 pub const PAYLOAD_CAPTURE_LIMIT: usize = 2048;
 
+/// Extra changed client-update payloads per connection, beyond the normal first capture.
+/// At 2 KiB per payload this bounds additional raw payload log text to about 1 MiB.
+pub const CLIENT_UPDATE_CAPTURE_LIMIT: usize = 256;
+
+/// Opt-in diagnostics only. No protocol state, authority or outgoing message is changed.
+struct ClientUpdateCapture {
+    remaining: usize,
+    after: Duration,
+    started: Option<Instant>,
+    previous: [Option<Vec<u8>>; 2],
+    window_seen: [bool; 2],
+}
+
+impl ClientUpdateCapture {
+    fn observe(&mut self, udt: u32, payload: &[u8], now: Instant, first: bool) -> bool {
+        let slot = match udt {
+            21 => 0,
+            47 => 1,
+            _ => return false,
+        };
+        if self.remaining == 0 {
+            return false;
+        }
+        let started = *self.started.get_or_insert(now);
+        let changed = self.previous[slot].as_deref() != Some(payload);
+        // Do not retain an unbounded payload. Oversized updates are always eligible and
+        // explicitly truncated, so a change beyond the captured prefix is never hidden.
+        self.previous[slot] = if payload.len() <= PAYLOAD_CAPTURE_LIMIT {
+            Some(payload.to_vec())
+        } else {
+            None
+        };
+        if now.saturating_duration_since(started) < self.after {
+            return false;
+        }
+        // Establish a baseline inside the selected window even if this payload did not
+        // change at the boundary. The startup capture may be minutes out of date.
+        let baseline = !self.window_seen[slot];
+        self.window_seen[slot] = true;
+        if first || (!changed && !baseline) {
+            return false;
+        }
+        self.remaining -= 1;
+        true
+    }
+}
+
 /// Hex of an inbound payload, for the run log. See [`AhEvent::Payload`].
 fn payload_event(user_defined_type: u32, payload: &[u8]) -> AhEvent {
     let n = payload.len().min(PAYLOAD_CAPTURE_LIMIT);
@@ -147,6 +194,7 @@ pub struct AhConnection {
     registry: crate::registry::HostRegistry,
     /// Which `user_defined_type`s have already had their payload logged. See [`Self::capture_once`].
     captured: std::collections::BTreeSet<u32>,
+    client_update_capture: Option<ClientUpdateCapture>,
     /// ⭐ How many [`AhEvent::CodecFault`]s this connection has produced. Once this is non-zero the
     /// host is no longer saying anything the client can act on, and the run should be read as
     /// **truncated**, not as a protocol result.
@@ -175,8 +223,23 @@ impl AhConnection {
                 0,
             )),
             captured: std::collections::BTreeSet::new(),
+            client_update_capture: None,
             codec_faults: 0,
         }
+    }
+
+    /// Capture up to `count` additional changed udt-21/47 payloads, capped at 256.
+    /// The delay starts at the first received 21/47 payload, not process startup.
+    /// Existing first-payload and every-incident captures remain unchanged.
+    pub fn with_client_update_capture(mut self, count: usize, after: Duration) -> Self {
+        self.client_update_capture = (count != 0).then(|| ClientUpdateCapture {
+            remaining: count.min(CLIENT_UPDATE_CAPTURE_LIMIT),
+            after,
+            started: None,
+            previous: [None, None],
+            window_seen: [false, false],
+        });
+        self
     }
 
     pub fn instance(&self) -> &ActivityInstance {
@@ -371,7 +434,7 @@ impl AhConnection {
     fn on_client_notification(&mut self, udt: u32, payload: &[u8], now: Instant) -> Vec<AhEvent> {
         let mut events = Vec::new();
         // ⭐ Deliberate non-decode, stated as such. See `AhEvent::NotDecoded`.
-        events.extend(self.capture_once(udt, payload));
+        events.extend(self.capture_once(udt, payload, now));
         if let Some(why) = crate::codec::undecodable_reason(udt) {
             events.push(AhEvent::NotDecoded {
                 user_defined_type: udt,
@@ -509,18 +572,22 @@ impl AhConnection {
     }
 
     /// The **first** payload seen for each `user_defined_type` on this connection, as hex.
+    /// Opt-in diagnostics also record bounded 21/47 baselines/changes in a selected window.
     ///
     /// Once per udt, not once per message: the keepalive alone arrived ten times in the run that
     /// motivated this, and ten copies of one byte is not ten vectors. The first is the one worth
     /// keeping - it is the one sent from a known state.
-    fn capture_once(&mut self, udt: u32, payload: &[u8]) -> Vec<AhEvent> {
+    fn capture_once(&mut self, udt: u32, payload: &[u8], now: Instant) -> Vec<AhEvent> {
         // ⭐ udt 18 (incident) is the client's mission report: cinematic ended, player entered a
         // trigger. Every one is kept, not only the first - a mission is driven by them.
         if udt == 18 {
             self.captured.insert(udt);
             return vec![payload_event(udt, payload)];
         }
-        if self.captured.insert(udt) {
+        let first = self.captured.insert(udt);
+        let changed = self.client_update_capture.as_mut()
+            .is_some_and(|capture| capture.observe(udt, payload, now, first));
+        if first || changed {
             vec![payload_event(udt, payload)]
         } else {
             Vec::new()
@@ -617,7 +684,16 @@ async fn drive(
     // ⭐ Poll at a quarter of the heartbeat, so three consecutive missed polls still leave the
     // client's 20,500 ms host-crash timeout un-tripped.
     let poll = conn_heartbeat_poll(&instance);
-    let mut conn = AhConnection::new(instance, codec);
+    let capture_count = std::env::var("D1_AH_CAPTURE_CLIENT_UPDATES")
+        .ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    let capture_after = std::env::var("D1_AH_CAPTURE_CLIENT_UPDATES_AFTER_S")
+        .ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+    let mut conn = AhConnection::new(instance, codec)
+        .with_client_update_capture(capture_count, Duration::from_secs(capture_after));
+    if capture_count != 0 {
+        tracing::info!("AH client-update diagnostics: up to {} extra changed payloads, after {capture_after}s from first udt 21/47; private raw data, no protocol change",
+            capture_count.min(CLIENT_UPDATE_CAPTURE_LIMIT));
+    }
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = [0u8; 8192];
     tracing::info!("AH connection from {peer}");
@@ -731,6 +807,103 @@ mod tests {
 
     fn conn(codec: Arc<dyn AhWireCodec>) -> AhConnection {
         AhConnection::new(ActivityInstance::new(0xD1A0_0001, "d1ah-test", Instant::now()), codec)
+    }
+
+    #[test]
+    fn client_update_capture_is_opt_in_and_preserves_incidents() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec));
+        for udt in [21, 47, 37] {
+            assert_eq!(c.capture_once(udt, &[1], now).len(), 1);
+            assert!(c.capture_once(udt, &[2], now).is_empty());
+        }
+        assert_eq!(c.capture_once(18, &[1], now).len(), 1);
+        assert_eq!(c.capture_once(18, &[1], now).len(), 1);
+        assert!(c.pending_pushes.is_empty());
+    }
+
+    #[test]
+    fn client_update_capture_tracks_both_types_without_repeating_unchanged_data() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(3, Duration::ZERO);
+        for udt in [21, 47] {
+            assert_eq!(c.capture_once(udt, &[1], now).len(), 1);
+            assert!(c.capture_once(udt, &[1], now).is_empty());
+            assert_eq!(c.capture_once(udt, &[2], now).len(), 1);
+        }
+        // An unrelated type keeps the old once-per-connection rule.
+        assert_eq!(c.capture_once(37, &[1], now).len(), 1);
+        assert!(c.capture_once(37, &[2], now).is_empty());
+        assert_eq!(c.client_update_capture.as_ref().unwrap().remaining, 1);
+        assert!(c.pending_pushes.is_empty());
+    }
+
+    #[test]
+    fn client_update_capture_waits_for_the_requested_window() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(2, Duration::from_secs(30));
+        assert_eq!(c.capture_once(21, &[1], now).len(), 1);
+        assert!(c.capture_once(21, &[2], now + Duration::from_secs(29)).is_empty());
+        assert_eq!(c.capture_once(21, &[2], now + Duration::from_secs(30)).len(), 1);
+        assert!(c.capture_once(21, &[2], now + Duration::from_secs(30)).is_empty());
+        assert_eq!(c.capture_once(21, &[3], now + Duration::from_secs(30)).len(), 1);
+        assert_eq!(c.client_update_capture.as_ref().unwrap().remaining, 0);
+    }
+
+    #[test]
+    fn client_update_capture_budget_is_shared_and_hard_capped() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(usize::MAX, Duration::ZERO);
+        assert_eq!(c.client_update_capture.as_ref().unwrap().remaining, CLIENT_UPDATE_CAPTURE_LIMIT);
+        c.capture_once(21, &[0], now);
+        c.capture_once(47, &[0], now);
+        for n in 1..=CLIENT_UPDATE_CAPTURE_LIMIT {
+            let udt = if n % 2 == 0 { 21 } else { 47 };
+            assert_eq!(c.capture_once(udt, &n.to_le_bytes(), now).len(), 1);
+        }
+        assert!(c.capture_once(21, &[99], now).is_empty());
+        assert!(c.capture_once(47, &[99], now).is_empty());
+        assert_eq!(c.capture_once(18, &[1], now).len(), 1);
+    }
+
+    #[test]
+    fn client_update_capture_bounds_storage_and_labels_oversized_payloads() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(2, Duration::ZERO);
+        let mut payload = vec![1; PAYLOAD_CAPTURE_LIMIT + 10];
+        c.capture_once(21, &payload, now);
+        payload[PAYLOAD_CAPTURE_LIMIT + 1] = 2;
+        let event = c.capture_once(21, &payload, now);
+        assert!(matches!(&event[0], AhEvent::Payload { hex, truncated: true, .. }
+            if hex.len() == 2 * PAYLOAD_CAPTURE_LIMIT));
+        assert!(c.client_update_capture.as_ref().unwrap().previous[0].is_none());
+    }
+
+    #[test]
+    fn client_update_capture_zero_disables_the_extra_diagnostics() {
+        let c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(0, Duration::ZERO);
+        assert!(c.client_update_capture.is_none());
+    }
+
+    #[test]
+    fn client_update_capture_adds_no_replies_on_the_notification_path() {
+        let now = Instant::now();
+        let mut c = conn(Arc::new(RawStructCodec))
+            .with_client_update_capture(4, Duration::ZERO);
+        for udt in [21, 47] {
+            for value in [0, 1] {
+                let events = c.on_client_notification(udt, &[value; 0x220], now);
+                assert!(events.iter().any(|e| matches!(e, AhEvent::Payload { .. })));
+                assert!(!events.iter().any(|e| matches!(e,
+                    AhEvent::WantsToPush { .. } | AhEvent::Enqueued { .. })));
+                assert!(c.pending_pushes.is_empty());
+            }
+        }
     }
 
     /// Wrap an inner frame in a plaintext envelope.
