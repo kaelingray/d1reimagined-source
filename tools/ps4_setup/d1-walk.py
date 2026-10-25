@@ -105,11 +105,14 @@ def main():
         centre = [float(v) for v in a.scan.split(',')]
         # A rough centre finds few copies; a second pass centred on the first fix finds the rest
         # (run agr-breach4: 1 tracked, then 253 around that fix).
-        for attempt in range(2):
+        for attempt in range(3):
             addrs = c.scan(centre, a.radius)
             print(len(addrs), 'candidates')
-            # Forward, still, side-step, still: a side-step still moves the player when backing up is blocked.
-            for moved, keys in ((True, ['Hold:W:1500']), (False, []), (True, ['Hold:A:1500']), (False, [])):
+            # Forward, still, back, still: backing up returns the player near the start (side-steps
+            # walked it into the ditch by the cars, run agr-breach8). The last attempt side-steps
+            # instead, which still moves the player when backing up is blocked.
+            back = 'Hold:A:1500' if attempt == 2 else 'Hold:S:1500'
+            for moved, keys in ((True, ['Hold:W:1500']), (False, []), (True, [back]), (False, [])):
                 before = keep(c, addrs, moved)
                 if keys:
                     pad(*keys)
@@ -136,25 +139,39 @@ def main():
     t_end = time.time() + a.max_seconds
     i = min(range(len(route)), key=lambda k: math.dist(route[k][:2], here[:2]))
     stuck = 0
-    best, since_best = None, 0
+    best, since_best, skipped = None, 0, False
+    def corner(k):
+        # The turn at waypoint k, in radians (0 = straight on).
+        if k <= 0 or k + 1 >= len(route):
+            return 0.0
+        h1 = math.atan2(route[k][1] - route[k - 1][1], route[k][0] - route[k - 1][0])
+        h2 = math.atan2(route[k + 1][1] - route[k][1], route[k + 1][0] - route[k][0])
+        return abs(wrap(h2 - h1))
+
     while i < len(route) and time.time() < t_end:
         target = route[i]
         d = math.dist(here[:2], target[:2])
-        if d < a.tolerance:
+        # Sharp corners need the waypoint itself: overshooting the north-to-west turn at the
+        # Wall's stairs (waypoint 43) drops the Guardian into a pit (runs agr-breach5 and 9).
+        sharp = corner(i) > 0.6
+        if d < (min(a.tolerance, 1.5) if sharp else a.tolerance):
             i += 1
             best, since_best = None, 0
             continue
-        # No progress toward this waypoint for a while (a railing, a car): back off, side-step
-        # and take the next waypoint instead.
+        # No progress toward this waypoint for a long while (a railing, a car): back off,
+        # side-step and take the next waypoint instead - once; skipping on without progress walks
+        # the whole route off in place (run agr-breach10 skipped 20 waypoints at the stairs).
         if best is None or d < best - 0.5:
-            best, since_best = d, 0
+            best, since_best, skipped = d, 0, False
         else:
             since_best += 1
-        if since_best >= 8:
+        if since_best >= 16 and not skipped:
+            skipped = True
             pad('Hold:S:600', 'Hold:A:500' if (i % 2) else 'Hold:D:500', 'NumPad2')
             i = min(i + 1, len(route) - 1)
-            best, since_best, heading = None, 0, None
+            since_best, heading = 0, None
             here = position(c, tracked, here) or here
+            best = math.dist(here[:2], route[i][:2])
             print(f'skip to wp {i}')
             continue
         want = math.atan2(target[1] - here[1], target[0] - here[0])
@@ -173,16 +190,18 @@ def main():
                     if p0 and p1 and math.dist(p0[:2], p1[:2]) > 0.3:
                         h1 = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
                         turned = wrap(h1 - h0)
-                        if abs(turned) > 0.05:
+                        # A pulse that slid along an obstacle measures nonsense (agr-breach8: 10 rad/s);
+                        # keep the default unless the rate is plausible (3.3 rad/s measured).
+                        if abs(turned) > 0.05 and 0.0015 <= abs(turned) / ms <= 0.006:
                             sign = (1.0 if turned * (-1 if key == 'L' else 1) > 0 else -1.0)
-                            rate = max(0.0008, min(0.01, abs(turned) / ms))
+                            rate = abs(turned) / ms
                             calibrated = True
                             print(f'calibrated: {rate * 1000:.2f} rad/s per key, sign {sign:+.0f}')
                         heading, here = h1, p1
                     continue
                 heading = None
         p0 = here
-        pad('Hold:W:700')
+        pad('Hold:W:350' if (sharp or d < 4) else 'Hold:W:700')
         here = position(c, tracked, p0) or p0
         step = math.dist(p0[:2], here[:2])
         if step > 0.3:
@@ -190,8 +209,17 @@ def main():
             stuck = 0
         else:
             stuck += 1
-            heading = None
-            pad('NumPad2', 'Hold:A:400' if stuck % 2 else 'Hold:D:400')   # jump and side-step out
+            # Blocked, so no heading and no way to steer. Step back (the way we came is usually
+            # free) and take the heading from that: facing is opposite to the back-step.
+            q0 = here
+            pad('Hold:S:500')
+            here = position(c, tracked, q0) or q0
+            if math.dist(q0[:2], here[:2]) > 0.3:
+                heading = math.atan2(q0[1] - here[1], q0[0] - here[0])
+            else:
+                heading = None
+                pad('NumPad2', 'Hold:A:600' if stuck % 2 else 'Hold:D:600')   # jump and side-step out
+                here = position(c, tracked, here) or here
         print(f'wp {i}/{len(route)} at ({here[0]:.1f}, {here[1]:.1f}, {here[2]:.1f}) -> ({target[0]:.1f}, {target[1]:.1f})')
     print('done' if i >= len(route) else 'stopped', here)
 
