@@ -86,6 +86,21 @@ def position(client, tracked, near=None):
     return tuple(statistics.median(t[k] for t in pts) for k in range(3))
 
 
+# The client returns to Orbit after 15 minutes "inactive" (prerequisite 1, 0x793A00). In the world it
+# takes the OLDER of two activity times: the last button change and the last stick-quadrant change
+# (0xB1B0E0, slot 0x2803340 + user*0x140: +0x1A0 buttons, +0x1B0 sticks, +0x1B8 the result). Sticks
+# alone never count, so press square (reload; harmless with a full magazine) and nudge the stick.
+KEEPALIVE_S = 45
+_last_active = 0.0
+
+
+def active(force=True):
+    global _last_active
+    if force or time.time() - _last_active >= KEEPALIVE_S:
+        pad('NumPad4', 'Hold:W:150', 'Hold:S:150')
+        _last_active = time.time()
+
+
 def wrap(a):
     return (a + math.pi) % (2 * math.pi) - math.pi
 
@@ -99,7 +114,14 @@ def main():
     ap.add_argument("--tolerance", type=float, default=2.5)
     ap.add_argument("--radius", type=float, default=25)
     ap.add_argument('--max-seconds', type=float, default=600)
+    ap.add_argument('--keepalive', type=float, help='only keep the Guardian active for this many seconds')
     a = ap.parse_args()
+    if a.keepalive:
+        end = time.time() + a.keepalive
+        while time.time() < end:
+            active()
+            time.sleep(min(KEEPALIVE_S, max(0.0, end - time.time())))
+        return
     c = Client()
     if a.scan:
         centre = [float(v) for v in a.scan.split(',')]
@@ -149,7 +171,17 @@ def main():
         h2 = math.atan2(route[k + 1][1] - route[k][1], route[k + 1][0] - route[k][0])
         return abs(wrap(h2 - h1))
 
+    def cross_track(k, p):
+        # Distance from p to the segment route[k-1] -> route[k].
+        (x1, y1), (x2, y2) = route[k - 1][:2], route[k][:2]
+        dx, dy = x2 - x1, y2 - y1
+        L2 = dx * dx + dy * dy
+        t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - x1) * dx + (p[1] - y1) * dy) / L2))
+        return math.dist(p[:2], (x1 + t * dx, y1 + t * dy))
+
+    retreats = 0
     while i < len(route) and time.time() < t_end:
+        active(force=False)
         target = route[i]
         d = math.dist(here[:2], target[:2])
         # Sharp corners need the waypoint itself: overshooting the north-to-west turn at the
@@ -157,7 +189,7 @@ def main():
         sharp = corner(i) > 0.6
         if d < (min(a.tolerance, 1.5) if sharp else a.tolerance):
             i += 1
-            best, since_best = None, 0
+            best, since_best, retreats = None, 0, 0
             continue
         # No progress toward this waypoint for a long while (a railing, a car): back off,
         # side-step and take the next waypoint instead - once; skipping on without progress walks
@@ -166,10 +198,21 @@ def main():
             best, since_best, skipped = d, 0, False
         else:
             since_best += 1
+        # Off the route by more than 3 units: steer back to the previous waypoint first (drifting
+        # sideways off the Wall-stair ramp dropped the Guardian into the pit, run agr-breach19).
+        if i > 0 and retreats < 2 and cross_track(i, here) > 3.0:
+            i, retreats = i - 1, retreats + 1
+            best, since_best, heading = None, 0, None
+            print(f'off the route: back to wp {i}')
+            continue
         if since_best >= 16 and not skipped:
             skipped = True
             pad('Hold:S:600', 'Hold:A:500' if (i % 2) else 'Hold:D:500', 'NumPad2')
-            i = min(i + 1, len(route) - 1)
+            # Never skip a corner (it is where the path turns around an obstacle): re-approach it.
+            if sharp and i > 0 and retreats < 2:
+                i, retreats = i - 1, retreats + 1
+            else:
+                i = min(i + 1, len(route) - 1)
             since_best, heading = 0, None
             here = position(c, tracked, here) or here
             best = math.dist(here[:2], route[i][:2])
@@ -211,7 +254,7 @@ def main():
             stuck = 0
             # Turns that keep making the error worse mean the turn sign is wrong (run agr-breach12
             # spiralled off the cliff south of the spawn): flip it.
-            if turn_err is not None:
+            if turn_err is not None and step > 1.5:   # only clean, unobstructed moves count
                 worse = worse + 1 if abs(wrap(want - heading)) > abs(turn_err) + 0.3 else 0
                 if worse >= 2:
                     sign, worse = -sign, 0
@@ -221,6 +264,14 @@ def main():
             stuck += 1
             # Blocked, so no heading and no way to steer. Step back (the way we came is usually
             # free) and take the heading from that: facing is opposite to the back-step.
+            if stuck % 2 == 0:
+                # A step or ledge (the ramp at the Wall's stairs, run agr-breach16): jump and push on.
+                pad('NumPad2', 'Hold:W:600')
+                q = position(c, tracked, here) or here
+                if math.dist(q[:2], here[:2]) > 0.3:
+                    heading, here = math.atan2(q[1] - here[1], q[0] - here[0]), q
+                    print(f'wp {i}/{len(route)} jumped to ({here[0]:.1f}, {here[1]:.1f}, {here[2]:.1f})')
+                    continue
             q0 = here
             pad('Hold:S:500')
             here = position(c, tracked, q0) or q0

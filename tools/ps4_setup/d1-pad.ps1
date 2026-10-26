@@ -8,6 +8,9 @@ param(
     [string]$Shot = ''
 )
 $ErrorActionPreference = 'Stop'
+# Through `powershell -File` an array arrives as ONE comma-joined string ("Hold:S:600,NumPad2"), and
+# such a key name matched nothing, so every multi-key call silently pressed nothing: split it here.
+$Keys = @($Keys | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 # Operator-pad stand-in for a contained run started with -OperatorInput: focuses the running
 # shadPS4 window and sends real key input (the emulator ignores keys posted to an unfocused window).
 Add-Type -AssemblyName System.Windows.Forms
