@@ -3663,6 +3663,17 @@ async fn main() -> Result<()> {
                                                                               b.len(),
                                                                               b.iter().map(|x| format!("{x:02x}")).collect::<String>());
                                                                         Some(b)
+                                                                    } else if id == d1_bap::loot::LOOT_PICKUP_ITEM {
+                                                                        // 601 loot_pickup_item: the client walked onto a world
+                                                                        // drop. Answer OK with the claimed nonce echoed
+                                                                        // (response 0x808017AB, see d1_bap::loot).
+                                                                        let req = plain.get(8..).unwrap_or(&[]);
+                                                                        match d1_bap::loot::parse_loot_pickup_request(req) {
+                                                                            Some(c) => warn!("      ⭐ LOOT CLAIM (601): source kind {} nonce {{{}, {:#x}}} word {}",
+                                                                                             c.source_kind, c.key, c.id, c.word),
+                                                                            None => warn!("      601 request did not decode ({}B)", req.len()),
+                                                                        }
+                                                                        d1_bap::loot::loot_pickup_response_body(req)
                                                                     } else {
                                                                         // ⚠ DO NOT warn "unhandled" here. This is the FIRST of
                                                                         // two dispatch chains; 206 (and anything else below) is

@@ -130,6 +130,8 @@ pub mod activity_host;
 /// ⭐ Investment messages 501/502/504/505 - create / delete / login / signout character. The
 /// client→server command direction (`THE-BLOCKS.md` B11). See `historicaldocs/design/character-lifecycle-messages.md`.
 pub mod character_lifecycle;
+/// 601 `loot_pickup_item`: the world-drop claim and its reply.
+pub mod loot;
 /// Messages 42/43 - matchmaking configuration.
 pub mod matchmaking;
 /// Session-parameter payloads. **Reference only - the server can never set one.**
