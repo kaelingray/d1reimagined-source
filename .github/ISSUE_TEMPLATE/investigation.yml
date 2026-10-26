@@ -1,0 +1,36 @@
+name: Investigation or experiment
+description: Propose research, a protocol investigation or an experiment.
+labels: [investigation]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What do you want to find out or make work?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current evidence
+      description: What is already known, with links to Dev Blogs, notes or commits.
+  - type: textarea
+    id: plan
+    attributes:
+      label: Proposed approach
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: What would count as done
+      description: Observable results, not only unit tests or static exports.
+    validations:
+      required: true
+  - type: checkboxes
+    id: inputs
+    attributes:
+      label: Inputs
+      options:
+        - label: This proposal needs no game files, keys, firmware or account data to be shared.
+          required: true

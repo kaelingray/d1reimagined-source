@@ -1,0 +1,59 @@
+name: Build or test failure
+description: Something in this repository fails to build, run or pass its checks.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please don't attach game files, extracted assets, firmware, keys, account data or personal paths. Reports that include them are removed.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - PS4 (current)
+        - PS3 (retained research)
+        - Website or tooling
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The exact commit you tested, e.g. the output of `git rev-parse HEAD`.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, emulator build or commit, GPU and driver.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output only. Remove personal paths and tokens first.
+      render: text
+  - type: checkboxes
+    id: inputs
+    attributes:
+      label: Inputs
+      options:
+        - label: This report contains no game files, keys, firmware, account data or personal paths.
+          required: true

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://d1reimagined.com/discord
+    about: Ask in the help forum on the D1 Reimagined Discord. Issues are for confirmed problems and planned work.
+  - name: Ideas and early discussion
+    url: https://d1reimagined.com/discord
+    about: Share ideas in the ideas forum on Discord before opening an issue.
+  - name: Security report
+    url: https://d1reimagined.com/security
+    about: Report security issues privately, never in a public issue.
