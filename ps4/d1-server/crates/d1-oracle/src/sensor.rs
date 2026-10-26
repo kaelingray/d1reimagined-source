@@ -78,6 +78,12 @@ pub const TAG_NAME_REF: u32 = 0x8080_04B1;
 /// The sensor AUTHORITY table, decoded by `0x2A1C40` into `world+0xA88` when `has_sensor_block`
 /// is set (56578: the schema pointer at `0x191A310`, filled at load).
 pub const TAG_AUTHORITY: u32 = 0x8080_0CF7;
+/// Types a sensor client's state may carry as a kind-`0x22` typed value (a registry handle the
+/// schema never reaches statically, so the oracle must be told). `0x8080279A`: the prop command,
+/// three `(i32, i32, f32)` channels, in a prop state's command block (`0x808007D9` / `0x80800387`
+/// `+0x20` count, `+0x30` type, `+0x40` value). Channels 0-2 at `(1, 1, 1.0)` on The Breach's
+/// control and light props open the barrier to the starter rifle (01.24 JOIN210).
+pub const TYPED_VALUE_TYPES: &[u32] = &[0x8080_279A];
 /// Entries in the authority table: 65 blocks of 12 bytes after a `u32`.
 pub const AUTHORITY_BLOCKS: usize = 65;
 
@@ -302,14 +308,14 @@ impl SensorPhaseUpdate {
                 let e = name.encode(&c.name_ref_image(), 0x1_0000)?;
                 let value = match (&c.a_value, c.has_a) {
                     (Some((tag, image)), true) => {
-                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
+                        Some(ObjectOracle::with_types(*tag, TYPED_VALUE_TYPES)?.encode(image, 0x1_0000)?)
                     }
                     _ => None,
                 };
                 let value_bits = value.as_ref().map_or(0, |v| v.bits);
                 let b_val = match (&c.b_value, c.has_b) {
                     (Some((tag, image)), true) => {
-                        Some(ObjectOracle::new(*tag)?.encode(image, 0x1_0000)?)
+                        Some(ObjectOracle::with_types(*tag, TYPED_VALUE_TYPES)?.encode(image, 0x1_0000)?)
                     }
                     _ => None,
                 };
@@ -424,6 +430,33 @@ const AUDIT_NAME_SUB: i16 = 3;
 const AUDIT_P3: &str = "0000000000785b595ee46000c00000557417fffffff811c9dc57fffffff020000000000811c9dc5000000003fffffffc08e4ee2807fff811c9dc50";
 /// The audited phase-3 + tail-fix payload (`record+0x674 = 0`, `record+0x678 = 0xC2DACAF7`).
 const AUDIT_TF: &str = "0000000000785b595ee46000c00000557417fffffff811c9dc57fffffff020000000001c2dacaf7000000003fffffffc08e4ee2807fff811c9dc50";
+
+#[cfg(test)]
+mod typed_value_tests {
+    /// ⭐ The Breach activation: a created prop (`0x808007D9`) carrying one prop command with
+    /// channels 0-2 at (1, 1, 1.0) round-trips through the client's codec once its type is in the
+    /// registry.
+    #[test]
+    fn a_prop_command_round_trips() {
+        let mut img = vec![0u8; 240];
+        img[0..4].copy_from_slice(&1u32.to_le_bytes());
+        img[8] = 1;
+        img[0xC..0x10].copy_from_slice(&0x811C_9DC5u32.to_le_bytes());
+        img[0x10] = 0xFF;
+        img[0x12..0x14].copy_from_slice(&(-1i16).to_le_bytes());
+        img[0x20] = 1;
+        img[0x30..0x34].copy_from_slice(&0x8080_279Au32.to_le_bytes());
+        for ch in 0..3 {
+            let at = 0x40 + 12 * ch;
+            img[at..at + 4].copy_from_slice(&1i32.to_le_bytes());
+            img[at + 4..at + 8].copy_from_slice(&1i32.to_le_bytes());
+            img[at + 8..at + 12].copy_from_slice(&1.0f32.to_le_bytes());
+        }
+        let mut o = crate::object::ObjectOracle::with_types(0x8080_07D9, super::TYPED_VALUE_TYPES).unwrap();
+        let e = o.encode(&img, 0x1_0000).unwrap();
+        assert_eq!(o.decode(&e.payload).unwrap().object, img);
+    }
+}
 
 #[cfg(test)]
 mod authority_tests {

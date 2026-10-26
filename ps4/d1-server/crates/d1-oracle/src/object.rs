@@ -214,9 +214,19 @@ impl ObjectOracle {
         Self::new_unchecked(tag)
     }
 
+    /// [`Self::new`] with typed-value types resolvable (see [`SchemaHarness::new_with_types`]).
+    pub fn with_types(tag: u32, value_types: &[u32]) -> Result<Self> {
+        control::require_object_control()?;
+        Self::new_unchecked_with(tag, value_types)
+    }
+
     /// Construct without running the control. **Only** the control itself may call this.
     pub(crate) fn new_unchecked(tag: u32) -> Result<Self> {
-        let mut s = SchemaHarness::new(tag, 1, 0)?;
+        Self::new_unchecked_with(tag, &[])
+    }
+
+    fn new_unchecked_with(tag: u32, value_types: &[u32]) -> Result<Self> {
+        let mut s = SchemaHarness::new_with_types(tag, 1, 0, value_types)?;
         let memset = harness::addrs_for(&s.image.sha256())
             .ok_or_else(|| OracleError::Eboot("no harness address set for this image".into()))?
             .memset;

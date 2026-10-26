@@ -72,6 +72,9 @@ enum Cmd {
         /// Hex bytes for the decoded C object (encode direction).
         #[arg(long)]
         obj: Option<String>,
+        /// A type a kind-0x22 typed value in the object names (repeatable), e.g. 0x8080279a.
+        #[arg(long, value_parser = parse_int)]
+        value_type: Vec<u64>,
         /// Convenience: roster key at +0x00, count at +0x08, SOIDs from +0x10.
         #[arg(long, value_parser = parse_int)]
         roster_key: Option<u64>,
@@ -2272,9 +2275,10 @@ fn run(cli: &Cli) -> anyhow::Result<ExitCode> {
             Ok(if ok { ExitCode::SUCCESS } else { ExitCode::from(2) })
         }
 
-        Cmd::Object { tag, decode, obj, roster_key, soid, capacity } => {
+        Cmd::Object { tag, decode, obj, value_type, roster_key, soid, capacity } => {
             let tag = *tag as u32;
-            let mut o = ObjectOracle::new(tag)?;
+            let types: Vec<u32> = value_type.iter().map(|&t| t as u32).collect();
+            let mut o = ObjectOracle::with_types(tag, &types)?;
             println!("tag {tag:#010x}  struct {} (={:#x}) bytes", o.struct_size(), o.struct_size());
             if let Some(h) = decode {
                 let d = o.decode(&hex(h)?)?;
