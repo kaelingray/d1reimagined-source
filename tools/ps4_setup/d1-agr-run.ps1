@@ -22,7 +22,10 @@ $D = "F:\d1\d1preservation-main\cfw-staging\$Name"
 New-Item -ItemType Directory -Force $D | Out-Null
 $L = 'F:\d1\tools\shadPS4\0.19.0\user\log\shad_log.txt'
 $pad = 'F:\d1\tools\d1-pad.ps1'
-$x = "D1_AH_MISSION_STEPS=$Steps"; if ($Extra) { $x += ",$Extra" }
+# The Breach props (lights, barrier, rifle) are created by the client only while it holds their
+# authority block: every block assigned to machine 3 (the client's machine in bubble 3), not yet
+# applied, so the client acknowledges it and keeps it (notes 26 Oct).
+$x = "D1_AH_MISSION_STEPS=$Steps,D1_AH_SENSOR_AUTHORITY=3,1,0"; if ($Extra) { $x += ",$Extra" }
 Start-Process pwsh -WindowStyle Minimized -ArgumentList @('-NoProfile', '-File', 'F:\d1\tools\d1-lab-served.ps1', '-Name', $Name,
     '-Profile', "$B\profile-tutorial-f.bin",
     '-UnlockFlags', '98,308,419,440,834,2668,3391,5021,5998,6029,433,2539,2549,3558,3587,3520,3527,3531,3533,3534,3535,3536,3544,3568,3594,3595,305,2669,2670,3389',

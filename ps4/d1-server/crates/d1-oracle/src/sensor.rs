@@ -145,12 +145,21 @@ impl SensorAuthority {
     /// Every block to `machine` (the 6-bit machine id the client calls local, e.g. 14), with
     /// sequence `seq`, applied.
     pub fn all_to(machine: u8, seq: u16) -> Self {
+        Self::all_to_with(machine, seq, true)
+    }
+
+    /// [`Self::all_to`] with the `applied` flag chosen. The applier (`0x2A1AB0`) starts a transfer
+    /// on a new `seq` (block bit set in `world+0xA70` and `+0xA7C`) and ends it when `applied` is
+    /// set (both bits cleared), so a table sent already applied leaves no block held. A prop's
+    /// "may I create it" test (`0x108360` → `0x2A1A80`) wants its block's `+0xA70` bit set and
+    /// `+0xA7C` clear: the transfer started and acknowledged by the client, not yet ended.
+    pub fn all_to_with(machine: u8, seq: u16, applied: bool) -> Self {
         let mut image = vec![0u8; 4 + 12 * AUTHORITY_BLOCKS];
         for i in 0..AUTHORITY_BLOCKS {
             let e = 4 + 12 * i;
             image[e + 1] = machine;
             image[e + 8..e + 10].copy_from_slice(&seq.to_le_bytes());
-            image[e + 0xA] = 1;
+            image[e + 0xA] = u8::from(applied);
         }
         Self { changed: (1u128 << AUTHORITY_BLOCKS) - 1, image }
     }
