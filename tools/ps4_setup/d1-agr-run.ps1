@@ -8,9 +8,12 @@ param(
     [int]$WatchSeconds = 220,
     # Raw d1-watchwrite arguments (e.g. --read ADDR) instead of -WatchExec.
     [string[]]$WatchArgs = @(),
-    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-ev.txt',
-    # The served profile (profile-tutorial-g.bin also owes the starter Khvostov as pending loot).
-    [string]$Profile = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578\profile-tutorial-f.bin'
+    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-breach10.txt',
+    # The served profile. profile-tutorial-t.bin is the unarmed tutorial Guardian (no weapons in the
+    # inventory or the roster) who owes the starter Khvostov as pending loot.
+    [string]$Profile = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578\profile-tutorial-t.bin',
+    # -Geared: the old fixture (geared inventory and roster, hand cannon in hand, no rifle grant).
+    [switch]$Geared
 )
 # A Guardian Rises (the tutorial) end to end, unattended: boot, title (X), skip the opening Mars
 # cinematic in character:prologue (X, then O - left playing it can trip the BLOCK_DETECT watchdog),
@@ -27,7 +30,16 @@ $pad = 'F:\d1\tools\d1-pad.ps1'
 # The Breach props (lights, barrier, rifle) are created by the client only while it holds their
 # authority block: every block assigned to machine 3 (the client's machine in bubble 3), not yet
 # applied, so the client acknowledges it and keeps it (notes 26 Oct).
-$x = "D1_AH_MISSION_STEPS=$Steps,D1_AH_SENSOR_AUTHORITY=3,1,0"; if ($Extra) { $x += ",$Extra" }
+$x = "D1_AH_MISSION_STEPS=$Steps,D1_AH_SENSOR_AUTHORITY=3,1,0"
+if (-not $Geared) {
+    # The unarmed tutorial: weaponless inventory and peer roster. Claiming the Breach rifle (601)
+    # grants the Khvostov (item + profile with the primary slot unlocked) and equips it (peer cards).
+    $GD = "$B\grants"
+    $x += ",D1_INVENTORY=$B\inventory-tutorial,D1_ROSTER_DIR=$B\rosters-f0-tutorial"
+    $x += ",D1_LOOT_GRANT=0x827dbaf0=0xd100000000000401:$GD\khvostov-3598.bin|$GD\profile-tutorial-th.bin"
+    $x += ",D1_LOOT_GRANT_ROSTER=$GD\rosters-f0-tutorial-khv"
+}
+if ($Extra) { $x += ",$Extra" }
 Start-Process pwsh -WindowStyle Minimized -ArgumentList @('-NoProfile', '-File', 'F:\d1\tools\d1-lab-served.ps1', '-Name', $Name,
     '-Profile', $Profile,
     '-UnlockFlags', '98,308,419,440,834,2668,3391,5021,5998,6029,433,2539,2549,3558,3587,3520,3527,3531,3533,3534,3535,3536,3544,3568,3594,3595,305,2669,2670,3389',
