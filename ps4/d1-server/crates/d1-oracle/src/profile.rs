@@ -165,6 +165,26 @@ pub struct Offs {
     pub off_all_content_override_items: usize,
     pub off_completions: usize,
     pub completion_slots: usize,
+    /// ⭐ The 64 pending-loot slots (`0x80801829`, 56 B each): field `[10]` `0x80801701` `+0x8`,
+    /// `0x80804671`. `None` where unmeasured.
+    pub off_pending_loot: Option<usize>,
+}
+
+/// Pending-loot slots and their stride.
+pub const PENDING_LOOT_SLOTS: usize = 64;
+pub const PENDING_LOOT_STRIDE: usize = 0x38;
+
+/// ⭐ A pending world-loot record (`0x80801829`): an item the character is owed and will receive
+/// when it picks up the matching world drop. The host announces the drop with incident 1504 (a
+/// `0x80800CB6` body carrying the same nonce); walking onto it sends a service-601 claim naming
+/// `source_kind` and the nonce. Layout: `+0` i16 content index, `+4` u32 quantity (1), `+8`
+/// 4-bit source kind (3 = a world spawn), `+0x10` `{u32 key, u64 id}` nonce, `+0x20` u32 (1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingLoot {
+    pub content_index: u16,
+    pub source_kind: u8,
+    pub key: u32,
+    pub nonce: u64,
 }
 
 pub const OFFS_0129: Offs = Offs {
@@ -177,6 +197,7 @@ pub const OFFS_0129: Offs = Offs {
     off_all_content_override_items: OFF_ALL_CONTENT_OVERRIDE_ITEMS,
     off_completions: OFF_COMPLETIONS,
     completion_slots: COMPLETION_SLOTS,
+    off_pending_loot: None,
 };
 
 /// How far 56578 moved everything from body field `[12]` onward.
@@ -200,6 +221,7 @@ pub const OFFS_56578: Offs = Offs {
     // (`0x8080165B`). `0x28D000` reads kind 3 at `+0x53C0 + sub` on this build.
     off_completions: OFF_COMPLETIONS + 0x100,
     completion_slots: 2560,
+    off_pending_loot: Some(0x3E90 + 0x8),
 };
 
 /// The offset set for an image, by its SHA-256.
@@ -332,6 +354,8 @@ pub struct ProfileSpec {
     /// the storage space differ. A kind-3 flag served here reaches the client's derived plane the
     /// way a real account's completions did; it is how the Director's destination gates are served.
     pub completions: Vec<u16>,
+    /// Pending world-loot records (see [`PendingLoot`]). Non-empty marks every other slot empty.
+    pub pending_loot: Vec<PendingLoot>,
 }
 
 impl Default for ProfileSpec {
@@ -349,6 +373,7 @@ impl Default for ProfileSpec {
             empty_item_slots: true,
             all_content: false,
             completions: Vec::new(),
+            pending_loot: Vec::new(),
         }
     }
 }
@@ -365,7 +390,7 @@ impl ProfileSpec {
 
     /// [`ProfileSpec::to_object`] at an explicit build's offsets. Needs no image.
     pub fn to_object_for(&self, o: Offs) -> Result<Vec<u8>> {
-        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, off_completions, completion_slots, .. } = o;
+        let Offs { off_stat_override_present, off_stat_override, off_all_content_override_items, off_all_content_override, struct_size, off_completions, completion_slots, off_pending_loot, .. } = o;
         let too_many = |what: &str, got: usize, cap: usize| {
             Err(OracleError::Shape(format!(
                 "{got} {what} exceeds the schema's {cap} slots - the extra entries would land in \
@@ -395,6 +420,30 @@ impl ProfileSpec {
             for i in 0..ITEM_SLOTS {
                 let at = OFF_ITEM_SLOTS + i * ITEM_SLOT_STRIDE;
                 o[at..at + 2].copy_from_slice(&EMPTY_INDEX.to_le_bytes());
+            }
+        }
+
+        if !self.pending_loot.is_empty() {
+            let Some(base) = off_pending_loot else {
+                return Err(OracleError::Shape("pending loot: no measured offset on this build".into()));
+            };
+            if self.pending_loot.len() > PENDING_LOOT_SLOTS {
+                return too_many("pending loot records", self.pending_loot.len(), PENDING_LOOT_SLOTS);
+            }
+            for k in 0..PENDING_LOOT_SLOTS {
+                let at = base + k * PENDING_LOOT_STRIDE;
+                match self.pending_loot.get(k) {
+                    // Zero is item 0, not empty (as for the item slots): mark unused slots -1.
+                    None => o[at..at + 2].copy_from_slice(&EMPTY_INDEX.to_le_bytes()),
+                    Some(p) => {
+                        o[at..at + 2].copy_from_slice(&p.content_index.to_le_bytes());
+                        o[at + 4..at + 8].copy_from_slice(&1u32.to_le_bytes());
+                        o[at + 8] = p.source_kind;
+                        o[at + 0x10..at + 0x14].copy_from_slice(&p.key.to_le_bytes());
+                        o[at + 0x18..at + 0x20].copy_from_slice(&p.nonce.to_le_bytes());
+                        o[at + 0x20..at + 0x24].copy_from_slice(&1u32.to_le_bytes());
+                    }
+                }
             }
         }
 

@@ -384,6 +384,10 @@ enum ProfileCmd {
         /// The master unlock table as TSV (`index hash kind sub`), e.g. from `d1-flagtable.py`.
         #[arg(long, default_value = "capture-rig/builds/later-56578/unlock-flags.tsv")]
         flag_table: String,
+        /// ⭐ A pending world-loot record `CONTENT_INDEX:SOURCE_KIND:KEY:NONCE` (repeatable), e.g.
+        /// the starter Khvostov `3598:3:1:0x...` that the Breach loot drop (incident 1504) names.
+        #[arg(long)]
+        pending_loot: Vec<String>,
         /// Print the payload and the decode; write nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1045,7 +1049,7 @@ fn run_profile(cli: &Cli, cmd: &ProfileCmd) -> anyhow::Result<ExitCode> {
         ProfileCmd::Build {
             out, soid, identity, destination, light, light_index, stats, inventory, equip,
             no_equip, progressions, phantom_item_slots, no_content_indices, all_content, complete,
-            complete_flags, flag_table, dry_run,
+            complete_flags, flag_table, pending_loot, dry_run,
         } => {
             let id: Vec<u8> = identity
                 .split(',')
@@ -1218,6 +1222,16 @@ fn run_profile(cli: &Cli, cmd: &ProfileCmd) -> anyhow::Result<ExitCode> {
                     subs.dedup();
                     subs
                 },
+                pending_loot: pending_loot.iter().map(|v| {
+                    let f: Vec<&str> = v.split(':').collect();
+                    let num = |t: &str| t.strip_prefix("0x").map_or_else(|| t.parse::<u64>().ok(), |h| u64::from_str_radix(h, 16).ok());
+                    (|| match f.as_slice() {
+                        [i, k, key, n] => Some(profile::PendingLoot {
+                            content_index: num(i)? as u16, source_kind: num(k)? as u8, key: num(key)? as u32, nonce: num(n)?,
+                        }),
+                        _ => None,
+                    })().ok_or_else(|| anyhow::anyhow!("--pending-loot {v:?}: want CONTENT_INDEX:SOURCE_KIND:KEY:NONCE"))
+                }).collect::<Result<Vec<_>, _>>()?,
             };
 
             let mut oracle = ObjectOracle::new(profile::TAG)?;

@@ -143,6 +143,10 @@ pub struct MissionStep {
     pub team0: Vec<u8>,
     pub team_minus1: Vec<u8>,
     pub region: Option<u32>,
+    /// ⭐ An incident the host sends when the step fires (`incident=TYPE:BODYHEX` on the steps
+    /// line): udt 18 is also AH → client. E.g. 1504, the world-loot drop that announces the
+    /// starter rifle in The Breach (body = a `0x80800CB6` object).
+    pub incident: Option<(u32, Vec<u8>)>,
 }
 
 /// When a [`MissionStep`] fires. Steps fire in order, one after another.
@@ -166,6 +170,17 @@ pub enum StepWhen {
     /// [`trigger_report`]), or N seconds after the previous step. Each report is used once, so a
     /// trigger that fires before its step is due (two armed at once) still counts.
     OnTrigger { group: u32, kind: u8, index: u16, timeout: Duration },
+}
+
+/// A udt-18 struct image carrying one incident (see [`ActivityInstance::incident_due`]).
+pub fn incident_image(incident: u32, body: &[u8]) -> Vec<u8> {
+    let mut img = vec![0u8; 0x2CC];
+    img[0..4].copy_from_slice(&1u32.to_le_bytes());
+    img[4..8].copy_from_slice(&incident.to_le_bytes());
+    let n = body.len().min(500);
+    img[0xD4..0xD8].copy_from_slice(&(n as u32).to_le_bytes());
+    img[0xD8..0xD8 + n].copy_from_slice(&body[..n]);
+    img
 }
 
 /// The player trigger an incident-3403 struct image names: its body (a bit buffer at `+0xD8`,
@@ -334,6 +349,8 @@ pub struct ActivityInstance {
     current_slice: Option<u32>,
     /// Player-trigger reports (incident 3403) by name, and whether a step has used each.
     trigger_reports: Vec<((u32, u8, u16), bool)>,
+    /// Host incidents waiting to be sent (see [`MissionStep::incident`]).
+    pending_incidents: Vec<(u32, Vec<u8>)>,
     /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
     slice_request: Option<(u8, u32, Instant)>,
     /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
@@ -468,6 +485,7 @@ impl ActivityInstance {
             incidents: Vec::new(),
             current_slice: None,
             trigger_reports: Vec::new(),
+            pending_incidents: Vec::new(),
             slice_request: None,
             membership_dirty: false,
             membership_update: 1,
@@ -1279,6 +1297,17 @@ impl ActivityInstance {
         Some(AhPush::new(self.ah_id, AhMessage::ReplicateMembership(m)))
     }
 
+    /// The next host incident to send, as udt 18 (`0x8080097D`, 716 bytes): `+0` the count (5 bits),
+    /// `+4` the 12-bit types, `+0x68` an optional list (left empty), `+0xD4` the body length in bytes
+    /// (9 bits) and `+0xD8` the body (up to 500 bytes).
+    pub fn incident_due(&mut self) -> Option<AhPush> {
+        if !matches!(self.state, InstanceState::Live) || self.pending_incidents.is_empty() {
+            return None;
+        }
+        let (t, body) = self.pending_incidents.remove(0);
+        Some(AhPush::new(self.ah_id, AhMessage::Opaque { user_defined_type: 18, bytes: incident_image(t, &body) }))
+    }
+
     /// Arm the timed mission steps (see [`MissionStep`]).
     pub fn set_mission_steps(&mut self, steps: std::collections::HashMap<u16, Vec<MissionStep>>) {
         self.mission_steps = steps;
@@ -1330,6 +1359,10 @@ impl ActivityInstance {
             return false;
         }
         let team0 = matches!(&self.sensor_team_frames, Some((_, _, set)) if set.contains(&self.activity_index));
+        if let Some((t, body)) = step.incident.clone() {
+            tracing::info!("⭐ mission step {i}: host incident {t} ({} body bytes)", body.len());
+            self.pending_incidents.push((t, body));
+        }
         self.sensor_payload = Some(if team0 { step.team0 } else { step.team_minus1 });
         if let Some(r) = step.region {
             // The host teleport: ask the group to move to slice set `r` and table its region.
@@ -1626,6 +1659,7 @@ mod tests {
             team0: vec![b],
             team_minus1: vec![b],
             region,
+            incident: None,
         };
         let mut steps = std::collections::HashMap::new();
         steps.insert(i.activity_index(), vec![step(0, 1, None), step(70, 2, None), step(120, 3, Some(112))]);
@@ -1684,6 +1718,15 @@ mod tests {
         assert_eq!(m.pah_region_id(), 24);
     }
 
+    /// ⭐ A host incident goes out as udt 18 with its type and body in place.
+    #[test]
+    fn a_host_incident_is_a_udt_18_image() {
+        let img = incident_image(1504, &[0xAA, 0xBB]);
+        assert_eq!(img.len(), 0x2CC);
+        assert_eq!(&img[0..8], &[1, 0, 0, 0, 0xE0, 0x05, 0, 0]);
+        assert_eq!(&img[0xD4..0xDA], &[2, 0, 0, 0, 0xAA, 0xBB]);
+    }
+
     /// ⭐ The trigger name in a 3403 report, from the run agr-breach13 incident (trigger 34).
     #[test]
     fn a_trigger_report_names_its_trigger() {
@@ -1726,7 +1769,7 @@ mod tests {
         assert_eq!(StepWhen::parse("+5"), Some(StepWhen::AfterPrevious(Duration::from_secs(5))));
         assert_eq!(StepWhen::parse("120"), Some(StepWhen::At(Duration::from_secs(120))));
         let (mut i, now) = instance();
-        let step = |when, b: u8| MissionStep { when, team0: vec![b], team_minus1: vec![b], region: None };
+        let step = |when, b: u8| MissionStep { when, team0: vec![b], team_minus1: vec![b], region: None, incident: None };
         let on891 = StepWhen::parse("@891|70").unwrap();
         let mut steps = std::collections::HashMap::new();
         steps.insert(i.activity_index(), vec![step(StepWhen::At(Duration::ZERO), 1), step(on891, 2), step(on891, 3)]);
@@ -1758,7 +1801,7 @@ mod tests {
         let mut steps = std::collections::HashMap::new();
         steps.insert(
             i.activity_index(),
-            vec![MissionStep { when: StepWhen::At(Duration::ZERO), team0: vec![1], team_minus1: vec![1], region: Some(112) }],
+            vec![MissionStep { when: StepWhen::At(Duration::ZERO), team0: vec![1], team_minus1: vec![1], region: Some(112), incident: None }],
         );
         i.set_mission_steps(steps);
         assert!(i.advance_mission(now));

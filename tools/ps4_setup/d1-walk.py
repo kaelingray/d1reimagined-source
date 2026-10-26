@@ -114,6 +114,8 @@ def main():
     ap.add_argument("--tolerance", type=float, default=2.5)
     ap.add_argument("--radius", type=float, default=25)
     ap.add_argument('--max-seconds', type=float, default=600)
+    ap.add_argument('--avoid', action='append', default=[],
+                    help='x0,y0,x1,y1: a hazard box to keep out of (the pit by the Wall stairs: 331,-837,338,-819)')
     ap.add_argument('--keepalive', type=float, help='only keep the Guardian active for this many seconds')
     a = ap.parse_args()
     if a.keepalive:
@@ -179,10 +181,27 @@ def main():
         t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - x1) * dx + (p[1] - y1) * dy) / L2))
         return math.dist(p[:2], (x1 + t * dx, y1 + t * dy))
 
+    boxes = [tuple(float(v) for v in b.split(',')) for b in a.avoid]
+
+    def escape(p, margin=1.5):
+        # The nearest point outside any hazard box (grown by margin) when p is inside one.
+        for x0, y0, x1, y1 in boxes:
+            x0, y0, x1, y1 = min(x0, x1) - margin, min(y0, y1) - margin, max(x0, x1) + margin, max(y0, y1) + margin
+            if x0 < p[0] < x1 and y0 < p[1] < y1:
+                exits = [(p[0] - x0, (x0 - 1.0, p[1])), (x1 - p[0], (x1 + 1.0, p[1])),
+                         (p[1] - y0, (p[0], y0 - 1.0)), (y1 - p[1], (p[0], y1 + 1.0))]
+                return min(exits)[1]
+        return None
+
     retreats = 0
     while i < len(route) and time.time() < t_end:
         active(force=False)
         target = route[i]
+        out = escape(here)
+        if out:
+            # Inside a hazard margin: step out first, short pulses, then resume the route.
+            print(f'hazard: stepping out to ({out[0]:.1f}, {out[1]:.1f})')
+            target = [out[0], out[1], here[2]]
         d = math.dist(here[:2], target[:2])
         # Sharp corners need the waypoint itself: overshooting the north-to-west turn at the
         # Wall's stairs (waypoint 43) drops the Guardian into a pit (runs agr-breach5 and 9).
