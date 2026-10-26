@@ -33,14 +33,11 @@
 /ps3_updates/01.13/*
 !/ps3_updates/01.13/USRDIR/
 /ps3_updates/01.13/USRDIR/*
-!/ps3_updates/01.13/USRDIR/EBOOT.elf
 /ps3_updates/01.24/*
 !/ps3_updates/01.24/USRDIR/
 /ps3_updates/01.24/USRDIR/*
-!/ps3_updates/01.24/USRDIR/EBOOT.elf
 
 /eboot/*
-!/eboot/EBOOT.elf
 
 /logs/*
 !/logs/TEST364-rpcs3.log

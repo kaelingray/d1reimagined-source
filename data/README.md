@@ -119,11 +119,11 @@ instructions, machine provenance and current capture material outside this repos
 
 | Directory | Source relative to the private runtime | Contents |
 | --- | --- | --- |
-| `eboot/` | `RESEARCH/ps3_decrypt/` | Decrypted `EBOOT.elf` |
+| `eboot/` | `RESEARCH/ps3_decrypt/` | Not in the repository: the decrypted `EBOOT.elf` (game executable) was removed on 26 Oct 2026. Use your own copy; its hash is in `SHA256SUMS.txt`. |
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
 | `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
-| `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | 01.13 and 01.24 decrypted EBOOTs, type exports, the derived 01.24 service map and package inventory, handle maps, comparison reports and update lists |
+| `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | Type exports, the derived 01.24 service map and package inventory, handle maps, comparison reports and update lists |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
 41 intact packages and all twelve package parts are individually below 100 MB.
@@ -133,7 +133,10 @@ The data-file sizes and hashes are recorded in `SHA256SUMS.txt`.
 repository. It contains names only, one per line.
 
 The 01.13 and 01.24 update EBOOTs were extracted from their Sony update PKGs
-and decrypted by RPCS3; the encrypted EBOOTs and update PKGs are not included.
+and decrypted by RPCS3. Neither they nor the encrypted EBOOTs and update PKGs are
+in the repository (the decrypted EBOOTs were removed on 26 Oct 2026); the derived
+exports and reports here were made from them, and `SHA256SUMS.txt` keeps their hashes
+so a private copy can be checked.
 The default export did not fetch the full update package set, so no `final_*.txt`
 lists were generated. A later targeted fetch of four 012f update packages
 provided the 01.24 service table; only its small derived map is included here.
