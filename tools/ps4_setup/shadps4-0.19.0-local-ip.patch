@@ -406,11 +406,378 @@ index 2035535..e667102 100644
  
  enum class ProbeResult {
      Ok,              // reachable and protocol version matches SHAD_PROTOCOL_VERSION
+diff --git a/src/video_core/buffer_cache/buffer_cache.cpp b/src/video_core/buffer_cache/buffer_cache.cpp
+index a47c578..23b89af 100644
+--- a/src/video_core/buffer_cache/buffer_cache.cpp
++++ b/src/video_core/buffer_cache/buffer_cache.cpp
+@@ -2,6 +2,7 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include <algorithm>
++#include <cstdlib>
+ #include <magic_enum/magic_enum.hpp>
+ 
+ #include "common/alignment.h"
+@@ -354,7 +355,11 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32
+ }
+ 
+ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_addr, u32 size) {
+-    if (auto type = texture_cache.IsMeta(device_addr)) {
++    static const bool d1_meta_run = [] {
++        const char* v = std::getenv("D1_META_RUN");
++        return v && v[0] == '1';
++    }();
++    if (auto type = texture_cache.IsMeta(device_addr); type && !d1_meta_run) {
+         if (*type == TextureCache::MetaType::HTile) {
+             static constexpr u32 ZmaskUncompressed = 0xf;
+             runtime.FillBuffer(arena, arena->Offset(device_addr), size, ZmaskUncompressed);
+diff --git a/src/video_core/renderer_vulkan/vk_rasterizer.cpp b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+index 26faa77..eac6e62 100644
+--- a/src/video_core/renderer_vulkan/vk_rasterizer.cpp
++++ b/src/video_core/renderer_vulkan/vk_rasterizer.cpp
+@@ -1,3 +1,9 @@
++#include <string>
++#include <filesystem>
++#include <cstdio>
++#include <chrono>
++#include <cstdlib>
++#include <unordered_set>
+ // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+@@ -21,6 +27,133 @@
+ 
+ namespace Vulkan {
+ 
++namespace {
++// D1 frame dump. Set D1_DUMP_DIR to a folder, then create "<D1_DUMP_DIR>.flag": for the next
++// ~0.2 s every texture a shader reads (first time per address and shader) is copied out linear,
++// in draw order, as raw files named SEQ_ADDR_SHADER_WxH_FORMAT_BPP.raw.
++struct D1Dump {
++    std::string dir;
++    std::chrono::steady_clock::time_point next_poll{}, until{};
++    bool enabled = false, active = false;
++    u32 seq = 0;
++    std::unordered_set<u64> seen;
++    std::vector<std::string> events;
++};
++D1Dump& D1DumpState() {
++    static D1Dump d = [] {
++        D1Dump d{};
++        if (const char* v = std::getenv("D1_DUMP_DIR")) {
++            d.dir = v;
++            d.enabled = !d.dir.empty();
++        }
++        return d;
++    }();
++    return d;
++}
++void D1DumpPoll() {
++    auto& d = D1DumpState();
++    if (!d.enabled) {
++        return;
++    }
++    const auto now = std::chrono::steady_clock::now();
++    if (d.active && now > d.until) {
++        d.active = false;
++        VideoCore::g_d1_dump_live = false;
++        if (std::FILE* f = std::fopen((d.dir + "/events.txt").c_str(), "w")) {
++            for (const auto& e : d.events) {
++                std::fputs(e.c_str(), f);
++                std::fputc('\n', f);
++            }
++            std::fclose(f);
++        }
++        d.events.clear();
++        LOG_WARNING(Render_Vulkan, "D1 dump: {} textures written to {}", d.seq, d.dir);
++    }
++    if (d.active || now < d.next_poll) {
++        return;
++    }
++    d.next_poll = now + std::chrono::milliseconds(500);
++    std::error_code ec;
++    const std::filesystem::path flag{d.dir + ".flag"};
++    if (std::filesystem::exists(flag, ec)) {
++        std::filesystem::remove(flag, ec);
++        std::filesystem::create_directories(d.dir, ec);
++        d.active = true;
++        VideoCore::g_d1_dump_live = true;
++        d.until = now + std::chrono::milliseconds(200);
++        d.seq = 0;
++        d.seen.clear();
++        LOG_WARNING(Render_Vulkan, "D1 dump: started");
++    }
++}
++void D1DumpTexture(Runtime& runtime, Scheduler& scheduler, VideoCore::Image& image, u64 hash) {
++    auto& d = D1DumpState();
++    if (!d.active || image.info.props.is_block || image.info.num_samples > 1) {
++        return;
++    }
++    if (!d.seen.insert(image.info.guest_address ^ (hash * 0x9E3779B97F4A7C15ull)).second ||
++        d.seen.size() > 800) {
++        return;
++    }
++    const bool depth = image.info.props.is_depth;
++    const u32 bpp = depth ? 4 : image.info.num_bits / 8;
++    const u32 w = image.info.size.width, h = image.info.size.height;
++    // 3D images: every slice, stacked vertically in the file (named W x H*D).
++    const u32 dz = image.info.type == AmdGpu::ImageType::Color3D ? image.info.size.depth : 1;
++    const u64 size = u64(w) * h * dz * bpp;
++    if (bpp == 0 || size == 0 || size > (64ull << 20)) {
++        return;
++    }
++    const auto dl = runtime.GetStagingPool().Request(size, VideoCore::MemoryType::HostCached, 16,
++                                                     true);
++    const vk::BufferImageCopy copy = {
++        .bufferOffset = dl.offset,
++        .bufferRowLength = 0,
++        .bufferImageHeight = 0,
++        .imageSubresource =
++            {
++                .aspectMask = depth ? vk::ImageAspectFlagBits::eDepth
++                                    : vk::ImageAspectFlagBits::eColor,
++                .mipLevel = 0,
++                .baseArrayLayer = 0,
++                .layerCount = 1,
++            },
++        .imageOffset = {0, 0, 0},
++        .imageExtent = {w, h, dz},
++    };
++    runtime.DownloadImage(&image, dl.buffer, std::span{&copy, 1});
++    std::string name = fmt::format("{}/{:04}_{:x}_{:016x}_{}x{}_{}_{}.raw", d.dir, d.seq++,
++                                   image.info.guest_address, hash, w, h * dz,
++                                   vk::to_string(image.info.pixel_format), bpp);
++    scheduler.DeferPriorityOperation([&runtime, dl, size, name = std::move(name)] {
++        dl.Invalidate();
++        if (std::FILE* f = std::fopen(name.c_str(), "wb")) {
++            std::fwrite(dl.mapped, 1, size, f);
++            std::fclose(f);
++        }
++        runtime.GetStagingPool().FreeDeferred(dl);
++    });
++}
++void D1DumpEvent(std::string&& e) {
++    auto& d = D1DumpState();
++    // Events naming the traced image (D1_TRACE_IMAGE) also go to the log, interleaved with the
++    // texture cache's trace of that address.
++    static const std::string traced = [] {
++        const char* v = std::getenv("D1_TRACE_IMAGE");
++        return v ? std::string(v) : std::string();
++    }();
++    if (d.active && !traced.empty() && e.find(traced) != std::string::npos) {
++        LOG_WARNING(Render_Vulkan, "D1 event {}", e);
++    }
++    if (d.active && d.events.size() < 200000) {
++        d.events.push_back(std::move(e));
++    }
++}
++bool D1DumpActive() {
++    return D1DumpState().active;
++}
++} // namespace
++
+ static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
+     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
+     // is encountered and implemented in the recompiler.
+@@ -598,7 +731,21 @@ bool Rasterizer::IsComputeMetaClear(const Pipeline* pipeline) {
+             if (!desc.IsSpecial() && desc.is_written && texture_cache.ClearMeta(address)) {
+                 // Assume all slices were updates
+                 LOG_TRACE(Render_Vulkan, "Metadata update skipped");
+-                return true;
++                // D1: the game reuses depth memory, so an address once registered as HTILE can
++                // hold ordinary compute output later; skipping that dispatch loses its data.
++                // D1_META_RUN=1 records the clear but still runs the dispatch.
++                static const bool d1_meta_run = [] {
++                    const char* v = std::getenv("D1_META_RUN");
++                    return v && v[0] == '1';
++                }();
++                static std::unordered_set<VAddr> d1_skip_seen;
++                if (d1_skip_seen.insert(address).second && d1_skip_seen.size() < 64) {
++                    LOG_WARNING(Render_Vulkan,
++                                "Compute write to metadata @ {:#x} ({} bytes, cs {:#x}): {}",
++                                address, desc.GetSharp(info).GetSize(), info.pgm_hash,
++                                d1_meta_run ? "run anyway" : "dispatch skipped");
++                }
++                return !d1_meta_run;
+             }
+         }
+     }
+@@ -811,14 +958,53 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
+ 
+ void Rasterizer::BindTextures(const Shader::Info& stage, Shader::Backend::Bindings& binding) {
+     image_bindings.clear();
++    D1DumpPoll();
+     const u32 first_image_idx = image_infos.size();
+     // To emulate storing to explicit mip levels, build a descriptor array with each mip level.
+     boost::container::small_vector<u32, 8> image_descriptor_array_sizes;
+ 
+     for (const auto& image_desc : stage.images) {
+         const auto tsharp = image_desc.GetSharp(stage);
+-        if (texture_cache.IsMeta(tsharp.Address())) {
+-            LOG_WARNING(Render_Vulkan, "Unexpected metadata read by a shader (texture)");
++        if (const auto meta = texture_cache.IsMeta(tsharp.Address())) {
++            // D1: say WHICH metadata and how it is read, once per address.
++            static std::unordered_set<VAddr> d1_meta_seen;
++            if (d1_meta_seen.insert(tsharp.Address()).second && d1_meta_seen.size() < 64) {
++                LOG_WARNING(Render_Vulkan,
++                            "Unexpected metadata read by a shader (texture): meta {} @ {:#x} as "
++                            "{}x{} type {} fmt {}/{}",
++                            static_cast<u32>(*meta), tsharp.Address(), tsharp.width + 1,
++                            tsharp.height + 1, static_cast<u32>(tsharp.GetType()),
++                            static_cast<u32>(tsharp.GetDataFmt()),
++                            static_cast<u32>(tsharp.GetNumberFmt()));
++            }
++        }
++
++        // D1_TEX_SURVEY=1: list each shader's distinct texture shapes once (format, tiling,
++        // swizzle), to find the inputs of a misbehaving pass without a graphics debugger.
++        static const bool d1_tex_survey = [] {
++            const char* v = std::getenv("D1_TEX_SURVEY");
++            return v && v[0] == '1';
++        }();
++        if (d1_tex_survey) {
++            static std::unordered_set<u64> d1_tex_seen;
++            const u64 key = stage.pgm_hash * 31 ^ (u64(tsharp.GetType()) << 60) ^
++                            (u64(tsharp.width) << 46) ^ (u64(tsharp.height) << 32) ^
++                            (u64(tsharp.depth) << 19) ^ (u64(tsharp.data_format) << 13) ^
++                            (u64(tsharp.num_format) << 9) ^ (u64(tsharp.tiling_index) << 4) ^
++                            u64(tsharp.last_level);
++            if (d1_tex_seen.size() < 3000 && d1_tex_seen.insert(key).second) {
++                LOG_WARNING(Render_Vulkan,
++                            "D1TEX sh {:#018x} st {} @ {:#x} type {} {}x{}x{} fmt {}/{} tile {} "
++                            "mips {}-{} arr {}-{} sel {}{}{}{} pitch {}",
++                            stage.pgm_hash, static_cast<u32>(stage.sw_stage), tsharp.Address(),
++                            static_cast<u32>(tsharp.GetType()), tsharp.width + 1,
++                            tsharp.height + 1, tsharp.depth + 1, u32(tsharp.data_format),
++                            u32(tsharp.num_format), u32(tsharp.tiling_index),
++                            u32(tsharp.base_level), u32(tsharp.last_level),
++                            u32(tsharp.base_array), u32(tsharp.last_array), u32(tsharp.dst_sel_x),
++                            u32(tsharp.dst_sel_y), u32(tsharp.dst_sel_z), u32(tsharp.dst_sel_w),
++                            tsharp.pitch + 1);
++            }
+         }
+ 
+         const auto data_fmt = tsharp.GetDataFmt();
+@@ -865,6 +1051,12 @@ void Rasterizer::BindTextures(const Shader::Info& stage, Shader::Backend::Bindin
+                 image_id = depth_image_id;
+                 image = &texture_cache.GetImage(image_id);
+             }
++            if (D1DumpActive()) {
++                D1DumpEvent(fmt::format("T {:016x} {} {:x} {}x{}", stage.pgm_hash,
++                                        u32(stage.sw_stage), image->info.guest_address,
++                                        image->info.size.width, image->info.size.height));
++            }
++            D1DumpTexture(runtime, scheduler, *image, stage.pgm_hash);
+             if (image->binding.is_bound) {
+                 // The image is already bound. In case if it is about to be used as storage we
+                 // need to force general layout on it.
+@@ -1041,6 +1233,40 @@ RenderState Rasterizer::BeginRendering(const GraphicsPipeline* pipeline) {
+         attachment.is_clear = is_clear;
+ 
+         image->usage.render_target = 1u;
++        if (D1DumpActive()) {
++            const auto* fs = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
++            D1DumpEvent(fmt::format("RT {:016x} cb{} {:x} {}x{} slices {}-{} gsize {:#x} {} wm{} blend{} clear{}",
++                                    fs ? fs->pgm_hash : 0, cb, image->info.guest_address,
++                                    image->info.size.width, image->info.size.height,
++                                    u32(col_buf.view.slice_start), u32(col_buf.view.slice_max),
++                                    image->info.guest_size,
++                                    vk::to_string(image->info.pixel_format),
++                                    u32(static_cast<VkColorComponentFlags>(key.write_masks[cb])),
++                                    u32(key.blend_controls[cb].enable), is_clear));
++        }
++
++        // D1_TEX_SURVEY=1 also lists which render targets each pixel shader writes.
++        static const bool d1_rt_survey = [] {
++            const char* v = std::getenv("D1_TEX_SURVEY");
++            return v && v[0] == '1';
++        }();
++        if (d1_rt_survey) {
++            static std::unordered_set<u64> d1_rt_seen;
++            const auto* fs = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
++            const u64 ps = fs ? fs->pgm_hash : 0;
++            const u64 rk = ps * 31 ^ (image->info.guest_address << 3) ^ cb;
++            if (d1_rt_seen.size() < 3000 && d1_rt_seen.insert(rk).second) {
++                LOG_WARNING(Render_Vulkan,
++                            "D1RT ps {:#018x} cb {} @ {:#x} {}x{} {} wm {} blend {} clear {} "
++                            "mrt {:#x} cbmask {:#x} fmt {}/{}",
++                            ps, cb, image->info.guest_address, image->info.size.width,
++                            image->info.size.height, vk::to_string(image->info.pixel_format),
++                            u32(static_cast<VkColorComponentFlags>(key.write_masks[cb])),
++                            u32(key.blend_controls[cb].enable), is_clear, key.mrt_mask,
++                            key.cb_shader_mask.raw, u32(col_buf.GetDataFmt()),
++                            u32(col_buf.GetNumberFmt()));
++            }
++        }
+     }
+     for (u32 cb = state.num_color_attachments; cb < state.color_attachments.size(); ++cb) {
+         state.color_attachments[cb] = {};
+@@ -1048,6 +1274,13 @@ RenderState Rasterizer::BeginRendering(const GraphicsPipeline* pipeline) {
+ 
+     if (auto image_id = db_desc.first; image_id) {
+         auto& desc = db_desc.second;
++        if (D1DumpActive()) {
++            const auto* fs = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
++            D1DumpEvent(fmt::format("DB {:016x} {:x} {}x{}", fs ? fs->pgm_hash : 0,
++                                    texture_cache.GetImage(image_id).info.guest_address,
++                                    texture_cache.GetImage(image_id).info.size.width,
++                                    texture_cache.GetImage(image_id).info.size.height));
++        }
+         const auto htile_address = regs.depth_htile_data_base.GetAddress();
+         const auto& image_view = texture_cache.FindDepthTarget(image_id, desc);
+         auto& image = texture_cache.GetImage(image_id);
+diff --git a/src/video_core/texture_cache/image.cpp b/src/video_core/texture_cache/image.cpp
+index de14a85..fcf4691 100644
+--- a/src/video_core/texture_cache/image.cpp
++++ b/src/video_core/texture_cache/image.cpp
+@@ -223,6 +223,13 @@ ImageView& Image::FindView(const ImageViewInfo& view_info, bool ensure_guest_sam
+ void Image::GetBarriers(Barriers& barriers, vk::ImageLayout dst_layout, vk::AccessFlags2 dst_mask,
+                         vk::PipelineStageFlags2 dst_stage,
+                         std::optional<SubresourceRange> subres_range) {
++    // D1 FORK-LOCAL CHANGE: a 3D image has one array layer; a 2D view of one of its depth slices
++    // (a render target writing slice z of a colour-grading volume) still transitions the whole
++    // image. Without this the slice index is taken as a layer index and overruns the state table.
++    if (info.props.is_volume && subres_range) {
++        subres_range->base.layer = 0;
++        subres_range->extent.layers = info.resources.layers;
++    }
+     auto& last_state = backing->state;
+     auto& subresource_states = backing->subresource_states;
+ 
 diff --git a/src/video_core/texture_cache/texture_cache.cpp b/src/video_core/texture_cache/texture_cache.cpp
-index 2d18c10..0a55bba 100644
+index 2d18c10..697aefb 100644
 --- a/src/video_core/texture_cache/texture_cache.cpp
 +++ b/src/video_core/texture_cache/texture_cache.cpp
-@@ -323,6 +323,16 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
+@@ -1,6 +1,7 @@
+ // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <cstdlib>
+ #include <xxhash.h>
+ 
+ #include "common/assert.h"
+@@ -22,6 +23,20 @@
+ 
+ namespace VideoCore {
+ 
++// D1 diagnostics: D1_TRACE_IMAGE=<hex address> traces lookups, creation, expansion and freeing
++// of images at that address.
++static VAddr D1TraceAddr() {
++    static const VAddr a = [] {
++        const char* v = std::getenv("D1_TRACE_IMAGE");
++        return v ? static_cast<VAddr>(std::strtoull(v, nullptr, 16)) : VAddr{0};
++    }();
++    return a;
++}
++static bool D1Traced(VAddr addr) {
++    static u32 n = 0;
++    return D1TraceAddr() && addr == D1TraceAddr() && g_d1_dump_live.load() && ++n < 3000;
++}
++
+ static constexpr u32 MAX_IMAGES = std::numeric_limits<u16>::max();
+ static constexpr u32 MAX_IMAGE_VIEWS = std::numeric_limits<u16>::max();
+ 
+@@ -323,6 +338,16 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
              return {merged_image_id, -1, -1};
          }
  
@@ -427,3 +794,251 @@ index 2d18c10..0a55bba 100644
          // Enhanced debug logging for unreachable case
          // Calculate expected size based on format and dimensions
          u64 expected_size =
+@@ -487,6 +512,12 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
+ ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
+     const auto new_image_id = slot_images.Insert(instance, runtime, slot_image_views, info);
+     RegisterImage(new_image_id);
++    if (D1Traced(info.guest_address)) {
++        const auto& o = slot_images[image_id].info;
++        LOG_WARNING(Render_Vulkan, "D1 trace expand #{} type {} d{} L{} -> #{} type {} d{} L{}",
++                    image_id.index, u32(o.type), o.size.depth, o.resources.layers,
++                    new_image_id.index, u32(info.type), info.size.depth, info.resources.layers);
++    }
+ 
+     auto& src_image = slot_images[image_id];
+     auto& new_image = slot_images[new_image_id];
+@@ -506,6 +537,21 @@ ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
+ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
+     const auto& info = desc.info;
+     ASSERT(info.guest_address != 0);
++    // D1 diagnostics: D1_TRACE_IMAGE=<hex address> logs every lookup of that address.
++    static const VAddr d1_trace = [] {
++        const char* v = std::getenv("D1_TRACE_IMAGE");
++        return v ? static_cast<VAddr>(std::strtoull(v, nullptr, 16)) : VAddr{0};
++    }();
++    static u32 d1_traced = 0;
++    if (d1_trace && info.guest_address == d1_trace && g_d1_dump_live.load() &&
++        d1_traced < 3000) {
++        ++d1_traced;
++        LOG_WARNING(Render_Vulkan, "D1 trace {:#x}: type {} {}x{}x{} L{} bind {} view base {} n {} size {:#x}",
++                    info.guest_address, static_cast<u32>(info.type), info.size.width,
++                    info.size.height, info.size.depth, info.resources.layers,
++                    static_cast<u32>(desc.type), desc.view_info.range.base.layer,
++                    desc.view_info.range.extent.layers, info.guest_size);
++    }
+ 
+     std::scoped_lock lock{mutex};
+     ImageIds image_ids;
+@@ -514,6 +560,49 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
+ 
+     ImageId image_id{};
+ 
++    // D1 FORK-LOCAL CHANGE: a render target that grows a 2D array by one layer per draw (Destiny
++    // builds its 32^3 colour-grading LUT this way: layers 0..z, view slice z) must extend the
++    // array it grew last time. The LUT's memory is a pooled allocation that other targets reuse
++    // within the frame (a 32x32 target with an 8-layer footprint, a 12x18 UI target), and their
++    // images used to be merged into the chain instead: the 8-layer request "perfectly matched" the
++    // other 32x32 image, two chains then grew side by side, and the LUT kept the wrong one, with
++    // stale memory in its darkest slices (black, blue-tinted shadows). Extend the predecessor
++    // (same format and size, one layer fewer, most recently used) and drop the other images at
++    // this address.
++    const auto& grow = desc.view_info.range;
++    if (desc.type == BindingType::RenderTarget && info.type == AmdGpu::ImageType::Color2D &&
++        info.resources.layers > 1 && grow.extent.layers == 1 &&
++        grow.base.layer == info.resources.layers - 1) {
++        ImageId pred{};
++        for (const auto& cache_id : image_ids) {
++            const auto& c = slot_images[cache_id];
++            if (c.info.guest_address == info.guest_address && c.info.type == info.type &&
++                c.info.pixel_format == info.pixel_format && c.info.size == info.size &&
++                c.info.resources.levels == info.resources.levels &&
++                c.info.resources.layers + 1 == info.resources.layers &&
++                // its footprint is exactly the first L-1 layers (the other 32x32 target at
++                // this address also has one layer, but an 8-layer footprint)
++                u64(c.info.guest_size) * info.resources.layers ==
++                    u64(info.guest_size) * c.info.resources.layers &&
++                (!pred || c.tick_accessed_last > slot_images[pred].tick_accessed_last)) {
++                pred = cache_id;
++            }
++        }
++        if (pred) {
++            for (const auto& cache_id : image_ids) {
++                if (cache_id != pred &&
++                    slot_images[cache_id].info.guest_address == info.guest_address) {
++                    FreeImage(cache_id);
++                }
++            }
++            image_id = ExpandImage(info, pred);
++            Image& image = slot_images[image_id];
++            image.tick_accessed_last = scheduler.CurrentTick();
++            TouchImage(image);
++            return image_id;
++        }
++    }
++
+     // Check for a perfect match first
+     for (const auto& cache_id : image_ids) {
+         auto& cache_image = slot_images[cache_id];
+@@ -555,22 +644,123 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
+         }
+     }
+ 
++    // D1 FORK-LOCAL CHANGE (D1_VOLUME_SLICES=3): a render target never writes into a 3D image
++    // through a slice view. Destiny renders its 32^3 colour-grading LUT one slice per draw into
++    // a 2D array (layers 0..z, view slice z) and then samples it as 3D; the 3D request copies the
++    // array into a volume (ResolveOverlap -> ExpandImage -> 2D array -> 3D copy). Next frame
++    // slice 0 resolved to that volume as a "view", and slice 1 then dropped it and re-created the
++    // array from stale guest memory, so the LUT lost its darkest slice every frame (crushed,
++    // blue-tinted shadows). Give the target a fresh 2D image instead.
++    if (image_id) {
++        static const int d1_volume_mode = [] {
++            const char* v = std::getenv("D1_VOLUME_SLICES");
++            return v ? v[0] - '0' : 3;
++        }();
++        Image& candidate = slot_images[image_id];
++        if (d1_volume_mode == 3 && candidate.info.props.is_volume &&
++            desc.type == BindingType::RenderTarget && info.type != AmdGpu::ImageType::Color3D) {
++            FreeImage(image_id);
++            image_id = {};
++        }
++    }
+     if (image_id) {
+         Image& image_resolved = slot_images[image_id];
+         if (exact_fmt && info.pixel_format != image_resolved.info.pixel_format) {
+             // Cannot reuse this image as we need the exact requested format.
+             image_id = {};
+         } else if (image_resolved.info.resources < info.resources) {
+-            // The image was clearly picked up wrong.
+-            FreeImage(image_id);
+-            image_id = {};
+-            LOG_WARNING(Render_Vulkan, "Image overlap resolve failed");
++            // D1 FORK-LOCAL CHANGE: a view asking for MORE layers/levels of the same image (Destiny
++            // 56578 grows 32-layer arrays one layer at a time, ~10k times per session) used to free
++            // the cached image and re-create it from guest memory, discarding everything the GPU
++            // had written into it. Expand it instead, as ResolveOverlap does, so the old layers
++            // are copied into the new image.
++            // D1 FORK-LOCAL CHANGE: a render target over a 3D image's depth slices (Destiny
++            // builds its 32^3 colour-grading volume slice by slice; the CB view names slices
++            // [slice_start, slice_max]) must render INTO the volume. The 3D image is created
++            // 2D-array compatible, so the target's 2D(-array) view selects those slices.
++            // D1_VOLUME_SLICES=1 enables it (default 3, see above; 0 = upstream behaviour).
++            // D1_VOLUME_SLICES=2: the render target only ALIASES the volume's memory (measured on
++            // Destiny 56578: always a 32x32 2-layer target writing slice 1 at the colour-grading
++            // LUT's address, a pooled allocation). Keep the volume and give the target its own image.
++            static const int volume_mode = [] {
++                const char* v = std::getenv("D1_VOLUME_SLICES");
++                return v ? v[0] - '0' : 3;
++            }();
++            const bool volume_slices = volume_mode == 1;
++            const bool volume_alias = volume_mode == 2;
++            const auto& vr = desc.view_info.range;
++            const bool slice_of_volume =
++                image_resolved.info.props.is_volume && desc.type == BindingType::RenderTarget &&
++                image_resolved.info.size.width == info.size.width &&
++                image_resolved.info.size.height == info.size.height &&
++                vr.base.layer + vr.extent.layers <= image_resolved.info.size.depth &&
++                IsVulkanFormatCompatible(image_resolved.info.pixel_format, info.pixel_format);
++            if (image_resolved.info.type == info.type &&
++                image_resolved.info.pixel_format == info.pixel_format &&
++                image_resolved.info.size == info.size) {
++                image_id = ExpandImage(info, image_id);
++            } else if (volume_slices && slice_of_volume) {
++                // Keep the volume; the render target view writes its slices.
++            } else if (volume_alias && image_resolved.info.props.is_volume &&
++                       desc.type == BindingType::RenderTarget) {
++                // Leave the volume registered. Reuse the one target image at this address (or
++                // replace it if it is too small), so images do not pile up on the same pages.
++                image_id = {};
++                for (const auto& other_id : image_ids) {
++                    Image& other = slot_images[other_id];
++                    if (other.info.props.is_volume ||
++                        other.info.guest_address != info.guest_address) {
++                        continue;
++                    }
++                    if (!image_id && other.info.type == info.type &&
++                        other.info.pixel_format == info.pixel_format &&
++                        other.info.size == info.size && !(other.info.resources < info.resources)) {
++                        image_id = other_id;
++                    } else {
++                        FreeImage(other_id);
++                    }
++                }
++            } else {
++                // The image was clearly picked up wrong.
++                static u32 logged = 0;
++                if (logged < 200) {
++                    ++logged;
++                    LOG_WARNING(Render_Vulkan,
++                                "Image overlap resolve failed: cached type {} fmt {} {}x{}x{} L{} M{}"
++                                " vol {} -> wanted type {} fmt {} {}x{}x{} L{} M{} bind {} view "
++                                "base {} n {} @ {:#x}",
++                                static_cast<u32>(image_resolved.info.type),
++                                static_cast<u32>(image_resolved.info.pixel_format),
++                                image_resolved.info.size.width, image_resolved.info.size.height,
++                                image_resolved.info.size.depth,
++                                image_resolved.info.resources.layers,
++                                image_resolved.info.resources.levels,
++                                image_resolved.info.props.is_volume ? 1 : 0,
++                                static_cast<u32>(info.type), static_cast<u32>(info.pixel_format),
++                                info.size.width, info.size.height, info.size.depth,
++                                info.resources.layers, info.resources.levels,
++                                static_cast<u32>(desc.type), vr.base.layer, vr.extent.layers,
++                                info.guest_address);
++                }
++                FreeImage(image_id);
++                image_id = {};
++            }
+         }
+     }
+     // Create and register a new image
+     if (!image_id) {
+         image_id = slot_images.Insert(instance, runtime, slot_image_views, info);
+         RegisterImage(image_id);
++        if (D1Traced(info.guest_address)) {
++            LOG_WARNING(Render_Vulkan, "D1 trace new #{} type {} {}x{}x{} L{} (from guest memory)",
++                        image_id.index, u32(info.type), info.size.width, info.size.height,
++                        info.size.depth, info.resources.layers);
++        }
++    } else if (D1Traced(info.guest_address)) {
++        const auto& r = slot_images[image_id].info;
++        LOG_WARNING(Render_Vulkan, "D1 trace -> #{} type {} {}x{}x{} L{} view base {}",
++                    image_id.index, u32(r.type), r.size.width, r.size.height, r.size.depth,
++                    r.resources.layers, view_slice);
+     }
+ 
+     Image& image = slot_images[image_id];
+@@ -816,6 +1006,11 @@ void TextureCache::RegisterImage(ImageId image_id) {
+ }
+ 
+ void TextureCache::UnregisterImage(ImageId image_id) {
++    if (D1Traced(slot_images[image_id].info.guest_address)) {
++        const auto& r = slot_images[image_id].info;
++        LOG_WARNING(Render_Vulkan, "D1 trace free #{} type {} {}x{}x{} L{}", image_id.index,
++                    u32(r.type), r.size.width, r.size.height, r.size.depth, r.resources.layers);
++    }
+     Image& image = slot_images[image_id];
+     ASSERT_MSG(True(image.flags & ImageFlagBits::Registered),
+                "Trying to unregister an already unregistered image");
+diff --git a/src/video_core/texture_cache/texture_cache.h b/src/video_core/texture_cache/texture_cache.h
+index c6493a2..8987763 100644
+--- a/src/video_core/texture_cache/texture_cache.h
++++ b/src/video_core/texture_cache/texture_cache.h
+@@ -3,6 +3,8 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++
+ #include <mutex>
+ #include <unordered_set>
+ #include <boost/container/small_vector.hpp>
+@@ -28,6 +30,9 @@ class Runtime;
+ 
+ namespace VideoCore {
+ 
++/// D1: true while a frame dump (D1_DUMP_DIR) is capturing; gates the D1_TRACE_IMAGE trace.
++inline std::atomic<bool> g_d1_dump_live{false};
++
+ class BufferCache;
+ class PageManager;
+ 
