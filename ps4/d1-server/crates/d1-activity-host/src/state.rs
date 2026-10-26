@@ -351,6 +351,9 @@ pub struct ActivityInstance {
     trigger_reports: Vec<((u32, u8, u16), bool)>,
     /// Host incidents waiting to be sent (see [`MissionStep::incident`]).
     pending_incidents: Vec<(u32, Vec<u8>)>,
+    /// ⭐ `D1_AH_CONTROL_FILE`: lines `incident TYPE BODYHEX` queue host incidents on demand
+    /// (the file is consumed: read, then deleted). A diagnostic lever, like the 01.24 control file.
+    control_file: Option<std::path::PathBuf>,
     /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
     slice_request: Option<(u8, u32, Instant)>,
     /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
@@ -486,6 +489,7 @@ impl ActivityInstance {
             current_slice: None,
             trigger_reports: Vec::new(),
             pending_incidents: Vec::new(),
+            control_file: None,
             slice_request: None,
             membership_dirty: false,
             membership_update: 1,
@@ -1301,11 +1305,42 @@ impl ActivityInstance {
     /// `+4` the 12-bit types, `+0x68` an optional list (left empty), `+0xD4` the body length in bytes
     /// (9 bits) and `+0xD8` the body (up to 500 bytes).
     pub fn incident_due(&mut self) -> Option<AhPush> {
+        self.poll_control();
         if !matches!(self.state, InstanceState::Live) || self.pending_incidents.is_empty() {
             return None;
         }
         let (t, body) = self.pending_incidents.remove(0);
         Some(AhPush::new(self.ah_id, AhMessage::Opaque { user_defined_type: 18, bytes: incident_image(t, &body) }))
+    }
+
+    /// Use `path` as the control file (see [`ActivityInstance::incident_due`]).
+    pub fn set_control_file(&mut self, path: std::path::PathBuf) {
+        self.control_file = Some(path);
+    }
+
+    fn poll_control(&mut self) {
+        let Some(path) = self.control_file.as_ref() else { return };
+        let Ok(text) = std::fs::read_to_string(path) else { return };
+        let _ = std::fs::remove_file(path);
+        for line in text.lines() {
+            let f: Vec<&str> = line.split_whitespace().collect();
+            let parsed = match f.as_slice() {
+                ["incident", t, hex] => t.parse::<u32>().ok().zip(
+                    (0..hex.len()).step_by(2)
+                        .map(|k| hex.get(k..k + 2).and_then(|b| u8::from_str_radix(b, 16).ok()))
+                        .collect::<Option<Vec<u8>>>(),
+                ),
+                _ => None,
+            };
+            match parsed {
+                Some((t, body)) => {
+                    tracing::info!("⭐ control: host incident {t} ({} body bytes)", body.len());
+                    self.pending_incidents.push((t, body));
+                }
+                None if line.trim().is_empty() => {}
+                None => tracing::warn!("control: ignored line {line:?} (want `incident TYPE BODYHEX`)"),
+            }
+        }
     }
 
     /// Arm the timed mission steps (see [`MissionStep`]).

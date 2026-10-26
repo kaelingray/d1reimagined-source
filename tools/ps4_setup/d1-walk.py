@@ -183,7 +183,7 @@ def main():
 
     boxes = [tuple(float(v) for v in b.split(',')) for b in a.avoid]
 
-    def escape(p, margin=1.5):
+    def escape(p, margin=0.8):
         # The nearest point outside any hazard box (grown by margin) when p is inside one.
         for x0, y0, x1, y1 in boxes:
             x0, y0, x1, y1 = min(x0, x1) - margin, min(y0, y1) - margin, max(x0, x1) + margin, max(y0, y1) + margin
@@ -206,7 +206,9 @@ def main():
         # Sharp corners need the waypoint itself: overshooting the north-to-west turn at the
         # Wall's stairs (waypoint 43) drops the Guardian into a pit (runs agr-breach5 and 9).
         sharp = corner(i) > 0.6
-        if d < (min(a.tolerance, 1.5) if sharp else a.tolerance):
+        # While stepping out of a hazard the target is the escape point, not a waypoint: do not
+        # count it as an arrival (rifle4 walked the whole route index off in place that way).
+        if not out and d < (min(a.tolerance, 1.5) if sharp else a.tolerance):
             i += 1
             best, since_best, retreats = None, 0, 0
             continue

@@ -849,6 +849,9 @@ fn main() -> anyhow::Result<()> {
                         }
                         i.set_world_table(world_table.clone());
                         i.set_mission_steps(mission_steps.clone());
+                        if let Ok(path) = std::env::var("D1_AH_CONTROL_FILE") {
+                            i.set_control_file(path.into());
+                        }
                         // ⭐ D1_AH_TIME_BASE_MS=<ms>|now: the world clock base at blob +0x520.
                         if let Ok(v) = std::env::var("D1_AH_TIME_BASE_MS") {
                             let ms = if v.trim() == "now" {
