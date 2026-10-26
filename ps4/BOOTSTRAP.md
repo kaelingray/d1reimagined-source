@@ -48,8 +48,9 @@ accept `PYTHONPATH=~/.local/lib/d1-tools`. See `capture-rig/oodle/README.md`.
 
 ### Tier 2: required to run the game
 
-* **shadPS4**, built separately, outside this repo. See step 5 - it carries a `[U]` you should read
-  before assuming a fresh clone can reproduce the reference build.
+* **shadPS4**, built separately, outside this repo: the project's build is
+  `github.com/p3n1cillin/d1reimagined-shadps4` (branch `d1`). See step 5 - it carries a `[U]` you
+  should read before assuming a fresh clone can reproduce the reference build.
 * **A Linux kernel with `/dev/uinput`**, writable by your user. `capture-rig/virtual-pad.py`
   creates a real evdev gamepad through it, which is how an unattended run presses buttons. On the
   reference box a POSIX ACL grants the user `rw` so no `sudo` is needed
@@ -311,6 +312,14 @@ you have a run corpus, not as broken.
 ## 5. The first contained run
 
 ### 5a. The emulator, which this repo does not contain
+
+**The build the project runs is published** as
+[`p3n1cillin/d1reimagined-shadps4`](https://github.com/p3n1cillin/d1reimagined-shadps4), branch
+`d1`: upstream v0.19.0 plus one commit per fix Destiny needs (lab networking, the shadNet probe
+retry, the JIT guard, the NaN class test, the colour-grading LUT, and the game-audio tap for
+recordings). Its `d1/README.md` has the Windows build script, the `config.json` keys and every
+`D1_*` environment variable; `tools/ps4_setup/shadps4-0.19.0-*.patch` here are the same changes as
+patches. Start there unless you need the older Linux tracer tree described below.
 
 **shadPS4 is a separate project and is not vendored here.** Build it yourself from upstream
 (`github.com/shadps4-emu/shadPS4`, a CMake project); its own README carries the current build
