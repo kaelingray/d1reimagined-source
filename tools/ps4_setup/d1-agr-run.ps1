@@ -8,7 +8,7 @@ param(
     [int]$WatchSeconds = 220,
     # Raw d1-watchwrite arguments (e.g. --read ADDR) instead of -WatchExec.
     [string[]]$WatchArgs = @(),
-    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-breach10.txt',
+    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-breach13.txt',
     # The served profile. profile-tutorial-t.bin is the unarmed tutorial Guardian (no weapons in the
     # inventory or the roster) who owes the starter Khvostov as pending loot.
     [string]$Profile = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578\profile-tutorial-t.bin',

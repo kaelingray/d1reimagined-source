@@ -502,6 +502,7 @@ fn main() -> anyhow::Result<()> {
             let mut sensor_team_frames: Option<(Vec<u8>, Vec<u8>, std::collections::HashSet<u16>)> = None;
             let mut world_table: std::collections::HashMap<u16, d1_activity_host::state::ServedWorld> = std::collections::HashMap::new();
             let mut mission_steps: std::collections::HashMap<u16, Vec<d1_activity_host::state::MissionStep>> = std::collections::HashMap::new();
+            let mut control_builder: Option<d1_activity_host::state::ControlBuilder> = None;
             let sensor_payload = match std::env::var("D1_AH_SENSOR_PHASE")
                 .ok()
                 .and_then(|s| s.trim().parse::<i8>().ok())
@@ -753,6 +754,32 @@ fn main() -> anyhow::Result<()> {
                             });
                         }
                     }
+                    // `clients GROUP PATH` control lines (D1_AH_CONTROL_FILE) build a frame the way a
+                    // mission step does.
+                    {
+                        let params = params.clone();
+                        control_builder = Some(d1_activity_host::state::ControlBuilder(std::sync::Arc::new(
+                            move |group: u32, path: &str, team: i32| -> Result<Vec<u8>, String> {
+                                let clients: Vec<d1_oracle::sensor::SensorClientRef> = std::fs::read_to_string(path)
+                                    .map_err(|e| e.to_string())?
+                                    .lines()
+                                    .filter_map(d1_oracle::sensor::SensorClientRef::parse_line)
+                                    .filter(|c| !(c.name_hash == group && c.name_i8 == name_i8 && c.name_sub == name_sub))
+                                    .collect();
+                                let mut p = params.clone();
+                                p.name_hash = group;
+                                p.clients = clients;
+                                for c in p.clients.iter_mut() {
+                                    if let Some((0x8080_22A5, img)) = c.a_value.as_mut() {
+                                        if img.len() >= 0x3C {
+                                            img[0x38..0x3C].copy_from_slice(&team.to_le_bytes());
+                                        }
+                                    }
+                                }
+                                d1_activity_host::codec::SchemaCodec::build_sensor(&p).map_err(|e| e.to_string())
+                            },
+                        )));
+                    }
                     match d1_activity_host::codec::SchemaCodec::build_sensor(&params) {
                         Ok(bytes) => {
                             tracing::info!(
@@ -851,6 +878,9 @@ fn main() -> anyhow::Result<()> {
                         i.set_mission_steps(mission_steps.clone());
                         if let Ok(path) = std::env::var("D1_AH_CONTROL_FILE") {
                             i.set_control_file(path.into());
+                            if let Some(b) = control_builder.clone() {
+                                i.set_control_builder(b);
+                            }
                         }
                         // ⭐ D1_AH_TIME_BASE_MS=<ms>|now: the world clock base at blob +0x520.
                         if let Ok(v) = std::env::var("D1_AH_TIME_BASE_MS") {

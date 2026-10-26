@@ -248,6 +248,17 @@ pub struct ServedWorld {
     pub team_minus1: Vec<u8>,
 }
 
+/// Encodes a sensor-client list file into a frame for the given spawn team (`clients GROUP PATH`
+/// control lines, see [`ActivityInstance::set_control_builder`]).
+#[derive(Clone)]
+pub struct ControlBuilder(pub std::sync::Arc<dyn Fn(u32, &str, i32) -> Result<Vec<u8>, String> + Send + Sync>);
+
+impl std::fmt::Debug for ControlBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ControlBuilder")
+    }
+}
+
 /// One activity instance, authoritative over its own Activity State.
 #[derive(Debug)]
 pub struct ActivityInstance {
@@ -354,6 +365,8 @@ pub struct ActivityInstance {
     /// ⭐ `D1_AH_CONTROL_FILE`: lines `incident TYPE BODYHEX` queue host incidents on demand
     /// (the file is consumed: read, then deleted). A diagnostic lever, like the 01.24 control file.
     control_file: Option<std::path::PathBuf>,
+    /// Builds the frame for a `clients GROUP PATH` control line.
+    control_builder: Option<ControlBuilder>,
     /// ⭐ The host teleport in progress: (state, slice-set index, when it was asked).
     slice_request: Option<(u8, u32, Instant)>,
     /// Re-publish `replicate_membership` on the next poll (a teleport state changed).
@@ -490,6 +503,7 @@ impl ActivityInstance {
             trigger_reports: Vec::new(),
             pending_incidents: Vec::new(),
             control_file: None,
+            control_builder: None,
             slice_request: None,
             membership_dirty: false,
             membership_update: 1,
@@ -1318,12 +1332,35 @@ impl ActivityInstance {
         self.control_file = Some(path);
     }
 
+    /// Let `clients GROUP PATH` control lines publish a sensor-client list at once (the same frame a
+    /// mission step builds), for trying states without a new run.
+    pub fn set_control_builder(&mut self, b: ControlBuilder) {
+        self.control_builder = Some(b);
+    }
+
     fn poll_control(&mut self) {
         let Some(path) = self.control_file.as_ref() else { return };
         let Ok(text) = std::fs::read_to_string(path) else { return };
         let _ = std::fs::remove_file(path);
         for line in text.lines() {
             let f: Vec<&str> = line.split_whitespace().collect();
+            if let ["clients", g, file] = f.as_slice() {
+                let group = u32::from_str_radix(g.trim_start_matches("0x"), 16).ok();
+                match (group, self.control_builder.clone()) {
+                    (Some(group), Some(b)) => {
+                        let team0 = matches!(&self.sensor_team_frames, Some((_, _, set)) if set.contains(&self.activity_index));
+                        match (b.0)(group, file, if team0 { 0 } else { -1 }) {
+                            Ok(bytes) => {
+                                tracing::info!("⭐ control: sensor clients {file} ({} bytes)", bytes.len());
+                                self.sensor_payload = Some(bytes);
+                            }
+                            Err(e) => tracing::warn!("control: clients {file}: {e}"),
+                        }
+                    }
+                    _ => tracing::warn!("control: ignored line {line:?} (bad group, or no builder)"),
+                }
+                continue;
+            }
             let parsed = match f.as_slice() {
                 ["incident", t, hex] => t.parse::<u32>().ok().zip(
                     (0..hex.len()).step_by(2)
@@ -1338,7 +1375,7 @@ impl ActivityInstance {
                     self.pending_incidents.push((t, body));
                 }
                 None if line.trim().is_empty() => {}
-                None => tracing::warn!("control: ignored line {line:?} (want `incident TYPE BODYHEX`)"),
+                None => tracing::warn!("control: ignored line {line:?} (want `incident TYPE BODYHEX` or `clients GROUP PATH`)"),
             }
         }
     }
