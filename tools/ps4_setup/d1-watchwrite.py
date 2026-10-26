@@ -223,7 +223,8 @@ def main():
         # Drain before detaching: a hit already raised on another thread is still queued, and once
         # detached it reaches the emulator as an unhandled 0x80000004 and kills it (13 Oct, run
         # bundle7d, at the watched store 0x409CAD). Swallow single-steps until the queue is quiet.
-        quiet_until = time.time() + 1.0
+        # 1 s was not always enough on a hot execute breakpoint (26 Oct: 0x28CFCA, max-hits 1).
+        quiet_until = time.time() + 3.0
         while time.time() < quiet_until:
             if not k32.WaitForDebugEvent(ev, 100):
                 continue
@@ -235,7 +236,7 @@ def main():
                     h = threads.get(tid)
                     if h:
                         arm(h, addrs, on=False)
-                    quiet_until = time.time() + 1.0
+                    quiet_until = time.time() + 3.0
                 else:
                     cont = DBG_EXCEPTION_NOT_HANDLED
             elif code == CREATE_THREAD:

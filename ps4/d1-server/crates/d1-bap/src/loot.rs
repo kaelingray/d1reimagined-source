@@ -80,20 +80,34 @@ pub fn loot_pickup_response_body(request: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// The family-4 DELTA that hands the character a new item instance: one family-4/3 inventory
-/// element (`0x80801732`, encoded by the client's own encoder) keyed by its instance SOID.
+/// The family-4 DELTA that hands the character a new item instance: optionally the character's
+/// updated profile (`{soid, payload}`: the pending record gone, the item in its bucket, any slot
+/// unlock the pickup earns), then one family-4/3 inventory element (`0x80801732`, encoded by the
+/// client's own encoder) keyed by its instance SOID.
 ///
 /// A delta upserts the objects it carries and leaves every other object alone (a repeated
 /// baseline would purge what it does not list, see [`crate::queuez_span_as_delta`]). `version`
 /// must be the family-4 version the client last accepted, plus one.
-pub fn item_grant_delta(account_soid: u64, version: u32, item_soid: u64, element: &[u8]) -> Vec<u8> {
+pub fn item_grant_delta(
+    account_soid: u64,
+    version: u32,
+    item_soid: u64,
+    element: &[u8],
+    profile: Option<(u64, &[u8])>,
+) -> Vec<u8> {
     let mut b = crate::queuez_family_header_versioned(
         crate::QUEUEZ_FAMILY_ACCOUNT,
         account_soid,
-        1,
+        1 + profile.is_some() as u32,
         version,
         crate::QUEUEZ_FLAG_DELTA,
     );
+    if let Some((soid, payload)) = profile {
+        b.extend_from_slice(&crate::profile_instance_type().to_be_bytes());
+        b.extend_from_slice(&soid.to_be_bytes());
+        b.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        b.extend_from_slice(payload);
+    }
     b.extend_from_slice(&crate::INVENTORY_INSTANCE_TYPE.to_be_bytes());
     b.extend_from_slice(&item_soid.to_be_bytes());
     b.extend_from_slice(&(element.len() as u32).to_be_bytes());
@@ -108,7 +122,7 @@ mod tests {
     /// The grant delta walks as one 4/3 object at the given version, flagged DELTA.
     #[test]
     fn the_grant_delta_is_one_inventory_object() {
-        let d = item_grant_delta(0xD100_0000_0000_0001, 2, 0xD100_0000_0000_0401, &[0xAB; 171]);
+        let d = item_grant_delta(0xD100_0000_0000_0001, 2, 0xD100_0000_0000_0401, &[0xAB; 171], None);
         assert_eq!(crate::queuez_span_version(&d), Some(2));
         assert_eq!(crate::queuez_span_flags(&d), Some(crate::QUEUEZ_FLAG_DELTA));
         let objs = crate::queuez_span_objects(&d).unwrap();
@@ -116,6 +130,16 @@ mod tests {
         assert_eq!(objs[0].instance_type, crate::INVENTORY_INSTANCE_TYPE);
         assert_eq!(objs[0].key, 0xD100_0000_0000_0401);
         assert_eq!(objs[0].payload.1 - objs[0].payload.0, 171);
+    }
+
+    /// With a profile, the profile comes first and the item second.
+    #[test]
+    fn the_grant_delta_can_carry_the_profile() {
+        let d = item_grant_delta(1, 3, 0x401, &[0xAB; 171], Some((0x201, &[0xCD; 40])));
+        let objs = crate::queuez_span_objects(&d).unwrap();
+        assert_eq!(objs.len(), 2);
+        assert_eq!((objs[0].instance_type, objs[0].key), (crate::profile_instance_type(), 0x201));
+        assert_eq!((objs[1].instance_type, objs[1].key), (crate::INVENTORY_INSTANCE_TYPE, 0x401));
     }
 
     fn hex(s: &str) -> Vec<u8> {

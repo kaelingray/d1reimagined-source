@@ -4476,21 +4476,24 @@ async fn main() -> Result<()> {
                                                                     warn!("      ⛔ loot grant waits: no family-4 baseline accepted yet");
                                                                 } else {
                                                                     for nonce in std::mem::take(&mut loot_grants_due) {
-                                                                        let Some((soid, element)) = loot_grant_for(nonce) else {
+                                                                        let Some((soid, element, profile)) = loot_grant_for(nonce) else {
                                                                             warn!("      ⛔ no D1_LOOT_GRANT entry for claimed nonce {nonce:#x}: nothing delivered");
                                                                             continue;
                                                                         };
                                                                         let version = family4_version.unwrap_or(0).wrapping_add(1);
                                                                         let acct = env_soid("D1_ACCOUNT_SOID", 0xD100_0000_0000_0001);
-                                                                        let b = d1_bap::loot::item_grant_delta(acct, version, soid, &element);
+                                                                        let prof_soid = env_soid("D1_PROFILE_SOID", 0xD100_0000_0000_0201);
+                                                                        let b = d1_bap::loot::item_grant_delta(acct, version, soid, &element,
+                                                                            profile.as_deref().map(|p| (prof_soid, p)));
                                                                         match conv.push_with_sequence(d1_bap::TYPE_QUEUEZ_OBJECT, server_seq, &b) {
                                                                             Ok(push) => {
                                                                                 let sn = nonces.peek(d1_bap::Direction::ServerToClient);
                                                                                 if let Ok(f) = d1_bap::seal_channel_frame(key, sn, &push) {
                                                                                     nonces.advance(d1_bap::Direction::ServerToClient);
                                                                                     if sock.write_all(&f).await.is_ok() {
-                                                                                        warn!("      ⭐⭐ LOOT GRANT: nonce {nonce:#x} -> item {soid:#018x} ({}B element) as family-4 delta version {version}, seq {server_seq}",
-                                                                                              element.len());
+                                                                                        warn!("      ⭐⭐ LOOT GRANT: nonce {nonce:#x} -> item {soid:#018x} ({}B element{}) as family-4 delta version {version}, seq {server_seq}",
+                                                                                              element.len(),
+                                                                                              profile.as_ref().map(|p| format!(" + {}B profile", p.len())).unwrap_or_default());
                                                                                         family4_version = Some(version);
                                                                                         server_seq += 1;
                                                                                     }
@@ -5141,10 +5144,11 @@ fn env_soid(var: &str, default: u64) -> u64 {
         .unwrap_or(default)
 }
 
-/// `D1_LOOT_GRANT=NONCE=SOID:FILE[;…]`: the item a claimed world drop delivers. `NONCE` is the
-/// pending-loot nonce id the 601 claim names, `SOID` the new item instance, `FILE` its 4/3 inventory
-/// element as `d1-oracle object --tag 0x80801732` encodes it.
-fn loot_grant_for(nonce: u64) -> Option<(u64, Vec<u8>)> {
+/// `D1_LOOT_GRANT=NONCE=SOID:FILE[|PROFILE][;…]`: the item a claimed world drop delivers. `NONCE`
+/// is the pending-loot nonce id the 601 claim names, `SOID` the new item instance, `FILE` its 4/3
+/// inventory element as `d1-oracle object --tag 0x80801732` encodes it, and `PROFILE` (optional)
+/// the character profile after the pickup, delivered in the same delta.
+fn loot_grant_for(nonce: u64) -> Option<(u64, Vec<u8>, Option<Vec<u8>>)> {
     let spec = std::env::var("D1_LOOT_GRANT").ok()?;
     let num = |t: &str| -> Option<u64> {
         let t = t.trim();
@@ -5156,13 +5160,23 @@ fn loot_grant_for(nonce: u64) -> Option<(u64, Vec<u8>)> {
         if num(n)? != nonce {
             return None;
         }
-        match std::fs::read(file.trim()) {
-            Ok(element) => Some((num(soid)?, element)),
+        let (file, profile) = match file.split_once('|') {
+            Some((f, p)) => (f.trim(), Some(p.trim())),
+            None => (file.trim(), None),
+        };
+        let read = |f: &str| match std::fs::read(f) {
+            Ok(b) => Some(b),
             Err(e) => {
-                warn!("      ⛔ D1_LOOT_GRANT {}: {e}", file.trim());
+                warn!("      ⛔ D1_LOOT_GRANT {f}: {e}");
                 None
             }
-        }
+        };
+        let element = read(file)?;
+        let profile = match profile {
+            Some(p) => Some(read(p)?),
+            None => None,
+        };
+        Some((num(soid)?, element, profile))
     })
 }
 
