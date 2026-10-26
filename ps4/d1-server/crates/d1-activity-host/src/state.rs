@@ -162,7 +162,7 @@ pub enum StepWhen {
     /// previous step. A walk into another bubble (a z-leg) switches on the client's own; this is
     /// the 01.24 mission's `{"on": {"type": 21, "slice_set": 24}}` (The Breach).
     OnSlice { slice: u32, timeout: Duration },
-    /// `#G/K/I|N`: when the client reports player trigger `G/K/I` (incident 3403 naming it, see
+    /// `^G/K/I|N`: when the client reports player trigger `G/K/I` (incident 3403 naming it, see
     /// [`trigger_report`]), or N seconds after the previous step. Each report is used once, so a
     /// trigger that fires before its step is due (two armed at once) still counts.
     OnTrigger { group: u32, kind: u8, index: u16, timeout: Duration },
@@ -190,7 +190,7 @@ impl StepWhen {
     /// Parse `N`, `+N`, `@T|N` or `%S|N` (seconds may be fractional).
     pub fn parse(s: &str) -> Option<Self> {
         let secs = |t: &str| t.parse::<f32>().ok().filter(|v| *v >= 0.0).map(Duration::from_secs_f32);
-        if let Some(rest) = s.strip_prefix('#') {
+        if let Some(rest) = s.strip_prefix('^') {
             let (name, n) = rest.split_once('|')?;
             let mut f = name.split('/');
             let num = |t: &str| {
@@ -1693,7 +1693,7 @@ mod tests {
         // Bytes +0xD8.. of the decoded struct; the name sits at body bit 303.
         assert_eq!(trigger_report(&img), Some((0x992B_B471, 0x1D, 34)));
         assert_eq!(
-            StepWhen::parse("#0x992bb471/0x1d/34|900"),
+            StepWhen::parse("^0x992bb471/0x1d/34|900"),
             Some(StepWhen::OnTrigger { group: 0x992B_B471, kind: 0x1D, index: 34, timeout: Duration::from_secs(900) })
         );
     }
