@@ -1,0 +1,34 @@
+# Labels open PRs by the areas they touch (see .github/labeler.yml). Runs hourly so PRs from forks are labelled too.
+name: Area labels
+
+on:
+  schedule:
+    - cron: '30 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo 'numbers<<EOF'
+            gh pr list -R "$GITHUB_REPOSITORY" --base "${{ github.event.repository.default_branch }}" -L 200 --json number --jq '.[].number'
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.prs.outputs.numbers != ''
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - if: steps.prs.outputs.numbers != ''
+        uses: actions/labeler@v5
+        with:
+          pr-number: ${{ steps.prs.outputs.numbers }}

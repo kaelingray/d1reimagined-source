@@ -1,0 +1,31 @@
+server:
+  - changed-files:
+      - any-glob-to-any-file: 'ps4/d1-server/**'
+
+trace:
+  - changed-files:
+      - any-glob-to-any-file: ['ps4/d1-trace/**', 'ps4/d1-observe/**', 'ps4/capture-rig/**']
+
+research:
+  - changed-files:
+      - any-glob-to-any-file: ['ps4/ghidra/**', 'ps4/design/**', 'notes/**']
+
+missions:
+  - changed-files:
+      - any-glob-to-any-file: ['missions/**', 'ps4/loadouts/**']
+
+ps3:
+  - changed-files:
+      - any-glob-to-any-file: ['patches/**', 'server/**', 'data/**']
+
+tools:
+  - changed-files:
+      - any-glob-to-any-file: ['tools/**', 'scripts/**']
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: ['docs/**', '**/*.md']
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
