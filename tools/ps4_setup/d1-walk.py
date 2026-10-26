@@ -140,6 +140,7 @@ def main():
     i = min(range(len(route)), key=lambda k: math.dist(route[k][:2], here[:2]))
     stuck = 0
     best, since_best, skipped = None, 0, False
+    turn_err, worse = None, 0
     def corner(k):
         # The turn at waypoint k, in radians (0 = straight on).
         if k <= 0 or k + 1 >= len(route):
@@ -182,6 +183,7 @@ def main():
                 key = 'L' if (err < 0) == (sign > 0) else 'J'
                 h0 = heading
                 pad(f'Hold:{key}:{ms}')
+                turn_err = err
                 if not calibrated:
                     # measure the turn: one short forward pulse gives the new heading
                     p0 = position(c, tracked, here)
@@ -207,6 +209,14 @@ def main():
         if step > 0.3:
             heading = math.atan2(here[1] - p0[1], here[0] - p0[0])
             stuck = 0
+            # Turns that keep making the error worse mean the turn sign is wrong (run agr-breach12
+            # spiralled off the cliff south of the spawn): flip it.
+            if turn_err is not None:
+                worse = worse + 1 if abs(wrap(want - heading)) > abs(turn_err) + 0.3 else 0
+                if worse >= 2:
+                    sign, worse = -sign, 0
+                    print('turn sign flipped')
+            turn_err = None
         else:
             stuck += 1
             # Blocked, so no heading and no way to steer. Step back (the way we came is usually
@@ -220,6 +230,9 @@ def main():
                 heading = None
                 pad('NumPad2', 'Hold:A:600' if stuck % 2 else 'Hold:D:600')   # jump and side-step out
                 here = position(c, tracked, here) or here
+        if here[2] < target[2] - 8:
+            print(f'fell off the route at {here}')
+            break
         print(f'wp {i}/{len(route)} at ({here[0]:.1f}, {here[1]:.1f}, {here[2]:.1f}) -> ({target[0]:.1f}, {target[1]:.1f})')
     print('done' if i >= len(route) else 'stopped', here)
 

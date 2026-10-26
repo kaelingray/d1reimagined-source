@@ -39,7 +39,14 @@ function Skip { & $pad -Keys NumPad2 | Out-Null; Start-Sleep 1; & $pad -Keys Num
 Start-Sleep 20
 if (-not (WaitFor "Entering state 'bootflow:start'" 300)) { exit 2 }
 Start-Sleep 6; & $pad -Keys NumPad2 | Out-Null
-if (WaitFor "Entering state 'character:prologue'" 300) { Start-Sleep 8; Skip; 'prologue skipped' }
+if (WaitFor "Entering state 'character:prologue'" 300) {
+    # A skip can be lost (focus, or pressed before the cinematic accepts input): retry until the
+    # client leaves the prologue (run agr-breach12 sat in it for ten minutes).
+    for ($k = 0; $k -lt 4; $k++) {
+        Start-Sleep 8; Skip
+        if (WaitFor "Leaving state 'character:prologue'" 20) { 'prologue skipped'; break }
+    }
+}
 $w = $null
 if ($WatchExec) {
     $a = @('-I', 'F:\d1\tools\d1-watchwrite.py', '--seconds', "$WatchSeconds", '--max-hits', '60', '--exec', $WatchExec, '--out', "$D\watch.jsonl")
