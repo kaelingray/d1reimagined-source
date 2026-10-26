@@ -110,9 +110,10 @@ history and private visibility are retained. Fresh checkouts should use
 Pass `-DataRepo` or `D1_DATA_REPO` explicitly for an imported layout. Current private
 logs/media and schema exports are not automatically copied into this repository.
 
-**Keep this repository private.** It contains extracted game binaries/assets and
-legacy logs. Access does not authorize redistribution, public hosting, release bundles
-or submission of those files as devlog source media. Preserve credentials, private
+**No game files.** The extracted game executables, packages and the Oodle runtime were
+removed (and purged from history) on 26 Oct 2026. Never add game binaries, assets,
+firmware or keys here; supply your own copies locally. Logs here are historical and
+are not devlog source media. Preserve credentials, private
 instructions, machine provenance and current capture material outside this repository.
 
 ## Snapshot contents and provenance
@@ -122,7 +123,7 @@ instructions, machine provenance and current capture material outside this repos
 | `eboot/` | `RESEARCH/ps3_decrypt/` | Not in the repository: the decrypted `EBOOT.elf` (game executable) was removed on 26 Oct 2026. Use your own copy; its hash is in `SHA256SUMS.txt`. |
 | `schema/` | `SIGNON_LOCAL/` | Current activity, investment, character and world schemas; highway baselines; TEST350 and TEST362 object exports |
 | `logs/` | `SIGNON_LOCAL/logs/` | Available TEST364–367 activity and RPCS3 logs |
-| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | 41 intact disc packages plus parts for five oversized packages, covering Cosmodrome, Tower, investment, gear, globals and startup data |
+| `packages/` | `01_WORKING/ps3_destiny/PS3_GAME/USRDIR/packages/` | Not in the repository: the 41 disc packages and the parts of five oversized ones (Cosmodrome, Tower, investment, gear, globals and startup data) were removed on 26 Oct 2026. Use your own copy; `SHA256SUMS.txt` and `split_packages.json` describe them. |
 | `ps3_updates/` | `RESEARCH/ps3_updates/` and Sony update metadata | Type exports, the derived 01.24 service map and package inventory, handle maps, comparison reports and update lists |
 
 `SHA256SUMS.txt` lists the size and SHA-256 hash of every copied data file. All
@@ -171,12 +172,12 @@ There were no matching BAP or lobby logs there. TEST370 screenshots and schema
 exports were not present when this snapshot was prepared. That historical absence
 does not describe the current source project's later character/inventory tests;
 those runtime captures remain private and are not included here. The optional
-`oo2core_3_win64.dll` was supplied from the user's Downloads folder. It is an
-unsigned 64-bit Windows DLL containing an Oodle decompression export. Its original
-download source and distribution terms have not been verified. The existing copy
-was used locally to decode the 01.24 service table; the four update packages
-remain outside this repository.
+Oodle runtime `oo2core_3_win64.dll` is not in the repository (removed on 26 Oct
+2026: it is third-party proprietary code). The tools that decode package blocks take
+your own copy as an input (`--oodle`). A local copy was used to decode the 01.24
+service table; the four update packages remain outside this repository.
 
 This repository intentionally excludes private CA keys, the RPCN account database,
-firmware, console keys, save data, RPCS3 installations and caches. Keep the repository
-private because it contains game binaries and logs.
+firmware, console keys, save data, RPCS3 installations and caches. Since 26 Oct 2026 it
+also excludes the game executables, the game packages and the Oodle runtime, including
+from its history; what remains is derived analysis, schemas, logs and hashes.
