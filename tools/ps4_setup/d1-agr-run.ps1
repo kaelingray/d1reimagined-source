@@ -8,7 +8,8 @@ param(
     [int]$WatchSeconds = 220,
     # Raw d1-watchwrite arguments (e.g. --read ADDR) instead of -WatchExec.
     [string[]]$WatchArgs = @(),
-    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-breach13.txt',
+    # Promote a verified full schedule with d1-agr-steps.py --promote-steps first.
+    [string]$Steps = 'F:\d1\d1preservation-main\cfw-staging\agr-steps-divide.txt',
     # The served profile. profile-tutorial-t.bin is the unarmed tutorial Guardian (no weapons in the
     # inventory or the roster) who owes the starter Khvostov as pending loot.
     [string]$Profile = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578\profile-tutorial-t.bin',
@@ -24,6 +25,7 @@ param(
 $ErrorActionPreference = 'Continue'
 $existing = @(Get-Process shadPS4, d1-activity-host, d1-responder, shadnet-server -ErrorAction SilentlyContinue)
 if ($existing.Count) { throw "Refusing to replace an active lab run (process ids: $($existing.Id -join ', ')). End that run first." }
+if (-not (Test-Path -LiteralPath $Steps -PathType Leaf)) { throw "Missing private mission schedule: $Steps" }
 $runStartedAt = Get-Date
 Start-Sleep 3
 $B = 'F:\d1\d1preservation-main\capture-rig\builds\later-56578'
@@ -35,6 +37,11 @@ $pad = 'F:\d1\tools\d1-pad.ps1'
 # authority block: every block assigned to machine 3 (the client's machine in bubble 3), not yet
 # applied, so the client acknowledges it and keeps it (notes 26 Oct).
 $x = "D1_AH_MISSION_STEPS=$Steps,D1_AH_SENSOR_AUTHORITY=3,1,0"
+# The live control file: d1-agr-replay.py opens the garage door through it (`clients GROUP PATH`).
+# Run 18 was launched without it, and its replay stopped at the garage with the list unconsumed.
+if ($Extra -notmatch 'D1_AH_CONTROL_FILE=') {
+    $x += ",D1_AH_CONTROL_FILE=F:\d1\d1preservation-main\cfw-staging\ah-control.txt"
+}
 if (-not $Geared) {
     # The unarmed tutorial: weaponless inventory and peer roster. Claiming the Breach rifle (601)
     # grants the Khvostov (item + profile with the primary slot unlocked) and equips it (peer cards).
