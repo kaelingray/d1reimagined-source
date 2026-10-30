@@ -152,8 +152,12 @@ class ActivityHostSession(unittest.TestCase):
 
     def test_default_heartbeat_without_world_state_keeps_empty_type_eleven(self):
         c = self.start("--ah-heartbeat", "0.01")
-        _, pushes = self.run_client(c, 0.1)
-        heartbeats = [data for _, subtype, data in pushes if subtype == b.AH_ESTABLISH]
+        # The join is processed on a separate thread. Wait for its response before
+        # timing heartbeats, rather than assuming Windows schedules it within 100 ms.
+        initial = c.pushes(0.5)
+        self.assertIn(b.AH_JOIN_RESPONSE, [subtype for _, subtype, _ in initial])
+        _, pushes = self.run_client(c, 0.4)
+        heartbeats = [data for _, subtype, data in initial + pushes if subtype == b.AH_ESTABLISH]
         self.assertGreaterEqual(len(heartbeats), 2)
         self.assertTrue(all(data == b"" for data in heartbeats))
 
