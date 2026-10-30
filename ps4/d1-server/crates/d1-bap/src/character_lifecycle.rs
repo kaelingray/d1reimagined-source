@@ -725,6 +725,82 @@ mod tests {
         assert_eq!(character_soid_argument(&unhex("00000000000000")), None);
     }
 
+    /// The 100-bit response leaves four padding bits. This reads the 64-bit SOID
+    /// independently of the production encoder, across each bit position and
+    /// deterministic boundary vectors. No native game inputs are required.
+    #[test]
+    fn create_response_soid_bits_round_trip_at_boundaries() {
+        let mut cases = vec![0u64, 1, u64::MAX, 0xD100_0000_0000_0101];
+        for bit in 0..64 {
+            cases.push(1u64 << bit);
+            cases.push(!(1u64 << bit));
+        }
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..512 {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            cases.push(state);
+        }
+        for soid in cases {
+            let body = create_character_response_body(soid);
+            assert_eq!(body.len(), 13);
+            assert_eq!(&body[..4], &[0x18, 0, 0, 0]);
+            assert_eq!(body[4] >> 4, 0, "36-bit result prefix");
+            assert_eq!(body[12] & 0x0f, 0, "four trailing pad bits");
+
+            let mut decoded = 0u64;
+            for pos in 36..100 {
+                let bit = (body[pos / 8] >> (7 - pos % 8)) & 1;
+                decoded = (decoded << 1) | u64::from(bit);
+            }
+            assert_eq!(decoded, soid, "SOID shifted or truncated: {soid:#018x}");
+        }
+    }
+
+    /// A short 64-bit argument is not SOID zero. Extra bytes are outside the
+    /// single-argument field and must not alter the first eight bytes.
+    #[test]
+    fn character_soid_argument_checks_all_lengths_and_bit_positions() {
+        let mut cases = vec![0u64, 1, u64::MAX, 0xD100_0000_0000_0101];
+        for bit in 0..64 {
+            cases.push(1u64 << bit);
+        }
+        for soid in cases {
+            let bytes = soid.to_be_bytes();
+            for len in 0..8 {
+                assert_eq!(character_soid_argument(&bytes[..len]), None);
+            }
+            assert_eq!(character_soid_argument(&bytes), Some(soid));
+            let mut with_suffix = bytes.to_vec();
+            with_suffix.extend_from_slice(&[0xAA, 0x55]);
+            assert_eq!(character_soid_argument(&with_suffix), Some(soid));
+        }
+    }
+
+    /// Presence bits are distinct from their biased i8 payloads. Flip one
+    /// presence flag in a known native-encoder vector and verify that the
+    /// remaining decoded fields, especially customization and name, survive.
+    #[test]
+    fn create_request_presence_bits_are_independent_of_values() {
+        let payload = unhex(VECTORS[1].1);
+        let reference = CreateCharacterRequest::decode(&payload).unwrap();
+        assert!(reference.race_present && reference.gender_present && reference.class_present);
+        for (position, field) in [(0usize, 0usize), (9, 1), (18, 2)] {
+            let mut edited = payload.clone();
+            edited[position / 8] ^= 1u8 << (7 - position % 8);
+            let mut expected = reference.clone();
+            match field {
+                0 => expected.race_present = false,
+                1 => expected.gender_present = false,
+                2 => expected.class_present = false,
+                _ => unreachable!(),
+            }
+            expected.raw = edited.clone();
+            assert_eq!(CreateCharacterRequest::decode(&edited).unwrap(), expected);
+        }
+    }
+
     /// ⭐⭐ **The trigger.** An account with an EMPTY character list must encode a count of **0**,
     /// and an account with `[0]` must not be mistaken for it.
     ///
