@@ -353,4 +353,142 @@ mod tests {
         // The skill policy is a different message pair and is nobody's configuration request.
         assert_eq!(response_for(34), ResponsePolicy::Expects(35));
     }
+
+    /// Presence bits are part of the request contract: omitted fields and present zeros differ.
+    /// These literals are independent of the production protobuf field writer.
+    #[test]
+    fn request_zero_presence_and_integer_limits_round_trip() {
+        let absent = MatchmakingCoreRequest::default();
+        assert!(absent.encode().is_empty());
+        assert_eq!(MatchmakingCoreRequest::decode(&[]), Ok(absent));
+
+        let zeros = MatchmakingCoreRequest {
+            version: Some(0),
+            request_kind: Some(0),
+            nonce: Some(0),
+            search_slot: Some(0),
+            matchmaking_set_id: Some(0),
+            advertisement_slot: Some(0),
+            matchmaking_key: Some(MatchmakingKey {
+                activity_hash: 0,
+                matchmaking_content_hash: 0,
+                skill_bucket_hash: Some(0),
+            }),
+        };
+        let zero_wire: [u8; 20] = [
+            0x08, 0x00, 0x10, 0x00, 0x18, 0x00, 0x20, 0x00, 0x28, 0x00, 0x30, 0x00, 0x5a, 0x06,
+            0x08, 0x00, 0x10, 0x00, 0x18, 0x00,
+        ];
+        assert_eq!(zeros.encode().as_slice(), zero_wire);
+        assert_eq!(MatchmakingCoreRequest::decode(&zero_wire), Ok(zeros));
+
+        let maximum = MatchmakingCoreRequest {
+            version: Some(u32::MAX),
+            request_kind: Some(u32::MAX),
+            nonce: Some(u64::MAX),
+            search_slot: Some(u32::MAX),
+            matchmaking_set_id: Some(u32::MAX),
+            advertisement_slot: Some(u32::MAX),
+            matchmaking_key: Some(MatchmakingKey {
+                activity_hash: u32::MAX,
+                matchmaking_content_hash: u32::MAX,
+                skill_bucket_hash: Some(u32::MAX),
+            }),
+        };
+        assert_eq!(
+            MatchmakingCoreRequest::decode(&maximum.encode()),
+            Ok(maximum)
+        );
+    }
+
+    /// The response codec must not collapse missing f4 into a present, empty submessage.
+    /// The large size is a parser exercise, NOT a claim that the client accepts this payload.
+    #[test]
+    fn response_configuration_presence_and_length_boundaries_round_trip() {
+        let missing = MatchmakingCoreResponse::default();
+        assert!(missing.encode().is_empty());
+        assert_eq!(MatchmakingCoreResponse::decode(&[]), Ok(missing));
+
+        for (size, header) in [
+            (0usize, vec![0x22, 0x00]),
+            (1, vec![0x22, 0x01]),
+            (127, vec![0x22, 0x7f]),
+            (128, vec![0x22, 0x80, 0x01]),
+            (65_535, vec![0x22, 0xff, 0xff, 0x03]),
+        ] {
+            let response = MatchmakingCoreResponse {
+                kind: None,
+                nonce: None,
+                configuration: Some(vec![0xa5; size]),
+            };
+            let wire = response.encode();
+            assert!(wire.starts_with(&header), "wrong length prefix for {size}");
+            assert_eq!(wire.len(), header.len() + size);
+            assert_eq!(MatchmakingCoreResponse::decode(&wire), Ok(response));
+        }
+
+        let max_echo = MatchmakingCoreResponse {
+            kind: Some(u32::MAX),
+            nonce: Some(u64::MAX),
+            configuration: Some(vec![0x0a, 0x00]),
+        };
+        assert_eq!(
+            MatchmakingCoreResponse::decode(&max_echo.encode()),
+            Ok(max_echo)
+        );
+    }
+
+    /// No truncated value, duplicate singular field, wrong wire type or overflowing u32
+    /// may silently turn into a valid request/response.
+    #[test]
+    fn malformed_matchmaking_fields_are_rejected() {
+        let bad_requests: &[&[u8]] = &[
+            &[0x08],                               // missing f1 value
+            &[0x08, 0x80],                         // unfinished varint
+            &[0x08, 0x00, 0x08, 0x01],             // duplicate f1
+            &[0x0a, 0x00],                         // f1 with bytes, not varint
+            &[0x08, 0x80, 0x80, 0x80, 0x80, 0x10], // f1 = 2^32
+            &[0x5a, 0x01, 0x08],                   // truncated nested f11.1
+        ];
+        for &wire in bad_requests {
+            assert!(MatchmakingCoreRequest::decode(wire).is_err(), "{wire:02x?}");
+        }
+        let bad_responses: &[&[u8]] = &[
+            &[0x22, 0x81],                         // truncated length
+            &[0x22, 0x03, 0xaa],                   // truncated f4 payload
+            &[0x08, 0x01, 0x08, 0x02],             // duplicate f1
+            &[0x0a, 0x00],                         // f1 with bytes, not varint
+            &[0x08, 0x80, 0x80, 0x80, 0x80, 0x10], // f1 = 2^32
+        ];
+        for &wire in bad_responses {
+            assert!(
+                MatchmakingCoreResponse::decode(wire).is_err(),
+                "{wire:02x?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_matchmaking_fields_are_ignored_without_losing_known_fields() {
+        let request = MatchmakingCoreRequest {
+            version: Some(13),
+            nonce: Some(42),
+            ..Default::default()
+        };
+        let mut request_wire = request.encode();
+        request_wire.extend_from_slice(&[0x78, 0x7f]); // unknown f15 varint
+        assert_eq!(MatchmakingCoreRequest::decode(&request_wire), Ok(request));
+
+        let response = MatchmakingCoreResponse {
+            kind: Some(4),
+            nonce: Some(42),
+            configuration: Some(vec![0x0a, 0x00]),
+        };
+        let mut response_wire = response.encode();
+        response_wire.extend_from_slice(&[0x78, 0x7f]);
+        assert_eq!(
+            MatchmakingCoreResponse::decode(&response_wire),
+            Ok(response)
+        );
+    }
 }
