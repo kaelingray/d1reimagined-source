@@ -34,6 +34,26 @@ jobs:
             echo "::endgroup::"
           done
 
+  # Keep the existing required Linux 'python' check context unchanged.
+  python-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements.txt
+      - name: Windows unit tests
+        shell: pwsh
+        run: |
+          foreach ($dir in @('server', 'scripts', 'tests', 'tools/content_capture')) {
+            Write-Host "::group::$dir"
+            python -m unittest discover -s $dir -p 'test_*.py'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "::endgroup::"
+          }
+
   rust-package-tools:
     strategy:
       matrix:
